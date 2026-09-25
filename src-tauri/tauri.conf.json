@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Vynl",
+  "version": "0.1.0",
+  "identifier": "vynl",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Vynl",
+        "width": 1600,
+        "height": 900,
+        "center": true,
+        "resizable": true,
+        "maximizable": true,
+        "decorations": false,
+        "backgroundColor": "#0d0d0d"
+      }
+    ],
+    "security": {
+      "csp": null,
+       "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["**"],
+          "requireLiteralLeadingDot": false
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "deb", "rpm", "appimage"],
+    "category": "Music",
+    "createUpdaterArtifacts": true,
+    "copyright": "Copyright (c) 2026 Vynl Contributors",
+    "shortDescription": "Music Player for Desktop",
+    "longDescription": "Vynl Is a Desktop Music Player.",
+    "homepage": "https://github.com/DevX32/Vynl",
+    "publisher": "Vynl",
+    "licenseFile": "../LICENSE",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {},
+      "rpm": {},
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4RjNBOERGODA0QjNBQUYKUldTdk9rdUEzNmp6S0grUFp4bXZycUwrQzkrMDVjZUNDaS9mdVh4aTNFWUVQTXdUNVNaZVBSeTkK",
+      "endpoints": [
+        "https://github.com/devx32/Vynl/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

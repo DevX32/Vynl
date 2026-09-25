@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["svelte", "vite/client"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true,
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./web/src/*"],
+      "@lib/*": ["./web/src/lib/*"],
+      "@components/*": ["./web/src/components/*"],
+      "@features/*": ["./web/src/features/*"],
+      "@state/*": ["./web/src/state/*"],
+      "@assets/*": ["./web/src/assets/*"]
+    }
+  },
+  "include": ["web/src/**/*"]
+}

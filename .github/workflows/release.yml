@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-version:
+    name: Tag matches app version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check tag against tauri.conf.json and Cargo.toml
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          conf="$(jq -r '.version' src-tauri/tauri.conf.json)"
+          cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)"
+          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo"
+          if [ "$tag" != "$conf" ]; then
+            echo "::error::Tag v$tag does not match tauri.conf.json version ($conf) — bump it before tagging."
+            exit 1
+          fi
+          if [ "$tag" != "$cargo" ]; then
+            echo "::error::Tag v$tag does not match Cargo.toml version ($cargo) — bump it before tagging."
+            exit 1
+          fi
+
+  build:
+    name: Build · ${{ matrix.platform }}
+    needs: verify-version
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config curl wget file \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev libasound2-dev
+      - name: Build and upload release assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Vynl ${{ github.ref_name }}
+          releaseBody: |
+            Vynl ${{ github.ref_name }}
+
+            - **Windows:** NSIS installer (`.exe`)
+            - **Linux:** `.deb`, `.rpm`, or `.AppImage`
+          releaseDraft: true
+          prerelease: false
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false
