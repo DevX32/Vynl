@@ -4,11 +4,33 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 
 ## Screenshots
 
-![Home](docs/screenshots/vynl-home.png)
+### Home
 
-![Vault](docs/screenshots/vynl-vault.png)
+![Home](docs/screenshots/01-home.png)
 
-![Settings](docs/screenshots/vynl-settings.png)
+### Library
+
+![Library](docs/screenshots/02-library.png)
+
+### Playlist
+
+![Playlist](docs/screenshots/03-playlist.png)
+
+### Now Playing
+
+![Now Playing](docs/screenshots/04-nowplaying.png)
+
+### Synced Lyrics
+
+![Synced lyrics](docs/screenshots/07-lyrics.png)
+
+### Vault
+
+![Vault](docs/screenshots/05-vault.png)
+
+### Settings
+
+![Settings](docs/screenshots/06-settings.png)
 
 ## Features
 
