@@ -4,33 +4,18 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 
 ## Screenshots
 
-### Home
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Vynl - Home" width="100%">
+</p>
 
-![Home](docs/screenshots/01-home.png)
-
-### Library
-
-![Library](docs/screenshots/02-library.png)
-
-### Playlist
-
-![Playlist](docs/screenshots/03-playlist.png)
-
-### Now Playing
-
-![Now Playing](docs/screenshots/04-nowplaying.png)
-
-### Synced Lyrics
-
-![Synced lyrics](docs/screenshots/07-lyrics.png)
-
-### Vault
-
-![Vault](docs/screenshots/05-vault.png)
-
-### Settings
-
-![Settings](docs/screenshots/06-settings.png)
+| | |
+|:---:|:---:|
+| ![Library](docs/screenshots/library.png) | ![Now Playing](docs/screenshots/now-playing.png) |
+| Library | Now Playing |
+| ![Playlist](docs/screenshots/playlist.png) | ![Synced lyrics](docs/screenshots/lyrics.png) |
+| Playlist | Synced lyrics |
+| ![Vault](docs/screenshots/vault.png) | ![Settings](docs/screenshots/settings.png) |
+| Vault | Settings |
 
 ## Features
 
