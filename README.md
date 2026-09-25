@@ -99,4 +99,4 @@ bun run tauri:dev
 
 ## License
 
-MIT
+AGPL-3.0. See [LICENSE](LICENSE).
