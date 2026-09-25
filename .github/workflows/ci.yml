@@ -44,3 +44,15 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo check
         working-directory: src-tauri
+
+  rust-windows:
+    name: Rust · check (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: cargo check
+        working-directory: src-tauri
