@@ -82,10 +82,11 @@ function capitalizeWithSuffix(word: string): string {
   for (const suffix of SUFFIX_PATTERNS) {
     if (lower.length > suffix.length && lower.endsWith(suffix)) {
       const base = word.slice(0, word.length - suffix.length);
-      return base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() + suffix.toUpperCase();
+      if (suffix.length === 1 && (base.length < 2 || base !== base.toUpperCase())) continue;
+      return base.charAt(0).toUpperCase() + base.slice(1) + suffix.toUpperCase();
     }
   }
-  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 export function toPascalCase(text: string): string {
