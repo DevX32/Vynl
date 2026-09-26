@@ -330,27 +330,24 @@ pub async fn check_tools(user_data_dir: &Path, app_handle: &AppHandle) -> Vec<To
 
     for name in ["yt-dlp", "ffmpeg"] {
         let owned_dir = user_data_dir.to_path_buf();
-        let status = match tokio::task::spawn_blocking(move || {
-            check_single_tool(name, &owned_dir)
-        })
-        .await
-        {
-            Ok(status) => status,
-            Err(_) => ToolStatus {
-                name: if name == "ffmpeg" {
-                    crate::commands::types::ToolNameEnum::Ffmpeg
-                } else {
-                    crate::commands::types::ToolNameEnum::YtDlp
+        let status =
+            match tokio::task::spawn_blocking(move || check_single_tool(name, &owned_dir)).await {
+                Ok(status) => status,
+                Err(_) => ToolStatus {
+                    name: if name == "ffmpeg" {
+                        crate::commands::types::ToolNameEnum::Ffmpeg
+                    } else {
+                        crate::commands::types::ToolNameEnum::YtDlp
+                    },
+                    installed: false,
+                    path: None,
+                    version: None,
+                    state: crate::commands::types::ToolState::Missing,
+                    progress: None,
+                    error: Some("probe failed".into()),
+                    update_available: None,
                 },
-                installed: false,
-                path: None,
-                version: None,
-                state: crate::commands::types::ToolState::Missing,
-                progress: None,
-                error: Some("probe failed".into()),
-                update_available: None,
-            },
-        };
+            };
         emit_status(app_handle, &status);
         statuses.push(status);
     }

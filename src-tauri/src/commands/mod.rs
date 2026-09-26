@@ -318,11 +318,9 @@ pub async fn get_library(app: AppHandle) -> Result<Vec<LibraryTrack>, String> {
         return Ok(cached);
     }
 
-    tokio::task::spawn_blocking(move || {
-        crate::services::library::scan_library(&output, &user_data)
-    })
-    .await
-    .map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || crate::services::library::scan_library(&output, &user_data))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
