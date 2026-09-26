@@ -235,14 +235,17 @@ pub async fn get_settings(app: AppHandle) -> Result<Settings, String> {
 pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, String> {
     let user_data = user_data_dir(&app)?;
     let next = crate::services::settings::set_settings(&user_data, patch)?;
-    let state = app.state::<AppState>();
-    let mut guard = state.settings.lock().map_err(|e| e.to_string())?;
-    let changed = guard.as_ref().map(|s| s.launch_at_startup) != Some(next.launch_at_startup);
+    let changed = {
+        let state = app.state::<AppState>();
+        let mut guard = state.settings.lock().map_err(|e| e.to_string())?;
+        let changed = guard.as_ref().map(|s| s.launch_at_startup) != Some(next.launch_at_startup);
+        *guard = Some(next.clone());
+        changed
+    };
     if changed {
         crate::sync_launch_at_startup(next.launch_at_startup);
     }
 
-    *guard = Some(next.clone());
     crate::services::player::set_eq(next.eq_enabled, &next.eq_bands);
     Ok(next)
 }
@@ -301,18 +304,25 @@ pub async fn get_library(app: AppHandle) -> Result<Vec<LibraryTrack>, String> {
 
     if let Some(cached) = crate::services::library::load_cache(&user_data) {
         let app_clone = app.clone();
+        let baseline = cached.clone();
         tokio::task::spawn_blocking(move || {
             let ud = user_data_dir(&app_clone).ok();
             let od = output_dir_from_settings(&app_clone).ok();
             if let (Some(ud), Some(od)) = (ud, od) {
                 let result = crate::services::library::scan_cached_library(&od, &ud);
-                let _ = app_clone.emit("library-updated", &result);
+                if result != baseline {
+                    let _ = app_clone.emit("library-updated", &result);
+                }
             }
         });
         return Ok(cached);
     }
 
-    Ok(crate::services::library::scan_library(&output, &user_data))
+    tokio::task::spawn_blocking(move || {
+        crate::services::library::scan_library(&output, &user_data)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -461,7 +471,15 @@ pub async fn lyrics_embed(file: String, text: String, app: AppHandle) -> Result<
     let validated = require_path_in_output(&file, &app)?;
     let user_data = user_data_dir(&app)?;
     let ffmpeg = crate::services::tools::get_tool_path("ffmpeg", &user_data);
-    crate::services::lyrics::embed_lyrics(&validated.to_string_lossy(), &text, ffmpeg.as_deref())
+    tokio::task::spawn_blocking(move || {
+        crate::services::lyrics::embed_lyrics(
+            &validated.to_string_lossy(),
+            &text,
+            ffmpeg.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -726,17 +744,17 @@ pub async fn player_set_volume(vol: u32) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn player_get_position(generation: u64) -> Result<f64, String> {
-    Ok(crate::services::player::get_position(generation))
+    crate::services::player::get_position(generation)
 }
 
 #[tauri::command]
 pub async fn player_is_playing(generation: u64) -> Result<bool, String> {
-    Ok(crate::services::player::is_playing(generation))
+    crate::services::player::is_playing(generation)
 }
 
 #[tauri::command]
 pub async fn player_check_finished(generation: u64) -> Result<bool, String> {
-    Ok(crate::services::player::check_finished(generation))
+    crate::services::player::check_finished(generation)
 }
 
 #[tauri::command]

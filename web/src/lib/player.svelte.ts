@@ -61,6 +61,12 @@ let seekRequestId = 0;
 let pendingPlayGeneration: number | null = null;
 let playReconcileUntil = 0;
 let lastPositionCheckpoint = Date.now();
+let lastSyncTickAt = Date.now();
+let reconcilePending = false;
+let syncHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+const SYNC_HEARTBEAT_MS = 1_000;
+const STALE_SYNC_MS = 2_000;
 
 onMuteChange(applyVolume);
 
@@ -89,17 +95,31 @@ function finishPlayReconcile(generation: number): void {
   }
 }
 
-function syncTick(): void {
+function isHidden(): boolean {
+  return (
+    typeof document !== "undefined" && document.visibilityState === "hidden"
+  );
+}
+
+function stopSync(): void {
+  if (syncRaf !== 0) {
+    cancelAnimationFrame(syncRaf);
+    syncRaf = 0;
+  }
+}
+
+function syncStep(): boolean {
   const np = getCurrentTrack();
   if (!np) {
-    syncRaf = 0;
-    return;
+    stopSync();
+    return false;
   }
 
   const generation = playGeneration;
   const trackId = np.id;
   const isCurrent = (): boolean =>
     generation === playGeneration && getCurrentTrack()?.id === trackId;
+  const checkEveryTick = isHidden();
 
   if (np.playing) {
     if (!isSeekDragging() && !seekPending && !positionRequestPending) {
@@ -111,6 +131,7 @@ function syncTick(): void {
             updateTime(pos);
           }
         })
+        .catch(() => {})
         .finally(() => {
           positionRequestPending = false;
         });
@@ -118,7 +139,7 @@ function syncTick(): void {
     if (
       !isSeekDragging() &&
       !seekPending &&
-      syncFrame % 10 === 0 &&
+      (checkEveryTick || syncFrame % 10 === 0) &&
       !finishedCheckPending
     ) {
       finishedCheckPending = true;
@@ -130,6 +151,7 @@ function syncTick(): void {
             if (!isSharedPlayback()) nextAutomatic();
           }
         })
+        .catch(() => {})
         .finally(() => {
           finishedCheckPending = false;
         });
@@ -149,8 +171,8 @@ function syncTick(): void {
       Date.now() > playReconcileUntil
     ) {
       finishPlayReconcile(generation);
-      syncRaf = 0;
-      return;
+      stopSync();
+      return false;
     }
     if (syncFrame % 5 === 0) {
       void vynl
@@ -167,12 +189,98 @@ function syncTick(): void {
   }
 
   syncFrame += 1;
-  syncRaf = requestAnimationFrame(syncTick);
+  return true;
+}
+
+function syncTick(): void {
+  syncRaf = 0;
+  lastSyncTickAt = Date.now();
+  if (syncStep()) {
+    startSync();
+  }
 }
 
 function startSync(): void {
   if (syncRaf === 0) {
     syncRaf = requestAnimationFrame(syncTick);
+  }
+}
+
+function syncHeartbeat(): void {
+  const np = getCurrentTrack();
+  if (!np) return;
+  if (!np.playing && syncRaf === 0 && pendingPlayGeneration === null) return;
+
+  const stale = Date.now() - lastSyncTickAt > STALE_SYNC_MS;
+  if (syncRaf !== 0 && !stale) return;
+
+  if (syncRaf !== 0) stopSync();
+  if (syncStep()) startSync();
+}
+
+async function reconcilePlaybackState(): Promise<void> {
+  const np = getCurrentTrack();
+  if (!np || reconcilePending || isSeekDragging() || seekPending) return;
+
+  reconcilePending = true;
+  const generation = playGeneration;
+  const trackId = np.id;
+  const isCurrent = (): boolean =>
+    generation === playGeneration && getCurrentTrack()?.id === trackId;
+
+  try {
+    let finished: boolean | null = null;
+    if (!finishedCheckPending) {
+      finishedCheckPending = true;
+      try {
+        finished = await vynl.playerCheckFinished(generation);
+      } catch {
+        finished = null;
+      } finally {
+        finishedCheckPending = false;
+      }
+    }
+    if (finished === true) {
+      if (isCurrent() && getCurrentTrack()?.playing) {
+        updatePlaying(false);
+        if (!isSharedPlayback()) nextAutomatic();
+      }
+      return;
+    }
+    if (!isCurrent()) return;
+
+    let playing: boolean | null = null;
+    try {
+      playing = await vynl.playerIsPlaying(generation);
+    } catch {
+      playing = null;
+    }
+    if (playing === null || !isCurrent()) return;
+
+    const cur = getCurrentTrack();
+    if (!cur) return;
+    if (playing !== cur.playing) updatePlaying(playing);
+    if (getCurrentTrack()?.playing) {
+      updateMediaSession();
+      startSync();
+    }
+  } finally {
+    reconcilePending = false;
+  }
+}
+
+function onWindowActive(): void {
+  startSync();
+  void reconcilePlaybackState();
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") onWindowActive();
+  });
+  window.addEventListener("focus", onWindowActive);
+  if (syncHeartbeatTimer === null) {
+    syncHeartbeatTimer = window.setInterval(syncHeartbeat, SYNC_HEARTBEAT_MS);
   }
 }
 

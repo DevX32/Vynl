@@ -3,6 +3,7 @@ use crate::services::process;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
@@ -327,8 +328,29 @@ fn check_single_tool(name: &str, user_data_dir: &Path) -> ToolStatus {
 pub async fn check_tools(user_data_dir: &Path, app_handle: &AppHandle) -> Vec<ToolStatus> {
     let mut statuses = Vec::new();
 
-    for name in &["yt-dlp", "ffmpeg"] {
-        let status = check_single_tool(name, user_data_dir);
+    for name in ["yt-dlp", "ffmpeg"] {
+        let owned_dir = user_data_dir.to_path_buf();
+        let status = match tokio::task::spawn_blocking(move || {
+            check_single_tool(name, &owned_dir)
+        })
+        .await
+        {
+            Ok(status) => status,
+            Err(_) => ToolStatus {
+                name: if name == "ffmpeg" {
+                    crate::commands::types::ToolNameEnum::Ffmpeg
+                } else {
+                    crate::commands::types::ToolNameEnum::YtDlp
+                },
+                installed: false,
+                path: None,
+                version: None,
+                state: crate::commands::types::ToolState::Missing,
+                progress: None,
+                error: Some("probe failed".into()),
+                update_available: None,
+            },
+        };
         emit_status(app_handle, &status);
         statuses.push(status);
     }
@@ -628,6 +650,8 @@ pub async fn install_tool(
     let client = reqwest::Client::builder()
         .user_agent(GH_UA)
         .redirect(reqwest::redirect::Policy::limited(10))
+        .connect_timeout(Duration::from_secs(15))
+        .read_timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
@@ -680,6 +704,8 @@ pub async fn check_for_updates(user_data_dir: &Path, app_handle: &AppHandle) -> 
     let client = reqwest::Client::builder()
         .user_agent(GH_UA)
         .redirect(reqwest::redirect::Policy::limited(10))
+        .connect_timeout(Duration::from_secs(10))
+        .read_timeout(Duration::from_secs(30))
         .build()
         .unwrap_or_default();
 

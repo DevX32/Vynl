@@ -200,7 +200,7 @@ pub struct ToolStatus {
     pub update_available: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrack {
     pub id: String,

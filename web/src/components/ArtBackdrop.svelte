@@ -36,13 +36,14 @@
     height: 100%;
     object-fit: cover;
     filter: blur(60px) saturate(1.6) brightness(0.35) contrast(1.1);
-    transform: scale(1.4);
+    transform: scale(1.5);
     animation: art-drift 20s ease-in-out infinite alternate;
+    will-change: transform;
   }
 
   @keyframes art-drift {
     0% {
-      transform: scale(1.4) translate(0, 0);
+      transform: scale(1.5) translate(0, 0);
     }
     100% {
       transform: scale(1.5) translate(-8px, -5px);

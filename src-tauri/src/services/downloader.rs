@@ -212,26 +212,74 @@ fn last_error(stderr: &str) -> String {
         .unwrap_or_else(|| "Unknown error".to_string())
 }
 
-fn run_yt_json(cmd: &str, args: &[String]) -> Option<Value> {
+fn output_with_timeout(
+    mut command: std::process::Command,
+    timeout: std::time::Duration,
+) -> Option<std::process::Output> {
+    use std::io::Read;
+
+    let mut child = command.spawn().ok()?;
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+
+    let out_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut pipe) = stdout_pipe {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut pipe) = stderr_pipe {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let start = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if start.elapsed() < timeout => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(None) | Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = out_reader.join();
+                let _ = err_reader.join();
+                return None;
+            }
+        }
+    };
+
+    Some(std::process::Output {
+        status,
+        stdout: out_reader.join().unwrap_or_default(),
+        stderr: err_reader.join().unwrap_or_default(),
+    })
+}
+
+fn run_yt_json(cmd: &str, args: &[String], timeout: std::time::Duration) -> Option<Value> {
     let mut command = process::hidden_std(std::process::Command::new(cmd));
     command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    command.output().ok().and_then(|output| {
-        if output.status.code() == Some(0) {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let trimmed = stdout.trim();
-            if !trimmed.is_empty() {
-                serde_json::from_str(trimmed).ok()
-            } else {
-                None
-            }
+    let output = output_with_timeout(command, timeout)?;
+    if output.status.code() == Some(0) {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let trimmed = stdout.trim();
+        if !trimmed.is_empty() {
+            serde_json::from_str(trimmed).ok()
         } else {
             None
         }
-    })
+    } else {
+        None
+    }
 }
 
 fn resolve_tool(name: &str, user_data_dir: &Path) -> Option<String> {
@@ -301,6 +349,10 @@ const MIN_SEARCH_CANDIDATES: usize = 5;
 
 const DOWNLOAD_WORKERS: usize = 4;
 
+const DOWNLOAD_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+const SEARCH_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
+
 const COVER_PREFETCH_WORKERS: usize = 8;
 
 const MATCH_CACHE_FILE: &str = "match-cache.json";
@@ -330,12 +382,17 @@ fn search_candidates(
     let mut seen: HashSet<String> = HashSet::new();
 
     let queries = [query, query_alt, query_lyrics];
+    let deadline = std::time::Instant::now() + SEARCH_BUDGET;
 
     for q in &queries {
         if out.len() >= MIN_SEARCH_CANDIDATES {
             break;
         }
         for (source, count) in SEARCH_QUOTA {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
             let prefix = search_prefix(source);
             let search_term = format!("{}{}:{}", prefix, count, q);
 
@@ -354,7 +411,7 @@ fn search_candidates(
 
             args.push(search_term);
 
-            let json = run_yt_json(ytdlp, &args);
+            let json = run_yt_json(ytdlp, &args, remaining);
 
             if let Some(data) = json {
                 if let Some(entries) = data.get("entries").and_then(|e| e.as_array()) {
@@ -615,6 +672,39 @@ pub fn get_done_track_ids(
     out
 }
 
+fn terminate_process(id: u32) {
+    if id == 0 {
+        return;
+    }
+    #[cfg(windows)]
+    {
+        unsafe {
+            use std::os::windows::raw::HANDLE;
+            const PROCESS_TERMINATE: u32 = 0x0001;
+            extern "system" {
+                fn OpenProcess(
+                    dwDesiredAccess: u32,
+                    bInheritHandle: i32,
+                    dwProcessId: u32,
+                ) -> HANDLE;
+                fn TerminateProcess(hProcess: HANDLE, uExitCode: u32) -> i32;
+                fn CloseHandle(hObject: HANDLE) -> i32;
+            }
+            let h = OpenProcess(PROCESS_TERMINATE, 0, id);
+            if !h.is_null() {
+                let _ = TerminateProcess(h, 1);
+                let _ = CloseHandle(h);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        unsafe {
+            libc::kill(id as i32, libc::SIGTERM);
+        }
+    }
+}
+
 pub async fn cancel_download() {
     CANCELLED_FIND.store(true, Ordering::SeqCst);
     CANCELLED_DOWNLOAD.store(true, Ordering::SeqCst);
@@ -624,35 +714,39 @@ pub async fn cancel_download() {
         if child_gen != gen {
             continue;
         }
-        #[cfg(windows)]
-        {
-            unsafe {
-                use std::os::windows::raw::HANDLE;
-                const PROCESS_TERMINATE: u32 = 0x0001;
-                extern "system" {
-                    fn OpenProcess(
-                        dwDesiredAccess: u32,
-                        bInheritHandle: i32,
-                        dwProcessId: u32,
-                    ) -> HANDLE;
-                    fn TerminateProcess(hProcess: HANDLE, uExitCode: u32) -> i32;
-                    fn CloseHandle(hObject: HANDLE) -> i32;
-                }
-                let h = OpenProcess(PROCESS_TERMINATE, 0, id);
-                if !h.is_null() {
-                    let _ = TerminateProcess(h, 1);
-                    let _ = CloseHandle(h);
-                }
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            unsafe {
-                libc::kill(id as i32, libc::SIGTERM);
-            }
-        }
+        terminate_process(id);
     }
     children.retain(|&(_, g)| g != gen);
+}
+
+async fn watch_for_stall(
+    id: u32,
+    last_activity: Arc<std::sync::Mutex<std::time::Instant>>,
+    stalled: Arc<AtomicBool>,
+    done: Arc<AtomicBool>,
+) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        if done.load(Ordering::Relaxed) {
+            return;
+        }
+        let idle = last_activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .elapsed();
+        if idle >= DOWNLOAD_STALL_TIMEOUT {
+            if done.load(Ordering::Relaxed) {
+                return;
+            }
+            eprintln!(
+                "[downloader] yt-dlp pid {id} stalled for {}s, terminating",
+                idle.as_secs()
+            );
+            stalled.store(true, Ordering::Relaxed);
+            terminate_process(id);
+            return;
+        }
+    }
 }
 
 async fn probe_duration(ffprobe: &str, file: &str) -> Option<f64> {
@@ -1103,6 +1197,16 @@ async fn download_track(
         let track_clone = track.clone();
         let event_fn = Arc::clone(&track_event);
 
+        let last_activity = Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
+        let stalled = Arc::new(AtomicBool::new(false));
+        let watch_done = Arc::new(AtomicBool::new(false));
+        let _watchdog = tokio::spawn(watch_for_stall(
+            id,
+            Arc::clone(&last_activity),
+            Arc::clone(&stalled),
+            Arc::clone(&watch_done),
+        ));
+
         let stderr_task = tokio::spawn(async move {
             let mut buf = String::new();
             if let Some(err) = stderr {
@@ -1115,6 +1219,7 @@ async fn download_track(
         if let Some(out) = stdout {
             let track_for_stdout = track_clone.clone();
             let event_for_stdout = Arc::clone(&event_fn);
+            let last_activity = Arc::clone(&last_activity);
             tokio::spawn(async move {
                 let mut reader = BufReader::new(out);
                 let mut last_emit = std::time::Instant::now();
@@ -1126,13 +1231,16 @@ async fn download_track(
                         Ok(0) | Err(_) => break,
                         Ok(_) => {}
                     }
+                    if let Ok(mut activity) = last_activity.lock() {
+                        *activity = std::time::Instant::now();
+                    }
                     if line.contains("[ExtractAudio]") {
                         event_for_stdout(&track_for_stdout, TrackStatus::Processing, 100.0, None);
                         continue;
                     }
                     if let Some(pct) = progress_from_line(&line) {
                         let now = std::time::Instant::now();
-                        if now.duration_since(last_emit).as_millis() > 150 || pct != last_pct {
+                        if now.duration_since(last_emit).as_millis() > 150 && pct != last_pct {
                             last_emit = now;
                             last_pct = pct;
                             event_for_stdout(
@@ -1148,10 +1256,29 @@ async fn download_track(
         }
 
         let code = child.wait().await.ok().and_then(|s| s.code());
+        watch_done.store(true, Ordering::Relaxed);
 
         {
             let mut children = CHILDREN.lock().await;
             children.retain(|&(c, _)| c != id);
+        }
+
+        let succeeded = raw_path.exists() && code == Some(0);
+        if stalled.load(Ordering::Relaxed) && !succeeded {
+            for f in [
+                &raw_path,
+                &tagged_path,
+                &tmp.join(format!("{}.part", track.id)),
+            ] {
+                let _ = std::fs::remove_file(f);
+            }
+            let msg = format!(
+                "stalled: no progress for {} seconds",
+                DOWNLOAD_STALL_TIMEOUT.as_secs()
+            );
+            track_event(track, TrackStatus::Searching, 0.0, Some(&msg));
+            failures.push(msg);
+            continue;
         }
 
         let stderr_text = stderr_task.await.unwrap_or_default();

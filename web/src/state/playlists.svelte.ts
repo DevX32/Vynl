@@ -129,10 +129,19 @@ export async function setPlaylistCover(
   _meta = await vynl.listPlaylists();
 }
 
+let _pathSource: LibraryTrack[] | null = null;
+let _pathMap = new Map<string, LibraryTrack>();
+
 function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
+  if (_pathSource !== library) {
+    const next = new Map<string, LibraryTrack>();
+    for (const track of library) next.set(track.path, track);
+    _pathSource = library;
+    _pathMap = next;
+  }
   return pl.paths
-    .map((p) => library.find((t) => t.path === p))
+    .map((p) => _pathMap.get(p))
     .filter((t): t is LibraryTrack => !!t);
 }
 

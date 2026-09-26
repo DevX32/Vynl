@@ -25,19 +25,22 @@ function sameTrack(a: LibraryTrack, b: LibraryTrack): boolean {
   );
 }
 
+function libraryChanged(next: LibraryTrack[]): boolean {
+  if (next.length !== _library.length) return true;
+  return next.some((track, index) => {
+    const current = _library[index];
+    return !current || !sameTrack(track, current);
+  });
+}
+
 function startListening(): Promise<void> {
   if (_listenerReady) return _listenerReady;
   _listenerReady = new Promise((resolve) => {
     vynl.onLibraryUpdated((tracks) => {
-      const changed =
-        tracks.length !== _library.length ||
-        tracks.some((track, index) => {
-          const current = _library[index];
-          return !current || !sameTrack(track, current);
-        });
+      if (!libraryChanged(tracks)) return;
       _library = tracks;
       _libraryRevision += 1;
-      if (changed) emitAppEvent("library-updated", { count: tracks.length });
+      emitAppEvent("library-updated", { count: tracks.length });
     }, resolve);
   });
   return _listenerReady;
@@ -52,7 +55,7 @@ export function refreshLibrary(): Promise<void> {
     try {
       await listenerReady;
       const tracks = await vynl.getLibrary();
-      if (_libraryRevision === requestRevision) {
+      if (_libraryRevision === requestRevision && libraryChanged(tracks)) {
         _library = tracks;
       }
     } catch (e) {

@@ -307,6 +307,8 @@ static CHANNEL: once_cell::sync::Lazy<PlayerChannel> = once_cell::sync::Lazy::ne
     PlayerChannel { cmd_tx }
 });
 
+const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
+
 fn to_result(resp: Result<PlayerResp, String>) -> Result<(), String> {
     match resp {
         Ok(PlayerResp::Ok) => Ok(()),
@@ -322,7 +324,13 @@ fn send(cmd: PlayerCmd) -> Result<PlayerResp, String> {
         .cmd_tx
         .send(PlayerRequest { cmd, reply_tx })
         .map_err(|e| format!("send: {e}"))?;
-    reply_rx.recv().map_err(|e| format!("recv: {e}"))
+    match reply_rx.recv_timeout(REPLY_TIMEOUT) {
+        Ok(resp) => Ok(resp),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            Err("player unresponsive: command timed out".to_string())
+        }
+        Err(e) => Err(format!("recv: {e}")),
+    }
 }
 
 fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
@@ -537,24 +545,30 @@ pub fn set_volume(vol: u32) {
     let _ = send(PlayerCmd::Volume(vol));
 }
 
-pub fn get_position(generation: u64) -> f64 {
+pub fn get_position(generation: u64) -> Result<f64, String> {
     match send(PlayerCmd::GetPosition(generation)) {
-        Ok(PlayerResp::F64(v)) => v,
-        _ => 0.0,
+        Ok(PlayerResp::F64(v)) => Ok(v),
+        Ok(PlayerResp::Err(e)) => Err(e),
+        Ok(_) => Err("unexpected".into()),
+        Err(e) => Err(e),
     }
 }
 
-pub fn is_playing(generation: u64) -> bool {
+pub fn is_playing(generation: u64) -> Result<bool, String> {
     match send(PlayerCmd::IsPlaying(generation)) {
-        Ok(PlayerResp::Bool(v)) => v,
-        _ => false,
+        Ok(PlayerResp::Bool(v)) => Ok(v),
+        Ok(PlayerResp::Err(e)) => Err(e),
+        Ok(_) => Err("unexpected".into()),
+        Err(e) => Err(e),
     }
 }
 
-pub fn check_finished(generation: u64) -> bool {
+pub fn check_finished(generation: u64) -> Result<bool, String> {
     match send(PlayerCmd::CheckFinished(generation)) {
-        Ok(PlayerResp::Bool(v)) => v,
-        _ => false,
+        Ok(PlayerResp::Bool(v)) => Ok(v),
+        Ok(PlayerResp::Err(e)) => Err(e),
+        Ok(_) => Err("unexpected".into()),
+        Err(e) => Err(e),
     }
 }
 

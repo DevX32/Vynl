@@ -66,8 +66,9 @@
   const playing = $derived(getIsTrackPlaying());
   const playlists = $derived(getCurrentPlaylists());
 
+  const titleCollator = new Intl.Collator();
   const sorted = $derived(
-    [...library].sort((a, b) => a.title.localeCompare(b.title)),
+    [...library].sort((a, b) => titleCollator.compare(a.title, b.title)),
   );
   const hits = $derived(
     query
