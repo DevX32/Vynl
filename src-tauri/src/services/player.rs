@@ -5,7 +5,7 @@ use std::sync::{mpsc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 use rodio::source::SeekError;
-use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -390,9 +390,60 @@ fn send(cmd: PlayerCmd) -> Result<PlayerResp, String> {
     }
 }
 
+fn default_output_device_name() -> Option<String> {
+    use rodio::cpal::traits::{DeviceTrait, HostTrait};
+    let host = rodio::cpal::default_host();
+    let device = host.default_output_device()?;
+    device.name().ok()
+}
+
+fn reopen_output(
+    output: &mut Option<OutputStream>,
+    handle: &mut Option<OutputStreamHandle>,
+    sink: &mut Option<Sink>,
+    current_path: &Option<String>,
+) {
+    let resume_pos = sink
+        .as_ref()
+        .filter(|s| !s.empty() && !PAUSED.load(Ordering::Relaxed))
+        .map(|s| s.get_pos().as_secs_f64());
+    if let Some(s) = sink.take() {
+        s.stop();
+    }
+    drop(handle.take());
+    drop(output.take());
+
+    let (new_output, new_handle) = match OutputStream::try_default() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("device change: reopen output failed: {e}");
+            return;
+        }
+    };
+    *output = Some(new_output);
+    *handle = Some(new_handle);
+
+    let (Some(path), Some(pos)) = (current_path.clone(), resume_pos) else {
+        return;
+    };
+    let opened = File::open(&path)
+        .map_err(|e| e.to_string())
+        .and_then(|f| Decoder::new(BufReader::new(f)).map_err(|e| e.to_string()));
+    let Ok(decoder) = opened else {
+        eprintln!("device change: could not reopen {}", path);
+        return;
+    };
+    let Ok(new_sink) = Sink::try_new(handle.as_ref().expect("stream present")) else {
+        return;
+    };
+    new_sink.append(EqualizerSource::new(decoder.convert_samples::<f32>()));
+    new_sink.set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
+    let _ = seek_sink(&new_sink, pos);
+    *sink = Some(new_sink);
+}
+
 fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
-    let output_result = OutputStream::try_default();
-    let (output, handle) = match output_result {
+    let (out, h) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
             eprintln!("audio output unavailable: {e}");
@@ -404,7 +455,11 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
             return;
         }
     };
+    let mut output = Some(out);
+    let mut handle = Some(h);
     let mut sink: Option<Sink> = None;
+    let mut current_path: Option<String> = None;
+    let mut output_device_name = default_output_device_name();
     let mut playback_generation = 0u64;
     let mut active_generation = 0u64;
     let mut pending_seek: Option<(f64, u64)> = None;
@@ -420,6 +475,17 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Ok
                         } else {
                             playback_generation = generation;
+                            if handle.is_none() {
+                                if let Ok((o, h)) = OutputStream::try_default() {
+                                    output = Some(o);
+                                    handle = Some(h);
+                                }
+                            }
+                            if handle.is_none() {
+                                let _ = reply_tx
+                                    .send(PlayerResp::Err("No audio output device".to_string()));
+                                continue;
+                            }
                             if pending_seek.as_ref().is_some_and(|(_, queued_generation)| {
                                 *queued_generation != generation
                             }) {
@@ -433,6 +499,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             if let Some(s) = sink.take() {
                                 s.stop();
                             }
+                            current_path = Some(path.clone());
                             active_generation = 0;
                             PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
@@ -441,7 +508,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                     Ok(decoder) => {
                                         let total =
                                             decoder.total_duration().map(|d| d.as_secs_f64());
-                                        match Sink::try_new(&handle) {
+                                        match Sink::try_new(
+                                            handle.as_ref().expect("stream present"),
+                                        ) {
                                             Ok(new_sink) => {
                                                 new_sink.append(EqualizerSource::new(
                                                     decoder.convert_samples::<f32>(),
@@ -481,6 +550,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             active_generation = 0;
                             pending_seek = None;
                             duration_secs = None;
+                            current_path = None;
                             if let Some(s) = sink.take() {
                                 s.stop();
                             }
@@ -573,7 +643,13 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
 
                 let _ = reply_tx.send(resp);
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let now = default_output_device_name();
+                if now != output_device_name {
+                    output_device_name = now;
+                    reopen_output(&mut output, &mut handle, &mut sink, &current_path);
+                }
+            }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
 
@@ -585,7 +661,8 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
         );
     }
 
-    let _ = output;
+    drop(output);
+    drop(handle);
 }
 
 pub fn play(path: &str, seek_to: Option<f64>, generation: u64) -> Result<(), String> {
