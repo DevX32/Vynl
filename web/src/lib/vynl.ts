@@ -11,6 +11,7 @@ import type {
   LyricsLookup,
   LyricsResult,
   NowPlayingState,
+  PlaybackTick,
   Playlist,
   PlaylistMeta,
   RpcPresence,
@@ -248,6 +249,9 @@ export const vynl = {
 
   playerCheckFinished: (generation?: number): Promise<boolean> =>
     cmd("player_check_finished", { generation: generation ?? 0 }),
+
+  onPlaybackTick: (cb: (tick: PlaybackTick) => void): (() => void) =>
+    onEvent<PlaybackTick>("vynl:player:tick", cb),
 
   cacheRemoteAudio: (url: string, key: string): Promise<string> =>
     cmd("cache_remote_audio", { url, key }),

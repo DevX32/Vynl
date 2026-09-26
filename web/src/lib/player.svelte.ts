@@ -38,6 +38,7 @@ import {
 import { vynl } from "@lib/vynl";
 import { clamp01 } from "@lib/pointer";
 import { t } from "@lib/i18n";
+import type { PlaybackTick } from "@lib/types";
 import type { PluginSharedState } from "@lib/plugins/types";
 
 export function isSharedPlayback(): boolean {
@@ -52,21 +53,13 @@ function normalizeDuration(value: number | undefined): number {
 
 let playGeneration = Date.now();
 let pendingRetry: ReturnType<typeof setTimeout> | null = null;
-let syncRaf = 0;
-let syncFrame = 0;
-let positionRequestPending = false;
-let finishedCheckPending = false;
 let seekPending = false;
 let seekRequestId = 0;
 let pendingPlayGeneration: number | null = null;
-let playReconcileUntil = 0;
 let lastPositionCheckpoint = Date.now();
-let lastSyncTickAt = Date.now();
 let reconcilePending = false;
-let syncHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
-const SYNC_HEARTBEAT_MS = 1_000;
-const STALE_SYNC_MS = 2_000;
+let pauseIntent = 0;
 
 onMuteChange(applyVolume);
 
@@ -85,8 +78,6 @@ if ("mediaSession" in navigator) {
 
 function beginPlayReconcile(generation: number): void {
   pendingPlayGeneration = generation;
-  playReconcileUntil = Date.now() + 5_000;
-  startSync();
 }
 
 function finishPlayReconcile(generation: number): void {
@@ -95,128 +86,53 @@ function finishPlayReconcile(generation: number): void {
   }
 }
 
-function isHidden(): boolean {
-  return (
-    typeof document !== "undefined" && document.visibilityState === "hidden"
-  );
-}
-
-function stopSync(): void {
-  if (syncRaf !== 0) {
-    cancelAnimationFrame(syncRaf);
-    syncRaf = 0;
-  }
-}
-
-function syncStep(): boolean {
-  const np = getCurrentTrack();
-  if (!np) {
-    stopSync();
-    return false;
-  }
-
-  const generation = playGeneration;
-  const trackId = np.id;
-  const isCurrent = (): boolean =>
-    generation === playGeneration && getCurrentTrack()?.id === trackId;
-  const checkEveryTick = isHidden();
-
-  if (np.playing) {
-    if (!isSeekDragging() && !seekPending && !positionRequestPending) {
-      positionRequestPending = true;
-      void vynl
-        .playerGetPosition(generation)
-        .then((pos) => {
-          if (Number.isFinite(pos) && !isSeekDragging() && !seekPending && isCurrent()) {
-            updateTime(pos);
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          positionRequestPending = false;
-        });
-    }
-    if (
-      !isSeekDragging() &&
-      !seekPending &&
-      (checkEveryTick || syncFrame % 10 === 0) &&
-      !finishedCheckPending
-    ) {
-      finishedCheckPending = true;
-      void vynl
-        .playerCheckFinished(generation)
-        .then((finished) => {
-          if (finished && isCurrent() && getCurrentTrack()?.playing) {
-            updatePlaying(false);
-            if (!isSharedPlayback()) nextAutomatic();
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          finishedCheckPending = false;
-        });
-    }
-    if (
-      isCurrent() &&
-      !isSeekDragging() &&
-      !seekPending &&
-      Date.now() - lastPositionCheckpoint >= 5_000
-    ) {
-      lastPositionCheckpoint = Date.now();
-      checkpointNowPlaying();
-    }
-  } else {
-    if (
-      pendingPlayGeneration !== generation ||
-      Date.now() > playReconcileUntil
-    ) {
-      finishPlayReconcile(generation);
-      stopSync();
-      return false;
-    }
-    if (syncFrame % 5 === 0) {
-      void vynl
-        .playerIsPlaying(generation)
-        .then((playing) => {
-          if (playing && isCurrent() && !getCurrentTrack()?.playing) {
-            finishPlayReconcile(generation);
-            updatePlaying(true);
-            updateMediaSession();
-          }
-        })
-        .catch(() => {});
-    }
-  }
-
-  syncFrame += 1;
-  return true;
-}
-
-function syncTick(): void {
-  syncRaf = 0;
-  lastSyncTickAt = Date.now();
-  if (syncStep()) {
-    startSync();
-  }
-}
-
-function startSync(): void {
-  if (syncRaf === 0) {
-    syncRaf = requestAnimationFrame(syncTick);
-  }
-}
-
-function syncHeartbeat(): void {
+function handleTick(tick: PlaybackTick): void {
+  if (tick.generation !== playGeneration) return;
   const np = getCurrentTrack();
   if (!np) return;
-  if (!np.playing && syncRaf === 0 && pendingPlayGeneration === null) return;
 
-  const stale = Date.now() - lastSyncTickAt > STALE_SYNC_MS;
-  if (syncRaf !== 0 && !stale) return;
+  if (tick.finished) {
+    if (np.playing) {
+      updatePlaying(false);
+      if (!isSharedPlayback()) nextAutomatic();
+    }
+    return;
+  }
 
-  if (syncRaf !== 0) stopSync();
-  if (syncStep()) startSync();
+  if (tick.playing && pauseIntent > 0) return;
+
+  if (tick.playing) {
+    if (pendingPlayGeneration === playGeneration) {
+      finishPlayReconcile(playGeneration);
+    }
+    if (!np.playing) {
+      updatePlaying(true);
+      updateMediaSession();
+    }
+  }
+
+  if (isSeekDragging() || seekPending) return;
+
+  if (Number.isFinite(tick.position)) {
+    updateTime(tick.position);
+  }
+
+  if (
+    tick.duration != null &&
+    Number.isFinite(tick.duration) &&
+    tick.duration > 0 &&
+    !(np.duration > 0)
+  ) {
+    patchNowPlaying({ duration: tick.duration });
+  }
+
+  if (tick.playing && Date.now() - lastPositionCheckpoint >= 5_000) {
+    lastPositionCheckpoint = Date.now();
+    checkpointNowPlaying();
+  }
 }
+
+vynl.onPlaybackTick(handleTick);
 
 async function reconcilePlaybackState(): Promise<void> {
   const np = getCurrentTrack();
@@ -229,26 +145,7 @@ async function reconcilePlaybackState(): Promise<void> {
     generation === playGeneration && getCurrentTrack()?.id === trackId;
 
   try {
-    let finished: boolean | null = null;
-    if (!finishedCheckPending) {
-      finishedCheckPending = true;
-      try {
-        finished = await vynl.playerCheckFinished(generation);
-      } catch {
-        finished = null;
-      } finally {
-        finishedCheckPending = false;
-      }
-    }
-    if (finished === true) {
-      if (isCurrent() && getCurrentTrack()?.playing) {
-        updatePlaying(false);
-        if (!isSharedPlayback()) nextAutomatic();
-      }
-      return;
-    }
     if (!isCurrent()) return;
-
     let playing: boolean | null = null;
     try {
       playing = await vynl.playerIsPlaying(generation);
@@ -256,13 +153,9 @@ async function reconcilePlaybackState(): Promise<void> {
       playing = null;
     }
     if (playing === null || !isCurrent()) return;
-
-    const cur = getCurrentTrack();
-    if (!cur) return;
-    if (playing !== cur.playing) updatePlaying(playing);
-    if (getCurrentTrack()?.playing) {
+    if (playing !== getCurrentTrack()?.playing) {
+      updatePlaying(playing);
       updateMediaSession();
-      startSync();
     }
   } finally {
     reconcilePending = false;
@@ -270,7 +163,6 @@ async function reconcilePlaybackState(): Promise<void> {
 }
 
 function onWindowActive(): void {
-  startSync();
   void reconcilePlaybackState();
 }
 
@@ -279,9 +171,6 @@ if (typeof document !== "undefined") {
     if (document.visibilityState === "visible") onWindowActive();
   });
   window.addEventListener("focus", onWindowActive);
-  if (syncHeartbeatTimer === null) {
-    syncHeartbeatTimer = window.setInterval(syncHeartbeat, SYNC_HEARTBEAT_MS);
-  }
 }
 
 export function applyVolume(): void {
@@ -382,7 +271,6 @@ function loadAndPlayNative(
     if (gen !== playGeneration) return;
     updatePlaying(true);
     updateMediaSession();
-    startSync();
   }).catch((err) => {
     finishPlayReconcile(gen);
     if (gen !== playGeneration) return;
@@ -453,6 +341,7 @@ function playSharedFile(opts: {
   });
   if (opts.playing === false) {
     beginPlayReconcile(gen);
+    pauseIntent += 1;
     void playNative(
       opts.path,
       initialTime > 0 ? initialTime : undefined,
@@ -460,6 +349,8 @@ function playSharedFile(opts: {
     ).then(() => {
       if (gen !== playGeneration) return;
       return vynl.playerPause(gen);
+    }).finally(() => {
+      pauseIntent -= 1;
     }).then(() => {
       if (gen !== playGeneration) return;
       finishPlayReconcile(gen);
@@ -603,7 +494,6 @@ export async function resumeOrPlay(
     if (operationId !== undefined && operationId !== _sharedGen) return;
     updatePlaying(true);
     updateMediaSession();
-    startSync();
   } finally {
     finishPlayReconcile(generation);
   }
@@ -611,7 +501,9 @@ export async function resumeOrPlay(
 
 export function pausePlayback(operationId?: number): void {
   const generation = playGeneration;
+  pauseIntent += 1;
   const finish = (): void => {
+    pauseIntent -= 1;
     if (generation !== playGeneration) return;
     if (operationId !== undefined && operationId !== _sharedGen) return;
     updatePlaying(false);
@@ -656,30 +548,24 @@ function advanceNext(automatic: boolean): void {
     loop,
   );
   if (!nextId) return;
+
+  const nextTrack = getLibrary().find((t) => t.id === nextId);
+  if (!nextTrack) return;
+
   invalidateSharedPlayback();
 
-  const library = getLibrary();
-  const nextTrack = library.find((t) => t.id === nextId);
-  if (nextTrack) {
-    const uq = getUserQueuePaths();
-    const uqIdx = uq.indexOf(nextTrack.path);
-    if (uqIdx >= 0) {
-      removeFromUserQueue(nextTrack.path);
-    }
-    advanceContextIndex(nextId);
-    if (shuffle) recordShuffleTrack(nextTrack.path);
+  const uq = getUserQueuePaths();
+  const uqIdx = uq.indexOf(nextTrack.path);
+  if (uqIdx >= 0) {
+    removeFromUserQueue(nextTrack.path);
   }
+  advanceContextIndex(nextId);
+  if (shuffle) recordShuffleTrack(nextTrack.path);
 
   cancelSeek(false);
   const gen = ++playGeneration;
-  setNowPlaying(
-    nextTrack
-      ? nowPlayingFromTrack(nextTrack)
-      : { ...np!, id: nextId, time: 0, playing: false, duration: 0, lyrics: null, cover: null },
-  );
-  if (nextTrack) {
-    loadAndPlayNative(nextTrack.path, gen);
-  }
+  setNowPlaying(nowPlayingFromTrack(nextTrack));
+  loadAndPlayNative(nextTrack.path, gen);
 }
 
 export function next(): void {
@@ -707,24 +593,17 @@ export function prev(): void {
     getCurrentLoop(),
   );
   if (!prevId) return;
-  invalidateSharedPlayback();
 
-  const library = getLibrary();
-  const prevTrack = library.find((t) => t.id === prevId);
-  if (prevTrack) {
-    advanceContextIndex(prevId);
-  }
+  const prevTrack = getLibrary().find((t) => t.id === prevId);
+  if (!prevTrack) return;
+
+  invalidateSharedPlayback();
+  advanceContextIndex(prevId);
 
   cancelSeek(false);
   const gen = ++playGeneration;
-  setNowPlaying(
-    prevTrack
-      ? nowPlayingFromTrack(prevTrack)
-      : { ...np!, id: prevId, time: 0, playing: false, duration: 0, lyrics: null, cover: null },
-  );
-  if (prevTrack) {
-    loadAndPlayNative(prevTrack.path, gen);
-  }
+  setNowPlaying(nowPlayingFromTrack(prevTrack));
+  loadAndPlayNative(prevTrack.path, gen);
 }
 
 let _seekTarget: number | null = null;

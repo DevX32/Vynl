@@ -91,10 +91,9 @@ function startShuffleSession(
   currentPath: string | null = contextQueue[startIndex] ?? null,
 ): void {
   const library = getLibrary();
-  const queued = new Set(_userQueue);
   const seen = new Set<string>();
-  const upcoming = contextQueue.slice(startIndex + 1).filter((path) => {
-    if (path === currentPath || queued.has(path) || seen.has(path)) return false;
+  const upcoming = contextQueue.filter((path) => {
+    if (path === currentPath || seen.has(path)) return false;
     if (!library.some((track) => track.path === path)) return false;
     seen.add(path);
     return true;
@@ -110,7 +109,7 @@ function refillShuffleSession(currentPath: string | null): void {
   const queued = new Set(_userQueue);
   const seen = new Set<string>();
   const candidates = _contextQueue.filter((path) => {
-    if (path === currentPath || queued.has(path) || seen.has(path)) return false;
+    if (path === currentPath || seen.has(path)) return false;
     if (!library.some((track) => track.path === path)) return false;
     seen.add(path);
     return true;
@@ -324,14 +323,29 @@ export function removeFromUserQueue(path: string): void {
   persistNowPlaying();
 }
 
+function findContextSlot(path: string): number {
+  const after = _contextQueue.findIndex(
+    (p, i) => i > _contextIndex && p === path,
+  );
+  if (after >= 0) return after;
+  return _contextQueue.findIndex((p, i) => i < _contextIndex && p === path);
+}
+
 export function removeFromContextQueue(path: string): void {
-  const idx = _contextQueue.findIndex((p, i) => i > _contextIndex && p === path);
-  if (idx < 0) return;
-  const next = [..._contextQueue];
-  next.splice(idx, 1);
-  _contextQueue = next;
-  _shuffleUpcoming = _shuffleUpcoming.filter((queued) => queued !== path);
-  persistNowPlaying();
+  const idx = findContextSlot(path);
+  const inUpcoming = _shuffleUpcoming.includes(path);
+  if (idx < 0 && !inUpcoming) return;
+
+  if (idx >= 0) {
+    const next = [..._contextQueue];
+    next.splice(idx, 1);
+    _contextQueue = next;
+    if (idx < _contextIndex) _contextIndex -= 1;
+    persistNowPlaying();
+  }
+  if (inUpcoming) {
+    _shuffleUpcoming = _shuffleUpcoming.filter((queued) => queued !== path);
+  }
 }
 
 export function reorderUserQueue(fromPath: string, toPath: string): void {
@@ -349,14 +363,20 @@ export function reorderContextQueue(fromPath: string, toPath: string): void {
     _shuffleUpcoming = moveItem(_shuffleUpcoming, shuffleFrom, shuffleTo);
   }
 
-  const from = _contextQueue.findIndex(
-    (p, i) => i > _contextIndex && p === fromPath,
-  );
-  const to = _contextQueue.findIndex(
-    (p, i) => i > _contextIndex && p === toPath,
-  );
+  const from = findContextSlot(fromPath);
+  const to = findContextSlot(toPath);
   if (from === to || from < 0 || to < 0) return;
+
+  const currentIndex = _contextIndex;
   _contextQueue = moveItem(_contextQueue, from, to);
+  _contextIndex =
+    from < currentIndex
+      ? to < currentIndex
+        ? currentIndex
+        : currentIndex - 1
+      : to < currentIndex
+        ? currentIndex + 1
+        : currentIndex;
   persistNowPlaying();
 }
 

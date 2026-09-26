@@ -155,6 +155,7 @@ pub fn run() {
             let settings = crate::services::settings::get_settings(&user_data);
 
             sync_launch_at_startup(settings.launch_at_startup);
+            crate::services::player::set_app_handle(app.handle());
             crate::services::player::set_eq(settings.eq_enabled, &settings.eq_bands);
 
             tauri::async_runtime::spawn(async move {

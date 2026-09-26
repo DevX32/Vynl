@@ -222,6 +222,14 @@ export interface NowPlayingState {
   timestamp: number;
 }
 
+export interface PlaybackTick {
+  generation: number;
+  position: number;
+  playing: boolean;
+  finished: boolean;
+  duration: number | null;
+}
+
 export interface UpdateStatus {
   available: boolean;
   version?: string;

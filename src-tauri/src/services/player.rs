@@ -1,15 +1,72 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{mpsc, Mutex, MutexGuard};
+use std::sync::{mpsc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 use rodio::source::SeekError;
 use rodio::{Decoder, OutputStream, Sink, Source};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter};
 
 static VOLUME: AtomicU32 = AtomicU32::new(75);
 static PLAYING: AtomicBool = AtomicBool::new(false);
 static PAUSED: AtomicBool = AtomicBool::new(false);
+
+pub const PLAYBACK_TICK_EVENT: &str = "vynl:player:tick";
+const TICK_INTERVAL: Duration = Duration::from_millis(50);
+static APP: OnceLock<AppHandle> = OnceLock::new();
+
+pub fn set_app_handle(app: &AppHandle) {
+    let _ = APP.set(app.clone());
+}
+
+#[derive(Clone, Serialize)]
+pub struct PlaybackTick {
+    pub generation: u64,
+    pub position: f64,
+    pub playing: bool,
+    pub finished: bool,
+    pub duration: Option<f64>,
+}
+
+type TickKey = (u64, bool, bool);
+
+fn emit_playback_tick(
+    generation: u64,
+    sink: Option<&Sink>,
+    duration_secs: Option<f64>,
+    last_key: &mut Option<TickKey>,
+) {
+    if generation == 0 {
+        return;
+    }
+
+    let has_sink = sink.is_some();
+    let empty = sink.map(|s| s.empty()).unwrap_or(false);
+    let paused = PAUSED.load(Ordering::Relaxed);
+    let playing = has_sink && !empty && !paused;
+    let finished = has_sink && empty && !paused;
+
+    let key: TickKey = (generation, playing, finished);
+    if !playing && *last_key == Some(key) {
+        return;
+    }
+    *last_key = Some(key);
+
+    let Some(app) = APP.get() else { return };
+    let position = sink.map(|s| s.get_pos().as_secs_f64()).unwrap_or(0.0);
+    let _ = app.emit(
+        PLAYBACK_TICK_EVENT,
+        PlaybackTick {
+            generation,
+            position,
+            playing,
+            finished,
+            duration: duration_secs,
+        },
+    );
+}
 
 fn scale_volume(raw: u32) -> f32 {
     let v = raw as f32 / 100.0;
@@ -351,9 +408,11 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
     let mut playback_generation = 0u64;
     let mut active_generation = 0u64;
     let mut pending_seek: Option<(f64, u64)> = None;
+    let mut duration_secs: Option<f64> = None;
+    let mut last_tick_key: Option<TickKey> = None;
 
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
+        match rx.recv_timeout(TICK_INTERVAL) {
             Ok(PlayerRequest { cmd, reply_tx }) => {
                 let resp = match cmd {
                     PlayerCmd::Play(path, seek_to, generation) => {
@@ -379,30 +438,34 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PAUSED.store(false, Ordering::Relaxed);
                             match File::open(&path) {
                                 Ok(file) => match Decoder::new(BufReader::new(file)) {
-                                    Ok(decoder) => match Sink::try_new(&handle) {
-                                        Ok(new_sink) => {
-                                            new_sink.append(EqualizerSource::new(
-                                                decoder.convert_samples::<f32>(),
-                                            ));
-                                            new_sink.set_volume(scale_volume(
-                                                VOLUME.load(Ordering::Relaxed),
-                                            ));
-                                            let seek_result = requested_seek
-                                                .map(|seek| seek_sink(&new_sink, seek))
-                                                .transpose();
-                                            match seek_result {
-                                                Ok(Some(())) | Ok(None) => {
-                                                    sink = Some(new_sink);
-                                                    active_generation = generation;
-                                                    PLAYING.store(true, Ordering::Relaxed);
-                                                    PAUSED.store(false, Ordering::Relaxed);
-                                                    PlayerResp::Ok
+                                    Ok(decoder) => {
+                                        let total = decoder.total_duration().map(|d| d.as_secs_f64());
+                                        match Sink::try_new(&handle) {
+                                            Ok(new_sink) => {
+                                                new_sink.append(EqualizerSource::new(
+                                                    decoder.convert_samples::<f32>(),
+                                                ));
+                                                new_sink.set_volume(scale_volume(
+                                                    VOLUME.load(Ordering::Relaxed),
+                                                ));
+                                                let seek_result = requested_seek
+                                                    .map(|seek| seek_sink(&new_sink, seek))
+                                                    .transpose();
+                                                match seek_result {
+                                                    Ok(Some(())) | Ok(None) => {
+                                                        sink = Some(new_sink);
+                                                        duration_secs = total;
+                                                        active_generation = generation;
+                                                        PLAYING.store(true, Ordering::Relaxed);
+                                                        PAUSED.store(false, Ordering::Relaxed);
+                                                        PlayerResp::Ok
+                                                    }
+                                                    Err(e) => PlayerResp::Err(e),
                                                 }
-                                                Err(e) => PlayerResp::Err(e),
                                             }
+                                            Err(e) => PlayerResp::Err(format!("sink: {e}")),
                                         }
-                                        Err(e) => PlayerResp::Err(format!("sink: {e}")),
-                                    },
+                                    }
                                     Err(e) => PlayerResp::Err(format!("decode: {e}")),
                                 },
                                 Err(e) => PlayerResp::Err(format!("open: {e}")),
@@ -416,6 +479,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             playback_generation = generation;
                             active_generation = 0;
                             pending_seek = None;
+                            duration_secs = None;
                             if let Some(s) = sink.take() {
                                 s.stop();
                             }
@@ -511,6 +575,13 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
+
+        emit_playback_tick(
+            active_generation,
+            sink.as_ref(),
+            duration_secs,
+            &mut last_tick_key,
+        );
     }
 
     let _ = output;
