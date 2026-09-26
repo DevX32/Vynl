@@ -439,7 +439,8 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             match File::open(&path) {
                                 Ok(file) => match Decoder::new(BufReader::new(file)) {
                                     Ok(decoder) => {
-                                        let total = decoder.total_duration().map(|d| d.as_secs_f64());
+                                        let total =
+                                            decoder.total_duration().map(|d| d.as_secs_f64());
                                         match Sink::try_new(&handle) {
                                             Ok(new_sink) => {
                                                 new_sink.append(EqualizerSource::new(

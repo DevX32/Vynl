@@ -1475,11 +1475,13 @@ async fn process_track(
         );
     }
 
-    let candidates = search_and_rank_candidates(ytdlp, track, opts_matches, user_data_dir).await;
-
     let picked = opts_picks
         .and_then(|p| p.get(&track.id))
         .map(|&i| i as usize);
+
+    let candidates =
+        search_and_rank_candidates(ytdlp, track, opts_matches, picked, user_data_dir).await;
+
     let app_for_dl = app.clone();
     let result = download_track(
         track,
@@ -1906,73 +1908,155 @@ async fn emit_final_summary(app_handle: &tauri::AppHandle, summary: &Arc<Mutex<D
     }
 }
 
-fn title_tokens(title: &str) -> HashSet<String> {
-    clean_title(title)
-        .to_lowercase()
-        .split_whitespace()
-        .filter(|t| t.len() > 1)
-        .map(|t| t.to_string())
-        .collect()
+fn normalize_phrase_input(s: &str) -> String {
+    let lowered = s.to_lowercase();
+    let mut out = String::with_capacity(lowered.len() + 2);
+    out.push(' ');
+    let mut prev_was_space = true;
+    for c in lowered.chars() {
+        if c.is_alphanumeric() {
+            out.push(c);
+            prev_was_space = false;
+        } else if !prev_was_space {
+            out.push(' ');
+            prev_was_space = true;
+        }
+    }
+    out.push(' ');
+    out
 }
 
-const UNWANTED_VARIANTS: &[&str] = &[
+fn contains_phrase(haystack: &str, needle: &str) -> bool {
+    let n = normalize_phrase_input(needle);
+    let n = n.trim();
+    if n.is_empty() {
+        return false;
+    }
+
+    let hay = normalize_phrase_input(haystack);
+    if n.contains(' ') {
+        return hay.contains(&format!(" {} ", n));
+    }
+    hay.split(' ').any(|t| t == n)
+}
+
+const REJECT_VARIANTS: &[&str] = &[
     "remix",
     "remixed",
-    "cover",
-    "covered",
-    "live",
-    "acoustic",
-    "instrumental",
-    "karaoke",
-    "8d",
+    "nightcore",
     "slowed",
     "reverb",
-    "bass boosted",
-    "nightcore",
     "sped up",
     "speed up",
-    "extended",
-    "edit",
+    "bass boosted",
+    "8d",
+    "karaoke",
+    "instrumental",
+    "acoustic",
+    "unplugged",
+    "live",
+    "bootleg",
+    "mashup",
+    "medley",
     "radio edit",
-    "clean",
-    "explicit",
-    "lyric",
-    "lyrics",
-    "visualizer",
-    "visualiser",
-    "audio",
-    "official audio",
-    "official video",
-    "music video",
-    "mv",
+    "extended mix",
+    "cover by",
+    "covered by",
+    "performed by",
+    "tribute",
+    "parody",
+    "fanmade",
+    "fan made",
+    "reupload",
+];
+
+const VARIANT_PENALTY_TOKENS: &[&str] = &[
+    "cover",
+    "piano",
+    "guitar",
+    "violin",
+    "drum",
+    "drums",
+    "bass",
+    "orchestral",
+    "orchestra",
+    "symphonic",
+    "how to",
+    "tutorial",
+    "reaction",
     "teaser",
     "trailer",
     "preview",
     "snippet",
-    "reaction",
-    "tutorial",
-    "how to",
-    "cover by",
-    "performed by",
-    "piano",
-    "guitar",
-    "drum",
-    "bass",
-    "violin",
-    "orchestral",
-    "symphonic",
-    "mashup",
-    "medley",
-    "bootleg",
-    "fanmade",
-    "fan made",
-    "tribute",
-    "parody",
+    "clean",
+    "explicit",
 ];
 
-fn has_unwanted_variant(title: &str) -> bool {
-    let lower = title.to_lowercase();
-    UNWANTED_VARIANTS.iter().any(|v| lower.contains(v))
+const UPLOAD_NOISE_TOKENS: &[&str] = &[
+    "official",
+    "audio",
+    "video",
+    "music",
+    "visualizer",
+    "visualiser",
+    "lyric",
+    "lyrics",
+    "letra",
+    "high",
+    "quality",
+    "hq",
+    "hd",
+    "4k",
+    "mv",
+    "mvi",
+    "full",
+    "version",
+    "stream",
+    "clip",
+    "track",
+    "colors",
+    "colour",
+];
+
+const STOPWORDS: &[&str] = &[
+    "the", "and", "for", "from", "with", "that", "this", "these", "those", "you", "your", "our",
+    "their", "his", "her", "its", "into", "onto", "over", "under", "than", "then", "them", "they",
+    "will", "was", "were", "been", "being", "are", "but", "not", "out", "off", "own", "too",
+    "very", "just", "get", "got", "let",
+];
+
+fn tokenize(s: &str) -> HashSet<String> {
+    s.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.len() > 1 && !STOPWORDS.contains(t))
+        .map(|t| t.to_string())
+        .collect()
+}
+
+fn strip_upload_noise(tokens: &HashSet<String>) -> HashSet<String> {
+    tokens
+        .iter()
+        .filter(|t| !UPLOAD_NOISE_TOKENS.contains(&t.as_str()))
+        .cloned()
+        .collect()
+}
+
+fn title_tokens(title: &str) -> HashSet<String> {
+    let mut tokens = tokenize(&clean_title(title));
+    tokens.retain(|t| !UPLOAD_NOISE_TOKENS.contains(&t.as_str()));
+    tokens
+}
+
+fn has_reject_variant(text: &str) -> bool {
+    REJECT_VARIANTS.iter().any(|v| contains_phrase(text, v))
+}
+
+fn variant_penalty(text: &str) -> f64 {
+    VARIANT_PENALTY_TOKENS
+        .iter()
+        .filter(|v| contains_phrase(text, v))
+        .count() as f64
+        * -30.0
 }
 
 fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
@@ -1987,29 +2071,21 @@ fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
     intersection as f64 / union as f64
 }
 
-fn tokenize(s: &str) -> HashSet<String> {
-    s.to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|t| t.len() > 1)
-        .map(|t| t.to_string())
-        .collect()
-}
-
 fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) -> f64 {
     let c_title = candidate.title.to_lowercase();
     let c_channel = candidate.channel.as_deref().unwrap_or("").to_lowercase();
 
-    let track_title_tokens = tokenize(&track.title);
-    let track_artist_tokens = tokenize(&track.artist);
-    let candidate_title_tokens = tokenize(&c_title);
-    let candidate_channel_tokens = tokenize(&c_channel);
+    let track_title_tokens = title_tokens(&track.title);
+    let track_artist_tokens = strip_upload_noise(&tokenize(&track.artist));
+    let candidate_title_tokens = strip_upload_noise(&tokenize(&c_title));
+    let candidate_channel_tokens = strip_upload_noise(&tokenize(&c_channel));
 
     let title_sim = jaccard_similarity(&track_title_tokens, &candidate_title_tokens);
     let artist_sim = jaccard_similarity(&track_artist_tokens, &candidate_title_tokens);
     let channel_artist_sim = jaccard_similarity(&track_artist_tokens, &candidate_channel_tokens);
 
     let mut score = 0.0;
-    score += title_sim * 40.0;
+    score += title_sim * 45.0;
     score += artist_sim * 30.0;
     score += channel_artist_sim * 15.0;
 
@@ -2051,13 +2127,8 @@ fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) -> f64 {
         score += 3.0;
     }
 
-    if has_unwanted_variant(&c_title) {
-        score -= 100.0;
-    }
-
-    if has_unwanted_variant(&c_channel) {
-        score -= 50.0;
-    }
+    score += variant_penalty(&c_title);
+    score += variant_penalty(&c_channel) / 2.0;
 
     score
 }
@@ -2066,41 +2137,49 @@ fn filter_and_rank_candidates(
     candidates: Vec<SearchCandidate>,
     track: &TrackMeta,
 ) -> Vec<SearchCandidate> {
-    let expected_artist = tokenize(&track.artist);
+    let expected_artist = strip_upload_noise(&tokenize(&track.artist));
     let expected_title = title_tokens(&track.title);
 
-    let mut scored: Vec<(f64, SearchCandidate)> = candidates
-        .into_iter()
-        .filter(|c| {
-            let c_title = c.title.to_lowercase();
-            let c_channel = c.channel.as_deref().unwrap_or("").to_lowercase();
-
-            let artist_hit = expected_artist
-                .iter()
-                .any(|tok| c_title.contains(tok) || c_channel.contains(tok));
-            let title_hit = expected_title.iter().any(|tok| c_title.contains(tok));
-            let channel_hit = expected_artist.iter().any(|tok| c_channel.contains(tok));
-
-            if !artist_hit && !title_hit && !channel_hit {
-                return false;
+    let duration_ok = |c: &SearchCandidate| {
+        if let (Some(dur), Some(c_dur)) = (track.duration, c.duration) {
+            if dur > 0.0 && c_dur > 0.0 {
+                let diff = (c_dur - dur).abs();
+                let ratio = diff / dur;
+                return !(ratio > 0.5 || diff > 120.0);
             }
-
-            if let (Some(dur), Some(c_dur)) = (track.duration, c.duration) {
-                if dur > 0.0 && c_dur > 0.0 {
-                    let diff = (c_dur - dur).abs();
-                    let ratio = diff / dur;
-                    if ratio > 0.5 || diff > 120.0 {
-                        return false;
-                    }
-                }
-            } else if let Some(c_dur) = c.duration {
-                if c_dur > 600.0 {
-                    return false;
-                }
-            }
-
             true
+        } else {
+            c.duration.map_or(true, |d| d <= 600.0)
+        }
+    };
+
+    let relevant = |c: &SearchCandidate| {
+        let c_title = strip_upload_noise(&tokenize(&c.title));
+        let c_channel = strip_upload_noise(&tokenize(c.channel.as_deref().unwrap_or("")));
+
+        let artist_hit = !expected_artist.is_empty()
+            && (expected_artist.intersection(&c_title).count() > 0
+                || expected_artist.intersection(&c_channel).count() > 0);
+        let title_hit =
+            !expected_title.is_empty() && expected_title.intersection(&c_title).count() > 0;
+
+        (artist_hit || title_hit) && duration_ok(c)
+    };
+
+    let relevant: Vec<SearchCandidate> =
+        candidates.iter().filter(|c| relevant(c)).cloned().collect();
+
+    let clean: Vec<SearchCandidate> = relevant
+        .iter()
+        .filter(|c| {
+            !has_reject_variant(&c.title) && !has_reject_variant(c.channel.as_deref().unwrap_or(""))
         })
+        .cloned()
+        .collect();
+    let pool = if clean.is_empty() { relevant } else { clean };
+
+    let mut scored: Vec<(f64, SearchCandidate)> = pool
+        .into_iter()
         .map(|c| {
             let score = score_candidate(&c, track);
             (score, c)
@@ -2115,10 +2194,16 @@ async fn search_and_rank_candidates(
     ytdlp: &str,
     track: &TrackMeta,
     precomputed: Option<&HashMap<String, Vec<SearchCandidate>>>,
+    picked: Option<usize>,
     user_data_dir: &Path,
 ) -> Vec<SearchCandidate> {
     if let Some(cands) = precomputed.and_then(|m| m.get(&track.id)) {
-        return cands.clone();
+        if !cands.is_empty() {
+            return match picked {
+                Some(_) => cands.clone(),
+                None => filter_and_rank_candidates(cands.clone(), track),
+            };
+        }
     }
     let raw = match match_cache_get(user_data_dir, &track.id) {
         Some(cached) => cached,
