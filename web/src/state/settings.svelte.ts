@@ -33,22 +33,12 @@ const currentTools = $derived(_tools);
 
 function normalizeBitrate(s: Settings): Settings {
   const br = BITRATES[s.format];
-  if (br) {
-    if (s.bitrate == null) {
-      return { ...s, bitrate: br[br.length - 1] };
-    }
-    if (!br.includes(s.bitrate)) {
-      console.warn(
-        `[Settings] Bitrate ${s.bitrate} is not valid for format ${s.format}. ` +
+  if (br && s.bitrate != null && !br.includes(s.bitrate)) {
+    console.warn(
+      `[Settings] Bitrate ${s.bitrate} is not valid. ` +
         `Valid bitrates: ${br.join(", ")}. Using ${br[br.length - 1]} as fallback.`
-      );
-      return { ...s, bitrate: br[br.length - 1] };
-    }
-  } else {
-    if (s.bitrate !== null) {
-      console.info(`[Settings] Clearing bitrate for format ${s.format} (not applicable)`);
-      return { ...s, bitrate: null };
-    }
+    );
+    return { ...s, bitrate: br[br.length - 1] };
   }
   return s;
 }

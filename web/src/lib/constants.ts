@@ -2,10 +2,6 @@ import type { AudioFormat } from "./types";
 
 export const BITRATES: Record<AudioFormat, number[] | null> = {
   mp3: [128, 192, 256, 320],
-  m4a: [128, 192, 256, 320],
-  opus: [128, 160, 192, 256, 320],
-  flac: null,
-  wav: null,
 };
 
 export const RPC_THROTTLE = 4000;

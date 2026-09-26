@@ -20,7 +20,6 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 ## Features
 
 - Playlists, albums, and single tracks from supported links
-- Configurable output: MP3, M4A, Opus, FLAC, WAV with bitrate selection
 - Embedded cover art and metadata
 - Parallel downloads with progress tracking
 - Auto-installs `yt-dlp` and `ffmpeg`

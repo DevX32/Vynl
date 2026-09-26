@@ -4,10 +4,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum AudioFormat {
     Mp3,
-    M4a,
-    Opus,
-    Flac,
-    Wav,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

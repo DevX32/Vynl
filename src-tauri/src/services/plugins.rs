@@ -520,10 +520,6 @@ pub fn validate_local_media(app: &AppHandle, path: &str, kind: &str) -> Result<S
     }
 }
 
-// ---------------------------------------------------------------------------
-// HTTP proxy (CORS-free fetch for plugins)
-// ---------------------------------------------------------------------------
-
 pub async fn http_fetch(
     url: String,
     opts: Option<PluginHttpOptions>,
@@ -586,10 +582,6 @@ pub async fn http_fetch(
         text: String::from_utf8_lossy(&bytes).into_owned(),
     })
 }
-
-// ---------------------------------------------------------------------------
-// Store catalog
-// ---------------------------------------------------------------------------
 
 fn parse_catalog(body: &str) -> Result<Vec<StorePlugin>, String> {
     let trimmed = body.trim();
@@ -669,7 +661,6 @@ pub async fn fetch_store(
     }
 
     if successes > 0 {
-        // Cache the merged catalog for offline fallback.
         let cache = PluginStoreResult {
             entries: merged.clone(),
             source_error: None,
@@ -687,7 +678,6 @@ pub async fn fetch_store(
         });
     }
 
-    // Everything failed: fall back to the last cached catalog.
     if let Ok(raw) = fs::read_to_string(root.join(STORE_CACHE_FILE)) {
         if let Ok(cached) = serde_json::from_str::<PluginStoreResult>(&raw) {
             return Ok(PluginStoreResult {

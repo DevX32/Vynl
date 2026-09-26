@@ -42,8 +42,6 @@ pub(crate) fn output_dir_from_settings(app: &AppHandle) -> Result<PathBuf, Strin
         .unwrap_or_else(|| PathBuf::from(".")))
 }
 
-/// Canonicalises `file`, tolerating a not-yet-existing final component, and
-/// rejects it unless it resolves inside `canonical_output`.
 fn canonicalize_in_output(file: &str, canonical_output: &Path) -> Result<PathBuf, String> {
     let path = Path::new(file);
     if !path.is_absolute() {
@@ -70,8 +68,6 @@ fn canonicalize_in_output(file: &str, canonical_output: &Path) -> Result<PathBuf
     Ok(canonical)
 }
 
-/// Canonical output directory, used as the containment root for every command
-/// that touches user files.
 fn canonical_output_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let output = output_dir_from_settings(app)?;
     Ok(fs::canonicalize(&output).unwrap_or(output))
@@ -81,8 +77,6 @@ fn validate_path_in_output(file: &str, app: &AppHandle) -> Result<PathBuf, Strin
     canonicalize_in_output(file, &canonical_output_dir(app)?)
 }
 
-/// [`validate_path_in_output`] plus the "the file must be there" check that
-/// every read/modify command performs right after it.
 fn require_path_in_output(file: &str, app: &AppHandle) -> Result<PathBuf, String> {
     let path = validate_path_in_output(file, app)?;
     if !path.exists() {

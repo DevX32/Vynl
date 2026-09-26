@@ -42,8 +42,6 @@
     }
   }
 
-  // The slider is being torn down mid-drag (fullscreen closed): drop the
-  // pending seek instead of committing it.
   onDestroy(() => {
     if (!dragging) return;
     cancelSeek();

@@ -1,20 +1,35 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use regex::Regex;
-use serde_json::Value;
 use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{Mutex, Semaphore};
 
 use crate::commands::types::*;
-use crate::services::{catalog, history, lyrics, process, tools, util};
+use crate::services::{catalog, history, lyrics, process as sysproc, tools, util};
 
-const VERIFY_TOLERANCE: f64 = 0.05;
+mod matching;
+mod paths;
+mod process;
+mod search;
+
+use matching::filter_and_rank_candidates;
+use paths::tmp_dir;
+pub use paths::{audio_format_ext, render_pattern, sanitize};
+pub use process::cancel_download;
+pub use process::resolve_tool;
+use process::{
+    fmt_dur, last_error, progress_from_line, watch_for_stall, CANCELLED_DOWNLOAD, CHILDREN,
+};
+pub use search::find_matches;
+use search::{common_yt_args, search_and_rank_candidates};
+
+const VERIFY_TOLERANCE: f64 = 0.10;
 
 static PROGRESS_RE: once_cell::sync::Lazy<Regex> =
     once_cell::sync::Lazy::new(|| Regex::new(r"\[download\]\s+(\d+(?:\.\d+)?)%").unwrap());
@@ -52,238 +67,14 @@ static NON_ALNUM_RE: once_cell::sync::Lazy<Regex> =
 const UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
-static CANCELLED_FIND: AtomicBool = AtomicBool::new(false);
-static CANCELLED_DOWNLOAD: AtomicBool = AtomicBool::new(false);
 static BUSY: AtomicBool = AtomicBool::new(false);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
-static CHILDREN: once_cell::sync::Lazy<Mutex<Vec<(u32, u64)>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(Vec::new()));
 
-fn tmp_dir(user_data_dir: &Path) -> PathBuf {
-    let d = user_data_dir.join("tmp");
-    let _ = std::fs::create_dir_all(&d);
-    d
-}
-
-pub fn audio_format_ext(fmt: &AudioFormat) -> &'static str {
-    match fmt {
-        AudioFormat::Mp3 => "mp3",
-        AudioFormat::M4a => "m4a",
-        AudioFormat::Opus => "opus",
-        AudioFormat::Flac => "flac",
-        AudioFormat::Wav => "wav",
-    }
-}
-
-pub fn sanitize(name: &str) -> String {
-    let cleaned = name
-        .chars()
-        .map(|c| {
-            if matches!(
-                c,
-                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '\0'..='\x1f'
-            ) {
-                ' '
-            } else {
-                c
-            }
-        })
-        .collect::<String>();
-    let cleaned = WHITESPACE_RE.replace_all(&cleaned, " ").to_string();
-    let cleaned = TRAILING_DOT_SPACE_RE.replace_all(&cleaned, "").to_string();
-    let trimmed = cleaned.trim().to_string();
-    let trimmed: String = trimmed
-        .split_whitespace()
-        .filter(|s| !matches!(*s, "." | ".."))
-        .collect::<Vec<_>>()
-        .join(" ");
-    if trimmed.is_empty() {
-        "track".to_string()
-    } else {
-        trimmed.chars().take(150).collect()
-    }
-}
-
-pub fn render_pattern(pattern: &str, t: &TrackMeta) -> String {
-    let track = t
-        .track_number
-        .map(|n| format!("{:02}", n))
-        .unwrap_or_else(|| "00".to_string());
-    let year = t.year.map(|y| y.to_string()).unwrap_or_default();
-    let step1 = pattern
-        .replace("{track}", "\x01TRACK\x02")
-        .replace("{title}", "\x01TITLE\x02")
-        .replace("{artist}", "\x01ARTIST\x02")
-        .replace("{album}", "\x01ALBUM\x02")
-        .replace("{year}", "\x01YEAR\x02");
-    step1
-        .replace("\x01TRACK\x02", &track)
-        .replace("\x01TITLE\x02", &t.title)
-        .replace("\x01ARTIST\x02", &t.artist)
-        .replace("\x01ALBUM\x02", &t.album)
-        .replace("\x01YEAR\x02", &year)
-}
-
-fn clean_title(s: &str) -> String {
+pub(super) fn clean_title(s: &str) -> String {
     let no_parens = PAREN_RE.replace_all(s, " ");
     let no_feat = FEAT_RE.replace(&no_parens, "");
     let cleaned = MULTI_SPACE_RE.replace_all(&no_feat, " ");
     cleaned.trim().to_string()
-}
-
-fn is_ascii_heavy(s: &str) -> bool {
-    let ascii_count = s.chars().filter(|c| c.is_ascii_alphabetic()).count();
-    let total = s.chars().filter(|c| !c.is_whitespace()).count();
-    total > 0 && ascii_count * 2 > total
-}
-
-fn build_query(track: &TrackMeta) -> String {
-    let title = clean_title(&track.title);
-    let title_q = if is_ascii_heavy(&title) {
-        format!("\"{}\"", title)
-    } else {
-        title.clone()
-    };
-    let artist_q = if is_ascii_heavy(&track.artist) {
-        format!("\"{}\"", track.artist)
-    } else {
-        track.artist.clone()
-    };
-    let mut parts = vec![title_q, artist_q];
-    if !track.album.is_empty() && track.album != track.title && track.album != track.artist {
-        let album = clean_title(&track.album);
-        if !album.is_empty() && album != title {
-            if is_ascii_heavy(&album) {
-                parts.push(format!("\"{}\"", album));
-            } else {
-                parts.push(album);
-            }
-        }
-    }
-    parts.join(" ")
-}
-
-/// Builds an artist+title search query for `track`, appending `suffix`
-/// (e.g. `" lyrics"`).
-fn build_query_simple(track: &TrackMeta, suffix: &str) -> String {
-    let title = clean_title(&track.title);
-    let artist = &track.artist;
-    let quoted = if is_ascii_heavy(&title) && is_ascii_heavy(artist) {
-        format!("\"{}\" \"{}\"", artist, title)
-    } else {
-        format!("{} {}", artist, title)
-    };
-    quoted + suffix
-}
-
-fn fmt_dur(sec: f64) -> String {
-    let m = (sec / 60.0).floor() as u64;
-    let s = (sec % 60.0).round() as u64;
-    format!("{}:{:02}", m, s)
-}
-
-fn progress_from_line(line: &str) -> Option<f64> {
-    PROGRESS_RE
-        .captures(line)
-        .and_then(|c| c.get(1))
-        .and_then(|m| m.as_str().parse::<f64>().ok())
-        .map(|p| p.min(100.0))
-}
-
-fn last_error(stderr: &str) -> String {
-    let lines: Vec<&str> = stderr.lines().collect();
-    let error_lines: Vec<&str> = lines
-        .iter()
-        .filter(|l| l.starts_with("ERROR:") || l.to_lowercase().contains("error"))
-        .copied()
-        .collect();
-    if !error_lines.is_empty() {
-        let last = error_lines.last().unwrap();
-        if let Some(caps) = LAST_ERROR_RE.captures(last) {
-            return caps.get(1).unwrap().as_str().trim().to_string();
-        }
-        return last.trim().to_string();
-    }
-    lines
-        .iter()
-        .rev()
-        .find(|l| !l.trim().is_empty())
-        .map(|l| l.trim().to_string())
-        .unwrap_or_else(|| "Unknown error".to_string())
-}
-
-fn output_with_timeout(
-    mut command: std::process::Command,
-    timeout: std::time::Duration,
-) -> Option<std::process::Output> {
-    use std::io::Read;
-
-    let mut child = command.spawn().ok()?;
-    let stdout_pipe = child.stdout.take();
-    let stderr_pipe = child.stderr.take();
-
-    let out_reader = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(mut pipe) = stdout_pipe {
-            let _ = pipe.read_to_end(&mut buf);
-        }
-        buf
-    });
-    let err_reader = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(mut pipe) = stderr_pipe {
-            let _ = pipe.read_to_end(&mut buf);
-        }
-        buf
-    });
-
-    let start = std::time::Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if start.elapsed() < timeout => {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = out_reader.join();
-                let _ = err_reader.join();
-                return None;
-            }
-        }
-    };
-
-    Some(std::process::Output {
-        status,
-        stdout: out_reader.join().unwrap_or_default(),
-        stderr: err_reader.join().unwrap_or_default(),
-    })
-}
-
-fn run_yt_json(cmd: &str, args: &[String], timeout: std::time::Duration) -> Option<Value> {
-    let mut command = process::hidden_std(std::process::Command::new(cmd));
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let output = output_with_timeout(command, timeout)?;
-    if output.status.code() == Some(0) {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let trimmed = stdout.trim();
-        if !trimmed.is_empty() {
-            serde_json::from_str(trimmed).ok()
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
-fn resolve_tool(name: &str, user_data_dir: &Path) -> Option<String> {
-    tools::get_tool_path(name, user_data_dir)
 }
 
 async fn follow_short_link(raw: &str) -> Option<catalog::CatalogLink> {
@@ -342,11 +133,6 @@ pub async fn resolve_link(raw_url: &str) -> Result<Collection, String> {
     catalog::fetch_collection(&link).await
 }
 
-const SEARCH_QUOTA: &[(MatchSource, usize)] =
-    &[(MatchSource::YouTube, 10), (MatchSource::YouTubeMusic, 5)];
-
-const MIN_SEARCH_CANDIDATES: usize = 5;
-
 const DOWNLOAD_WORKERS: usize = 4;
 
 const DOWNLOAD_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
@@ -355,275 +141,7 @@ const SEARCH_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
 
 const COVER_PREFETCH_WORKERS: usize = 8;
 
-const MATCH_CACHE_FILE: &str = "match-cache.json";
-
 type CoverMap = Arc<std::sync::Mutex<HashMap<String, Option<PathBuf>>>>;
-
-const SEARCH_PREFIX: &[(MatchSource, &str)] = &[
-    (MatchSource::YouTube, "ytsearch"),
-    (MatchSource::YouTubeMusic, "ytmsearch"),
-];
-
-fn search_prefix(source: &MatchSource) -> &str {
-    SEARCH_PREFIX
-        .iter()
-        .find(|(s, _)| s == source)
-        .map(|(_, p)| *p)
-        .unwrap_or("ytsearch")
-}
-
-fn search_candidates(
-    ytdlp: &str,
-    query: &str,
-    query_alt: &str,
-    query_lyrics: &str,
-) -> Vec<SearchCandidate> {
-    let mut out: Vec<SearchCandidate> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-
-    let queries = [query, query_alt, query_lyrics];
-    let deadline = std::time::Instant::now() + SEARCH_BUDGET;
-
-    for q in &queries {
-        if out.len() >= MIN_SEARCH_CANDIDATES {
-            break;
-        }
-        for (source, count) in SEARCH_QUOTA {
-            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-            if remaining.is_zero() {
-                break;
-            }
-            let prefix = search_prefix(source);
-            let search_term = format!("{}{}:{}", prefix, count, q);
-
-            let mut args: Vec<String> = vec![
-                "--flat-playlist".into(),
-                "--dump-single-json".into(),
-                "--quiet".into(),
-                "--no-warnings".into(),
-                "--color".into(),
-                "never".into(),
-                "--socket-timeout".into(),
-                "15".into(),
-                "--extractor-args".into(),
-                "youtube:player_client=android,web,web_safari".into(),
-            ];
-
-            args.push(search_term);
-
-            let json = run_yt_json(ytdlp, &args, remaining);
-
-            if let Some(data) = json {
-                if let Some(entries) = data.get("entries").and_then(|e| e.as_array()) {
-                    for entry in entries {
-                        let url = entry
-                            .get("url")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        let title = entry
-                            .get("title")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let duration = entry
-                            .get("duration")
-                            .and_then(|v| v.as_f64())
-                            .map(|d| d.round());
-                        let channel = entry
-                            .get("channel")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        let view_count = entry.get("view_count").and_then(|v| v.as_i64());
-                        let channel_verified =
-                            entry.get("channel_is_verified").and_then(|v| v.as_bool());
-                        let upload_date = entry
-                            .get("upload_date")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-
-                        if let Some(u) = url {
-                            if !title.is_empty() && seen.insert(u.clone()) {
-                                out.push(SearchCandidate {
-                                    url: u,
-                                    title,
-                                    duration,
-                                    channel,
-                                    source: source.clone(),
-                                    view_count,
-                                    channel_verified,
-                                    upload_date,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    out
-}
-
-fn match_cache_path(user_data_dir: &Path) -> PathBuf {
-    user_data_dir.join(MATCH_CACHE_FILE)
-}
-
-struct MatchCacheState {
-    path: Option<PathBuf>,
-    entries: HashMap<String, Vec<SearchCandidate>>,
-    dirty: bool,
-    last_saved: Option<std::time::Instant>,
-}
-
-static MATCH_CACHE: once_cell::sync::Lazy<std::sync::Mutex<MatchCacheState>> =
-    once_cell::sync::Lazy::new(|| {
-        std::sync::Mutex::new(MatchCacheState {
-            path: None,
-            entries: HashMap::new(),
-            dirty: false,
-            last_saved: None,
-        })
-    });
-
-fn with_match_cache<R>(user_data_dir: &Path, f: impl FnOnce(&mut MatchCacheState) -> R) -> R {
-    let mut guard = MATCH_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let path = match_cache_path(user_data_dir);
-    if guard.path.as_ref() != Some(&path) {
-        guard.entries = std::fs::read(&path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default();
-        guard.path = Some(path);
-        guard.dirty = false;
-        guard.last_saved = None;
-    }
-    f(&mut guard)
-}
-
-const MATCH_CACHE_SAVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
-
-fn match_cache_save(state: &mut MatchCacheState, force: bool) {
-    if !state.dirty {
-        return;
-    }
-    let due = force
-        || state
-            .last_saved
-            .map(|t| t.elapsed() >= MATCH_CACHE_SAVE_INTERVAL)
-            .unwrap_or(true);
-    if !due {
-        return;
-    }
-    let Some(path) = state.path.clone() else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(bytes) = serde_json::to_vec(&state.entries) {
-        let tmp = path.with_extension("json.tmp");
-        if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
-            state.dirty = false;
-            state.last_saved = Some(std::time::Instant::now());
-        }
-    }
-}
-
-fn match_cache_get(user_data_dir: &Path, id: &str) -> Option<Vec<SearchCandidate>> {
-    with_match_cache(user_data_dir, |s| {
-        s.entries.get(id).filter(|v| !v.is_empty()).cloned()
-    })
-}
-
-fn match_cache_put(user_data_dir: &Path, id: &str, candidates: Vec<SearchCandidate>) -> bool {
-    if candidates.is_empty() {
-        return false;
-    }
-    with_match_cache(user_data_dir, |s| {
-        if s.entries.contains_key(id) {
-            return false;
-        }
-        s.entries.insert(id.to_string(), candidates);
-        s.dirty = true;
-        match_cache_save(s, false);
-        true
-    })
-}
-
-pub async fn find_matches(
-    collection: &Collection,
-    user_data_dir: &Path,
-) -> Result<HashMap<String, Vec<SearchCandidate>>, String> {
-    CANCELLED_FIND.store(false, Ordering::SeqCst);
-    let ytdlp = resolve_tool("yt-dlp", user_data_dir)
-        .ok_or_else(|| "yt-dlp is required to search for matches.".to_string())?;
-
-    let result: Arc<Mutex<HashMap<String, Vec<SearchCandidate>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let index = Arc::new(AtomicUsize::new(0));
-    let semaphore = Arc::new(Semaphore::new(4));
-    let data_dir = user_data_dir.to_path_buf();
-
-    let mut handles = Vec::new();
-    for _ in 0..4 {
-        let ytdlp = ytdlp.clone();
-        let collection = collection.clone();
-        let result = Arc::clone(&result);
-        let index = Arc::clone(&index);
-        let semaphore = Arc::clone(&semaphore);
-        let data_dir = data_dir.clone();
-
-        handles.push(tokio::spawn(async move {
-            let _permit = match semaphore.acquire().await {
-                Ok(p) => p,
-                Err(_) => return,
-            };
-            loop {
-                if CANCELLED_FIND.load(Ordering::Relaxed) {
-                    break;
-                }
-                let i = index.fetch_add(1, Ordering::Relaxed);
-                if i >= collection.tracks.len() {
-                    break;
-                }
-                let track = &collection.tracks[i];
-                let cached = match_cache_get(&data_dir, &track.id);
-                let candidates = match cached {
-                    Some(c) => c,
-                    None => {
-                        let query = build_query(track);
-                        let query_alt = build_query_simple(track, "");
-                        let query_lyrics = build_query_simple(track, " lyrics");
-                        let ytdlp_clone = ytdlp.clone();
-                        let found = tokio::task::spawn_blocking(move || {
-                            search_candidates(&ytdlp_clone, &query, &query_alt, &query_lyrics)
-                        })
-                        .await
-                        .unwrap_or_default();
-                        match_cache_put(&data_dir, &track.id, found.clone());
-                        found
-                    }
-                };
-
-                let mut res = result.lock().await;
-                res.insert(track.id.clone(), candidates);
-            }
-        }));
-    }
-
-    for handle in handles {
-        handle.await.map_err(|e| e.to_string())?;
-    }
-
-    let final_result = match Arc::try_unwrap(result) {
-        Ok(mutex) => mutex.into_inner(),
-        Err(arc) => arc.lock().await.clone(),
-    };
-
-    with_match_cache(user_data_dir, |s| match_cache_save(s, true));
-
-    Ok(final_result)
-}
 
 fn final_output_path(track: &TrackMeta, settings: &Settings) -> PathBuf {
     let base_name = sanitize(&render_pattern(&settings.filename_pattern, track));
@@ -672,83 +190,6 @@ pub fn get_done_track_ids(
     out
 }
 
-fn terminate_process(id: u32) {
-    if id == 0 {
-        return;
-    }
-    #[cfg(windows)]
-    {
-        unsafe {
-            use std::os::windows::raw::HANDLE;
-            const PROCESS_TERMINATE: u32 = 0x0001;
-            extern "system" {
-                fn OpenProcess(
-                    dwDesiredAccess: u32,
-                    bInheritHandle: i32,
-                    dwProcessId: u32,
-                ) -> HANDLE;
-                fn TerminateProcess(hProcess: HANDLE, uExitCode: u32) -> i32;
-                fn CloseHandle(hObject: HANDLE) -> i32;
-            }
-            let h = OpenProcess(PROCESS_TERMINATE, 0, id);
-            if !h.is_null() {
-                let _ = TerminateProcess(h, 1);
-                let _ = CloseHandle(h);
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        unsafe {
-            libc::kill(id as i32, libc::SIGTERM);
-        }
-    }
-}
-
-pub async fn cancel_download() {
-    CANCELLED_FIND.store(true, Ordering::SeqCst);
-    CANCELLED_DOWNLOAD.store(true, Ordering::SeqCst);
-    let gen = GENERATION.load(Ordering::SeqCst);
-    let mut children = CHILDREN.lock().await;
-    for &(id, child_gen) in children.iter() {
-        if child_gen != gen {
-            continue;
-        }
-        terminate_process(id);
-    }
-    children.retain(|&(_, g)| g != gen);
-}
-
-async fn watch_for_stall(
-    id: u32,
-    last_activity: Arc<std::sync::Mutex<std::time::Instant>>,
-    stalled: Arc<AtomicBool>,
-    done: Arc<AtomicBool>,
-) {
-    loop {
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        if done.load(Ordering::Relaxed) {
-            return;
-        }
-        let idle = last_activity
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .elapsed();
-        if idle >= DOWNLOAD_STALL_TIMEOUT {
-            if done.load(Ordering::Relaxed) {
-                return;
-            }
-            eprintln!(
-                "[downloader] yt-dlp pid {id} stalled for {}s, terminating",
-                idle.as_secs()
-            );
-            stalled.store(true, Ordering::Relaxed);
-            terminate_process(id);
-            return;
-        }
-    }
-}
-
 async fn probe_duration(ffprobe: &str, file: &str) -> Option<f64> {
     {
         use lofty::prelude::*;
@@ -771,7 +212,7 @@ async fn probe_duration(ffprobe: &str, file: &str) -> Option<f64> {
         file.into(),
     ];
 
-    let mut command = process::hidden_tokio(Command::new(ffprobe));
+    let mut command = sysproc::hidden_tokio(Command::new(ffprobe));
     command
         .args(&args)
         .stdin(Stdio::null())
@@ -823,7 +264,7 @@ async fn fetch_cover(url: &str, dest: &str) -> bool {
 fn try_tag_with_lofty(
     audio_path: &str,
     track: &TrackMeta,
-    format: &AudioFormat,
+    _format: &AudioFormat,
     cover: Option<&str>,
     lyrics: Option<&str>,
 ) -> Result<(), String> {
@@ -832,9 +273,6 @@ fn try_tag_with_lofty(
     use lofty::probe::Probe;
     use lofty::tag::{ItemKey, TagType};
     use std::fs;
-    if *format == AudioFormat::Wav {
-        return Err("wav tagging via lofty not supported".into());
-    }
 
     let path = Path::new(audio_path);
     let mut tagged_file = Probe::open(path)
@@ -842,13 +280,7 @@ fn try_tag_with_lofty(
         .read()
         .map_err(|e| format!("lofty read failed: {e}"))?;
 
-    let tag_type = match format {
-        AudioFormat::Mp3 => TagType::Id3v2,
-        AudioFormat::M4a => TagType::Mp4Ilst,
-        AudioFormat::Flac => TagType::VorbisComments,
-        AudioFormat::Opus => TagType::VorbisComments,
-        AudioFormat::Wav => TagType::Id3v2,
-    };
+    let tag_type = TagType::Id3v2;
     let tag = if let Some(primary_type) = tagged_file.primary_tag().map(|t| t.tag_type()) {
         if primary_type != tag_type {
             if tagged_file.tag(tag_type).is_none() {
@@ -914,7 +346,7 @@ async fn tag(
     cover: Option<&str>,
     lyrics: Option<&str>,
 ) -> Result<(), String> {
-    if *format != AudioFormat::Wav && audio_in != audio_out {
+    if audio_in != audio_out {
         if let Err(e) = tokio::fs::copy(audio_in, audio_out).await {
             eprintln!("lofty copy failed: {e}, falling back to ffmpeg");
         } else {
@@ -946,7 +378,7 @@ async fn tag(
         }
     }
 
-    let use_cover = cover.is_some() && *format != AudioFormat::Opus;
+    let use_cover = cover.is_some();
     let mut args: Vec<String> = vec!["-y".into(), "-i".into(), audio_in.into()];
 
     if let Some(c) = cover {
@@ -974,10 +406,6 @@ async fn tag(
     if *format == AudioFormat::Mp3 {
         args.push("-id3v2_version".into());
         args.push("3".into());
-    }
-    if *format == AudioFormat::M4a {
-        args.push("-movflags".into());
-        args.push("+faststart".into());
     }
 
     let year_str = track.year.map(|y| y.to_string()).unwrap_or_default();
@@ -1009,7 +437,7 @@ async fn tag(
 
     args.push(audio_out.into());
 
-    let mut command = process::hidden_tokio(Command::new(ffmpeg));
+    let mut command = sysproc::hidden_tokio(Command::new(ffmpeg));
     command
         .args(&args)
         .stdin(Stdio::null())
@@ -1052,24 +480,20 @@ fn base_args(ffmpeg_dir: &str, format: &AudioFormat, bitrate: Option<i64>) -> Ve
         "--audio-quality".into(),
         quality,
         "--newline".into(),
-        "--no-warnings".into(),
-        "--color".into(),
-        "never".into(),
-        "--retries".into(),
-        "10".into(),
-        "--fragment-retries".into(),
-        "10".into(),
-        "--concurrent-fragments".into(),
-        "4".into(),
-        "--socket-timeout".into(),
-        "15".into(),
-        "--extractor-args".into(),
-        "youtube:player_client=android,web,web_safari".into(),
-        "--user-agent".into(),
-        UA.into(),
-        "--ffmpeg-location".into(),
-        ffmpeg_dir.into(),
     ];
+
+    args.extend(common_yt_args());
+
+    args.push("--retries".into());
+    args.push("10".into());
+    args.push("--fragment-retries".into());
+    args.push("10".into());
+    args.push("--concurrent-fragments".into());
+    args.push("4".into());
+    args.push("--user-agent".into());
+    args.push(UA.into());
+    args.push("--ffmpeg-location".into());
+    args.push(ffmpeg_dir.into());
 
     if cfg!(target_os = "windows") {
         args.push("--windows-filenames".into());
@@ -1160,7 +584,7 @@ async fn download_track(
         );
         args.push(cand.url.clone());
 
-        let mut command = process::hidden_tokio(Command::new(&ytdlp));
+        let mut command = sysproc::hidden_tokio(Command::new(&ytdlp));
         command
             .args(&args)
             .stdin(Stdio::null())
@@ -1533,9 +957,7 @@ async fn process_track(
         audio_format_ext(&settings.format)
     ));
 
-    if settings.format == AudioFormat::Wav {
-        let _ = std::fs::rename(&raw_path, &tagged_file);
-    } else {
+    {
         let cover_str = cover_path.as_ref().map(|p| p.to_string_lossy().to_string());
         let cover_arg = cover_str.as_deref();
         match tag(
@@ -1908,322 +1330,6 @@ async fn emit_final_summary(app_handle: &tauri::AppHandle, summary: &Arc<Mutex<D
     }
 }
 
-fn normalize_phrase_input(s: &str) -> String {
-    let lowered = s.to_lowercase();
-    let mut out = String::with_capacity(lowered.len() + 2);
-    out.push(' ');
-    let mut prev_was_space = true;
-    for c in lowered.chars() {
-        if c.is_alphanumeric() {
-            out.push(c);
-            prev_was_space = false;
-        } else if !prev_was_space {
-            out.push(' ');
-            prev_was_space = true;
-        }
-    }
-    out.push(' ');
-    out
-}
-
-fn contains_phrase(haystack: &str, needle: &str) -> bool {
-    let n = normalize_phrase_input(needle);
-    let n = n.trim();
-    if n.is_empty() {
-        return false;
-    }
-
-    let hay = normalize_phrase_input(haystack);
-    if n.contains(' ') {
-        return hay.contains(&format!(" {} ", n));
-    }
-    hay.split(' ').any(|t| t == n)
-}
-
-const REJECT_VARIANTS: &[&str] = &[
-    "remix",
-    "remixed",
-    "nightcore",
-    "slowed",
-    "reverb",
-    "sped up",
-    "speed up",
-    "bass boosted",
-    "8d",
-    "karaoke",
-    "instrumental",
-    "acoustic",
-    "unplugged",
-    "live",
-    "bootleg",
-    "mashup",
-    "medley",
-    "radio edit",
-    "extended mix",
-    "cover by",
-    "covered by",
-    "performed by",
-    "tribute",
-    "parody",
-    "fanmade",
-    "fan made",
-    "reupload",
-];
-
-const VARIANT_PENALTY_TOKENS: &[&str] = &[
-    "cover",
-    "piano",
-    "guitar",
-    "violin",
-    "drum",
-    "drums",
-    "bass",
-    "orchestral",
-    "orchestra",
-    "symphonic",
-    "how to",
-    "tutorial",
-    "reaction",
-    "teaser",
-    "trailer",
-    "preview",
-    "snippet",
-    "clean",
-    "explicit",
-];
-
-const UPLOAD_NOISE_TOKENS: &[&str] = &[
-    "official",
-    "audio",
-    "video",
-    "music",
-    "visualizer",
-    "visualiser",
-    "lyric",
-    "lyrics",
-    "letra",
-    "high",
-    "quality",
-    "hq",
-    "hd",
-    "4k",
-    "mv",
-    "mvi",
-    "full",
-    "version",
-    "stream",
-    "clip",
-    "track",
-    "colors",
-    "colour",
-];
-
-const STOPWORDS: &[&str] = &[
-    "the", "and", "for", "from", "with", "that", "this", "these", "those", "you", "your", "our",
-    "their", "his", "her", "its", "into", "onto", "over", "under", "than", "then", "them", "they",
-    "will", "was", "were", "been", "being", "are", "but", "not", "out", "off", "own", "too",
-    "very", "just", "get", "got", "let",
-];
-
-fn tokenize(s: &str) -> HashSet<String> {
-    s.to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|t| t.len() > 1 && !STOPWORDS.contains(t))
-        .map(|t| t.to_string())
-        .collect()
-}
-
-fn strip_upload_noise(tokens: &HashSet<String>) -> HashSet<String> {
-    tokens
-        .iter()
-        .filter(|t| !UPLOAD_NOISE_TOKENS.contains(&t.as_str()))
-        .cloned()
-        .collect()
-}
-
-fn title_tokens(title: &str) -> HashSet<String> {
-    let mut tokens = tokenize(&clean_title(title));
-    tokens.retain(|t| !UPLOAD_NOISE_TOKENS.contains(&t.as_str()));
-    tokens
-}
-
-fn has_reject_variant(text: &str) -> bool {
-    REJECT_VARIANTS.iter().any(|v| contains_phrase(text, v))
-}
-
-fn variant_penalty(text: &str) -> f64 {
-    VARIANT_PENALTY_TOKENS
-        .iter()
-        .filter(|v| contains_phrase(text, v))
-        .count() as f64
-        * -30.0
-}
-
-fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
-    if a.is_empty() && b.is_empty() {
-        return 1.0;
-    }
-    if a.is_empty() || b.is_empty() {
-        return 0.0;
-    }
-    let intersection = a.intersection(b).count();
-    let union = a.union(b).count();
-    intersection as f64 / union as f64
-}
-
-fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) -> f64 {
-    let c_title = candidate.title.to_lowercase();
-    let c_channel = candidate.channel.as_deref().unwrap_or("").to_lowercase();
-
-    let track_title_tokens = title_tokens(&track.title);
-    let track_artist_tokens = strip_upload_noise(&tokenize(&track.artist));
-    let candidate_title_tokens = strip_upload_noise(&tokenize(&c_title));
-    let candidate_channel_tokens = strip_upload_noise(&tokenize(&c_channel));
-
-    let title_sim = jaccard_similarity(&track_title_tokens, &candidate_title_tokens);
-    let artist_sim = jaccard_similarity(&track_artist_tokens, &candidate_title_tokens);
-    let channel_artist_sim = jaccard_similarity(&track_artist_tokens, &candidate_channel_tokens);
-
-    let mut score = 0.0;
-    score += title_sim * 45.0;
-    score += artist_sim * 30.0;
-    score += channel_artist_sim * 15.0;
-
-    if let (Some(expected), Some(actual)) = (track.duration, candidate.duration) {
-        if expected > 0.0 && actual > 0.0 {
-            let diff = (actual - expected).abs();
-            let ratio = diff / expected;
-            if ratio < 0.05 {
-                score += 15.0;
-            } else if ratio < 0.1 {
-                score += 10.0;
-            } else if ratio < 0.2 {
-                score += 5.0;
-            } else if ratio > 0.5 || diff > 120.0 {
-                score -= 50.0;
-            }
-        }
-    } else if let Some(c_dur) = candidate.duration {
-        if c_dur > 600.0 {
-            score -= 20.0;
-        }
-    }
-
-    if candidate.channel_verified.unwrap_or(false) {
-        score += 10.0;
-    }
-
-    if let Some(views) = candidate.view_count {
-        if views > 1_000_000 {
-            score += 5.0;
-        } else if views > 100_000 {
-            score += 3.0;
-        } else if views > 10_000 {
-            score += 1.0;
-        }
-    }
-
-    if candidate.source == MatchSource::YouTubeMusic {
-        score += 3.0;
-    }
-
-    score += variant_penalty(&c_title);
-    score += variant_penalty(&c_channel) / 2.0;
-
-    score
-}
-
-fn filter_and_rank_candidates(
-    candidates: Vec<SearchCandidate>,
-    track: &TrackMeta,
-) -> Vec<SearchCandidate> {
-    let expected_artist = strip_upload_noise(&tokenize(&track.artist));
-    let expected_title = title_tokens(&track.title);
-
-    let duration_ok = |c: &SearchCandidate| {
-        if let (Some(dur), Some(c_dur)) = (track.duration, c.duration) {
-            if dur > 0.0 && c_dur > 0.0 {
-                let diff = (c_dur - dur).abs();
-                let ratio = diff / dur;
-                return !(ratio > 0.5 || diff > 120.0);
-            }
-            true
-        } else {
-            c.duration.map_or(true, |d| d <= 600.0)
-        }
-    };
-
-    let relevant = |c: &SearchCandidate| {
-        let c_title = strip_upload_noise(&tokenize(&c.title));
-        let c_channel = strip_upload_noise(&tokenize(c.channel.as_deref().unwrap_or("")));
-
-        let artist_hit = !expected_artist.is_empty()
-            && (expected_artist.intersection(&c_title).count() > 0
-                || expected_artist.intersection(&c_channel).count() > 0);
-        let title_hit =
-            !expected_title.is_empty() && expected_title.intersection(&c_title).count() > 0;
-
-        (artist_hit || title_hit) && duration_ok(c)
-    };
-
-    let relevant: Vec<SearchCandidate> =
-        candidates.iter().filter(|c| relevant(c)).cloned().collect();
-
-    let clean: Vec<SearchCandidate> = relevant
-        .iter()
-        .filter(|c| {
-            !has_reject_variant(&c.title) && !has_reject_variant(c.channel.as_deref().unwrap_or(""))
-        })
-        .cloned()
-        .collect();
-    let pool = if clean.is_empty() { relevant } else { clean };
-
-    let mut scored: Vec<(f64, SearchCandidate)> = pool
-        .into_iter()
-        .map(|c| {
-            let score = score_candidate(&c, track);
-            (score, c)
-        })
-        .collect();
-
-    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored.into_iter().map(|(_, c)| c).collect()
-}
-
-async fn search_and_rank_candidates(
-    ytdlp: &str,
-    track: &TrackMeta,
-    precomputed: Option<&HashMap<String, Vec<SearchCandidate>>>,
-    picked: Option<usize>,
-    user_data_dir: &Path,
-) -> Vec<SearchCandidate> {
-    if let Some(cands) = precomputed.and_then(|m| m.get(&track.id)) {
-        if !cands.is_empty() {
-            return match picked {
-                Some(_) => cands.clone(),
-                None => filter_and_rank_candidates(cands.clone(), track),
-            };
-        }
-    }
-    let raw = match match_cache_get(user_data_dir, &track.id) {
-        Some(cached) => cached,
-        None => {
-            let ytdlp_c = ytdlp.to_string();
-            let query = build_query(track);
-            let query_alt = build_query_simple(track, "");
-            let query_lyrics = build_query_simple(track, " lyrics");
-            let found = tokio::task::spawn_blocking(move || {
-                search_candidates(&ytdlp_c, &query, &query_alt, &query_lyrics)
-            })
-            .await
-            .unwrap_or_default();
-            match_cache_put(user_data_dir, &track.id, found.clone());
-            found
-        }
-    };
-    filter_and_rank_candidates(raw, track)
-}
-
 async fn verify_track_duration(
     ffprobe: &str,
     raw_path: &Path,
@@ -2269,12 +1375,9 @@ fn record_failure(
 
 async fn process_lyrics_lookup(
     track: &TrackMeta,
-    format: &AudioFormat,
+    _format: &AudioFormat,
     user_data_dir: &Path,
 ) -> (Option<String>, Option<String>) {
-    if *format == AudioFormat::Wav {
-        return (None, None);
-    }
     let lookup = LyricsLookup {
         title: track.title.clone(),
         artist: track.artist.clone(),
@@ -2367,6 +1470,12 @@ fn move_file(from: &Path, to: &Path) -> Result<(), String> {
 mod tests {
     use super::clean_title;
 
+    const MODULE_SOURCES: &[(&str, &str)] = &[
+        ("mod.rs", include_str!("mod.rs")),
+        ("paths.rs", include_str!("paths.rs")),
+        ("matching.rs", include_str!("matching.rs")),
+    ];
+
     #[test]
     fn clean_title_strips_feat_suffix_after_any_dash_separator() {
         let en = "\u{2013}";
@@ -2387,21 +1496,22 @@ mod tests {
 
     #[test]
     fn source_file_has_no_double_encoded_text() {
-        let src = include_str!("downloader.rs");
-        let chars: Vec<char> = src.chars().collect();
+        for (name, src) in MODULE_SOURCES {
+            let chars: Vec<char> = src.chars().collect();
 
-        for (i, w) in chars.windows(2).enumerate() {
-            let (a, b) = (w[0] as u32, w[1] as u32);
-            let latin1_lead = (0xC0..=0xFF).contains(&a);
-            let c1_control = (0x80..=0x9F).contains(&b);
+            for (i, w) in chars.windows(2).enumerate() {
+                let (a, b) = (w[0] as u32, w[1] as u32);
+                let latin1_lead = (0xC0..=0xFF).contains(&a);
+                let c1_control = (0x80..=0x9F).contains(&b);
 
-            assert!(
-                !(latin1_lead && b >= 0x80) && !c1_control,
-                "double-encoded UTF-8 at char offset {}: {:?}{:?}",
-                i,
-                a,
-                b
-            );
+                assert!(
+                    !(latin1_lead && b >= 0x80) && !c1_control,
+                    "double-encoded UTF-8 in {name} at char offset {}: {:?}{:?}",
+                    i,
+                    a,
+                    b
+                );
+            }
         }
     }
 }

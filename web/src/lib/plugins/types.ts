@@ -62,7 +62,6 @@ export interface PluginStoreResult {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __VYNL_PLUGIN_SDK__:
     | { readonly PLUGIN_API_VERSION: number }
     | undefined;
