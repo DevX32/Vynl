@@ -8,22 +8,6 @@ export const BITRATES: Record<AudioFormat, number[] | null> = {
   wav: null,
 };
 
-export const FORMAT_LABELS: Record<AudioFormat, string> = {
-  mp3: "MP3",
-  m4a: "M4A (AAC)",
-  opus: "Opus",
-  flac: "FLAC",
-  wav: "WAV",
-};
-
-export const FORMAT_ORDER: AudioFormat[] = [
-  "mp3",
-  "m4a",
-  "opus",
-  "flac",
-  "wav",
-];
-
 export const RPC_THROTTLE = 4000;
 export const EQ_BANDS = [
   31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,

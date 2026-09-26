@@ -117,10 +117,8 @@
   }
 
   $effect(() => {
-    void settings.format;
     void settings.filenamePattern;
     void settings.overwrite;
-    void settings.bitrate;
     if (isActive && collection && !running && !resolving) {
       void refreshDone();
     }
@@ -811,7 +809,7 @@
 
   .page-arrow:hover:not(:disabled) {
     background: var(--bg-raise);
-    border-color: var(--text);
+    border-color: var(--line-strong);
     color: var(--text);
   }
 

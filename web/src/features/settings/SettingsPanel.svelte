@@ -3,12 +3,10 @@
   import ColorPicker from "@components/ColorPicker.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
-  import { FORMAT_LABELS, FORMAT_ORDER, BITRATES } from "@lib/constants";
   import { openEq } from "@state/equalizer.svelte";
   import { getInstalledPlugins, openPluginsUi } from "@state/plugins.svelte";
 
   const settings = $derived(getCurrentSettings());
-  const currentBitrates = $derived(BITRATES[settings.format]);
   const installedCount = $derived(getInstalledPlugins().length);
 
   let _displayNameTimer: ReturnType<typeof setTimeout> | null = null;
@@ -35,44 +33,6 @@
       {t("settings.displayNameHint")}
     </div>
   </div>
-
-  <div class="section">
-    <div class="label mono">{t("settings.format")}</div>
-    <div class="chips">
-      {#each FORMAT_ORDER as fmt}
-        <button
-          class="chip mono"
-          class:selected={settings.format === fmt}
-          onclick={() => void patchSettings({ format: fmt })}
-        >
-          {FORMAT_LABELS[fmt]}
-        </button>
-      {/each}
-    </div>
-    <div class="hint mono">
-      {t("settings.formatHint")}
-    </div>
-  </div>
-
-  {#if currentBitrates}
-    <div class="section">
-      <div class="label mono">{t("settings.bitrate")}</div>
-      <div class="chips">
-        {#each currentBitrates as br}
-          <button
-            class="chip mono"
-            class:selected={settings.bitrate === br}
-            onclick={() => void patchSettings({ bitrate: br })}
-          >
-            {br}k
-          </button>
-        {/each}
-      </div>
-      <div class="hint mono">
-        {t("settings.bitrateHint")}
-      </div>
-    </div>
-  {/if}
 
   <div class="section row-section">
     <div>
@@ -307,12 +267,6 @@
     transition: border-color 0.15s;
   }
 
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
   .chip {
     font-size: 11px;
     color: var(--dim);
@@ -328,11 +282,6 @@
     color: var(--text);
     border-color: var(--line-strong);
     background: var(--bg-raise);
-  }
-
-  .chip.selected {
-    color: var(--accent);
-    background: var(--accent-soft);
   }
 
   .eq-actions {

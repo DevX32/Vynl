@@ -175,10 +175,6 @@ export const en = {
     displayNameHint:
       "Your name across Vynl. Leave blank for a random nickname.",
     displayNamePlaceholder: "e.g. Cosmic Panda",
-    format: "Audio Format",
-    formatHint: "Choose the format for downloaded tracks.",
-    bitrate: "Bitrate",
-    bitrateHint: "Higher bitrate = better quality, larger files.",
     equalizer: "Equalizer",
     equalizerHint: "Shape the sound of everything you play — changes apply live.",
     equalizerHintOff: "Turn on to shape the sound of everything you play.",

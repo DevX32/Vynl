@@ -3,7 +3,6 @@ use std::path::Path;
 
 use crate::commands::types::Settings;
 use crate::services::util;
-
 const DEFAULT_ACCENT_COLOR: &str = "#a894e8";
 
 crate::declare_file_mutex!();
@@ -15,6 +14,9 @@ fn is_valid_hex_color(s: &str) -> bool {
     };
     matches!(hex.len(), 3 | 6) && hex.chars().all(|c| c.is_ascii_hexdigit())
 }
+
+const FIXED_FORMAT: crate::commands::types::AudioFormat = crate::commands::types::AudioFormat::Mp3;
+const FIXED_BITRATE: i64 = 320;
 
 fn defaults() -> Settings {
     let music = dirs::audio_dir().unwrap_or_default();
@@ -31,8 +33,8 @@ fn defaults() -> Settings {
     let dir = dir.canonicalize().unwrap_or(dir);
     Settings {
         output_dir: dir.to_string_lossy().to_string(),
-        format: crate::commands::types::AudioFormat::Mp3,
-        bitrate: None,
+        format: FIXED_FORMAT,
+        bitrate: Some(FIXED_BITRATE),
         filename_pattern: "{track} - {title}".into(),
         overwrite: false,
         discord_rpc: true,
@@ -61,8 +63,6 @@ pub fn get_settings(user_data_dir: &Path) -> Settings {
 pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, String> {
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let current = get_settings_unlocked(user_data_dir);
-    let is_lossless = patch.format == crate::commands::types::AudioFormat::Flac
-        || patch.format == crate::commands::types::AudioFormat::Wav;
 
     let output_dir = if patch.output_dir.is_empty() {
         current.output_dir
@@ -77,12 +77,8 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
 
     let next = Settings {
         output_dir,
-        format: patch.format,
-        bitrate: if is_lossless {
-            None
-        } else {
-            patch.bitrate.or(current.bitrate)
-        },
+        format: FIXED_FORMAT,
+        bitrate: Some(FIXED_BITRATE),
         filename_pattern: if patch.filename_pattern.is_empty() {
             current.filename_pattern
         } else {
@@ -110,7 +106,6 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
     Ok(next)
 }
 
-/// Reads settings while the caller already holds the file mutex.
 fn get_settings_unlocked(user_data_dir: &Path) -> Settings {
     let Some(mut loaded) = util::read_json::<Settings>(&settings_file(user_data_dir)) else {
         return defaults();
@@ -126,5 +121,7 @@ fn get_settings_unlocked(user_data_dir: &Path) -> Settings {
         loaded.accent_color = def.accent_color;
     }
     loaded.eq_bands = crate::services::player::normalize_eq_bands(&loaded.eq_bands);
+    loaded.format = FIXED_FORMAT;
+    loaded.bitrate = Some(FIXED_BITRATE);
     loaded
 }
