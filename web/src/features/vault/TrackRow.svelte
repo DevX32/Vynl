@@ -133,7 +133,6 @@
     align-items: center;
     gap: var(--col-gap, 8px);
     padding: var(--row-py, 8px) var(--row-px, 0px);
-    border-radius: var(--radius-sm);
     transition: background 0.12s ease;
   }
 
