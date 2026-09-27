@@ -120,9 +120,7 @@
     setPlayHandler((id, queue) => playTrack(id, queue));
     await initSettings();
     void vynl.rpcUpdate(null);
-    await refreshPlaylists();
-    await refreshLibrary();
-    await restoreNowPlaying();
+    await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
     void initPlugins().catch(console.warn);
     hideSplash();
     const off = vynl.onDownloadEvent((e) => {
