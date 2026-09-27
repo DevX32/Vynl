@@ -180,7 +180,6 @@ export const en = {
     equalizerHintOff: "Turn on to shape the sound of everything you play.",
     equalizerToggle: "Equalizer toggle",
     equalizerBand: "band",
-    equalizerOpen: "Open",
     stateOn: "On",
     stateOff: "Off",
     support: "Support Vynl",

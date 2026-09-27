@@ -3,7 +3,6 @@
   import ColorPicker from "@components/ColorPicker.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
-  import { openEq } from "@state/equalizer.svelte";
   import { getInstalledPlugins, openPluginsUi } from "@state/plugins.svelte";
 
   const settings = $derived(getCurrentSettings());
@@ -31,25 +30,6 @@
     />
     <div class="hint mono">
       {t("settings.displayNameHint")}
-    </div>
-  </div>
-
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.equalizer")}</div>
-      <div class="hint mono">
-        {settings.eqEnabled
-          ? t("settings.equalizerHint")
-          : t("settings.equalizerHintOff")}
-      </div>
-    </div>
-    <div class="eq-actions">
-      <span class="eq-status mono" class:on={settings.eqEnabled}>
-        {settings.eqEnabled ? t("settings.stateOn") : t("settings.stateOff")}
-      </span>
-      <button class="chip mono" onclick={openEq}>
-        {t("settings.equalizerOpen")}
-      </button>
     </div>
   </div>
 
