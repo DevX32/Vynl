@@ -299,6 +299,7 @@ pub fn run() {
             commands::plugins::plugins_install_from_zip,
             commands::plugins::plugins_reload_dev,
             commands::plugins::plugins_read_file,
+            commands::plugins::plugin_compile,
             commands::plugins::plugin_get_config,
             commands::plugins::plugin_set_config,
             commands::plugins::plugin_http_fetch,

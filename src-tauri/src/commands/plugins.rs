@@ -82,6 +82,15 @@ pub async fn plugins_read_file(id: String, path: String, app: AppHandle) -> Resu
 }
 
 #[tauri::command]
+pub async fn plugin_compile(
+    id: String,
+    entry: String,
+    app: AppHandle,
+) -> Result<crate::services::plugin_compiler::CompiledPlugin, String> {
+    crate::services::plugin_compiler::compile(&app, &id, &entry).await
+}
+
+#[tauri::command]
 pub async fn plugin_get_config(id: String, app: AppHandle) -> Result<serde_json::Value, String> {
     crate::services::plugins::get_config(&app, &id)
 }

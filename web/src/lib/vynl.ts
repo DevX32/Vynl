@@ -300,6 +300,12 @@ export const vynl = {
   pluginsReadFile: (id: string, path: string): Promise<string> =>
     cmd("plugins_read_file", { id, path }),
 
+  pluginCompile: (
+    id: string,
+    entry: string,
+  ): Promise<{ code: string; deps: string[] }> =>
+    cmd("plugin_compile", { id, entry }),
+
   pluginGetConfig: (id: string): Promise<Record<string, unknown>> =>
     cmd("plugin_get_config", { id }),
 

@@ -427,10 +427,7 @@ pub fn remove(app: &AppHandle, id: &str) -> Result<(), String> {
     })
 }
 
-pub fn read_plugin_file(app: &AppHandle, id: &str, rel: &str) -> Result<String, String> {
-    let entry = get_entry(app, id)?;
-    let base = app_dir(app)?.join(&entry.path);
-
+pub fn resolve_in_plugin(base: &Path, rel: &str) -> Result<PathBuf, String> {
     let rel_path = Path::new(rel);
     if rel_path.is_absolute() {
         return Err("Path must be relative".into());
@@ -443,11 +440,27 @@ pub fn read_plugin_file(app: &AppHandle, id: &str, rel: &str) -> Result<String, 
     }
 
     let full = base.join(rel_path);
-    if let (Ok(canon_base), Ok(canon_full)) = (fs::canonicalize(&base), fs::canonicalize(&full))
+    if let (Ok(canon_base), Ok(canon_full)) = (fs::canonicalize(base), fs::canonicalize(&full))
         && !canon_full.starts_with(&canon_base)
     {
         return Err("Path must stay inside the plugin directory".into());
     }
+    Ok(full)
+}
+
+pub fn plugin_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    let entry = get_entry(app, id)?;
+    let base = app_dir(app)?.join(&entry.path);
+    if !base.is_dir() {
+        return Err(format!("Plugin '{id}' has no files on disk"));
+    }
+    Ok(base)
+}
+
+pub fn read_plugin_file(app: &AppHandle, id: &str, rel: &str) -> Result<String, String> {
+    let entry = get_entry(app, id)?;
+    let base = app_dir(app)?.join(&entry.path);
+    let full = resolve_in_plugin(&base, rel)?;
     fs::read_to_string(&full).map_err(|e| format!("Cannot read '{rel}': {e}"))
 }
 

@@ -7,6 +7,7 @@ pub mod internal;
 pub mod library;
 pub mod lyrics;
 pub mod player;
+pub mod plugin_compiler;
 pub mod playlists;
 pub mod plugins;
 pub mod process;
