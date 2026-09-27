@@ -10,7 +10,7 @@ mod gtk_log_filter {
 
     type GLogFunc = extern "C" fn(*const c_char, c_uint, *const c_char, *mut c_void);
 
-    extern "C" {
+    unsafe extern "C" {
         fn g_log_set_handler(
             log_domain: *const c_char,
             log_levels: c_uint,
@@ -66,7 +66,7 @@ fn register_aumid() {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
 
-    extern "system" {
+    unsafe extern "system" {
         fn SetCurrentProcessExplicitAppUserModelID(app_id: *const u16) -> i32;
     }
 
@@ -80,8 +80,8 @@ fn register_aumid() {
     }
 
     {
-        use winreg::enums::*;
         use winreg::RegKey;
+        use winreg::enums::*;
 
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         if let Ok((key, _)) = hkcu.create_subkey_with_flags(
@@ -95,8 +95,8 @@ fn register_aumid() {
 
 #[cfg(target_os = "windows")]
 pub fn sync_launch_at_startup(enabled: bool) {
-    use winreg::enums::*;
     use winreg::RegKey;
+    use winreg::enums::*;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let run_key = hkcu.open_subkey_with_flags(
@@ -224,18 +224,18 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
-                    let app = window.app_handle();
-                    let should_minimize = {
-                        let state = app.state::<commands::AppState>();
-                        let guard = state.settings.lock().unwrap_or_else(|e| e.into_inner());
-                        guard.as_ref().map(|s| s.minimize_to_tray).unwrap_or(false)
-                    };
-                    if should_minimize {
-                        let _ = window.hide();
-                        api.prevent_close();
-                    }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == "main"
+            {
+                let app = window.app_handle();
+                let should_minimize = {
+                    let state = app.state::<commands::AppState>();
+                    let guard = state.settings.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.as_ref().map(|s| s.minimize_to_tray).unwrap_or(false)
+                };
+                if should_minimize {
+                    let _ = window.hide();
+                    api.prevent_close();
                 }
             }
         })

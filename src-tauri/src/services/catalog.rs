@@ -5,7 +5,7 @@ use regex::Regex;
 use reqwest::Client;
 use serde_json::Value;
 use tokio::sync::Mutex;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 use super::internal;
 use crate::commands::types::*;
@@ -200,37 +200,32 @@ fn pick_cover(entity: &Value) -> Option<String> {
 
 fn year_of(entity: &Value) -> Option<i64> {
     if let Some(rd) = entity.get("releaseDate") {
-        if let Some(iso) = rd.get("isoString").and_then(|v| v.as_str()) {
-            if iso.len() >= 4 {
-                if let Ok(y) = iso[..4].parse::<i64>() {
-                    if y > 0 {
-                        return Some(y);
-                    }
-                }
-            }
+        if let Some(iso) = rd.get("isoString").and_then(|v| v.as_str())
+            && iso.len() >= 4
+            && let Ok(y) = iso[..4].parse::<i64>()
+            && y > 0
+        {
+            return Some(y);
         }
-        if let Some(y) = rd.get("year").and_then(|v| v.as_i64()) {
-            if y > 0 {
-                return Some(y);
-            }
+        if let Some(y) = rd.get("year").and_then(|v| v.as_i64())
+            && y > 0
+        {
+            return Some(y);
         }
-        if let Some(y) = rd.get("year").and_then(|v| v.as_str()) {
-            if let Ok(y) = y.parse::<i64>() {
-                if y > 0 {
-                    return Some(y);
-                }
-            }
+        if let Some(y) = rd.get("year").and_then(|v| v.as_str())
+            && let Ok(y) = y.parse::<i64>()
+            && y > 0
+        {
+            return Some(y);
         }
     }
 
-    if let Some(rd) = entity.get("releaseDate").and_then(|v| v.as_str()) {
-        if rd.len() >= 4 {
-            if let Ok(y) = rd[..4].parse::<i64>() {
-                if y > 0 {
-                    return Some(y);
-                }
-            }
-        }
+    if let Some(rd) = entity.get("releaseDate").and_then(|v| v.as_str())
+        && rd.len() >= 4
+        && let Ok(y) = rd[..4].parse::<i64>()
+        && y > 0
+    {
+        return Some(y);
     }
 
     None
@@ -398,12 +393,11 @@ fn extract_embed_entity(body: &str) -> Result<EmbedResult, String> {
         .and_then(|p| p.get("pageProps"))
         .and_then(|pp| pp.as_object());
 
-    if let Some(page) = page {
-        if let Some(status_val) = page.get("status").and_then(|s| s.as_i64()) {
-            if status_val == 500 || status_val == 404 {
-                return Ok(EmbedResult::NotFound);
-            }
-        }
+    if let Some(page) = page
+        && let Some(status_val) = page.get("status").and_then(|s| s.as_i64())
+        && (status_val == 500 || status_val == 404)
+    {
+        return Ok(EmbedResult::NotFound);
     }
 
     let entity = parsed

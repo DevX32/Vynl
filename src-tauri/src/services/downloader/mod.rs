@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use regex::Regex;
 use tauri::Emitter;
@@ -24,7 +24,7 @@ pub use paths::{audio_format_ext, render_pattern, sanitize};
 pub use process::cancel_download;
 pub use process::resolve_tool;
 use process::{
-    fmt_dur, last_error, progress_from_line, watch_for_stall, CANCELLED_DOWNLOAD, CHILDREN,
+    CANCELLED_DOWNLOAD, CHILDREN, fmt_dur, last_error, progress_from_line, watch_for_stall,
 };
 pub use search::find_matches;
 use search::{common_yt_args, search_and_rank_candidates};
@@ -64,8 +64,7 @@ static TRAILING_DOT_SPACE_RE: once_cell::sync::Lazy<Regex> =
 static NON_ALNUM_RE: once_cell::sync::Lazy<Regex> =
     once_cell::sync::Lazy::new(|| Regex::new(r"[^a-z0-9]+").unwrap());
 
-const UA: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 static BUSY: AtomicBool = AtomicBool::new(false);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -162,27 +161,27 @@ pub fn get_done_track_ids(
     let history_set: HashSet<String> = history_ids.iter().cloned().collect();
     let mut done: HashSet<String> = history_set.clone();
 
-    if let Some(s) = settings {
-        if !s.output_dir.is_empty() {
-            let output = Path::new(&s.output_dir);
-            if output.exists() {
-                for track in &collection.tracks {
-                    let path = final_output_path(track, s);
-                    if path.exists() {
-                        done.insert(track.id.clone());
-                    }
+    if let Some(s) = settings
+        && !s.output_dir.is_empty()
+    {
+        let output = Path::new(&s.output_dir);
+        if output.exists() {
+            for track in &collection.tracks {
+                let path = final_output_path(track, s);
+                if path.exists() {
+                    done.insert(track.id.clone());
                 }
             }
-            done.retain(|id| {
-                if history_set.contains(id) {
-                    if let Some(track) = collection.tracks.iter().find(|t| &t.id == id) {
-                        let path = final_output_path(track, s);
-                        return path.exists();
-                    }
-                }
-                true
-            });
         }
+        done.retain(|id| {
+            if history_set.contains(id)
+                && let Some(track) = collection.tracks.iter().find(|t| &t.id == id)
+            {
+                let path = final_output_path(track, s);
+                return path.exists();
+            }
+            true
+        });
     }
 
     let mut out: Vec<String> = done.into_iter().collect();
@@ -307,28 +306,27 @@ fn try_tag_with_lofty(
     if let Some(num) = track.track_number {
         tag.set_track(num as u32);
     }
-    if let Some(l) = lyrics {
-        if !l.trim().is_empty() {
-            tag.insert_text(ItemKey::Lyrics, l.to_string());
-            tag.insert_text(ItemKey::UnsyncLyrics, l.to_string());
-        }
+    if let Some(l) = lyrics
+        && !l.trim().is_empty()
+    {
+        tag.insert_text(ItemKey::Lyrics, l.to_string());
+        tag.insert_text(ItemKey::UnsyncLyrics, l.to_string());
     }
-    if let Some(cover_path) = cover {
-        if let Ok(bytes) = fs::read(cover_path) {
-            if !bytes.is_empty() {
-                let mime = if cover_path.to_lowercase().ends_with(".png") {
-                    MimeType::Png
-                } else {
-                    MimeType::Jpeg
-                };
-                let pic = Picture::unchecked(bytes)
-                    .mime_type(mime)
-                    .pic_type(PictureType::CoverFront)
-                    .build();
-                tag.remove_picture_type(PictureType::CoverFront);
-                tag.push_picture(pic);
-            }
-        }
+    if let Some(cover_path) = cover
+        && let Ok(bytes) = fs::read(cover_path)
+        && !bytes.is_empty()
+    {
+        let mime = if cover_path.to_lowercase().ends_with(".png") {
+            MimeType::Png
+        } else {
+            MimeType::Jpeg
+        };
+        let pic = Picture::unchecked(bytes)
+            .mime_type(mime)
+            .pic_type(PictureType::CoverFront)
+            .build();
+        tag.remove_picture_type(PictureType::CoverFront);
+        tag.push_picture(pic);
     }
 
     tagged_file
@@ -381,11 +379,11 @@ async fn tag(
     let use_cover = cover.is_some();
     let mut args: Vec<String> = vec!["-y".into(), "-i".into(), audio_in.into()];
 
-    if let Some(c) = cover {
-        if use_cover {
-            args.push("-i".into());
-            args.push(c.into());
-        }
+    if let Some(c) = cover
+        && use_cover
+    {
+        args.push("-i".into());
+        args.push(c.into());
     }
 
     args.push("-map".into());
@@ -602,7 +600,9 @@ async fn download_track(
         let id = match child.id() {
             Some(id) if id > 0 => id,
             Some(id) => {
-                eprintln!("[downloader] Warning: child.id() returned {id}, attempting alternative tracking");
+                eprintln!(
+                    "[downloader] Warning: child.id() returned {id}, attempting alternative tracking"
+                );
                 let _ = child.kill().await;
                 continue;
             }
@@ -858,7 +858,7 @@ async fn process_track(
     ytdlp: &str,
     app: &tauri::AppHandle,
     prefetched_covers: &CoverMap,
-    gen: u64,
+    generation: u64,
 ) -> TrackOutcome {
     let track = &collection.tracks[idx];
 
@@ -913,7 +913,7 @@ async fn process_track(
         picked,
         settings,
         user_data_dir,
-        gen,
+        generation,
         move |t, s, p, m| emit_track(&app_for_dl, t, s, p, m),
     )
     .await;
@@ -1032,7 +1032,7 @@ async fn run_pass(
     app_handle: &tauri::AppHandle,
     prefetched_covers: &CoverMap,
     summary: &Arc<Mutex<DownloadSummary>>,
-    gen: u64,
+    generation: u64,
     is_final_attempt: bool,
     retry_out: &Arc<Mutex<Vec<usize>>>,
 ) {
@@ -1085,7 +1085,7 @@ async fn run_pass(
                     &ytdlp,
                     &app,
                     &prefetched_covers,
-                    gen,
+                    generation,
                 )
                 .await;
 
@@ -1161,7 +1161,7 @@ async fn download_collection_inner(
     opts: DownloadOpts,
 ) -> Result<(), String> {
     CANCELLED_DOWNLOAD.store(false, Ordering::SeqCst);
-    let gen = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
     let tmp = tmp_dir(user_data_dir);
 
@@ -1217,7 +1217,7 @@ async fn download_collection_inner(
         app_handle,
         &prefetched_covers,
         &summary,
-        gen,
+        generation,
         false,
         &retry_indices,
     )
@@ -1243,7 +1243,7 @@ async fn download_collection_inner(
                 app_handle,
                 &prefetched_covers,
                 &summary,
-                gen,
+                generation,
                 true,
                 &retry_indices,
             )
@@ -1418,11 +1418,11 @@ async fn move_tagged_to_output(
 
     move_file(tagged_file, final_path)?;
 
-    if let Some(lrc) = lyrics_lrc_text {
-        if !lrc.trim().is_empty() {
-            let sidecar = lyrics::sidecar_path(&final_path.to_string_lossy(), "lrc");
-            let _ = std::fs::write(&sidecar, lrc);
-        }
+    if let Some(lrc) = lyrics_lrc_text
+        && !lrc.trim().is_empty()
+    {
+        let sidecar = lyrics::sidecar_path(&final_path.to_string_lossy(), "lrc");
+        let _ = std::fs::write(&sidecar, lrc);
     }
 
     let key = history::collection_key(&collection.kind, &collection.id);

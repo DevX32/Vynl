@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{mpsc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock, mpsc};
 use std::time::Duration;
 
 use rodio::source::SeekError;
@@ -206,7 +206,7 @@ struct EqualizerSource<S> {
     inner: S,
     filters: Vec<[Biquad; EQ_BAND_COUNT]>,
     gains: [f32; EQ_BAND_COUNT],
-    gen: u64,
+    generation: u64,
     enabled: bool,
     channels: usize,
     sample_rate: u32,
@@ -225,7 +225,7 @@ where
             inner,
             filters: Vec::new(),
             gains: cfg.gains,
-            gen: EQ_GEN.load(Ordering::Acquire),
+            generation: EQ_GEN.load(Ordering::Acquire),
             enabled: cfg.enabled,
             channels,
             sample_rate,
@@ -247,10 +247,10 @@ where
 
     #[inline]
     fn refresh(&mut self) {
-        if EQ_GEN.load(Ordering::Acquire) == self.gen {
+        if EQ_GEN.load(Ordering::Acquire) == self.generation {
             return;
         }
-        self.gen = EQ_GEN.load(Ordering::Acquire);
+        self.generation = EQ_GEN.load(Ordering::Acquire);
         let cfg = *eq_config();
         self.enabled = cfg.enabled;
         let sample_rate = self.inner.sample_rate().max(1);
@@ -475,11 +475,11 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Ok
                         } else {
                             playback_generation = generation;
-                            if handle.is_none() {
-                                if let Ok((o, h)) = OutputStream::try_default() {
-                                    output = Some(o);
-                                    handle = Some(h);
-                                }
+                            if handle.is_none()
+                                && let Ok((o, h)) = OutputStream::try_default()
+                            {
+                                output = Some(o);
+                                handle = Some(h);
                             }
                             if handle.is_none() {
                                 let _ = reply_tx

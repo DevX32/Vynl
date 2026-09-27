@@ -379,10 +379,10 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
 
     match client.get(&url).send().await {
         Ok(resp) if resp.status().as_u16() == 200 => {
-            if let Ok(data) = resp.json::<serde_json::Value>().await {
-                if let Some(r) = parse_lrclib_response(Some(&data)) {
-                    return Some(r);
-                }
+            if let Ok(data) = resp.json::<serde_json::Value>().await
+                && let Some(r) = parse_lrclib_response(Some(&data))
+            {
+                return Some(r);
             }
         }
         _ => {}
@@ -412,11 +412,11 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
                 let title = item["trackName"].as_str().unwrap_or("");
                 let artist = item["artistName"].as_str().unwrap_or("");
                 let score = score_lyrics_match(title, artist, lookup);
-                if score > best_score {
-                    if let Some(r) = parse_lrclib_response(Some(item)) {
-                        best_score = score;
-                        best = Some(r);
-                    }
+                if score > best_score
+                    && let Some(r) = parse_lrclib_response(Some(item))
+                {
+                    best_score = score;
+                    best = Some(r);
                 }
             }
             best

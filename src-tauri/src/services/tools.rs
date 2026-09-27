@@ -721,17 +721,16 @@ pub async fn check_for_updates(user_data_dir: &Path, app_handle: &AppHandle) -> 
         if let Some(repo) = repos.iter().find(|(n, _)| match status.name {
             crate::commands::types::ToolNameEnum::YtDlp => *n == "yt-dlp",
             crate::commands::types::ToolNameEnum::Ffmpeg => *n == "ffmpeg",
-        }) {
-            if let Some(latest_tag) = fetch_latest_tag(&client, repo.1).await {
-                let update_available = match status.name {
-                    crate::commands::types::ToolNameEnum::Ffmpeg => None,
-                    crate::commands::types::ToolNameEnum::YtDlp => Some(is_newer(
-                        &latest_tag,
-                        status.version.as_deref().unwrap_or(""),
-                    )),
-                };
-                status.update_available = update_available;
-            }
+        }) && let Some(latest_tag) = fetch_latest_tag(&client, repo.1).await
+        {
+            let update_available = match status.name {
+                crate::commands::types::ToolNameEnum::Ffmpeg => None,
+                crate::commands::types::ToolNameEnum::YtDlp => Some(is_newer(
+                    &latest_tag,
+                    status.version.as_deref().unwrap_or(""),
+                )),
+            };
+            status.update_available = update_available;
         }
 
         emit_status(app_handle, status);

@@ -309,10 +309,10 @@ pub async fn install_from_url(
     if !resp.status().is_success() {
         return Err(format!("Plugin download failed ({})", resp.status()));
     }
-    if let Some(len) = resp.content_length() {
-        if len > MAX_ARCHIVE_BYTES {
-            return Err("Plugin archive is too large".into());
-        }
+    if let Some(len) = resp.content_length()
+        && len > MAX_ARCHIVE_BYTES
+    {
+        return Err("Plugin archive is too large".into());
     }
     let bytes = resp
         .bytes()
@@ -443,10 +443,10 @@ pub fn read_plugin_file(app: &AppHandle, id: &str, rel: &str) -> Result<String, 
     }
 
     let full = base.join(rel_path);
-    if let (Ok(canon_base), Ok(canon_full)) = (fs::canonicalize(&base), fs::canonicalize(&full)) {
-        if !canon_full.starts_with(&canon_base) {
-            return Err("Path must stay inside the plugin directory".into());
-        }
+    if let (Ok(canon_base), Ok(canon_full)) = (fs::canonicalize(&base), fs::canonicalize(&full))
+        && !canon_full.starts_with(&canon_base)
+    {
+        return Err("Path must stay inside the plugin directory".into());
     }
     fs::read_to_string(&full).map_err(|e| format!("Cannot read '{rel}': {e}"))
 }
@@ -678,17 +678,17 @@ pub async fn fetch_store(
         });
     }
 
-    if let Ok(raw) = fs::read_to_string(root.join(STORE_CACHE_FILE)) {
-        if let Ok(cached) = serde_json::from_str::<PluginStoreResult>(&raw) {
-            return Ok(PluginStoreResult {
-                entries: cached.entries,
-                source_error: Some(if errors.is_empty() {
-                    "Store unreachable, showing cached catalog".into()
-                } else {
-                    format!("{} (showing cached catalog)", errors.join("; "))
-                }),
-            });
-        }
+    if let Ok(raw) = fs::read_to_string(root.join(STORE_CACHE_FILE))
+        && let Ok(cached) = serde_json::from_str::<PluginStoreResult>(&raw)
+    {
+        return Ok(PluginStoreResult {
+            entries: cached.entries,
+            source_error: Some(if errors.is_empty() {
+                "Store unreachable, showing cached catalog".into()
+            } else {
+                format!("{} (showing cached catalog)", errors.join("; "))
+            }),
+        });
     }
 
     Ok(PluginStoreResult {

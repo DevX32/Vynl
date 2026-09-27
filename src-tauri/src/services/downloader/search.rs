@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use serde_json::Value;
 use tokio::sync::{Mutex, Semaphore};
@@ -352,13 +352,13 @@ pub(super) async fn search_and_rank_candidates(
     picked: Option<usize>,
     user_data_dir: &Path,
 ) -> Vec<SearchCandidate> {
-    if let Some(cands) = precomputed.and_then(|m| m.get(&track.id)) {
-        if !cands.is_empty() {
-            return match picked {
-                Some(_) => cands.clone(),
-                None => filter_and_rank_candidates(cands.clone(), track),
-            };
-        }
+    if let Some(cands) = precomputed.and_then(|m| m.get(&track.id))
+        && !cands.is_empty()
+    {
+        return match picked {
+            Some(_) => cands.clone(),
+            None => filter_and_rank_candidates(cands.clone(), track),
+        };
     }
     let raw = match match_cache_get(user_data_dir, &track.id) {
         Some(cached) => cached,

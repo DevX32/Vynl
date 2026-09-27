@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::Value;
 use tokio::sync::Mutex as AsyncMutex;
@@ -141,7 +141,7 @@ pub(super) fn terminate_process(id: u32) {
         unsafe {
             use std::os::windows::raw::HANDLE;
             const PROCESS_TERMINATE: u32 = 0x0001;
-            extern "system" {
+            unsafe extern "system" {
                 fn OpenProcess(
                     dwDesiredAccess: u32,
                     bInheritHandle: i32,
@@ -168,15 +168,15 @@ pub(super) fn terminate_process(id: u32) {
 pub async fn cancel_download() {
     CANCELLED_FIND.store(true, Ordering::SeqCst);
     CANCELLED_DOWNLOAD.store(true, Ordering::SeqCst);
-    let gen = GENERATION.load(Ordering::SeqCst);
+    let generation = GENERATION.load(Ordering::SeqCst);
     let mut children = CHILDREN.lock().await;
     for &(id, child_gen) in children.iter() {
-        if child_gen != gen {
+        if child_gen != generation {
             continue;
         }
         terminate_process(id);
     }
-    children.retain(|&(_, g)| g != gen);
+    children.retain(|&(_, g)| g != generation);
 }
 
 pub(super) async fn watch_for_stall(

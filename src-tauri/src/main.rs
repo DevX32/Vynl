@@ -29,14 +29,22 @@ fn apply_hardware_acceleration() {
         };
         if val.get("hardwareAcceleration").and_then(|v| v.as_bool()) == Some(false) {
             #[cfg(target_os = "windows")]
-            std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS", "--disable-gpu");
+            unsafe {
+                std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS", "--disable-gpu")
+            };
             #[cfg(target_os = "linux")]
-            std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+            unsafe {
+                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+            };
         } else {
             #[cfg(target_os = "windows")]
-            std::env::remove_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS");
+            unsafe {
+                std::env::remove_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS")
+            };
             #[cfg(target_os = "linux")]
-            std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE");
+            unsafe {
+                std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE")
+            };
         }
         return;
     }

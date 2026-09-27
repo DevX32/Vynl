@@ -125,10 +125,10 @@ fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, ArtistInfo>) {
 }
 
 fn get_cached(key: &str, user_data_dir: &Path) -> Option<ArtistInfo> {
-    if let Ok(guard) = mem_cache().lock() {
-        if let Some(hit) = guard.get(key) {
-            return Some(hit.clone());
-        }
+    if let Ok(guard) = mem_cache().lock()
+        && let Some(hit) = guard.get(key)
+    {
+        return Some(hit.clone());
     }
     let disk = load_disk_cache(user_data_dir);
     if let Some(hit) = disk.get(key) {
@@ -142,19 +142,20 @@ fn get_cached(key: &str, user_data_dir: &Path) -> Option<ArtistInfo> {
 
 fn put_cached(key: &str, info: &ArtistInfo, user_data_dir: &Path) {
     if let Ok(mut guard) = mem_cache().lock() {
-        if guard.len() >= MEM_CACHE_MAX {
-            if let Some(k) = guard.keys().next().cloned() {
-                guard.remove(&k);
-            }
+        if guard.len() >= MEM_CACHE_MAX
+            && let Some(k) = guard.keys().next().cloned()
+        {
+            guard.remove(&k);
         }
         guard.insert(key.to_string(), info.clone());
     }
 
     let mut disk = load_disk_cache(user_data_dir);
-    if disk.len() >= DISK_CACHE_MAX && !disk.contains_key(key) {
-        if let Some(k) = disk.keys().next().cloned() {
-            disk.remove(&k);
-        }
+    if disk.len() >= DISK_CACHE_MAX
+        && !disk.contains_key(key)
+        && let Some(k) = disk.keys().next().cloned()
+    {
+        disk.remove(&k);
     }
     disk.insert(key.to_string(), info.clone());
     save_disk_cache(user_data_dir, &disk);

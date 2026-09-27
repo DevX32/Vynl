@@ -65,23 +65,22 @@ fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
             let full = entry.path();
 
             if full.is_symlink() {
-                if let Ok(resolved) = fs::canonicalize(&full) {
-                    if resolved.starts_with(dir) && resolved.is_file() {
-                        if let Some(ext) = resolved.extension().and_then(|e| e.to_str()) {
-                            if AUDIO_EXTS.contains(&ext.to_lowercase().as_str()) {
-                                out.push(full);
-                            }
-                        }
-                    }
+                if let Ok(resolved) = fs::canonicalize(&full)
+                    && resolved.starts_with(dir)
+                    && resolved.is_file()
+                    && let Some(ext) = resolved.extension().and_then(|e| e.to_str())
+                    && AUDIO_EXTS.contains(&ext.to_lowercase().as_str())
+                {
+                    out.push(full);
                 }
                 continue;
             }
 
             if full.is_file() {
-                if let Some(ext) = full.extension().and_then(|e| e.to_str()) {
-                    if AUDIO_EXTS.contains(&ext.to_lowercase().as_str()) {
-                        out.push(full);
-                    }
+                if let Some(ext) = full.extension().and_then(|e| e.to_str())
+                    && AUDIO_EXTS.contains(&ext.to_lowercase().as_str())
+                {
+                    out.push(full);
                 }
             } else if full.is_dir() {
                 stack.push(full);
@@ -361,10 +360,10 @@ fn probe_via_ffmpeg(ffmpeg: &str, file: &Path) -> ProbeResult {
 
     parse_ffmpeg_metadata_block(text, &mut result);
 
-    if let Some(ref lyrics) = result.lyrics {
-        if lyrics.trim().is_empty() {
-            result.lyrics = None;
-        }
+    if let Some(ref lyrics) = result.lyrics
+        && lyrics.trim().is_empty()
+    {
+        result.lyrics = None;
     }
 
     result.pic_codec = extract_attached_pic_codec(text);

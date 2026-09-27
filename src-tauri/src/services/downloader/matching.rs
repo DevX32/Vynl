@@ -268,10 +268,10 @@ pub(crate) fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) ->
                 score -= 50.0;
             }
         }
-    } else if let Some(c_dur) = candidate.duration {
-        if c_dur > 600.0 {
-            score -= 20.0;
-        }
+    } else if let Some(c_dur) = candidate.duration
+        && c_dur > 600.0
+    {
+        score -= 20.0;
     }
 
     if candidate.channel_verified.unwrap_or(false) {
@@ -314,7 +314,7 @@ pub(crate) fn filter_and_rank_candidates(
             }
             true
         } else {
-            c.duration.map_or(true, |d| d <= 600.0)
+            c.duration.is_none_or(|d| d <= 600.0)
         }
     };
 

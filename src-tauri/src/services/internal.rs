@@ -5,7 +5,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha1::Sha1;
 
 use crate::commands::types::*;
@@ -67,34 +67,32 @@ fn transform_secret(secret_bytes: &[u8]) -> Vec<u8> {
 async fn fetch_latest_totp_secret(client: &Client) -> (u32, Vec<u8>) {
     {
         let cache = CACHED_SECRET.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(ref cached) = *cache {
-            if cached.fetched_at.elapsed() < SECRET_MAX_AGE && !cached.key_bytes.is_empty() {
-                return (cached.version, cached.key_bytes.clone());
-            }
+        if let Some(ref cached) = *cache
+            && cached.fetched_at.elapsed() < SECRET_MAX_AGE
+            && !cached.key_bytes.is_empty()
+        {
+            return (cached.version, cached.key_bytes.clone());
         }
     }
 
     if let Ok(resp) = client.get(SECRETS_URL).send().await {
-        if resp.status().is_success() {
-            if let Ok(secrets) = resp.json::<HashMap<String, Vec<u8>>>().await {
-                if let Some((ver_str, secret)) = secrets
-                    .iter()
-                    .max_by_key(|(k, _)| k.parse::<u32>().unwrap_or(0))
-                {
-                    if let Ok(ver) = ver_str.parse::<u32>() {
-                        let key_bytes = transform_secret(secret);
-                        if !key_bytes.is_empty() {
-                            let mut cache = CACHED_SECRET.lock().unwrap_or_else(|e| e.into_inner());
-                            *cache = Some(CachedSecret {
-                                version: ver,
-                                key_bytes: key_bytes.clone(),
-                                fetched_at: Instant::now(),
-                            });
-                            eprintln!("[Vynl] Fetched TOTP secret v{ver} from community endpoint");
-                            return (ver, key_bytes);
-                        }
-                    }
-                }
+        if resp.status().is_success()
+            && let Ok(secrets) = resp.json::<HashMap<String, Vec<u8>>>().await
+            && let Some((ver_str, secret)) = secrets
+                .iter()
+                .max_by_key(|(k, _)| k.parse::<u32>().unwrap_or(0))
+            && let Ok(ver) = ver_str.parse::<u32>()
+        {
+            let key_bytes = transform_secret(secret);
+            if !key_bytes.is_empty() {
+                let mut cache = CACHED_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+                *cache = Some(CachedSecret {
+                    version: ver,
+                    key_bytes: key_bytes.clone(),
+                    fetched_at: Instant::now(),
+                });
+                eprintln!("[Vynl] Fetched TOTP secret v{ver} from community endpoint");
+                return (ver, key_bytes);
             }
         }
         eprintln!("[Vynl] Failed to fetch TOTP secret from community endpoint, using fallback");
@@ -142,10 +140,10 @@ pub struct Session {
 pub async fn init_session(client: &Client) -> Result<Session, String> {
     {
         let cache = CACHED_SESSION.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(ref cached) = *cache {
-            if cached.created_at.elapsed() < SESSION_MAX_AGE {
-                return Ok(cached.session.clone());
-            }
+        if let Some(ref cached) = *cache
+            && cached.created_at.elapsed() < SESSION_MAX_AGE
+        {
+            return Ok(cached.session.clone());
         }
     }
 
@@ -192,10 +190,10 @@ fn extract_client_version(html: &str) -> String {
         let slice = &html[start..];
         if let Some(colon) = slice.find(':') {
             let after = &slice[colon + 1..].trim_start();
-            if let Some(after_q) = after.strip_prefix('"') {
-                if let Some(end) = after_q.find('"') {
-                    return after_q[..end].to_string();
-                }
+            if let Some(after_q) = after.strip_prefix('"')
+                && let Some(end) = after_q.find('"')
+            {
+                return after_q[..end].to_string();
             }
         }
     }
@@ -212,7 +210,10 @@ async fn get_access_token(
 
     for offset in &windows {
         let totp_code = generate_totp_from_key(&key_bytes, *offset)?;
-        eprintln!("[Vynl] TOTP code: {totp_code} (version: {totp_version}, offset: {offset}, key_len: {})", key_bytes.len());
+        eprintln!(
+            "[Vynl] TOTP code: {totp_code} (version: {totp_version}, offset: {offset}, key_len: {})",
+            key_bytes.len()
+        );
 
         let url = format!(
             "https://open.spotify.com/api/token?reason=init&productType=web-player&totp={}&totpVer={}&totpServer={}",
@@ -904,12 +905,11 @@ pub async fn search_spotify(
                         .iter()
                         .filter_map(|s| s.get("url").and_then(|u| u.as_str()))
                         .max_by_key(|u| {
-                            let w = sources
+                            sources
                                 .iter()
                                 .find(|ss| ss.get("url").and_then(|uu| uu.as_str()) == Some(*u))
                                 .and_then(|ss| ss.get("width").and_then(|ww| ww.as_u64()))
-                                .unwrap_or(0);
-                            w
+                                .unwrap_or(0)
                         })
                         .map(|s| s.to_string())
                 });

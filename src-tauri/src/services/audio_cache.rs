@@ -36,12 +36,11 @@ pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> 
     std::fs::create_dir_all(&dir).map_err(|e| format!("cache dir: {e}"))?;
 
     let dest = dir.join(safe_name(key));
-    if dest.exists() {
-        if let Ok(meta) = dest.metadata() {
-            if meta.len() > 0 {
-                return Ok(dest.to_string_lossy().into_owned());
-            }
-        }
+    if dest.exists()
+        && let Ok(meta) = dest.metadata()
+        && meta.len() > 0
+    {
+        return Ok(dest.to_string_lossy().into_owned());
     }
 
     let tmp = dest.with_extension("partial");
@@ -88,7 +87,7 @@ async fn stream_body(
                 return Err(format!(
                     "download stalled: no data for {}s",
                     CHUNK_STALL_TIMEOUT.as_secs()
-                ))
+                ));
             }
         }
     }

@@ -53,10 +53,10 @@ pub fn list_playlists(output_dir: &Path) -> Vec<PlaylistMeta> {
     let mut names: Vec<String> = Vec::new();
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.flatten() {
-            if let Some(name) = entry.file_name().to_str() {
-                if name.ends_with(".json") {
-                    names.push(name.to_string());
-                }
+            if let Some(name) = entry.file_name().to_str()
+                && name.ends_with(".json")
+            {
+                names.push(name.to_string());
             }
         }
     }
