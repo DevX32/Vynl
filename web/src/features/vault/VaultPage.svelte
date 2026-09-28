@@ -650,12 +650,12 @@
 <style>
   .page {
     --num-w: 32px;
-    --cover-w: 36px;
+    --cover-size: 36px;
     --status-w: 70px;
     --col-gap: 8px;
     --row-px: 10px;
     --row-py: 8px;
-    --track-cols: var(--num-w) var(--cover-w) minmax(0, 1fr)
+    --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr)
       minmax(140px, 1fr) var(--status-w);
 
     height: 100%;
@@ -854,9 +854,9 @@
       margin: 0 -16px;
       padding: 0 16px;
       --num-w: 28px;
-      --cover-w: 32px;
+      --cover-size: 32px;
       --col-gap: 6px;
-      --track-cols: var(--num-w) var(--cover-w) minmax(0, 1fr) var(--status-w);
+      --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr) var(--status-w);
     }
 
     .h-source {
@@ -873,11 +873,11 @@
     .page {
       margin: 0 -10px;
       padding: 0 10px;
-      --cover-w: 28px;
+      --cover-size: 28px;
       --status-w: 64px;
       --col-gap: 4px;
       --row-px: 8px;
-      --track-cols: var(--cover-w) minmax(0, 1fr) var(--status-w);
+      --track-cols: var(--cover-size) minmax(0, 1fr) var(--status-w);
     }
 
     .h-num {

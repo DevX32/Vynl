@@ -126,7 +126,6 @@
     position: fixed;
     right: 10px;
     top: 50%;
-    transform: translateY(-50%);
     z-index: 210;
     width: 28px;
     height: 28px;
@@ -138,7 +137,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transform: rotate(45deg);
+    transform: translateY(-50%) rotate(45deg);
     opacity: 0;
     transition: opacity 0.15s ease;
   }
@@ -170,12 +169,6 @@
     position: fixed;
     inset: 0;
     z-index: 2;
-  }
-
-  .fs-art :global(.ring) {
-    inset: -52px !important;
-    width: calc(100% + 104px) !important;
-    height: calc(100% + 104px) !important;
   }
 
   .fs-controls {

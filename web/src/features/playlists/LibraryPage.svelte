@@ -32,8 +32,9 @@
   } from "../../lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
-  import { blobSrc } from "../../lib/format";
   import SearchInput from "../../components/SearchInput.svelte";
+  import TrackCover from "../../components/TrackCover.svelte";
+  import EqualizerBars from "../../components/EqualizerBars.svelte";
   import Dialog from "../../components/Dialog.svelte";
   import ContextMenu, { type CtxEntry } from "../../components/ContextMenu.svelte";
   import {
@@ -280,26 +281,13 @@
           >
             <span class="c-num mono">
               {#if trk.id === nowPlaying?.id}
-                <span class="eq">
-                  <span class="eq-bar"></span>
-                  <span class="eq-bar"></span>
-                  <span class="eq-bar"></span>
-                </span>
+                <EqualizerBars />
               {:else}
                 {String(i + 1).padStart(2, "0")}
               {/if}
             </span>
             <div class="c-cover">
-              {#if trk.cover}
-                <img
-                  class="cover-img"
-                  use:blobSrc={trk.cover}
-                  alt=""
-                  loading="lazy"
-                />
-              {:else}
-                <div class="cover-placeholder"></div>
-              {/if}
+              <TrackCover src={trk.cover} />
             </div>
             <div class="c-meta">
               <span class="c-title" class:accent={trk.id === nowPlaying?.id}>
@@ -451,7 +439,8 @@
   }
 
   .tracks {
-    --track-cols: 28px 40px minmax(0, 1fr) minmax(0, 1fr) 42px 28px;
+    --cover-size: 40px;
+    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px 28px;
     --col-gap: 12px;
     --row-px: 10px;
     --row-py: 7px;
@@ -546,49 +535,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .eq {
-    display: inline-flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 14px;
-  }
-
-  .eq-bar {
-    width: 3px;
-    border-radius: 1px;
-    background: var(--accent);
-    animation: eq 0.8s ease-in-out infinite alternate;
-  }
-
-  .eq-bar:nth-child(1) { height: 40%; animation-delay: 0s; }
-  .eq-bar:nth-child(2) { height: 70%; animation-delay: 0.2s; }
-  .eq-bar:nth-child(3) { height: 50%; animation-delay: 0.4s; }
-
-  @keyframes eq {
-    0% { height: 20%; }
-    100% { height: 100%; }
-  }
-
   .c-cover {
-    width: 40px;
-    height: 40px;
-  }
-
-  .cover-img {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-sm);
-    object-fit: cover;
-    background: var(--bg-raise);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  }
-
-  .cover-placeholder {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-sm);
-    background: var(--placeholder-gradient);
-    border: 1px solid var(--line);
+    display: flex;
   }
 
   .c-meta {
@@ -672,7 +620,8 @@
     }
 
     .tracks {
-      --track-cols: 24px 36px minmax(0, 1fr) minmax(0, 1fr) 36px;
+      --cover-size: 36px;
+      --track-cols: 24px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 36px;
       --col-gap: 8px;
     }
 

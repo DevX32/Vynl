@@ -11,14 +11,6 @@
     type EqPreset,
   } from "@lib/constants";
 
-  let {
-    framed = true,
-    showLabel = true,
-  }: {
-    framed?: boolean;
-    showLabel?: boolean;
-  } = $props();
-
   const settings = $derived(getCurrentSettings());
 
   const TRACK_H = 128;
@@ -131,12 +123,9 @@
   }
 </script>
 
-<div class="section" class:framed>
+<div class="section">
   <div class="head">
     <div class="head-text">
-      {#if showLabel}
-        <div class="label mono">{t("settings.equalizer")}</div>
-      {/if}
       <div class="hint mono">
         {settings.eqEnabled
           ? t("settings.equalizerHint")
@@ -209,11 +198,6 @@
     gap: 14px;
   }
 
-  .section.framed {
-    padding: 16px;
-    border-top: 1px solid var(--line);
-  }
-
   .head {
     display: flex;
     align-items: center;
@@ -226,12 +210,6 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
-  }
-
-  .label {
-    font-size: 11px;
-    color: var(--dim);
-    letter-spacing: 0.1em;
   }
 
   .hint {

@@ -10,12 +10,13 @@
     reorderQueueTrack,
   } from "@lib/player.svelte";
   import { getCurrentShuffle } from "@state/player.svelte";
-  import { blobSrc, fmtTime } from "../../lib/format";
+  import { fmtTime } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
   import { t } from "@lib/i18n";
   import type { LibraryTrack } from "@lib/types";
   import ContextMenu from "../../components/ContextMenu.svelte";
   import DragGhostLayer from "../../components/DragGhostLayer.svelte";
+  import TrackCover from "../../components/TrackCover.svelte";
   import { ChevronLeft, ChevronRight, Trash2 } from "lucide-svelte";
 
   type QueueSection = "user" | "context";
@@ -89,17 +90,7 @@
         }}
       >
         <div class="q-cover">
-          {#if q.cover}
-            <img
-              class="q-cover-img"
-              use:blobSrc={q.cover}
-              alt=""
-              loading="lazy"
-              draggable="false"
-            />
-          {:else}
-            <div class="q-cover-ph"></div>
-          {/if}
+          <TrackCover src={q.cover} />
         </div>
         <div class="q-meta">
           <span class="q-title">{q.title}</span>
@@ -130,17 +121,7 @@
     {#if np}
         <div class="now-playing">
           <div class="q-cover">
-            {#if np.cover}
-              <img
-                class="q-cover-img"
-                use:blobSrc={np.cover}
-                alt=""
-                loading="lazy"
-                draggable="false"
-              />
-            {:else}
-              <div class="q-cover-ph"></div>
-            {/if}
+            <TrackCover src={np.cover} />
           </div>
           <div class="q-meta">
             <span class="q-title accent">{np.title}</span>
@@ -435,26 +416,8 @@
   }
 
   .q-cover {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    background: var(--bg-raise);
-    flex-shrink: 0;
-  }
-
-  .q-cover-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .q-cover-ph {
-    width: 100%;
-    height: 100%;
-    background: var(--placeholder-gradient);
-    border: 1px solid var(--line);
+    display: flex;
+    --cover-size: 36px;
   }
 
   .q-meta {

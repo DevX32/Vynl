@@ -7,9 +7,9 @@
   } from "../../lib/types";
   import { DURATION_TOLERANCE } from "../../lib/constants";
   import { AlertTriangle } from "lucide-svelte";
-  import { blobSrc } from "../../lib/format";
   import { t } from "@lib/i18n";
   import Select from "../../components/Select.svelte";
+  import TrackCover from "../../components/TrackCover.svelte";
 
   let {
     track,
@@ -74,11 +74,7 @@
   </span>
 
   <span class="c-cover">
-    {#if track.cover}
-      <img class="cover-img" use:blobSrc={track.cover} alt="" loading="lazy" />
-    {:else}
-      <div class="cover-placeholder"></div>
-    {/if}
+    <TrackCover src={track.cover} />
   </span>
 
   <div class="c-title">
@@ -164,24 +160,7 @@
   }
 
   .c-cover {
-    width: var(--cover-w, 36px);
-    height: var(--cover-w, 36px);
-  }
-
-  .cover-img {
-    width: var(--cover-w, 36px);
-    height: var(--cover-w, 36px);
-    border-radius: var(--radius-sm);
-    object-fit: cover;
-    background: var(--bg-raise);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  }
-
-  .cover-placeholder {
-    width: var(--cover-w, 36px);
-    height: var(--cover-w, 36px);
-    border-radius: var(--radius-sm);
-    background: var(--placeholder-gradient);
+    display: flex;
   }
 
   .c-title {
@@ -211,11 +190,6 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-  }
-
-  .source-text {
-    font-size: 11px;
-    color: var(--faint);
   }
 
   .warn {

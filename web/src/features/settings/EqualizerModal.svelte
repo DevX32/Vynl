@@ -24,7 +24,7 @@
       </button>
     </div>
     <div class="body">
-      <Equalizer framed={false} showLabel={false} />
+      <Equalizer />
     </div>
   </div>
 </div>

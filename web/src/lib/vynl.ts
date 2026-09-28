@@ -247,9 +247,6 @@ export const vynl = {
   playerIsPlaying: (generation?: number): Promise<boolean> =>
     cmd("player_is_playing", { generation: generation ?? 0 }),
 
-  playerCheckFinished: (generation?: number): Promise<boolean> =>
-    cmd("player_check_finished", { generation: generation ?? 0 }),
-
   onPlaybackTick: (cb: (tick: PlaybackTick) => void): (() => void) =>
     onEvent<PlaybackTick>("vynl:player:tick", cb),
 

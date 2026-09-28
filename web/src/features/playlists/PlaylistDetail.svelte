@@ -30,6 +30,8 @@
   import { toasts } from "@lib/toast";
   import { vynl } from "../../lib/vynl";
   import SearchInput from "../../components/SearchInput.svelte";
+  import TrackCover from "../../components/TrackCover.svelte";
+  import EqualizerBars from "../../components/EqualizerBars.svelte";
   import ContextMenu, {
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
@@ -308,27 +310,13 @@
           >
             <span class="c-num mono">
               {#if trk.id === getCurrentTrack()?.id}
-                <span class="eq">
-                  <span class="eq-bar"></span>
-                  <span class="eq-bar"></span>
-                  <span class="eq-bar"></span>
-                </span>
+                <EqualizerBars />
               {:else}
                 {String(i + 1).padStart(2, "0")}
               {/if}
             </span>
             <div class="c-cover">
-              {#if trk.cover}
-                <img
-                  class="cover-img"
-                  use:blobSrc={trk.cover}
-                  alt=""
-                  loading="lazy"
-                  draggable="false"
-                />
-              {:else}
-                <div class="cover-placeholder"></div>
-              {/if}
+              <TrackCover src={trk.cover} shadow="var(--shadow-sm)" />
             </div>
             <div class="c-title-col">
               <span
@@ -551,7 +539,8 @@
   }
 
   .tracks {
-    --track-cols: 28px 40px minmax(0, 1fr) minmax(0, 1fr) 42px;
+    --cover-size: 40px;
+    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -616,31 +605,7 @@
   }
 
   .c-cover {
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    background: var(--bg-raise);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .cover-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .cover-placeholder {
-    width: 100%;
-    height: 100%;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--faint);
-    border: 1px solid var(--line);
-    background: var(--placeholder-gradient);
   }
 
   .c-title-col {
@@ -685,29 +650,6 @@
     color: var(--faint);
     text-align: right;
     font-variant-numeric: tabular-nums;
-  }
-
-  .eq {
-    display: inline-flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 14px;
-  }
-
-  .eq-bar {
-    width: 3px;
-    border-radius: 1px;
-    background: var(--accent);
-    animation: eq 0.8s ease-in-out infinite alternate;
-  }
-
-  .eq-bar:nth-child(1) { height: 40%; animation-delay: 0s; }
-  .eq-bar:nth-child(2) { height: 70%; animation-delay: 0.2s; }
-  .eq-bar:nth-child(3) { height: 50%; animation-delay: 0.4s; }
-
-  @keyframes eq {
-    0% { height: 20%; }
-    100% { height: 100%; }
   }
 
   .row {

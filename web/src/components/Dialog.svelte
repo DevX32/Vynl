@@ -9,7 +9,6 @@
     description = "",
     confirmLabel = "Confirm",
     danger = false,
-    icon,
     onconfirm,
     oncancel,
     children,
@@ -19,7 +18,6 @@
     description?: string;
     confirmLabel?: string;
     danger?: boolean;
-    icon?: typeof import("lucide-svelte").Pencil;
     onconfirm?: () => void;
     oncancel: () => void;
     children?: Snippet;
@@ -54,10 +52,6 @@
       onkeydown={onKey}
     >
       <div class="header">
-        {#if icon}
-          {@const Icon = icon}
-          <span class="header-icon"><Icon size={14} stroke-width={1.5} /></span>
-        {/if}
         <span id="dlg-title">{title}</span>
       </div>
       {#if description}
@@ -138,13 +132,6 @@
 
   .header:has(+ .desc) {
     margin-bottom: 4px;
-  }
-
-  .header-icon {
-    display: inline-flex;
-    align-items: center;
-    color: var(--accent);
-    flex-shrink: 0;
   }
 
   .desc {
