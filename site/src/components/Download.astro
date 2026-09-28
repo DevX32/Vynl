@@ -1,0 +1,169 @@
+---
+import Icon from './Icon.astro'
+import { getLatestRelease, FALLBACK_DOWNLOAD_URL } from '../lib/releases'
+
+const release = await getLatestRelease()
+---
+
+<section class="section" id="download">
+  <div class="container">
+    <div class="section-head section-head--center reveal">
+      <span class="eyebrow">Download</span>
+    </div>
+
+    <div class="platforms">
+      <article class="card platform reveal">
+        <header>
+          <span class="platform-icon"><Icon name="windows" size={20} /></span>
+          <div>
+            <h3>Windows</h3>
+            <p>64-bit · NSIS installer</p>
+          </div>
+        </header>
+
+        {release?.windows ? (
+          <a class="btn btn--primary download-btn" href={release.windows.url}>
+            <Icon name="download" size={17} />
+            {release.windows.file}
+            <span class="size">{release.windows.size}</span>
+          </a>
+        ) : (
+          <a class="btn btn--primary download-btn" href={FALLBACK_DOWNLOAD_URL} target="_blank" rel="noopener">
+            <Icon name="download" size={17} />
+            Download the installer
+          </a>
+        )}
+
+        <p class="platform-hint">Windows 10 or newer. SmartScreen may warn on first run.</p>
+      </article>
+
+      <article class="card platform reveal" style="transition-delay:80ms">
+        <header>
+          <span class="platform-icon"><Icon name="terminal" size={20} /></span>
+          <div>
+            <h3>Linux</h3>
+            <p>x86_64 · three package formats</p>
+          </div>
+        </header>
+
+        <div class="linux-links">
+          {release?.linux.length ? (
+            release.linux.map((asset) => (
+              <a class="pkg" href={asset.url}>
+                <span class="pkg-format">{asset.format}</span>
+                <span class="pkg-size">{asset.size}</span>
+              </a>
+            ))
+          ) : (
+            <a class="pkg" href={FALLBACK_DOWNLOAD_URL} target="_blank" rel="noopener">
+              <span class="pkg-format">AppImage</span>
+              <span class="pkg-size">.deb · .rpm</span>
+            </a>
+          )}
+        </div>
+
+        <p class="platform-hint">AppImage just runs. The .deb and .rpm register a system package.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .platforms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  .platform {
+    padding: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .platform:hover {
+    border-color: rgba(168, 148, 232, 0.32);
+  }
+
+  .platform header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .platform-icon {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    border: 1px solid rgba(168, 148, 232, 0.2);
+    color: var(--accent);
+  }
+
+  .platform h3 {
+    font-size: 17px;
+  }
+
+  .platform header p {
+    color: var(--faint);
+    font-size: 13.5px;
+    margin-top: 2px;
+  }
+
+  .download-btn {
+    justify-content: flex-start;
+  }
+
+  .size {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    opacity: 0.75;
+  }
+
+  .linux-links {
+    display: grid;
+    gap: 8px;
+  }
+
+  .pkg {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 15px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 14px;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .pkg:hover {
+    border-color: rgba(168, 148, 232, 0.5);
+    background: var(--accent-soft);
+    transform: translateY(-1px);
+  }
+
+  .pkg-format {
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+
+  .pkg-size {
+    color: var(--faint);
+    font-size: 13px;
+  }
+
+  .platform-hint {
+    color: var(--faint);
+    font-size: 13px;
+    margin-top: auto;
+  }
+</style>

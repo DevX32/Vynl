@@ -1,0 +1,59 @@
+---
+interface Props {
+  name: string
+  size?: number
+  strokeWidth?: number
+  class?: string
+}
+
+const { name, size = 20, strokeWidth = 1.7, class: className } = Astro.props
+
+const ICONS: Record<string, { paths: string[]; viewBox?: string; filled?: boolean }> = {
+  download: { paths: ['M12 3.5v11.5', 'm7.2 10.8 4.8 4.8 4.8-4.8', 'M4.5 20.5h15'] },
+  terminal: { paths: ['m5.5 7.5 4.5 4.5-4.5 4.5', 'M12.5 16.5h6'] },
+  box: { paths: ['m12 3 8.5 4.6v8.8L12 21l-8.5-4.6V7.6L12 3Z', 'm3.5 7.6 8.5 4.6 8.5-4.6', 'M12 12.2V21'] },
+  check: { paths: ['m4.5 12.5 5 5 10-11'] },
+  'arrow-right': { paths: ['M4 12h15', 'm12.5 5.5 6.5 6.5-6.5 6.5'] },
+  'external-link': {
+    paths: ['M14 4.5h5.5V10', 'm19.5 4.5-8 8', 'M18 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1H10']
+  },
+  windows: {
+    paths: [
+      'M3 5.4 10.4 4.4V11H3V5.4Z',
+      'M12 4.1 21 2.8V11h-9V4.1Z',
+      'M3 12.6h7.4v6.6L3 18.2v-5.6Z',
+      'M12 12.6h9v8.2l-9-1.3v-6.9Z'
+    ]
+  },
+  github: {
+    viewBox: '0 0 16 16',
+    filled: true,
+    paths: [
+      'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z'
+    ]
+  }
+}
+
+const icon = ICONS[name]
+if (!icon) throw new Error(`Unknown icon: ${name}`)
+
+const viewBox = icon.viewBox ?? '0 0 24 24'
+const filled = icon.filled ?? false
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox={viewBox}
+  width={size}
+  height={size}
+  fill={filled ? 'currentColor' : 'none'}
+  stroke={filled ? 'none' : 'currentColor'}
+  stroke-width={strokeWidth}
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class={className}
+  aria-hidden="true"
+  focusable="false"
+>
+  {icon.paths.map((d) => <path d={d} />)}
+</svg>

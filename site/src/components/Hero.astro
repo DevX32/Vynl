@@ -1,0 +1,276 @@
+---
+import Icon from './Icon.astro'
+import { base } from '../lib/base'
+import { getLatestRelease } from '../lib/releases'
+import { getAppVersion, RELEASES_URL, REPO_URL } from '../lib/repo'
+
+const version = getAppVersion()
+
+const release = await getLatestRelease()
+const windowsUrl = release?.windows?.url ?? RELEASES_URL
+const linuxUrl =
+  release?.linux.find((asset) => asset.format === 'AppImage')?.url ??
+  release?.linux[0]?.url ??
+  RELEASES_URL
+const defaultUrl = release ? windowsUrl : RELEASES_URL
+
+const highlights = [
+  'Gapless player with queue',
+  'Synced lyrics',
+  'Extensible plugins',
+  'No account, no cloud'
+]
+---
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-copy">
+      <a class="pill" href={`${REPO_URL}/releases/tag/v${version}`} target="_blank" rel="noopener">
+        <span class="pill-dot"></span>
+        v{version} is out
+        <Icon name="arrow-right" size={14} />
+      </a>
+
+      <h1>
+        Music, kept<br />
+        <span class="grad">minimal</span>.
+      </h1>
+
+      <p class="lede">
+        A lightweight desktop music player with a library, playlists and synced lyrics,
+        wrapped in a native window that gets out of the way.
+      </p>
+
+      <div class="btn-row hero-actions">
+        <a
+          class="btn btn--primary btn--lg"
+          href={defaultUrl}
+          data-download
+          data-windows={windowsUrl}
+          data-linux={linuxUrl}
+        >
+          <Icon name="download" size={18} />
+          <span data-download-label>Download</span>
+        </a>
+        <a class="btn btn--ghost btn--lg" href={REPO_URL} target="_blank" rel="noopener">
+          <Icon name="github" size={18} />
+          View source
+        </a>
+      </div>
+
+      <ul class="highlights">
+        {highlights.map((label) => <li>{label}</li>)}
+      </ul>
+    </div>
+
+    <div class="hero-visual" aria-hidden="true">
+      <div class="glow"></div>
+      <div class="window">
+        <div class="window-bar">
+          <span class="dot dot--red"></span>
+          <span class="dot dot--amber"></span>
+          <span class="dot dot--green"></span>
+          <span class="window-title">Vynl</span>
+        </div>
+        <img src={`${base}screenshots/home.png`} alt="" width="1596" height="896" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const button = document.querySelector<HTMLAnchorElement>('[data-download]')
+
+  if (button) {
+    const ua = navigator.userAgent
+    const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? ''
+    const label = button.querySelector<HTMLElement>('[data-download-label]')
+
+    const set = (url: string | undefined, text: string) => {
+      if (!url) return
+      button.href = url
+      if (label) label.textContent = text
+    }
+
+    if (/win/i.test(platform) || /windows/i.test(ua)) {
+      set(button.dataset.windows, 'Download for Windows')
+    } else if (/linux|x11/i.test(ua) && !/android/i.test(ua)) {
+      set(button.dataset.linux, 'Download for Linux')
+    }
+  }
+</script>
+
+<style>
+  .hero {
+    padding-top: 72px;
+    padding-bottom: 40px;
+  }
+
+  .hero-copy {
+    max-width: 720px;
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--dim);
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-sm);
+    padding: 5px 14px 5px 11px;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .pill:hover {
+    color: var(--text);
+    border-color: rgba(168, 148, 232, 0.45);
+    background: var(--accent-soft);
+  }
+
+  .pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 3px rgba(143, 214, 148, 0.16);
+  }
+
+  h1 {
+    margin-top: 26px;
+    font-size: clamp(46px, 8.4vw, 88px);
+    letter-spacing: -0.045em;
+    font-weight: 600;
+  }
+
+  .grad {
+    background: linear-gradient(100deg, #cdbfff 0%, var(--accent) 48%, #79bdf0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .lede {
+    margin: 22px auto 0;
+    max-width: 58ch;
+    color: var(--dim);
+    font-size: clamp(16px, 2vw, 18.5px);
+  }
+
+  .hero-actions {
+    justify-content: center;
+    margin-top: 34px;
+  }
+
+  .highlights {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 24px;
+    margin: 40px 0 0;
+    padding: 0;
+  }
+
+  .highlights li {
+    position: relative;
+    padding-left: 16px;
+    font-size: 14px;
+    color: var(--faint);
+  }
+
+  .highlights li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 5px;
+    height: 5px;
+    border-radius: 1px;
+    background: var(--accent);
+    opacity: 0.7;
+  }
+
+  .hero-visual {
+    position: relative;
+    margin-top: 64px;
+  }
+
+  .glow {
+    position: absolute;
+    inset: -6% -4% 14%;
+    background: radial-gradient(60% 60% at 50% 30%, rgba(168, 148, 232, 0.28), transparent 72%);
+    filter: blur(30px);
+    z-index: -1;
+  }
+
+  .window {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .window-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 40px;
+    padding: 0 14px;
+    background: #16161b;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+  }
+
+  .dot--red {
+    background: #ff5f57;
+  }
+
+  .dot--amber {
+    background: #febc2e;
+  }
+
+  .dot--green {
+    background: #28c840;
+  }
+
+  .window-title {
+    margin-inline: auto;
+    margin-right: 46px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--faint);
+  }
+
+  .window img {
+    width: 100%;
+    height: auto;
+  }
+
+  @media (max-width: 640px) {
+    .hero {
+      padding-top: 40px;
+    }
+
+    .hero-visual {
+      margin-top: 44px;
+    }
+
+    .highlights {
+      gap: 10px 18px;
+    }
+  }
+</style>

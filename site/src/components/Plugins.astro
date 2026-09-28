@@ -1,0 +1,234 @@
+---
+import Icon from './Icon.astro'
+import { STORE_URL } from '../lib/repo'
+
+const capabilities = [
+  'A JavaScript runtime with onLoad / onEnable / onDisable / onUnload hooks',
+  'Providers for lyrics, artist info and collection resolution',
+  'Settings sections, Home sections and whole pages contributed by plugins',
+  'Player observation and playback control, gated behind a permission',
+  'One-click installs and updates from the built-in plugin store',
+  'A dev folder for live reload, or sideload any .zip'
+]
+
+const sample = `// listen-along/index.js
+export default {
+  id: 'listen-along',
+  name: 'Listen Along',
+  version: '1.0.0',
+
+  permissions: ['player'],
+
+  async onLoad(api) {
+    this.api = api
+  },
+
+  async onEnable() {
+    // host a session, share the code, friends follow along
+    this.session = await this.api.sessions.create({
+      control: ['play', 'pause', 'seek']
+    })
+  },
+
+  onDisable() {
+    this.session?.close()
+  }
+}`
+---
+
+<section class="section" id="plugins">
+  <div class="container">
+    <div class="section-head section-head--center reveal">
+      <span class="eyebrow">Plugins</span>
+      <h2 class="section-title">Pluggable by design</h2>
+      <p class="section-sub">
+        Vynl has a real plugin runtime, not an extension bolted on afterwards.
+        Write JavaScript, get a whole new capability.
+      </p>
+    </div>
+
+    <div class="split">
+      <div class="split-copy reveal">
+        <ul class="caps">
+          {capabilities.map((cap) => (
+            <li>
+              <span class="tick"><Icon name="check" size={13} /></span>
+              {cap}
+            </li>
+          ))}
+        </ul>
+
+        <div class="btn-row">
+          <a class="btn btn--primary" href={STORE_URL} target="_blank" rel="noopener">
+            <Icon name="box" size={17} />
+            Browse the plugin store
+            <Icon name="external-link" size={15} />
+          </a>
+        </div>
+      </div>
+
+      <div class="split-code reveal" style="transition-delay:90ms">
+        <div class="code-bar">
+          <span></span><span></span><span></span>
+          <em>plugin.js</em>
+        </div>
+        <pre><code>{sample}</code></pre>
+      </div>
+    </div>
+
+    <article class="spotlight card reveal">
+      <div class="spotlight-body">
+        <span class="spotlight-tag">Store plugin</span>
+        <h3>Listen Along</h3>
+        <p>
+          Host a listening session, share a short code, and let friends follow your playback in
+          real time, with synced position, queue and controls. It ships as a plugin, which is the
+          clearest proof that the runtime is genuinely open.
+        </p>
+      </div>
+      <a
+        class="btn btn--ghost"
+        href={`${STORE_URL}/tree/main/plugins/listen-along`}
+        target="_blank"
+        rel="noopener"
+      >
+        <Icon name="github" size={17} />
+        View the source
+      </a>
+    </article>
+  </div>
+</section>
+
+<style>
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    gap: 40px;
+    align-items: center;
+  }
+
+  .caps {
+    list-style: none;
+    margin: 0 0 28px;
+    padding: 0;
+    display: grid;
+    gap: 13px;
+  }
+
+  .caps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    color: var(--dim);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .tick {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: rgba(143, 214, 148, 0.14);
+    color: var(--green);
+  }
+
+  .split-code {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #0a0a0c;
+    box-shadow: var(--shadow-md);
+  }
+
+  .code-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 14px;
+    background: #16161b;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .code-bar span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(240, 240, 236, 0.16);
+  }
+
+  .code-bar em {
+    margin-inline: auto;
+    padding-right: 28px;
+    font-family: var(--font-mono);
+    font-style: normal;
+    font-size: 11.5px;
+    color: var(--faint);
+  }
+
+  .split-code pre {
+    margin: 0;
+    padding: 20px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 12.8px;
+    line-height: 1.75;
+    color: #c9c6d6;
+    tab-size: 2;
+  }
+
+  .spotlight {
+    margin-top: 28px;
+    padding: 28px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 24px;
+    background:
+      radial-gradient(600px 200px at 12% 0%, rgba(168, 148, 232, 0.12), transparent 70%),
+      var(--surface);
+  }
+
+  .spotlight:hover {
+    border-color: rgba(168, 148, 232, 0.32);
+  }
+
+  .spotlight-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .spotlight h3 {
+    font-size: 20px;
+    margin-top: 6px;
+  }
+
+  .spotlight p {
+    margin-top: 8px;
+    color: var(--dim);
+    font-size: 14.5px;
+    max-width: 72ch;
+  }
+
+  @media (max-width: 900px) {
+    .split {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .spotlight {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      text-align: left;
+    }
+  }
+</style>

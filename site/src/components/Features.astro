@@ -1,0 +1,113 @@
+---
+const groups = [
+  {
+    label: 'Player',
+    items: [
+      { title: 'Built-in player', text: 'Play, pause, seek and volume without leaving the window.' },
+      { title: 'Queue management', text: 'Reorder, remove and shuffle the upcoming queue.' },
+      { title: 'Fullscreen mode', text: 'A distraction-free player view for the big screen.' },
+      { title: 'Persistent state', text: 'Now Playing survives restarts, so you pick up where you left off.' }
+    ]
+  },
+  {
+    label: 'Library',
+    items: [
+      { title: 'Incremental scanning', text: 'Library scans pick up changes without rescanning everything.' },
+      { title: 'Playlists', text: 'Create, rename and delete playlists, then reorder tracks inside them.' },
+      { title: 'Cover art', text: 'Embedded artwork and metadata, with custom playlist covers.' }
+    ]
+  },
+  {
+    label: 'Lyrics',
+    items: [
+      { title: 'Synced lyrics', text: 'LRC and plain text, fetched from LRCLIB and lyrics.ovh.' },
+      { title: 'Embed them', text: 'Write lyrics straight into the audio file for portable players.' },
+      { title: 'In-player overlay', text: 'Scrollable lyrics that follow along inside the player.' }
+    ]
+  },
+  {
+    label: 'Integrations',
+    items: [
+      { title: 'Discord Rich Presence', text: 'Show what you are listening to straight in your profile.' },
+      { title: 'System tray', text: 'Quick controls from the tray, with a minimised player.' },
+      { title: 'Auto-updater', text: 'Stay current with in-app update checks.' },
+      { title: 'Theming & i18n', text: 'Accent colors you choose, and a translated interface.' }
+    ]
+  }
+]
+---
+
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head section-head--center reveal">
+      <span class="eyebrow">Features</span>
+      <h2 class="section-title">Everything you need,<br />nothing you don’t</h2>
+      <p class="section-sub">
+        A focused feature set. Only the things a music player does well, and no dashboard to configure.
+      </p>
+    </div>
+
+    <div class="groups">
+      {groups.map((group, index) => (
+        <div class="group reveal" style={`transition-delay:${index * 70}ms`}>
+          <div class="group-label">{group.label}</div>
+
+          <div class="grid">
+            {group.items.map((item) => (
+              <article class="card item">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .groups {
+    display: grid;
+    gap: 44px;
+  }
+
+  .group-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 16px;
+  }
+
+  .item {
+    padding: 24px 22px;
+  }
+
+  .item:hover {
+    transform: translateY(-3px);
+    background: var(--bg-raise);
+  }
+
+  .item h3 {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .item p {
+    margin-top: 8px;
+    color: var(--dim);
+    font-size: 14.5px;
+    line-height: 1.55;
+  }
+</style>
