@@ -69,7 +69,10 @@ fn esbuild_runs(bin: &str) -> bool {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    command.output().map(|o| o.status.success()).unwrap_or(false)
+    command
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 fn http_client() -> Result<reqwest::Client, String> {
@@ -91,9 +94,7 @@ pub async fn ensure_esbuild(app: &AppHandle) -> Result<String, String> {
         return Ok(bin);
     }
 
-    let _guard = compile_lock()
-        .lock()
-        .await;
+    let _guard = compile_lock().lock().await;
 
     if let Some(bin) = tools::get_tool_path("esbuild", &user_data)
         && esbuild_runs(&bin)
@@ -159,8 +160,7 @@ async fn download_esbuild(app: &AppHandle, user_data: &Path) -> Result<String, S
 
     let extract_dir = scratch.join("esbuild-extract");
     let _ = fs::remove_dir_all(&extract_dir);
-    fs::create_dir_all(&extract_dir)
-        .map_err(|e| format!("Failed to create extract dir: {e}"))?;
+    fs::create_dir_all(&extract_dir).map_err(|e| format!("Failed to create extract dir: {e}"))?;
 
     let extracted = if ext == "zip" {
         extract_esbuild_zip(&archive, &extract_dir)?
@@ -403,15 +403,7 @@ pub async fn compile(
     let outfile = scratch.join("bundle.js");
     let metafile = scratch.join("meta.json");
 
-    let result = run_esbuild(
-        &esbuild,
-        &base,
-        &entry_path,
-        &shim,
-        &outfile,
-        &metafile,
-    )
-    .await;
+    let result = run_esbuild(&esbuild, &base, &entry_path, &shim, &outfile, &metafile).await;
 
     let outcome = match result {
         Ok(()) => read_outputs(&outfile, &metafile),
@@ -471,8 +463,8 @@ async fn run_esbuild(
 }
 
 fn read_outputs(outfile: &Path, metafile: &Path) -> Result<CompiledPlugin, String> {
-    let code = fs::read_to_string(outfile)
-        .map_err(|e| format!("Failed to read esbuild output: {e}"))?;
+    let code =
+        fs::read_to_string(outfile).map_err(|e| format!("Failed to read esbuild output: {e}"))?;
 
     let mut deps: Vec<String> = util::read_json::<serde_json::Value>(metafile)
         .and_then(|meta| {
@@ -504,10 +496,7 @@ mod tests {
             resolve_relative("src/index.ts", "./util/x").unwrap(),
             "src/util/x"
         );
-        assert_eq!(
-            resolve_relative("src/lib/a.ts", "../b").unwrap(),
-            "src/b"
-        );
+        assert_eq!(resolve_relative("src/lib/a.ts", "../b").unwrap(), "src/b");
         assert_eq!(resolve_relative("index.ts", "./a/../b").unwrap(), "b");
     }
 
@@ -551,17 +540,15 @@ mod tests {
 
     #[test]
     fn allows_the_sdk_module_and_ordinary_imports() {
-        assert!(check_specifiers(
-            r#"import sdk from "@vynl/plugin-sdk"; import "./helper";"#,
-            "index.ts"
-        )
-        .is_ok());
+        assert!(
+            check_specifiers(
+                r#"import sdk from "@vynl/plugin-sdk"; import "./helper";"#,
+                "index.ts"
+            )
+            .is_ok()
+        );
         assert!(check_specifiers(r#"import { x } from "some-pkg";"#, "index.ts").is_ok());
-        assert!(check_specifiers(
-            r#"const m = await import("./lazy");"#,
-            "index.ts"
-        )
-        .is_ok());
+        assert!(check_specifiers(r#"const m = await import("./lazy");"#, "index.ts").is_ok());
     }
 
     #[test]
@@ -574,13 +561,9 @@ mod tests {
 
     #[test]
     fn ignores_absolute_paths_that_are_not_imports() {
-        assert!(check_specifiers(
-            r#"const hint = "install to /usr/local/bin";"#,
-            "index.ts"
-        )
-        .is_ok());
         assert!(
-            check_specifiers("// see /etc/passwd for details", "index.ts").is_ok()
+            check_specifiers(r#"const hint = "install to /usr/local/bin";"#, "index.ts").is_ok()
         );
+        assert!(check_specifiers("// see /etc/passwd for details", "index.ts").is_ok());
     }
 }
