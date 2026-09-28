@@ -26,6 +26,8 @@
   } from "../../lib/format";
   import { blobSrc } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
+  import { normalizeCoverImage } from "@lib/cover-image";
+  import { toasts } from "@lib/toast";
   import { vynl } from "../../lib/vynl";
   import SearchInput from "../../components/SearchInput.svelte";
   import ContextMenu, {
@@ -86,6 +88,7 @@
   let addQuery = $state("");
   const addedPaths = $derived(new Set(pl?.paths ?? []));
   let coverInput: HTMLInputElement | undefined = $state();
+  let coverBusy = $state(false);
 
   function totalDur(): number {
     return totalSeconds(currentTracks);
@@ -160,13 +163,19 @@
   async function onCoverFile(e: Event): Promise<void> {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file || !pl) return;
-    const ext = file.name.split(".").pop() || "jpg";
-    const arrayBuf = await file.arrayBuffer();
-    const data = Array.from(new Uint8Array(arrayBuf));
-    const savedPath = await vynl.savePlaylistCover(pl.id, ext, data);
-    await setPlaylistCover(pl.id, savedPath);
     input.value = "";
+    if (!file || !pl || coverBusy) return;
+    coverBusy = true;
+    try {
+      const { ext, data } = await normalizeCoverImage(file);
+      const savedPath = await vynl.savePlaylistCover(pl.id, ext, data);
+      await setPlaylistCover(pl.id, savedPath);
+    } catch (err) {
+      console.warn("set playlist cover failed:", err);
+      toasts.error(t("playlist.coverFailed"));
+    } finally {
+      coverBusy = false;
+    }
   }
 </script>
 
@@ -189,7 +198,9 @@
         {/if}
         <button
           class="cover-pick-btn"
+          class:busy={coverBusy}
           onclick={pickCover}
+          disabled={coverBusy}
           aria-label={t("playlist.changeCover")}
         >
           <Image size={14} stroke-width={1.5} />
@@ -380,15 +391,25 @@
     padding: 20px 2px 12px;
   }
 
-  .hero-cover {
-    width: 96px;
-    height: 96px;
+  .hero-cover-wrap {
+    position: relative;
     flex-shrink: 0;
-    border-radius: var(--radius-sm);
-    object-fit: cover;
-    display: block;
+    --hero-cover: 128px;
+    width: var(--hero-cover);
+    height: var(--hero-cover);
+    border-radius: var(--radius);
+    overflow: hidden;
     background: var(--bg-raise);
-    box-shadow: var(--shadow-sm);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.07),
+      var(--shadow-md);
+  }
+
+  .hero-cover {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
   }
 
   .hero-cover.placeholder {
@@ -396,13 +417,7 @@
     align-items: center;
     justify-content: center;
     color: var(--faint);
-    border: 1px solid var(--line);
     background: var(--placeholder-gradient);
-  }
-
-  .hero-cover-wrap {
-    position: relative;
-    flex-shrink: 0;
   }
 
   .cover-pick-btn {
@@ -413,14 +428,23 @@
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: 0;
     color: #fff;
     cursor: pointer;
     opacity: 0;
     transition: opacity 0.15s;
   }
 
-  .hero-cover-wrap:hover .cover-pick-btn {
+  .cover-pick-btn:disabled {
+    cursor: default;
+  }
+
+  .cover-pick-btn.busy {
+    opacity: 1;
+  }
+
+  .hero-cover-wrap:hover .cover-pick-btn:not(:disabled),
+  .cover-pick-btn:focus-visible {
     opacity: 1;
   }
 
@@ -731,4 +755,23 @@
     letter-spacing: 0.06em;
   }
 
+  @container player (max-width: 760px) {
+    .hero-cover-wrap {
+      --hero-cover: 108px;
+    }
+  }
+
+  @container player (max-width: 540px) {
+    .hero {
+      gap: 12px;
+    }
+
+    .hero-cover-wrap {
+      --hero-cover: 92px;
+    }
+
+    .hero-name {
+      font-size: 26px;
+    }
+  }
 </style>

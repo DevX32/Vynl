@@ -244,6 +244,7 @@ export const en = {
     noMatchesQuery: 'Nothing matches "{query}"',
     searchLibrary: "Search library...",
     changeCover: "Change cover",
+    coverFailed: "Couldn't use that image",
     playlistName: "Playlist name",
     remove: "Remove",
     addToQueue: "Add to queue",

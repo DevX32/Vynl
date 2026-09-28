@@ -180,7 +180,7 @@
 
 <style>
   .sidebar {
-    --cover: 40px;
+    --cover: 44px;
     --icon: 18px;
     --pad: 6px;
     --collapsed-w: 60px;

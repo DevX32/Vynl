@@ -435,9 +435,23 @@ pub async fn save_playlist_cover(
     let user_data = user_data_dir(&app)?;
     let covers_dir = user_data.join("covers");
     fs::create_dir_all(&covers_dir).map_err(|e| e.to_string())?;
-    let filename = format!("pl-{}.{}", id, ext);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    let filename = format!("pl-{}.{}.{}", id, stamp, ext);
     let path = covers_dir.join(&filename);
     fs::write(&path, &data).map_err(|e| e.to_string())?;
+    let prefix = format!("pl-{}.", id);
+    if let Ok(entries) = fs::read_dir(&covers_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(&prefix) && name != filename {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
     Ok(path.to_string_lossy().into_owned())
 }
 
