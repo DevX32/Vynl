@@ -11,7 +11,6 @@ use tauri::AppHandle;
 use crate::services::{plugins, process, tools, util};
 
 const ESBUILD_LATEST_URL: &str = "https://api.github.com/repos/evanw/esbuild/releases/latest";
-const GH_UA: &str = "Vynl/1.0";
 const SDK_MODULE: &str = "@vynl/plugin-sdk";
 
 const MAX_SOURCE_BYTES: u64 = 8 * 1024 * 1024;
@@ -76,13 +75,7 @@ fn esbuild_runs(bin: &str) -> bool {
 }
 
 fn http_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent(GH_UA)
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .connect_timeout(Duration::from_secs(15))
-        .read_timeout(Duration::from_secs(120))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))
+    util::github_client(Duration::from_secs(120))
 }
 
 pub async fn ensure_esbuild(app: &AppHandle) -> Result<String, String> {

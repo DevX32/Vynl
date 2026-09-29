@@ -388,6 +388,13 @@ fn extract_cover(ffmpeg: &str, file: &Path, dest: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn covers_search_dirs(user_data_dir: &Path) -> Vec<PathBuf> {
+    super::tools::user_data_search_roots(user_data_dir)
+        .into_iter()
+        .map(|dir| dir.join("covers"))
+        .collect()
+}
+
 fn extract_or_cache_cover(
     ffmpeg: &str,
     file: &Path,
@@ -399,7 +406,7 @@ fn extract_or_cache_cover(
     let cover_ext = pic_codec.map(codec_ext).unwrap_or("jpg");
     let filename = format!("{}.{}", hash, cover_ext);
 
-    let cached = super::tools::covers_search_dirs(user_data_dir)
+    let cached = covers_search_dirs(user_data_dir)
         .into_iter()
         .map(|dir| dir.join(&filename))
         .find(|dest| dest.exists() && dest.metadata().map(|m| m.len() > 0).unwrap_or(false));
@@ -532,7 +539,7 @@ fn probe_file(
             let covers_dir = user_data_dir.join("covers");
             let cover_ext = pic_codec.map(codec_ext).unwrap_or("jpg");
             let filename = format!("{}.{}", hash, cover_ext);
-            let cached = super::tools::covers_search_dirs(user_data_dir)
+            let cached = covers_search_dirs(user_data_dir)
                 .into_iter()
                 .map(|dir| dir.join(&filename))
                 .find(|dest| {

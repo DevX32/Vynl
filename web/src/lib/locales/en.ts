@@ -193,6 +193,7 @@ export const en = {
     installingHint: "Installing automatically in the background...",
     notInstalled: "Not installed",
     downloading: "Downloading... {n}%",
+    downloadingUnknown: "Downloading...",
     failed: "Failed: {error}",
     failedUnknown: "Failed: unknown error",
     installed: "Installed",

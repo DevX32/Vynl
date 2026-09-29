@@ -263,23 +263,6 @@ pub async fn install_tool(name: String, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn update_tool(name: String, app: AppHandle) -> Result<(), String> {
-    let valid_names = ["yt-dlp", "ffmpeg"];
-    if !valid_names.contains(&name.as_str()) {
-        return Err("Unknown tool".into());
-    }
-    let user_data = user_data_dir(&app)?;
-    let exe = if cfg!(target_os = "windows") {
-        format!("{}.exe", name)
-    } else {
-        name.clone()
-    };
-    let bin_path = user_data.join("bin").join(&exe);
-    fs::remove_file(&bin_path).ok();
-    crate::services::tools::install_tool(&user_data, &name, app).await
-}
-
-#[tauri::command]
 pub async fn delete_library_track(path: String, app: AppHandle) -> Result<(), String> {
     let canonical_path = require_path_in_output(&path, &app)?;
     fs::remove_file(&canonical_path).map_err(|e| format!("Failed to delete file: {e}"))?;

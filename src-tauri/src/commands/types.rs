@@ -27,12 +27,42 @@ pub enum CollectionKind {
     Playlist,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolNameEnum {
     #[serde(rename = "yt-dlp")]
     YtDlp,
     Ffmpeg,
+}
+
+pub const ALL_TOOLS: [ToolNameEnum; 2] = [ToolNameEnum::YtDlp, ToolNameEnum::Ffmpeg];
+
+impl ToolNameEnum {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ToolNameEnum::YtDlp => "yt-dlp",
+            ToolNameEnum::Ffmpeg => "ffmpeg",
+        }
+    }
+
+    pub fn version_args(self) -> &'static [&'static str] {
+        match self {
+            ToolNameEnum::YtDlp => &["--version"],
+            ToolNameEnum::Ffmpeg => &["-version"],
+        }
+    }
+}
+
+impl std::str::FromStr for ToolNameEnum {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "yt-dlp" => Ok(ToolNameEnum::YtDlp),
+            "ffmpeg" => Ok(ToolNameEnum::Ffmpeg),
+            other => Err(format!("Unknown tool: {other}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -194,6 +224,50 @@ pub struct ToolStatus {
     pub progress: Option<f64>,
     pub error: Option<String>,
     pub update_available: Option<bool>,
+}
+
+impl ToolStatus {
+    pub fn new(name: ToolNameEnum, state: ToolState) -> Self {
+        Self {
+            name,
+            installed: false,
+            path: None,
+            version: None,
+            state,
+            progress: None,
+            error: None,
+            update_available: None,
+        }
+    }
+
+    pub fn downloading(name: ToolNameEnum, progress: Option<f64>) -> Self {
+        Self::new(name, ToolState::Downloading).with_progress(progress)
+    }
+
+    pub fn with_progress(mut self, progress: Option<f64>) -> Self {
+        self.progress = progress;
+        self
+    }
+
+    pub fn found(mut self, path: String, version: Option<String>) -> Self {
+        self.installed = true;
+        self.path = Some(path);
+        self.state = match version {
+            Some(_) => ToolState::Ok,
+            None => {
+                self.error = Some("binary found but failed to run".into());
+                ToolState::Error
+            }
+        };
+        self.version = version;
+        self
+    }
+
+    pub fn failed(name: ToolNameEnum, error: impl Into<String>) -> Self {
+        let mut status = Self::new(name, ToolState::Error);
+        status.error = Some(error.into());
+        status
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

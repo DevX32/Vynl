@@ -9,6 +9,18 @@ pub fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
+pub const GITHUB_UA: &str = concat!("Vynl/", env!("CARGO_PKG_VERSION"));
+
+pub fn github_client(read_timeout: std::time::Duration) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent(GITHUB_UA)
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .read_timeout(read_timeout)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))
+}
+
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()

@@ -1,16 +1,27 @@
-use crate::commands::types::ToolStatus;
-use crate::services::process;
+use crate::commands::types::{ALL_TOOLS, ToolNameEnum, ToolState, ToolStatus};
+use crate::services::{process, util};
+use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::str::FromStr;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
-const GH_UA: &str = "Vynl/1.0";
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+const PROBE_CACHE_TTL: Duration = Duration::from_secs(10);
+const PROGRESS_EMIT_STEP: f64 = 1.0;
 
 fn bin_dir(user_data_dir: &Path) -> PathBuf {
     user_data_dir.join("bin")
+}
+
+pub fn user_data_search_roots(user_data_dir: &Path) -> Vec<PathBuf> {
+    std::iter::once(user_data_dir.to_path_buf())
+        .chain(legacy_user_data_dirs(user_data_dir))
+        .collect()
 }
 
 fn legacy_user_data_dirs(current: &Path) -> Vec<PathBuf> {
@@ -27,12 +38,6 @@ fn legacy_user_data_dirs(current: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-fn user_data_search_roots(user_data_dir: &Path) -> Vec<PathBuf> {
-    std::iter::once(user_data_dir.to_path_buf())
-        .chain(legacy_user_data_dirs(user_data_dir))
-        .collect()
-}
-
 fn tmp_dir(user_data_dir: &Path) -> PathBuf {
     user_data_dir.join("tmp")
 }
@@ -43,6 +48,14 @@ fn exe_name(name: &str) -> String {
     } else {
         name.to_string()
     }
+}
+
+fn parse_tool(name: &str) -> Result<ToolNameEnum, String> {
+    ToolNameEnum::from_str(name)
+}
+
+fn tool_exe(tool: ToolNameEnum) -> String {
+    exe_name(tool.as_str())
 }
 
 fn run_which(shell_cmd: Command) -> Option<String> {
@@ -119,15 +132,41 @@ fn which(name: &str) -> Option<String> {
     None
 }
 
-fn version_of(bin: &str, args: &[&str]) -> Option<String> {
-    let mut command = process::hidden_std(Command::new(bin));
+fn parse_version(tool: ToolNameEnum, raw: &str) -> Option<String> {
+    let line = raw.trim();
+    if line.is_empty() {
+        return None;
+    }
+
+    let candidate = match tool {
+        ToolNameEnum::Ffmpeg => {
+            let rest = line.strip_prefix("ffmpeg version ")?;
+            rest.split_whitespace().next()?
+        }
+        ToolNameEnum::YtDlp => line,
+    };
+
+    let token = candidate.trim_start_matches(['v', 'V']);
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
+async fn version_of(bin: &str, args: &[&str]) -> Option<String> {
+    let mut command = process::hidden_tokio(tokio::process::Command::new(bin));
     command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
 
-    let output = command.output().ok()?;
+    let output = tokio::time::timeout(PROBE_TIMEOUT, command.output())
+        .await
+        .ok()?
+        .ok()?;
     let combined = format!(
         "{}\n{}",
         String::from_utf8_lossy(&output.stdout),
@@ -144,13 +183,6 @@ fn version_of(bin: &str, args: &[&str]) -> Option<String> {
 fn resolve_binary(name: &str, user_data_dir: &Path) -> Option<String> {
     let exe = exe_name(name);
 
-    if let Some(resource_dir) = dirs::data_dir() {
-        let bundled = resource_dir.join("bin").join(&exe);
-        if bundled.exists() {
-            return Some(bundled.to_string_lossy().to_string());
-        }
-    }
-
     for dir in user_data_search_roots(user_data_dir) {
         let local = bin_dir(&dir).join(&exe);
         if local.exists() {
@@ -165,25 +197,50 @@ fn resolve_binary(name: &str, user_data_dir: &Path) -> Option<String> {
     None
 }
 
-fn version_nums(v: &str) -> Vec<u32> {
-    v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect()
+fn numeric_version(v: &str) -> Option<Vec<u32>> {
+    let token = v
+        .split(|c: char| !c.is_ascii_digit() && c != '.')
+        .find(|t| !t.is_empty())?;
+    let parts: Vec<u32> = token
+        .split('.')
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .ok()?;
+    (parts.len() >= 2).then_some(parts)
 }
 
-fn is_newer(latest: &str, current: &str) -> bool {
-    let a = version_nums(latest);
-    let b = version_nums(current);
-    let len = a.len().max(b.len());
-    for i in 0..len {
-        let x = a.get(i).copied().unwrap_or(0);
-        let y = b.get(i).copied().unwrap_or(0);
-        if x > y {
-            return true;
-        }
-        if x < y {
-            return false;
+fn compare_versions(a: &[u32], b: &[u32]) -> Ordering {
+    for i in 0..a.len().max(b.len()) {
+        match a
+            .get(i)
+            .copied()
+            .unwrap_or(0)
+            .cmp(&b.get(i).copied().unwrap_or(0))
+        {
+            Ordering::Equal => continue,
+            other => return other,
         }
     }
-    false
+    Ordering::Equal
+}
+
+fn has_update(installed: &str, latest_tag: &str) -> Option<bool> {
+    let latest = numeric_version(latest_tag)?;
+    let current = numeric_version(installed)?;
+    Some(compare_versions(&latest, &current) == Ordering::Greater)
+}
+
+fn update_repo(tool: ToolNameEnum) -> &'static str {
+    match tool {
+        ToolNameEnum::YtDlp => "yt-dlp/yt-dlp",
+        ToolNameEnum::Ffmpeg => {
+            if cfg!(target_os = "windows") {
+                "GyanD/codexffmpeg"
+            } else {
+                "BtbN/FFmpeg-Builds"
+            }
+        }
+    }
 }
 
 async fn download_file(
@@ -191,11 +248,10 @@ async fn download_file(
     url: &str,
     dest: &Path,
     app_handle: &AppHandle,
-    tool_name: &str,
+    tool: ToolNameEnum,
 ) -> Result<(), String> {
     let resp = client
         .get(url)
-        .header("User-Agent", GH_UA)
         .send()
         .await
         .map_err(|e| format!("HTTP request failed: {e}"))?;
@@ -210,8 +266,9 @@ async fn download_file(
         ));
     }
 
-    let total = resp.content_length().unwrap_or(0);
+    let total = resp.content_length().filter(|n| *n > 0);
     let mut received: u64 = 0;
+    let mut last_emitted = f64::NEG_INFINITY;
 
     let mut stream = resp;
     let mut file = tokio::fs::File::create(dest)
@@ -219,20 +276,7 @@ async fn download_file(
         .map_err(|e| format!("Failed to create file: {e}"))?;
     emit_status(
         app_handle,
-        &ToolStatus {
-            name: if tool_name == "yt-dlp" {
-                crate::commands::types::ToolNameEnum::YtDlp
-            } else {
-                crate::commands::types::ToolNameEnum::Ffmpeg
-            },
-            installed: false,
-            path: None,
-            version: None,
-            state: crate::commands::types::ToolState::Downloading,
-            progress: Some(0.0),
-            error: None,
-            update_available: None,
-        },
+        &ToolStatus::downloading(tool, total.map(|_| 0.0)),
     );
 
     while let Some(chunk) = stream.chunk().await.map_err(|e| {
@@ -243,26 +287,15 @@ async fn download_file(
             .await
             .map_err(|e| format!("Write failed: {e}"))?;
         received += chunk.len() as u64;
-        let progress = if total > 0 {
-            (received as f64 / total as f64 * 100.0).min(100.0)
-        } else {
-            (received as f64 / (1024.0 * 1024.0 * 20.0) * 95.0).min(95.0)
-        };
-        let status = ToolStatus {
-            name: if tool_name == "yt-dlp" {
-                crate::commands::types::ToolNameEnum::YtDlp
-            } else {
-                crate::commands::types::ToolNameEnum::Ffmpeg
-            },
-            installed: false,
-            path: None,
-            version: None,
-            state: crate::commands::types::ToolState::Downloading,
-            progress: Some(progress),
-            error: None,
-            update_available: None,
-        };
-        emit_status(app_handle, &status);
+
+        let Some(total) = total else { continue };
+        let progress = (received as f64 / total as f64 * 100.0).min(100.0);
+        if progress - last_emitted < PROGRESS_EMIT_STEP {
+            continue;
+        }
+        last_emitted = progress;
+
+        emit_status(app_handle, &ToolStatus::downloading(tool, Some(progress)));
     }
 
     file.flush()
@@ -275,84 +308,76 @@ fn emit_status(app_handle: &AppHandle, status: &ToolStatus) {
     let _ = app_handle.emit("vynl:tools:update", status);
 }
 
-fn check_single_tool(name: &str, user_data_dir: &Path) -> ToolStatus {
-    let tool_name_enum = match name {
-        "yt-dlp" => crate::commands::types::ToolNameEnum::YtDlp,
-        "ffmpeg" => crate::commands::types::ToolNameEnum::Ffmpeg,
-        _ => crate::commands::types::ToolNameEnum::YtDlp,
+async fn check_single_tool(tool: ToolNameEnum, user_data_dir: PathBuf) -> ToolStatus {
+    let name = tool.as_str();
+
+    let bin = match tokio::task::spawn_blocking(move || resolve_binary(name, &user_data_dir)).await
+    {
+        Ok(bin) => bin,
+        Err(_) => return ToolStatus::failed(tool, "probe failed"),
     };
-    let bin = resolve_binary(name, user_data_dir);
-    match bin {
-        Some(path) => {
-            let args = if name == "yt-dlp" {
-                vec!["--version"]
-            } else {
-                vec!["-version"]
-            };
-            match version_of(&path, &args) {
-                Some(version) => ToolStatus {
-                    name: tool_name_enum,
-                    installed: true,
-                    path: Some(path),
-                    version: Some(version),
-                    state: crate::commands::types::ToolState::Ok,
-                    progress: None,
-                    error: None,
-                    update_available: None,
-                },
-                None => ToolStatus {
-                    name: tool_name_enum,
-                    installed: true,
-                    path: Some(path),
-                    version: None,
-                    state: crate::commands::types::ToolState::Error,
-                    progress: None,
-                    error: Some("binary found but failed to run".into()),
-                    update_available: None,
-                },
-            }
-        }
-        None => ToolStatus {
-            name: tool_name_enum,
-            installed: false,
-            path: None,
-            version: None,
-            state: crate::commands::types::ToolState::Missing,
-            progress: None,
-            error: None,
-            update_available: None,
-        },
-    }
+
+    let Some(path) = bin else {
+        return ToolStatus::new(tool, ToolState::Missing);
+    };
+
+    let version = version_of(&path, tool.version_args())
+        .await
+        .and_then(|raw| parse_version(tool, &raw));
+
+    ToolStatus::new(tool, ToolState::Ok).found(path, version)
 }
 
-pub async fn check_tools(user_data_dir: &Path, app_handle: &AppHandle) -> Vec<ToolStatus> {
-    let mut statuses = Vec::new();
+struct ProbeCache {
+    user_data_dir: PathBuf,
+    at: std::time::Instant,
+    statuses: Vec<ToolStatus>,
+}
 
-    for name in ["yt-dlp", "ffmpeg"] {
-        let owned_dir = user_data_dir.to_path_buf();
-        let status =
-            match tokio::task::spawn_blocking(move || check_single_tool(name, &owned_dir)).await {
-                Ok(status) => status,
-                Err(_) => ToolStatus {
-                    name: if name == "ffmpeg" {
-                        crate::commands::types::ToolNameEnum::Ffmpeg
-                    } else {
-                        crate::commands::types::ToolNameEnum::YtDlp
-                    },
-                    installed: false,
-                    path: None,
-                    version: None,
-                    state: crate::commands::types::ToolState::Missing,
-                    progress: None,
-                    error: Some("probe failed".into()),
-                    update_available: None,
-                },
-            };
+fn probe_cache() -> &'static tokio::sync::Mutex<Option<ProbeCache>> {
+    static CACHE: OnceLock<tokio::sync::Mutex<Option<ProbeCache>>> = OnceLock::new();
+    CACHE.get_or_init(|| tokio::sync::Mutex::new(None))
+}
+
+async fn probe_all(
+    user_data_dir: &Path,
+    app_handle: &AppHandle,
+    use_cache: bool,
+) -> Vec<ToolStatus> {
+    if use_cache {
+        let guard = probe_cache().lock().await;
+        if let Some(cache) = guard.as_ref()
+            && cache.user_data_dir == user_data_dir
+            && cache.at.elapsed() < PROBE_CACHE_TTL
+        {
+            return cache.statuses.clone();
+        }
+    }
+
+    let dir = user_data_dir.to_path_buf();
+    let mut set = tokio::task::JoinSet::new();
+    for tool in ALL_TOOLS {
+        set.spawn(check_single_tool(tool, dir.clone()));
+    }
+
+    let mut statuses = Vec::with_capacity(ALL_TOOLS.len());
+    while let Some(joined) = set.join_next().await {
+        let Ok(status) = joined else { continue };
         emit_status(app_handle, &status);
         statuses.push(status);
     }
 
+    *probe_cache().lock().await = Some(ProbeCache {
+        user_data_dir: user_data_dir.to_path_buf(),
+        at: std::time::Instant::now(),
+        statuses: statuses.clone(),
+    });
+
     statuses
+}
+
+pub async fn check_tools(user_data_dir: &Path, app_handle: &AppHandle) -> Vec<ToolStatus> {
+    probe_all(user_data_dir, app_handle, true).await
 }
 
 pub fn get_tool_path(name: &str, user_data_dir: &Path) -> Option<String> {
@@ -384,11 +409,53 @@ pub fn get_ffprobe_path(user_data_dir: &Path) -> Option<String> {
     None
 }
 
-pub fn covers_search_dirs(user_data_dir: &Path) -> Vec<PathBuf> {
-    user_data_search_roots(user_data_dir)
-        .into_iter()
-        .map(|dir| dir.join("covers"))
-        .collect()
+struct ScratchDir(PathBuf);
+
+impl ScratchDir {
+    fn create(parent: &Path) -> Result<Self, String> {
+        let unique = format!(
+            "install-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        );
+        let path = parent.join(unique);
+        fs::create_dir_all(&path).map_err(|e| format!("Failed to create temp dir: {e}"))?;
+        Ok(Self(path))
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+async fn promote(staged: &Path, dest: &Path) -> Result<(), String> {
+    let (staged, dest) = (staged.to_path_buf(), dest.to_path_buf());
+    tokio::task::spawn_blocking(move || {
+        fs::rename(&staged, &dest).or_else(|_| {
+            fs::copy(&staged, &dest)?;
+            fs::remove_file(&staged)?;
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e: std::io::Error| format!("Failed to install binary: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
+    }
+    Ok(())
 }
 
 async fn install_ytdlp(
@@ -402,28 +469,55 @@ async fn install_ytdlp(
     } else {
         "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
     };
-    let tmp_path = td.join("yt-dlp.part");
-    download_file(client, url, &tmp_path, app_handle, "yt-dlp").await?;
+    let scratch = ScratchDir::create(td)?;
+    let staged = scratch.path().join(tool_exe(ToolNameEnum::YtDlp));
+    download_file(client, url, &staged, app_handle, ToolNameEnum::YtDlp).await?;
+    promote(&staged, &bd.join(tool_exe(ToolNameEnum::YtDlp))).await
+}
 
-    let dest = bd.join(exe_name("yt-dlp"));
-    let tmp = tmp_path.clone();
-    let dest_for_task = dest.clone();
-    tokio::task::spawn_blocking(move || {
-        fs::rename(&tmp, &dest_for_task).or_else(|_| {
-            fs::copy(&tmp, &dest_for_task)?;
-            fs::remove_file(&tmp)?;
-            Ok(())
-        })
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))?
-    .map_err(|e: std::io::Error| format!("Failed to move binary: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
+async fn latest_release(client: &reqwest::Client, repo: &str) -> Result<serde_json::Value, String> {
+    let url = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch release info: {e}"))?;
+
+    let status = resp.status();
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read release info: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "GitHub returned {status} for {repo}: {}",
+            body.chars().take(200).collect::<String>()
+        ));
     }
-    Ok(())
+
+    serde_json::from_str(&body).map_err(|e| format!("Invalid release JSON: {e}"))
+}
+
+fn pick_asset(release: &serde_json::Value, matches: impl Fn(&str) -> bool) -> Option<String> {
+    release["assets"]
+        .as_array()?
+        .iter()
+        .find(|a| matches(a["name"].as_str().unwrap_or("")))?
+        .get("browser_download_url")?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn windows_ffmpeg_asset(name: &str) -> bool {
+    name.ends_with("-essentials_build.zip") && !name.contains("-x64_shared-")
+}
+
+fn linux_ffmpeg_asset(name: &str) -> bool {
+    name.contains("linux64-gpl")
+        && name.ends_with(".tar.xz")
+        && !name.contains("shared")
+        && !name.contains("arm64")
 }
 
 async fn install_ffmpeg_windows(
@@ -432,41 +526,30 @@ async fn install_ffmpeg_windows(
     td: &Path,
     app_handle: &AppHandle,
 ) -> Result<(), String> {
-    let release_url = "https://api.github.com/repos/GyanD/codexffmpeg/releases/latest";
-    let release_body = client
-        .get(release_url)
-        .header("User-Agent", GH_UA)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch release info: {e}"))?
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read release body: {e}"))?;
+    let release = latest_release(client, "GyanD/codexffmpeg").await?;
+    let download_url =
+        pick_asset(&release, windows_ffmpeg_asset).ok_or("No ffmpeg essentials build found")?;
 
-    let release: serde_json::Value =
-        serde_json::from_str(&release_body).map_err(|e| format!("Invalid release JSON: {e}"))?;
+    let scratch = ScratchDir::create(td)?;
+    let zip_path = scratch.path().join("ffmpeg.zip");
+    download_file(
+        client,
+        &download_url,
+        &zip_path,
+        app_handle,
+        ToolNameEnum::Ffmpeg,
+    )
+    .await?;
 
-    let assets = release["assets"].as_array().ok_or("No assets in release")?;
+    let ffmpeg = scratch.path().join(exe_name("ffmpeg"));
+    let ffprobe = scratch.path().join(exe_name("ffprobe"));
+    extract_ffmpeg_from_zip(&ffmpeg, &ffprobe, &zip_path)?;
 
-    let asset = assets
-        .iter()
-        .find(|a| {
-            let name = a["name"].as_str().unwrap_or("");
-            name.ends_with("-essentials_build.zip") && !name.contains("-x64_shared-")
-        })
-        .ok_or("No ffmpeg essentials build found")?;
-
-    let download_url = asset["browser_download_url"]
-        .as_str()
-        .ok_or("Missing download URL")?;
-
-    let zip_path = td.join("ffmpeg.zip");
-    download_file(client, download_url, &zip_path, app_handle, "ffmpeg").await?;
-
-    extract_ffmpeg_from_zip(bd, &zip_path)
+    promote(&ffmpeg, &bd.join(exe_name("ffmpeg"))).await?;
+    promote(&ffprobe, &bd.join(exe_name("ffprobe"))).await
 }
 
-fn extract_ffmpeg_from_zip(bd: &Path, zip_path: &Path) -> Result<(), String> {
+fn extract_ffmpeg_from_zip(ffmpeg: &Path, ffprobe: &Path, zip_path: &Path) -> Result<(), String> {
     let zip_file = fs::File::open(zip_path).map_err(|e| format!("Failed to open zip: {e}"))?;
     let mut archive =
         zip::ZipArchive::new(zip_file).map_err(|e| format!("Failed to read zip: {e}"))?;
@@ -484,19 +567,18 @@ fn extract_ffmpeg_from_zip(bd: &Path, zip_path: &Path) -> Result<(), String> {
         let is_ffprobe = entry_name.to_lowercase().ends_with("/bin/ffprobe.exe");
 
         if is_ffmpeg || is_ffprobe {
-            let out_name = if is_ffmpeg {
+            let out_path = if is_ffmpeg {
                 found_ffmpeg = true;
-                exe_name("ffmpeg")
+                ffmpeg
             } else {
                 found_ffprobe = true;
-                exe_name("ffprobe")
+                ffprobe
             };
 
-            let out_path = bd.join(&out_name);
-            let mut out_file = fs::File::create(&out_path)
-                .map_err(|e| format!("Failed to create {out_name}: {e}"))?;
+            let mut out_file = fs::File::create(out_path)
+                .map_err(|e| format!("Failed to create {}: {e}", out_path.display()))?;
             std::io::copy(&mut entry, &mut out_file)
-                .map_err(|e| format!("Failed to extract {out_name}: {e}"))?;
+                .map_err(|e| format!("Failed to extract {}: {e}", out_path.display()))?;
         }
     }
 
@@ -515,50 +597,49 @@ async fn install_ffmpeg_linux(
     td: &Path,
     app_handle: &AppHandle,
 ) -> Result<(), String> {
-    let release_url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest";
-    let release_body = client
-        .get(release_url)
-        .header("User-Agent", GH_UA)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch release info: {e}"))?
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read release body: {e}"))?;
+    let release = latest_release(client, "BtbN/FFmpeg-Builds").await?;
+    let download_url =
+        pick_asset(&release, linux_ffmpeg_asset).ok_or("No ffmpeg linux build found")?;
 
-    let release: serde_json::Value =
-        serde_json::from_str(&release_body).map_err(|e| format!("Invalid release JSON: {e}"))?;
+    let scratch = ScratchDir::create(td)?;
+    let tar_path = scratch.path().join("ffmpeg.tar.xz");
+    download_file(
+        client,
+        &download_url,
+        &tar_path,
+        app_handle,
+        ToolNameEnum::Ffmpeg,
+    )
+    .await?;
 
-    let assets = release["assets"].as_array().ok_or("No assets in release")?;
+    let ffmpeg = scratch.path().join(exe_name("ffmpeg"));
+    let ffprobe = scratch.path().join(exe_name("ffprobe"));
+    extract_ffmpeg_from_tar(&ffmpeg, &ffprobe, &tar_path).await?;
 
-    let asset = assets
-        .iter()
-        .find(|a| {
-            let name = a["name"].as_str().unwrap_or("");
-            name.contains("linux64-gpl")
-                && name.ends_with(".tar.xz")
-                && !name.contains("shared")
-                && !name.contains("arm64")
-        })
-        .ok_or("No ffmpeg linux build found")?;
-
-    let download_url = asset["browser_download_url"]
-        .as_str()
-        .ok_or("Missing download URL")?;
-
-    let tar_path = td.join("ffmpeg.tar.xz");
-    download_file(client, download_url, &tar_path, app_handle, "ffmpeg").await?;
-
-    extract_ffmpeg_from_tar(bd, td, &tar_path).await
+    promote(&ffmpeg, &bd.join(exe_name("ffmpeg"))).await?;
+    promote(&ffprobe, &bd.join(exe_name("ffprobe"))).await
 }
 
-async fn extract_ffmpeg_from_tar(bd: &Path, td: &Path, tar_path: &Path) -> Result<(), String> {
-    let bd = bd.to_path_buf();
-    let td = td.to_path_buf();
+async fn extract_ffmpeg_from_tar(
+    ffmpeg: &Path,
+    ffprobe: &Path,
+    tar_path: &Path,
+) -> Result<(), String> {
+    let ffmpeg = ffmpeg.to_path_buf();
+    let ffprobe = ffprobe.to_path_buf();
     let tar_path = tar_path.to_path_buf();
     tokio::task::spawn_blocking(move || {
+        let extract_dir = tar_path.with_extension("extracted");
+        fs::create_dir_all(&extract_dir)
+            .map_err(|e| format!("Failed to create extraction dir: {e}"))?;
+
         let output = Command::new("tar")
-            .args(["xf", tar_path.to_string_lossy().as_ref(), "-C", td.to_string_lossy().as_ref()])
+            .args([
+                "xf",
+                tar_path.to_string_lossy().as_ref(),
+                "-C",
+                extract_dir.to_string_lossy().as_ref(),
+            ])
             .output()
             .map_err(|e| format!("Failed to run 'tar' (is it installed?): {e}"))?;
 
@@ -573,28 +654,26 @@ async fn extract_ffmpeg_from_tar(bd: &Path, td: &Path, tar_path: &Path) -> Resul
         let mut found_ffmpeg = false;
         let mut found_ffprobe = false;
 
-        if let Ok(entries) = fs::read_dir(&td) {
+        if let Ok(entries) = fs::read_dir(&extract_dir) {
             for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    let bin_dir = path.join("bin");
-                    if bin_dir.exists() {
-                        let ffmpeg_bin = bin_dir.join("ffmpeg");
-                        let ffprobe_bin = bin_dir.join("ffprobe");
-                        if ffmpeg_bin.exists() {
-                            let dest = bd.join("ffmpeg");
-                            fs::copy(&ffmpeg_bin, &dest)
-                                .map_err(|e| format!("Failed to copy ffmpeg: {e}"))?;
-                            found_ffmpeg = true;
-                        }
-                        if ffprobe_bin.exists() {
-                            let dest = bd.join("ffprobe");
-                            fs::copy(&ffprobe_bin, &dest)
-                                .map_err(|e| format!("Failed to copy ffprobe: {e}"))?;
-                            found_ffprobe = true;
-                        }
-                        break;
-                    }
+                let bin_dir = entry.path().join("bin");
+                if !bin_dir.is_dir() {
+                    continue;
+                }
+                let ffmpeg_bin = bin_dir.join("ffmpeg");
+                let ffprobe_bin = bin_dir.join("ffprobe");
+                if ffmpeg_bin.exists() {
+                    fs::copy(&ffmpeg_bin, &ffmpeg)
+                        .map_err(|e| format!("Failed to copy ffmpeg: {e}"))?;
+                    found_ffmpeg = true;
+                }
+                if ffprobe_bin.exists() {
+                    fs::copy(&ffprobe_bin, &ffprobe)
+                        .map_err(|e| format!("Failed to copy ffprobe: {e}"))?;
+                    found_ffprobe = true;
+                }
+                if found_ffmpeg && found_ffprobe {
+                    break;
                 }
             }
         }
@@ -605,17 +684,15 @@ async fn extract_ffmpeg_from_tar(bd: &Path, td: &Path, tar_path: &Path) -> Resul
         if !found_ffprobe {
             return Err("ffprobe not found in archive".into());
         }
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(bd.join("ffmpeg"), fs::Permissions::from_mode(0o755));
-            let _ = fs::set_permissions(bd.join("ffprobe"), fs::Permissions::from_mode(0o755));
-        }
         Ok(())
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn install_lock() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
 pub async fn install_tool(
@@ -623,118 +700,185 @@ pub async fn install_tool(
     name: &str,
     app_handle: AppHandle,
 ) -> Result<(), String> {
-    let status = ToolStatus {
-        name: match name {
-            "yt-dlp" => crate::commands::types::ToolNameEnum::YtDlp,
-            "ffmpeg" => crate::commands::types::ToolNameEnum::Ffmpeg,
-            _ => crate::commands::types::ToolNameEnum::YtDlp,
-        },
-        installed: false,
-        path: None,
-        version: None,
-        state: crate::commands::types::ToolState::Downloading,
-        progress: Some(0.0),
-        error: None,
-        update_available: None,
-    };
-    emit_status(&app_handle, &status);
+    let tool = parse_tool(name)?;
+    let _guard = install_lock().lock().await;
+    emit_status(&app_handle, &ToolStatus::downloading(tool, Some(0.0)));
 
     let bd = bin_dir(user_data_dir);
     let td = tmp_dir(user_data_dir);
     fs::create_dir_all(&bd).map_err(|e| format!("Failed to create bin dir: {e}"))?;
     fs::create_dir_all(&td).map_err(|e| format!("Failed to create tmp dir: {e}"))?;
 
-    let client = reqwest::Client::builder()
-        .user_agent(GH_UA)
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .connect_timeout(Duration::from_secs(15))
-        .read_timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    let client = util::github_client(Duration::from_secs(30))?;
 
-    match name {
-        "yt-dlp" => {
+    match tool {
+        ToolNameEnum::YtDlp => {
             install_ytdlp(&client, &bd, &td, &app_handle).await?;
         }
-        "ffmpeg" => {
+        ToolNameEnum::Ffmpeg => {
             if cfg!(target_os = "windows") {
                 install_ffmpeg_windows(&client, &bd, &td, &app_handle).await?;
             } else {
                 install_ffmpeg_linux(&client, &bd, &td, &app_handle).await?;
             }
         }
-        _ => {
-            return Err(format!("Unknown tool: {name}"));
-        }
     }
 
-    let final_statuses = check_tools(user_data_dir, &app_handle).await;
+    let final_statuses = probe_all(user_data_dir, &app_handle, false).await;
     final_statuses
         .iter()
-        .find(|s| match &s.name {
-            crate::commands::types::ToolNameEnum::YtDlp => name == "yt-dlp",
-            crate::commands::types::ToolNameEnum::Ffmpeg => name == "ffmpeg",
-        })
-        .cloned()
-        .ok_or_else(|| format!("Tool {name} not found after install"))
-        .map(|_| ())
-}
+        .find(|s| s.name == tool)
+        .ok_or_else(|| format!("Tool {name} not found after install"))?;
 
-async fn fetch_latest_tag(client: &reqwest::Client, repo: &str) -> Option<String> {
-    let url = format!("https://api.github.com/repos/{repo}/releases/latest");
-    let body = client
-        .get(&url)
-        .header("User-Agent", GH_UA)
-        .send()
-        .await
-        .ok()?
-        .text()
-        .await
-        .ok()?;
-    let json: serde_json::Value = serde_json::from_str(&body).ok()?;
-    json["tag_name"].as_str().map(|s| s.to_string())
+    Ok(())
 }
 
 pub async fn check_for_updates(user_data_dir: &Path, app_handle: &AppHandle) -> Vec<ToolStatus> {
     let mut statuses = check_tools(user_data_dir, app_handle).await;
 
-    let client = reqwest::Client::builder()
-        .user_agent(GH_UA)
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .connect_timeout(Duration::from_secs(10))
-        .read_timeout(Duration::from_secs(30))
-        .build()
-        .unwrap_or_default();
-
-    let ffmpeg_repo = if cfg!(target_os = "windows") {
-        "GyanD/codexffmpeg"
-    } else {
-        "BtbN/FFmpeg-Builds"
+    let Ok(client) = util::github_client(Duration::from_secs(30)) else {
+        return statuses;
     };
-    let repos = [("yt-dlp", "yt-dlp/yt-dlp"), ("ffmpeg", ffmpeg_repo)];
 
-    for status in &mut statuses {
-        if !status.installed || status.version.is_none() {
+    for tool in ALL_TOOLS {
+        let Some(status) = statuses
+            .iter_mut()
+            .find(|s| s.name == tool && s.installed && s.version.is_some())
+        else {
+            continue;
+        };
+
+        let Some(current) = status.version.clone() else {
+            continue;
+        };
+        if numeric_version(&current).is_none() {
             continue;
         }
 
-        if let Some(repo) = repos.iter().find(|(n, _)| match status.name {
-            crate::commands::types::ToolNameEnum::YtDlp => *n == "yt-dlp",
-            crate::commands::types::ToolNameEnum::Ffmpeg => *n == "ffmpeg",
-        }) && let Some(latest_tag) = fetch_latest_tag(&client, repo.1).await
-        {
-            let update_available = match status.name {
-                crate::commands::types::ToolNameEnum::Ffmpeg => None,
-                crate::commands::types::ToolNameEnum::YtDlp => Some(is_newer(
-                    &latest_tag,
-                    status.version.as_deref().unwrap_or(""),
-                )),
-            };
-            status.update_available = update_available;
-        }
+        let Ok(release) = latest_release(&client, update_repo(tool)).await else {
+            continue;
+        };
+        let Some(latest_tag) = release["tag_name"].as_str() else {
+            continue;
+        };
+        let Some(available) = has_update(&current, latest_tag) else {
+            continue;
+        };
 
+        status.update_available = Some(available);
         emit_status(app_handle, status);
     }
 
     statuses
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    fn temp_root(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("vynl-tools-{name}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[tokio::test]
+    async fn promote_replaces_an_existing_binary() {
+        let root = temp_root("promote-ok");
+        let dest = root.join(exe_name("ffmpeg"));
+        fs::write(&dest, b"OLD").unwrap();
+        let staged = root.join("staged");
+        fs::write(&staged, b"NEW").unwrap();
+
+        promote(&staged, &dest).await.unwrap();
+
+        assert_eq!(fs::read(&dest).unwrap(), b"NEW");
+        assert!(!staged.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn promote_keeps_the_working_binary_when_staged_is_missing() {
+        let root = temp_root("promote-missing");
+        let dest = root.join(exe_name("ffmpeg"));
+        fs::write(&dest, b"WORKING").unwrap();
+
+        let result = promote(&root.join("never-downloaded"), &dest).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read(&dest).unwrap(),
+            b"WORKING",
+            "a failed promote destroyed a working install"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn probes_over_a_joinset_overlap_in_time() {
+        async fn slow(ms: u64) -> u64 {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
+            ms
+        }
+
+        let start = Instant::now();
+        let mut queued = Vec::new();
+        for _ in 0..4 {
+            queued.push(slow(300));
+        }
+        let mut serial_total = 0;
+        for probe in queued {
+            serial_total += probe.await;
+        }
+        let serial = start.elapsed();
+
+        let start = Instant::now();
+        let mut set = tokio::task::JoinSet::new();
+        for _ in 0..4 {
+            set.spawn(slow(300));
+        }
+        let mut joined_total = 0;
+        while let Some(joined) = set.join_next().await {
+            joined_total += joined.unwrap();
+        }
+        let concurrent = start.elapsed();
+
+        assert_eq!(serial_total, joined_total);
+        assert!(
+            serial >= concurrent + Duration::from_millis(200),
+            "probes ran sequentially: serial {serial:?} vs concurrent {concurrent:?}"
+        );
+    }
+
+    #[test]
+    fn parse_version_strips_the_ffmpeg_banner() {
+        let banner = "ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers";
+        assert_eq!(
+            parse_version(ToolNameEnum::Ffmpeg, banner).as_deref(),
+            Some("9.0.2-essentials_build-www.gyan.dev")
+        );
+        assert_eq!(
+            parse_version(ToolNameEnum::YtDlp, "2026.08.19").as_deref(),
+            Some("2026.08.19")
+        );
+        assert_eq!(parse_version(ToolNameEnum::Ffmpeg, ""), None);
+        assert_eq!(
+            parse_version(ToolNameEnum::Ffmpeg, "command not found"),
+            None
+        );
+    }
+
+    #[test]
+    fn update_detection_refuses_to_guess_from_non_version_tags() {
+        assert_eq!(has_update("2026.08.19", "2026.09.01"), Some(true));
+        assert_eq!(has_update("2026.08.19", "2026.08.19"), Some(false));
+        assert_eq!(has_update("9.0.2-essentials_build", "9.1.0"), Some(true));
+        assert_eq!(has_update("9.0.2-essentials_build", "latest"), None);
+        assert_eq!(
+            has_update("9.0.2-essentials_build", "autobuild-2024-01-01-12-30"),
+            None
+        );
+    }
 }

@@ -18,7 +18,9 @@
 
   function label(tool: ToolStatus): string {
     if (tool.state === "downloading")
-      return t("tools.downloading", { n: Math.round(tool.progress ?? 0) });
+      return tool.progress == null
+        ? t("tools.downloadingUnknown")
+        : t("tools.downloading", { n: Math.round(tool.progress) });
     if (tool.state === "error")
       return tool.error
         ? t("tools.failed", { error: tool.error })
@@ -89,7 +91,7 @@
             >
           </div>
           {#if tool.state === "downloading"}
-            <div class="bar">
+            <div class="bar" class:indeterminate={tool.progress == null}>
               <div class="fill" style:width={`${tool.progress ?? 0}%`}></div>
             </div>
           {:else if tool.state === "error"}
@@ -198,6 +200,20 @@
     background: var(--line-strong);
     border-radius: var(--radius-sm);
     overflow: hidden;
+  }
+
+  .bar.indeterminate .fill {
+    width: 40%;
+    animation: slide 1.1s ease-in-out infinite;
+  }
+
+  @keyframes slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(250%);
+    }
   }
 
   .fill {

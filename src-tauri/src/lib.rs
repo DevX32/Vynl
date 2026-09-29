@@ -252,7 +252,6 @@ pub fn run() {
             commands::get_tools,
             commands::check_tool_updates,
             commands::install_tool,
-            commands::update_tool,
             commands::delete_library_track,
             commands::get_library,
             commands::list_playlists,
