@@ -145,12 +145,30 @@ function tracksOf(pl: Playlist): LibraryTrack[] {
     .filter((t): t is LibraryTrack => !!t);
 }
 
+let _failedCovers = $state<Set<string>>(new Set());
+
+export function markCoverFailed(path: string | null | undefined): void {
+  if (!path || _failedCovers.has(path)) return;
+  _failedCovers = new Set(_failedCovers).add(path);
+}
+
+export function resolvePlaylistCovers(
+  custom: string | null | undefined,
+  tracks: LibraryTrack[],
+): string[] {
+  if (custom && !_failedCovers.has(custom)) return [custom];
+  const covers = tracks
+    .map((t) => t.cover)
+    .filter((c): c is string => !!c && !_failedCovers.has(c));
+  return [...new Set(covers)].slice(0, 4);
+}
+
+export function getPlaylistCustomCover(id: string): string | null {
+  return _all[id]?.cover ?? null;
+}
+
 export function getPlaylistCovers(id: string): string[] {
   const pl = _all[id];
   if (!pl) return [];
-  if (pl.cover) return [pl.cover];
-  const covers = tracksOf(pl)
-    .map((t) => t.cover)
-    .filter((c): c is string => !!c);
-  return [...new Set(covers)].slice(0, 4);
+  return resolvePlaylistCovers(pl.cover, tracksOf(pl));
 }

@@ -39,8 +39,10 @@
   import {
     addToPlaylist,
     getCurrentPlaylist,
+    markCoverFailed,
     moveInPlaylist,
     removeFromPlaylist,
+    resolvePlaylistCovers,
     setPlaylistCover,
   } from "@state/playlists.svelte";
   import { t } from "@lib/i18n";
@@ -64,15 +66,7 @@
           .filter((t): t is import("../../lib/types").LibraryTrack => !!t)
       : [],
   );
-  const covers = $derived(
-    pl?.cover
-      ? [pl.cover]
-      : [
-          ...new Set(
-            currentTracks.map((t) => t.cover).filter((c): c is string => !!c),
-          ),
-        ].slice(0, 4),
-  );
+  const covers = $derived(resolvePlaylistCovers(pl?.cover, currentTracks));
   const plHits = $derived(
     q
       ? currentTracks.filter((t) =>
@@ -185,13 +179,30 @@
   {#if pl}
     <div class="hero">
       <div class="hero-cover-wrap">
-        {#if covers[0]}
+        {#if covers.length >= 2}
+          <div class="hero-cover-grid">
+            {#each covers as c (c)}
+              <img
+                class="hero-cover-tile"
+                use:blobSrc={c}
+                alt=""
+                loading="lazy"
+                draggable="false"
+                onerror={() => markCoverFailed(c)}
+              />
+            {/each}
+            {#each Array(4 - covers.length) as _}
+              <div class="hero-cover-tile hero-cover-tile-empty"></div>
+            {/each}
+          </div>
+        {:else if covers.length === 1}
           <img
             class="hero-cover"
             use:blobSrc={covers[0]}
             alt=""
             loading="lazy"
             draggable="false"
+            onerror={() => markCoverFailed(covers[0])}
           />
         {:else}
           <div class="hero-cover placeholder">
@@ -398,6 +409,27 @@
     height: 100%;
     display: block;
     object-fit: cover;
+  }
+
+  .hero-cover-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    background: var(--bg);
+  }
+
+  .hero-cover-tile {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: var(--bg-raise);
+  }
+
+  .hero-cover-tile-empty {
+    background: var(--placeholder-gradient);
   }
 
   .hero-cover.placeholder {

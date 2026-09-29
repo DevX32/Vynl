@@ -344,7 +344,8 @@ pub async fn rename_playlist(id: String, name: String, app: AppHandle) -> Result
 #[tauri::command]
 pub async fn delete_playlist(id: String, app: AppHandle) -> Result<(), String> {
     let output = output_dir_from_settings(&app)?;
-    crate::services::playlists::delete_playlist(&output, &id);
+    let user_data = user_data_dir(&app)?;
+    crate::services::playlists::delete_playlist(&output, &user_data, &id);
     Ok(())
 }
 
@@ -401,7 +402,8 @@ pub async fn set_playlist_cover(
     app: AppHandle,
 ) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
-    crate::services::playlists::set_playlist_cover(&output, &id, cover)
+    let user_data = user_data_dir(&app)?;
+    crate::services::playlists::set_playlist_cover(&output, &user_data, &id, cover)
 }
 
 #[tauri::command]
@@ -433,7 +435,7 @@ pub async fn save_playlist_cover(
         return Err("data does not match image extension".into());
     }
     let user_data = user_data_dir(&app)?;
-    let covers_dir = user_data.join("covers");
+    let covers_dir = crate::services::playlists::covers_dir(&user_data);
     fs::create_dir_all(&covers_dir).map_err(|e| e.to_string())?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

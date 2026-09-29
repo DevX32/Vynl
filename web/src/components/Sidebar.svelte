@@ -13,7 +13,7 @@
   } from "lucide-svelte";
   import { blobSrc, toPascalCase } from "../lib/format";
   import { t } from "@lib/i18n";
-  import { getPlaylistCovers } from "@state/playlists.svelte";
+  import { getPlaylistCovers, markCoverFailed } from "@state/playlists.svelte";
   import { getPluginPages } from "@state/plugins.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
   import type { Page, PlaylistMeta } from "@lib/types";
@@ -118,6 +118,7 @@
                   alt=""
                   loading="lazy"
                   draggable="false"
+                  onerror={() => markCoverFailed(c)}
                 />
               {/each}
               {#each Array(4 - covers.length) as _}
@@ -131,6 +132,7 @@
               alt=""
               loading="lazy"
               draggable="false"
+              onerror={() => markCoverFailed(covers[0])}
             />
           {:else}
             <div class="rail-cover placeholder">

@@ -14,14 +14,16 @@
   import { toPascalCase } from "./lib/format";
   import {
     getCurrentPlaylists,
+    getPlaylistCustomCover,
     getSelectedId,
     refreshPlaylists,
     selectPlaylist,
     renamePlaylist,
     deletePlaylist,
+    setPlaylistCover,
     createPlaylist,
   } from "@state/playlists.svelte";
-  import ContextMenu from "./components/ContextMenu.svelte";
+  import ContextMenu, { type CtxEntry } from "./components/ContextMenu.svelte";
   import Dialog from "./components/Dialog.svelte";
   import Toast from "./components/Toast.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -40,6 +42,7 @@
   import TitleBar from "./components/TitleBar.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
   import { isPluginPage, type Page } from "@lib/types";
+  import { ImageOff, Pencil, Trash2 } from "lucide-svelte";
 
   let page = $state<Page>("home");
   let sidebarOpen = $state(true);
@@ -273,16 +276,45 @@
     }
   }
 
-  function handleCtxMenuAction(): void {
-    const m = ctxMenu;
-    if (!m || m.type !== "playlist" || !m.playlistId || !m.playlistName) return;
-    deleteTarget = { id: m.playlistId, name: m.playlistName };
+  async function removePlaylistCover(id: string): Promise<void> {
+    try {
+      await setPlaylistCover(id, null);
+    } catch (err) {
+      console.warn("remove playlist cover failed:", err);
+      toasts.error(t("playlist.coverFailed"));
+    }
   }
 
-  function handleCtxRename(): void {
+  function ctxItems(): CtxEntry[] {
     const m = ctxMenu;
-    if (!m || m.type !== "playlist" || !m.playlistId || !m.playlistName) return;
-    renameTarget = { id: m.playlistId, name: m.playlistName };
+    if (!m || m.type !== "playlist" || !m.playlistId || !m.playlistName) return [];
+    const id = m.playlistId;
+    const name = m.playlistName;
+    return [
+      {
+        label: t("contextMenu.rename"),
+        icon: Pencil,
+        action: () => {
+          renameTarget = { id, name };
+        },
+      },
+      { type: "separator" },
+      {
+        label: t("playlist.removeCover"),
+        icon: ImageOff,
+        disabled: !getPlaylistCustomCover(id),
+        action: () => void removePlaylistCover(id),
+      },
+      { type: "separator" },
+      {
+        label: t("contextMenu.delete"),
+        icon: Trash2,
+        danger: true,
+        action: () => {
+          deleteTarget = { id, name };
+        },
+      },
+    ];
   }
 </script>
 
@@ -378,9 +410,8 @@
     x={ctxMenu.x}
     y={ctxMenu.y}
     onclose={() => (ctxMenu = null)}
-    onrename={ctxMenu.type === "playlist" ? handleCtxRename : undefined}
-    ondelete={ctxMenu.type === "playlist" ? handleCtxMenuAction : undefined}
     onnewplaylist={ctxMenu.type === "rail" ? newPlaylist : undefined}
+    items={ctxItems()}
   />
 {/if}
 

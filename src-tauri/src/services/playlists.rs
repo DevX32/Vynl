@@ -15,6 +15,29 @@ fn playlist_file(output_dir: &Path, id: &str) -> std::path::PathBuf {
     playlists_dir(output_dir).join(format!("{}.json", id))
 }
 
+pub fn covers_dir(user_data_dir: &Path) -> std::path::PathBuf {
+    user_data_dir.join("covers")
+}
+
+fn cover_prefix(id: &str) -> String {
+    format!("pl-{id}.")
+}
+
+pub fn remove_playlist_covers(user_data_dir: &Path, id: &str) {
+    if !validate_id(id) {
+        return;
+    }
+    let prefix = cover_prefix(id);
+    let Ok(entries) = fs::read_dir(covers_dir(user_data_dir)) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().starts_with(&prefix) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 pub fn validate_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
@@ -35,6 +58,9 @@ fn read_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
     }
     if pl.updated_at == 0 {
         pl.updated_at = pl.created_at;
+    }
+    if pl.cover.as_deref().is_some_and(|c| !Path::new(c).is_file()) {
+        pl.cover = None;
     }
     Some(pl)
 }
@@ -154,13 +180,14 @@ pub fn rename_playlist(output_dir: &Path, id: &str, name: &str) -> Result<Playli
     Ok(pl)
 }
 
-pub fn delete_playlist(output_dir: &Path, id: &str) {
+pub fn delete_playlist(output_dir: &Path, user_data_dir: &Path, id: &str) {
     if !validate_id(id) {
         return;
     }
     let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let path = playlist_file(output_dir, id);
     let _ = fs::remove_file(&path);
+    remove_playlist_covers(user_data_dir, id);
 }
 
 pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {
@@ -249,6 +276,7 @@ pub fn move_in_playlist(
 
 pub fn set_playlist_cover(
     output_dir: &Path,
+    user_data_dir: &Path,
     id: &str,
     cover: Option<String>,
 ) -> Result<Playlist, String> {
@@ -260,6 +288,9 @@ pub fn set_playlist_cover(
     pl.cover = cover;
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
+    if pl.cover.is_none() {
+        remove_playlist_covers(user_data_dir, id);
+    }
     Ok(pl)
 }
 
