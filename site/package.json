@@ -5,10 +5,9 @@
   "type": "module",
   "description": "Landing site for Vynl, published to GitHub Pages",
   "scripts": {
-    "sync": "node scripts/sync-assets.mjs",
-    "dev": "node scripts/sync-assets.mjs && astro dev",
+    "dev": "astro dev",
     "start": "astro dev",
-    "build": "node scripts/sync-assets.mjs && astro build",
+    "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
   },
