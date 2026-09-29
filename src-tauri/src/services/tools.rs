@@ -439,22 +439,24 @@ impl Drop for ScratchDir {
 
 async fn promote(staged: &Path, dest: &Path) -> Result<(), String> {
     let (staged, dest) = (staged.to_path_buf(), dest.to_path_buf());
-    tokio::task::spawn_blocking(move || {
-        fs::rename(&staged, &dest).or_else(|_| {
+    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        fs::rename(&staged, &dest).or_else(|_| -> std::io::Result<()> {
             fs::copy(&staged, &dest)?;
             fs::remove_file(&staged)?;
             Ok(())
-        })
+        })?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
+        }
+        Ok(())
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
-    .map_err(|e: std::io::Error| format!("Failed to install binary: {e}"))?;
+    .map_err(|e| format!("Failed to install binary: {e}"))?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
-    }
     Ok(())
 }
 
