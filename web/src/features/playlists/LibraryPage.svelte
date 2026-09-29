@@ -189,8 +189,9 @@
     const target = deleteTarget;
     if (!target) return;
     try {
-      await vynl.deleteLibraryTrack(target.path);
+      await vynl.deleteLibraryTrack(target.path, target.id);
       await refreshLibrary();
+      await refreshPlaylists();
       toasts.success(t("library.deleteConfirm"));
     } catch {
       toasts.error(t("library.deleteFailed"));

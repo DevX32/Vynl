@@ -27,6 +27,12 @@ static PIC_CODEC_RE: once_cell::sync::Lazy<Regex> =
 
 static SCAN_LOCK: once_cell::sync::Lazy<Mutex<()>> = once_cell::sync::Lazy::new(|| Mutex::new(()));
 
+fn track_hash(path: &str, mtime_ms: u64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{path}:{mtime_ms}").as_bytes());
+    hex::encode(hasher.finalize())
+}
+
 fn codec_ext(codec: &str) -> &str {
     match codec {
         "png" => "png",
@@ -434,6 +440,39 @@ fn extract_or_cache_cover(
     None
 }
 
+pub fn remove_cached_cover(user_data_dir: &Path, track_id: Option<&str>, scan_path: &str) {
+    let mtime_ms = file_times(Path::new(scan_path)).0;
+    let candidates = [
+        track_id.map(str::to_string),
+        (mtime_ms > 0).then(|| track_hash(scan_path, mtime_ms)),
+    ];
+
+    let mut ids: Vec<String> = Vec::new();
+    for candidate in candidates {
+        if let Some(id) = candidate
+            && id.len() == 64
+            && id.chars().all(|c| c.is_ascii_hexdigit())
+            && !ids.contains(&id)
+        {
+            ids.push(id);
+        }
+    }
+    if ids.is_empty() {
+        return;
+    }
+
+    for dir in covers_search_dirs(user_data_dir) {
+        for id in &ids {
+            for ext in ["jpg", "png", "webp"] {
+                let path = dir.join(format!("{id}.{ext}"));
+                if path.is_file() {
+                    let _ = fs::remove_file(path);
+                }
+            }
+        }
+    }
+}
+
 fn epoch_ms(t: std::time::SystemTime) -> u64 {
     t.duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -466,12 +505,7 @@ fn probe_file(
     let (mtime_ms, created_ms) = file_times(file);
     let added_at_ms = resolve_added_at(added_at_hint, created_ms, mtime_ms);
 
-    let hash_input = format!("{}:{}", file.to_string_lossy(), mtime_ms);
-    let hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(hash_input.as_bytes());
-        hex::encode(hasher.finalize())
-    };
+    let hash = track_hash(&file.to_string_lossy(), mtime_ms);
 
     let fallback_title = file
         .file_stem()

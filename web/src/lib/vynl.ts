@@ -108,8 +108,8 @@ export const vynl = {
 
   getLibrary: (): Promise<LibraryTrack[]> => cmd("get_library"),
 
-  deleteLibraryTrack: (path: string): Promise<void> =>
-    cmd("delete_library_track", { path }),
+  deleteLibraryTrack: (path: string, id?: string): Promise<void> =>
+    cmd("delete_library_track", { path, id }),
 
   listPlaylists: (): Promise<PlaylistMeta[]> => cmd("list_playlists"),
 

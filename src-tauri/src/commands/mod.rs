@@ -263,14 +263,31 @@ pub async fn install_tool(name: String, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn delete_library_track(path: String, app: AppHandle) -> Result<(), String> {
+pub async fn delete_library_track(
+    path: String,
+    id: Option<String>,
+    app: AppHandle,
+) -> Result<(), String> {
     let canonical_path = require_path_in_output(&path, &app)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
+    let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+
+    crate::services::library::remove_cached_cover(&user_data, id.as_deref(), &path);
+
     fs::remove_file(&canonical_path).map_err(|e| format!("Failed to delete file: {e}"))?;
+
     for sidecar_ext in &["lrc", "txt"] {
-        let sidecar =
-            crate::services::lyrics::sidecar_path(&canonical_path.to_string_lossy(), sidecar_ext);
+        let sidecar = crate::services::lyrics::sidecar_path(&canonical_str, sidecar_ext);
         let _ = fs::remove_file(sidecar);
     }
+
+    let mut stale = vec![path];
+    if !stale.contains(&canonical_str) {
+        stale.push(canonical_str);
+    }
+    crate::services::playlists::remove_paths_from_all(&output, &stale);
+
     Ok(())
 }
 

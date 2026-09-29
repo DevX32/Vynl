@@ -163,6 +163,35 @@ pub fn delete_playlist(output_dir: &Path, id: &str) {
     let _ = fs::remove_file(&path);
 }
 
+pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {
+    if paths.is_empty() {
+        return;
+    }
+    let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let Ok(entries) = fs::read_dir(playlists_dir(output_dir)) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !name.ends_with(".json") {
+            continue;
+        }
+        let id = &name[..name.len() - 5];
+        let Some(mut pl) = read_playlist(output_dir, id) else {
+            continue;
+        };
+        let before = pl.paths.len();
+        pl.paths.retain(|p| !paths.iter().any(|stale| stale == p));
+        if pl.paths.len() != before {
+            touch(&mut pl);
+            let _ = write_playlist(output_dir, &pl);
+        }
+    }
+}
+
 pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<Playlist, String> {
     if !validate_id(id) {
         return Err("invalid playlist id".into());
