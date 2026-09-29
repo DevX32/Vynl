@@ -161,15 +161,28 @@ export function getUserQueue(): LibraryTrack[] {
   return tracksForPaths(_userQueue, getLibrary(), seen);
 }
 
-export function getContextUpcoming(shuffle = false): LibraryTrack[] {
+export function getContextUpcoming(
+  shuffle = false,
+  loop: LoopMode = "off",
+): LibraryTrack[] {
   const library = getLibrary();
   const seen = new Set<string>();
   if (currentId) seen.add(currentId);
   if (shuffle) {
     tracksForPaths(_userQueue, library, seen);
-    return tracksForPaths(_shuffleUpcoming, library, seen);
+    const upcoming = tracksForPaths(_shuffleUpcoming, library, seen);
+    if (upcoming.length > 0) return upcoming;
+    if (loop !== "all" || _contextQueue.length === 0) return [];
+    return tracksForPaths(_contextQueue, library, seen);
   }
   tracksForPaths(_userQueue, library, seen);
+  if (loop === "all" && _contextQueue.length > 0) {
+    const order = [
+      ..._contextQueue.slice(_contextIndex + 1),
+      ..._contextQueue.slice(0, _contextIndex),
+    ];
+    return tracksForPaths(order, library, seen);
+  }
   return tracksForPaths(_contextQueue.slice(_contextIndex + 1), library, seen);
 }
 

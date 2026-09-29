@@ -9,7 +9,7 @@
     removeQueueTrack,
     reorderQueueTrack,
   } from "@lib/player.svelte";
-  import { getCurrentShuffle } from "@state/player.svelte";
+  import { getCurrentLoop, getCurrentShuffle } from "@state/player.svelte";
   import { fmtTime } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
   import { t } from "@lib/i18n";
@@ -28,7 +28,9 @@
 
   const np = $derived(getCurrentTrack());
   const userQueue = $derived(getUserQueue());
-  const contextUpcoming = $derived(getContextUpcoming(getCurrentShuffle()));
+  const contextUpcoming = $derived(
+    getContextUpcoming(getCurrentShuffle(), getCurrentLoop()),
+  );
 
   function tracksOf(section: string | null) {
     return section === "context" ? contextUpcoming : userQueue;
