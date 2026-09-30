@@ -136,11 +136,16 @@ fn local_addrs() -> Result<Vec<IpAddr>, String> {
 fn hostname() -> Result<String, String> {
     #[cfg(windows)]
     {
-        use std::process::Command;
-        let out = Command::new("hostname")
-            .output()
-            .map_err(|e| e.to_string())?;
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        unsafe extern "system" {
+            fn GetComputerNameW(lpBuffer: *mut u16, nSize: *mut u32) -> i32;
+        }
+        let mut size: u32 = 256;
+        let mut buf = vec![0u16; size as usize];
+        let ok = unsafe { GetComputerNameW(buf.as_mut_ptr(), &mut size) };
+        if ok == 0 {
+            return Err("GetComputerNameW failed".into());
+        }
+        Ok(String::from_utf16_lossy(&buf[..size as usize]))
     }
     #[cfg(not(windows))]
     {

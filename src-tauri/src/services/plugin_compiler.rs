@@ -207,7 +207,7 @@ async fn extract_esbuild_tar(archive: &Path, dest: &Path) -> Result<PathBuf, Str
     let archive = archive.to_path_buf();
     let dest = dest.to_path_buf();
     tokio::task::spawn_blocking(move || {
-        let output = std::process::Command::new("tar")
+        let output = crate::services::process::hidden_std(std::process::Command::new("tar"))
             .args([
                 "xf",
                 archive.to_string_lossy().as_ref(),

@@ -635,7 +635,7 @@ async fn extract_ffmpeg_from_tar(
         fs::create_dir_all(&extract_dir)
             .map_err(|e| format!("Failed to create extraction dir: {e}"))?;
 
-        let output = Command::new("tar")
+        let output = process::hidden_std(Command::new("tar"))
             .args([
                 "xf",
                 tar_path.to_string_lossy().as_ref(),
