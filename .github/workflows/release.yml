@@ -97,7 +97,7 @@ jobs:
           channel: stable
           cache: true
 
-      - uses: actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
 
       - name: Write android/local.properties
         working-directory: mobile
