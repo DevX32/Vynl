@@ -1,0 +1,8 @@
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_barcode.** { *; }
+-keep class com.google.android.gms.internal.mlkit_common.** { *; }
+-keep class dev.steenbakker.mobile_scanner.** { *; }
+-keep class androidx.camera.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.internal.mlkit_vision_barcode.**
+-dontwarn com.google.android.gms.internal.mlkit_common.**
