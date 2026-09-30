@@ -44,6 +44,6 @@ lofty = "0.25"
 winreg = "0.55"
 
 [profile.release]
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 strip = true

@@ -401,6 +401,8 @@ pub struct UpdateStatus {
     pub progress: Option<f64>,
     pub ready: Option<bool>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub silent: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

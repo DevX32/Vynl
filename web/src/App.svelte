@@ -134,9 +134,6 @@
       }
     });
     const offUpdate = vynl.onUpdateStatus((s) => {
-      if (s.available && !s.downloading && !s.ready && !s.error) {
-        toasts.success(t("update.availableTitle"));
-      }
       if (s.ready) {
         toasts.success(t("update.readyTitle"));
       }

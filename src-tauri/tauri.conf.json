@@ -70,7 +70,10 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4RjNBOERGODA0QjNBQUYKUldTdk9rdUEzNmp6S0grUFp4bXZycUwrQzkrMDVjZUNDaS9mdVh4aTNFWUVQTXdUNVNaZVBSeTkK",
       "endpoints": [
         "https://github.com/devx32/Vynl/releases/latest/download/latest.json"
-      ]
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
