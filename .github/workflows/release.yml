@@ -167,14 +167,19 @@ jobs:
             echo "Release $TAG not ready, retrying in 15s (attempt $attempt/6)"
             sleep 15
           done
+          version="${TAG#v}"
           for apk in app-arm64-v8a-release.apk app-armeabi-v7a-release.apk app-x86_64-release.apk; do
             path="mobile/build/app/outputs/flutter-apk/$apk"
             if [ ! -f "$path" ]; then
               echo "::error::Missing expected APK: $path"
               exit 1
             fi
-            echo "Uploading $apk"
-            gh release upload "$TAG" "$path" --clobber
+            abi="${apk#app-}"
+            abi="${abi%-release.apk}"
+            renamed="Vynl-mobile-${version}-${abi}.apk"
+            mv "$path" "mobile/build/app/outputs/flutter-apk/$renamed"
+            echo "Uploading $renamed"
+            gh release upload "$TAG" "mobile/build/app/outputs/flutter-apk/$renamed" --clobber
           done
           echo "APKs attached to $TAG"
 
