@@ -249,6 +249,7 @@ export interface UpdateStatus {
   progress?: number;
   ready?: boolean;
   error?: string;
+  silent?: boolean;
 }
 
 export interface ArtistInfo {
