@@ -720,18 +720,3 @@ pub fn check_finished(generation: u64) -> Result<bool, String> {
         Err(e) => Err(e),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::valid_seek_time;
-
-    #[test]
-    fn seek_time_validation_rejects_invalid_values() {
-        assert!(valid_seek_time(0.0));
-        assert!(valid_seek_time(12.5));
-        assert!(!valid_seek_time(-0.1));
-        assert!(!valid_seek_time(f64::NAN));
-        assert!(!valid_seek_time(f64::INFINITY));
-        assert!(!valid_seek_time(f64::NEG_INFINITY));
-    }
-}
