@@ -175,6 +175,32 @@ export const en = {
     displayNameHint:
       "Your name across Vynl. Leave blank for a random nickname.",
     displayNamePlaceholder: "e.g. Cosmic Panda",
+    mobileSync: "Mobile Sync",
+    mobileSyncHint:
+      "Share your library with the Vynl Android app over your local Wi‑Fi.",
+    mobileSyncToggle: "Mobile sync toggle",
+    mobileSyncStopped: "Stopped",
+    mobileSyncOff: "Off",
+    mobileSyncLive: "Live",
+    mobileSyncLoading: "Reading status…",
+    mobileSyncUnavailable: "Could not read mobile sync status.",
+    mobileSyncRefresh: "Refresh status",
+    mobileSyncTurnedOn: "Mobile sync is live on your local network.",
+    mobileSyncTurnedOff: "Mobile sync turned off.",
+    mobileSyncPinRotated:
+      "New pairing code generated. Scan the QR again on any paired phone.",
+    mobileSyncInsecureNotice:
+      "Traffic is unencrypted over HTTP. Only enable this on a Wi‑Fi network you trust.",
+    mobileSyncNotRunning:
+      "Enabled, but the server isn't listening. Restart Vynl to bring it back up.",
+    mobileSyncNoNetwork: "No network address found.",
+    mobileSyncScanOnly:
+      "The QR carries the address and PIN. Scan it with the Vynl Android app to pair.",
+    mobileSyncNewQr: "New QR",
+    mobileSyncCopy: "Copy",
+    mobileSyncQr: "Scan with the Vynl Android app",
+    mobileSyncFoot:
+      "Regenerating invalidates every paired phone — they'll need to scan the new code. Downloads stay on your local network.",
     equalizer: "Equalizer",
     equalizerHint: "Shape the sound of everything you play — changes apply live.",
     equalizerHintOff: "Turn on to shape the sound of everything you play.",

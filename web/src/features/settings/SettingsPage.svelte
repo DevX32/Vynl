@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from "@lib/i18n";
   import SettingsPanel from "./SettingsPanel.svelte";
+  import MobileSyncSettings from "./MobileSyncSettings.svelte";
   import PluginSettings from "./PluginSettings.svelte";
   import ToolSetup from "./ToolSetup.svelte";
   import UpdateBanner from "./UpdateBanner.svelte";
@@ -17,6 +18,7 @@
     <UpdateBanner />
     <ToolSetup />
     <SettingsPanel />
+    <MobileSyncSettings />
     <PluginSettings />
     <SupportBanner />
   </div>

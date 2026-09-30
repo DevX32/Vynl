@@ -142,6 +142,17 @@ export interface ToolStatus {
   updateAvailable?: boolean;
 }
 
+export interface MobileSyncStatus {
+  enabled: boolean;
+  running: boolean;
+  port: number;
+  pairingPin: string;
+  lanAddresses: string[];
+  pairUrls: string[];
+  hostname: string | null;
+  qrSvg: string | null;
+}
+
 export interface TrackProgress {
   trackId: string;
   status: TrackStatus;
