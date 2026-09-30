@@ -348,7 +348,7 @@
     gap: 10px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     box-shadow: var(--shadow-lg);
     animation: picker-in 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     will-change: transform, opacity;
