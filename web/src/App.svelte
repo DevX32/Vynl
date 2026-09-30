@@ -45,7 +45,12 @@
   import { ImageOff, Pencil, Trash2 } from "lucide-svelte";
 
   let page = $state<Page>("home");
-  let sidebarOpen = $state(true);
+  function loadSidebarOpen(): boolean {
+    if (typeof localStorage === "undefined") return true;
+    return localStorage.getItem("vynl.sidebarOpen") !== "false";
+  }
+
+  let sidebarOpen = $state(loadSidebarOpen());
   let showFullscreen = $state(false);
   let selectedArtist = $state<string | null>(null);
 
@@ -102,6 +107,7 @@
 
   function setSidebarOpen(open: boolean): void {
     sidebarOpen = open;
+    localStorage.setItem("vynl.sidebarOpen", String(open));
   }
 
   const SPLASH_MIN_MS = 2500;
