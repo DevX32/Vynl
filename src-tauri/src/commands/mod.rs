@@ -245,6 +245,31 @@ pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, S
 }
 
 #[tauri::command]
+pub async fn get_mobile_sync_status(
+    app: AppHandle,
+) -> Result<crate::services::mobile_sync::MobileSyncStatus, String> {
+    let user_data = user_data_dir(&app)?;
+    Ok(crate::services::mobile_sync::get_status(&user_data).await)
+}
+
+#[tauri::command]
+pub async fn set_mobile_sync_enabled(
+    enabled: bool,
+    app: AppHandle,
+) -> Result<crate::services::mobile_sync::MobileSyncStatus, String> {
+    let user_data = user_data_dir(&app)?;
+    crate::services::mobile_sync::set_enabled(&user_data, enabled).await
+}
+
+#[tauri::command]
+pub async fn rotate_mobile_sync_pin(
+    app: AppHandle,
+) -> Result<crate::services::mobile_sync::MobileSyncStatus, String> {
+    let user_data = user_data_dir(&app)?;
+    crate::services::mobile_sync::rotate_pin(&user_data).await
+}
+
+#[tauri::command]
 pub async fn get_tools(app: AppHandle) -> Result<Vec<ToolStatus>, String> {
     let user_data = user_data_dir(&app)?;
     Ok(crate::services::tools::check_tools(&user_data, &app).await)

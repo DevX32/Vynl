@@ -6,6 +6,7 @@ pub mod history;
 pub mod internal;
 pub mod library;
 pub mod lyrics;
+pub mod mobile_sync;
 pub mod player;
 pub mod playlists;
 pub mod plugin_compiler;

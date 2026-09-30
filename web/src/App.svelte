@@ -10,6 +10,7 @@
   import { playTrack } from "@lib/player.svelte";
   import { handleGlobalKey, getShowShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
+  import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
   import { toasts } from "./lib/toast";
   import { toPascalCase } from "./lib/format";
   import {
@@ -34,6 +35,7 @@
   import PlaylistDetail from "./features/playlists/PlaylistDetail.svelte";
   import SettingsPage from "./features/settings/SettingsPage.svelte";
   import EqualizerModal from "./features/settings/EqualizerModal.svelte";
+  import MobileSyncModal from "./features/settings/MobileSyncModal.svelte";
   import PluginsModal from "./features/plugins/PluginsModal.svelte";
   import VaultPage from "./features/vault/VaultPage.svelte";
   import HomePage from "./features/home/HomePage.svelte";
@@ -403,6 +405,10 @@
 
 {#if getPluginsUiOpen()}
   <PluginsModal />
+{/if}
+
+{#if getMobileSyncUiOpen()}
+  <MobileSyncModal />
 {/if}
 
 {#if ctxMenu}
