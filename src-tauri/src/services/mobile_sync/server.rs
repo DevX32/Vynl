@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Request, State};
-use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -93,8 +93,14 @@ pub async fn serve(
         .route("/v1/sync-manifest", get(sync_manifest))
         .route("/v1/tracks/{id}/audio", get(track_audio))
         .route("/v1/tracks/{id}/cover", get(track_cover))
-        .route("/health", get(|| async { Json(serde_json::json!({"ok": true})) }))
-        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+        .route(
+            "/health",
+            get(|| async { Json(serde_json::json!({"ok": true})) }),
+        )
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
         .layer(cors)
         .with_state(state);
 
@@ -110,11 +116,7 @@ pub async fn serve(
         .map_err(|e| e.to_string())
 }
 
-async fn auth_middleware(
-    State(state): State<SharedState>,
-    req: Request,
-    next: Next,
-) -> Response {
+async fn auth_middleware(State(state): State<SharedState>, req: Request, next: Next) -> Response {
     let path = req.uri().path();
     if path == "/pair" || path == "/health" {
         return next.run(req).await;
@@ -163,10 +165,7 @@ fn to_catalog(track: &LibraryTrack) -> MobileCatalogTrack {
         lyrics: track.lyrics.clone(),
         ext: track.ext.clone(),
         mtime: track.mtime,
-        has_cover: track
-            .cover
-            .as_ref()
-            .is_some_and(|c| Path::new(c).is_file()),
+        has_cover: track.cover.as_ref().is_some_and(|c| Path::new(c).is_file()),
     }
 }
 
@@ -233,9 +232,7 @@ async fn playlists_handler(State(state): State<SharedState>) -> Json<Vec<MobileP
     Json(out)
 }
 
-async fn sync_manifest(
-    State(state): State<SharedState>,
-) -> Json<Vec<MobileSyncManifestEntry>> {
+async fn sync_manifest(State(state): State<SharedState>) -> Json<Vec<MobileSyncManifestEntry>> {
     let tracks = tokio::task::spawn_blocking({
         let ud = state.user_data.clone();
         move || load_library_tracks(&ud)
@@ -280,10 +277,7 @@ async fn track_audio(
     serve_file_with_range(path, headers, content_type_for_ext(&track.ext)).await
 }
 
-async fn track_cover(
-    State(state): State<SharedState>,
-    AxumPath(id): AxumPath<String>,
-) -> Response {
+async fn track_cover(State(state): State<SharedState>, AxumPath(id): AxumPath<String>) -> Response {
     let tracks = tokio::task::spawn_blocking({
         let ud = state.user_data.clone();
         move || load_library_tracks(&ud)
@@ -364,7 +358,11 @@ async fn serve_file_with_range(path: PathBuf, headers: HeaderMap, content_type: 
         let mut res = Response::new(Body::from(buf));
         *res.status_mut() = StatusCode::PARTIAL_CONTENT;
         let headers = res.headers_mut();
-        headers.insert(header::CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap_or(HeaderValue::from_static("application/octet-stream")));
+        headers.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(content_type)
+                .unwrap_or(HeaderValue::from_static("application/octet-stream")),
+        );
         headers.insert(
             header::CONTENT_LENGTH,
             HeaderValue::from_str(&content_len.to_string()).unwrap(),
@@ -383,7 +381,11 @@ async fn serve_file_with_range(path: PathBuf, headers: HeaderMap, content_type: 
         let mut res = Response::new(Body::from(buf));
         *res.status_mut() = StatusCode::OK;
         let headers = res.headers_mut();
-        headers.insert(header::CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap_or(HeaderValue::from_static("application/octet-stream")));
+        headers.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(content_type)
+                .unwrap_or(HeaderValue::from_static("application/octet-stream")),
+        );
         headers.insert(
             header::CONTENT_LENGTH,
             HeaderValue::from_str(&len.to_string()).unwrap(),

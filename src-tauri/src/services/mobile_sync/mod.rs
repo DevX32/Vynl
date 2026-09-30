@@ -336,7 +336,11 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
 
     let (tx, rx) = oneshot::channel::<()>();
     let user_data = user_data_dir.to_path_buf();
-    let port = if cfg.port == 0 { DEFAULT_PORT } else { cfg.port };
+    let port = if cfg.port == 0 {
+        DEFAULT_PORT
+    } else {
+        cfg.port
+    };
     let pin = cfg.pairing_pin.clone();
     let token = cfg.api_token.clone();
 
