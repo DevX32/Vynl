@@ -1,0 +1,47 @@
+name: vynl_mobile
+description: Vynl offline music player for Android
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependency_overrides:
+  path_provider_android: 2.2.23
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.3
+  flutter_secure_storage: ^9.2.2
+  sqflite: ^2.4.1
+  sqflite_common_ffi: ^2.3.4
+  just_audio: ^0.9.42
+  audio_session: ^0.1.21
+  provider: ^6.1.2
+  intl: ^0.19.0
+  mobile_scanner: ^6.0.2
+  flutter_local_notifications: ^18.0.1
+  collection: ^1.18.0
+  palette_generator: ^0.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Variable.ttf
+          weight: 400
+    - family: Geist Mono
+      fonts:
+        - asset: assets/fonts/GeistMono-Variable.ttf
+          weight: 400

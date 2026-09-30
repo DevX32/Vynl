@@ -21,7 +21,17 @@
 
   type QueueSection = "user" | "context";
 
-  let collapsed = $state(false);
+  function loadCollapsed(): boolean {
+    if (typeof localStorage === "undefined") return false;
+    return localStorage.getItem("vynl.queueCollapsed") === "true";
+  }
+
+  let collapsed = $state(loadCollapsed());
+
+  function setCollapsed(value: boolean): void {
+    collapsed = value;
+    localStorage.setItem("vynl.queueCollapsed", String(value));
+  }
 
   let queueEl: HTMLElement | undefined = $state();
   let ctx = $state<{ x: number; y: number; path: string } | null>(null);
@@ -109,7 +119,7 @@
         <button
           class="collapse-btn"
           aria-label={t("player.collapseQueue")}
-          onclick={() => (collapsed = true)}
+          onclick={() => setCollapsed(true)}
         >
           <ChevronRight size={13} stroke-width={1.5} />
         </button>
@@ -185,7 +195,7 @@
     <button
       class="expand-btn"
       aria-label={t("player.expandQueue")}
-      onclick={() => (collapsed = false)}
+      onclick={() => setCollapsed(false)}
     >
       <ChevronLeft size={18} stroke-width={1.5} />
     </button>

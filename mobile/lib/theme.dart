@@ -1,0 +1,235 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+class VynlColors {
+  static const bg = Color(0xFF131110);
+  static const bgTop = Color(0xFF1D1916);
+  static const surface = Color(0xFF1C1917);
+  static const surfaceRaised = Color(0xFF272220);
+  static const line = Color(0xFF302A26);
+  static const text = Color(0xFFF4EFE8);
+  static const dim = Color(0xFFA9A096);
+  static const faint = Color(0xFF736B63);
+  static const accent = Color(0xFFB9A5E8);
+  static const warm = Color(0xFFE7A97E);
+  static const danger = Color(0xFFE8836B);
+  static const warning = Color(0xFFDCB060);
+  static const success = Color(0xFF86C79A);
+}
+
+class VynlRadius {
+  static const control = 4.0;
+  static const card = control;
+  static const tile = control;
+  static const thumb = control;
+  static const art = control;
+
+  static const hero = 10.0;
+}
+
+class VynlFonts {
+  static const mono = 'Geist Mono';
+
+  static const display = 'Geist';
+}
+
+class VynlMotion {
+  static const fast = Duration(milliseconds: 170);
+  static const normal = Duration(milliseconds: 320);
+  static const slow = Duration(milliseconds: 520);
+
+  static Curve get emphasized => Curves.easeOutCubic;
+  static Curve get standard => Curves.easeOutQuart;
+}
+
+const kVynlBackground = RadialGradient(
+  center: Alignment(0, -0.95),
+  radius: 1.5,
+  colors: [Color(0xFF221E23), VynlColors.bg, VynlColors.bg],
+  stops: [0, 0.5, 1],
+);
+
+ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: Brightness.dark,
+  ).copyWith(
+    primary: VynlColors.accent,
+    onPrimary: const Color(0xFF17131A),
+    secondary: VynlColors.warm,
+    onSecondary: const Color(0xFF1A1410),
+    surface: VynlColors.bg,
+    onSurface: VynlColors.text,
+    outline: VynlColors.line,
+    error: VynlColors.danger,
+    surfaceContainer: VynlColors.surface,
+    surfaceContainerHigh: VynlColors.surfaceRaised,
+  );
+
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: VynlColors.bg,
+    splashFactory: InkSparkle.splashFactory,
+    fontFamily: VynlFonts.mono,
+  );
+
+  return base.copyWith(
+    textTheme: base.textTheme.apply(
+      bodyColor: VynlColors.text,
+      displayColor: VynlColors.text,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      foregroundColor: VynlColors.text,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: VynlColors.text,
+        fontFamily: VynlFonts.display,
+        fontSize: 21,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.4,
+      ),
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: VynlColors.surface,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      prefixIconColor: VynlColors.faint,
+      suffixIconColor: VynlColors.faint,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(VynlRadius.control),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(VynlRadius.control),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(VynlRadius.control),
+        borderSide: BorderSide.none,
+      ),
+      labelStyle: const TextStyle(color: VynlColors.dim),
+      hintStyle: const TextStyle(color: VynlColors.faint),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: VynlColors.accent,
+        foregroundColor: const Color(0xFF17131A),
+        minimumSize: const Size.fromHeight(54),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(VynlRadius.control),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: VynlColors.text,
+        side: const BorderSide(color: VynlColors.line),
+        minimumSize: const Size.fromHeight(54),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(VynlRadius.control),
+        ),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: VynlColors.text,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(VynlRadius.control),
+        ),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: VynlColors.dim,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(VynlRadius.control),
+        ),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: VynlColors.surface,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: VynlColors.accent.withValues(alpha: 0.16),
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(VynlRadius.control),
+      ),
+      height: 68,
+      elevation: 0,
+      labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+      labelTextStyle: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return TextStyle(
+          fontSize: 10.5,
+          height: 1.1,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+          color: selected ? VynlColors.text : VynlColors.faint,
+        );
+      }),
+      iconTheme: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return IconThemeData(
+          size: 23,
+          color: selected ? VynlColors.text : VynlColors.faint,
+        );
+      }),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: VynlColors.surfaceRaised,
+      contentTextStyle: const TextStyle(color: VynlColors.text, fontSize: 13.5),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(VynlRadius.tile),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: VynlColors.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(VynlRadius.card),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(
+      color: VynlColors.line,
+      thickness: 1,
+      space: 1,
+    ),
+    sliderTheme: SliderThemeData(
+      activeTrackColor: VynlColors.text,
+      inactiveTrackColor: VynlColors.line,
+      thumbColor: VynlColors.text,
+      overlayColor: VynlColors.accent.withValues(alpha: 0.14),
+      trackHeight: 3,
+      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+      overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+    ),
+    listTileTheme: const ListTileThemeData(
+      iconColor: VynlColors.dim,
+      textColor: VynlColors.text,
+      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: VynlColors.accent,
+      linearTrackColor: VynlColors.line,
+    ),
+  );
+}
