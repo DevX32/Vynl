@@ -158,6 +158,13 @@ pub fn run() {
             crate::services::player::set_app_handle(app.handle());
             crate::services::player::set_eq(settings.eq_enabled, &settings.eq_bands);
 
+            {
+                let ud = user_data.clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::services::mobile_sync::ensure_started_on_boot(&ud).await;
+                });
+            }
+
             tauri::async_runtime::spawn(async move {
                 let _ = crate::services::internal::warm_session().await;
             });
@@ -249,6 +256,9 @@ pub fn run() {
             commands::sync_done,
             commands::get_settings,
             commands::set_settings,
+            commands::get_mobile_sync_status,
+            commands::set_mobile_sync_enabled,
+            commands::rotate_mobile_sync_pin,
             commands::get_tools,
             commands::check_tool_updates,
             commands::install_tool,

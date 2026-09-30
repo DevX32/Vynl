@@ -39,6 +39,12 @@ ctrlc = "3"
 rodio = "0.19"
 uuid = { version = "1", features = ["v4"] }
 lofty = "0.25"
+axum = { version = "0.8", features = ["multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
+http-body-util = "0.1"
+qrcode = "0.14"
+mdns-sd = "0.21"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.55"

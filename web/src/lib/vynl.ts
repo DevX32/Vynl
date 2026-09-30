@@ -20,6 +20,7 @@ import type {
   SearchResult,
   ToolName,
   ToolStatus,
+  MobileSyncStatus,
   UpdateStatus,
 } from "../lib/types";
 import type {
@@ -97,6 +98,15 @@ export const vynl = {
 
   setSettings: (patch: Partial<Settings>): Promise<Settings> =>
     cmd("set_settings", { patch }),
+
+  getMobileSyncStatus: (): Promise<MobileSyncStatus> =>
+    cmd("get_mobile_sync_status"),
+
+  setMobileSyncEnabled: (enabled: boolean): Promise<MobileSyncStatus> =>
+    cmd("set_mobile_sync_enabled", { enabled }),
+
+  rotateMobileSyncPin: (): Promise<MobileSyncStatus> =>
+    cmd("rotate_mobile_sync_pin"),
 
   getTools: (): Promise<ToolStatus[]> => cmd("get_tools"),
 
