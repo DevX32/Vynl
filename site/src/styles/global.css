@@ -99,6 +99,10 @@ svg {
   max-width: 100%;
 }
 
+svg {
+  flex: none;
+}
+
 button {
   font: inherit;
   color: inherit;

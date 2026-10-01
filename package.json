@@ -1,7 +1,7 @@
 {
   "name": "vynl",
   "version": "0.1.7",
-  "description": "Music Player for Desktop",
+  "description": "A minimal music player",
   "author": "DevX32",
   "license": "AGPL-3.0-only",
   "engines": {

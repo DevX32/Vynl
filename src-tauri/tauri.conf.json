@@ -39,7 +39,7 @@
     "category": "Music",
     "createUpdaterArtifacts": true,
     "copyright": "Copyright (c) 2026 Vynl Contributors",
-    "shortDescription": "Music Player for Desktop",
+    "shortDescription": "A minimal music player",
     "longDescription": "Vynl Is a Desktop Music Player.",
     "homepage": "https://github.com/DevX32/Vynl",
     "publisher": "Vynl",

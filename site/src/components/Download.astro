@@ -24,7 +24,7 @@ const release = await getLatestRelease()
         {release?.windows ? (
           <a class="btn btn--primary download-btn" href={release.windows.url}>
             <Icon name="download" size={17} />
-            {release.windows.file}
+            <span class="file">{release.windows.file}</span>
             <span class="size">{release.windows.size}</span>
           </a>
         ) : (
@@ -152,10 +152,19 @@ const release = await getLatestRelease()
 
   .download-btn {
     justify-content: flex-start;
+    padding-inline: 16px;
+  }
+
+  .file {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .size {
     margin-left: auto;
+    flex: none;
     font-family: var(--font-mono);
     font-size: 12px;
     opacity: 0.75;
