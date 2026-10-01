@@ -64,6 +64,40 @@ const release = await getLatestRelease()
 
         <p class="platform-hint">AppImage just runs. The .deb and .rpm register a system package.</p>
       </article>
+
+      <article class="card platform reveal" style="transition-delay:160ms">
+        <header>
+          <span class="platform-icon"><Icon name="android" size={20} /></span>
+          <div>
+            <h3>Android</h3>
+            <p>Companion app · pairs with your desktop</p>
+          </div>
+        </header>
+
+        <div class="linux-links">
+          {release?.android.length ? (
+            release.android.map((asset) => (
+              <a class="pkg" href={asset.url}>
+                <span class="pkg-format">
+                  {asset.recommended && <span class="pkg-tag">Recommended</span>}
+                  {asset.abi}
+                </span>
+                <span class="pkg-size">{asset.size}</span>
+              </a>
+            ))
+          ) : (
+            <a class="pkg" href={FALLBACK_DOWNLOAD_URL} target="_blank" rel="noopener">
+              <span class="pkg-format">arm64-v8a</span>
+              <span class="pkg-size">.apk</span>
+            </a>
+          )}
+        </div>
+
+        <p class="platform-hint">
+          Sideload the APK, then pair over your local network with <strong>Settings → Mobile Sync</strong>.
+          The app updates itself once a release ships.
+        </p>
+      </article>
     </div>
   </div>
 </section>
@@ -154,6 +188,22 @@ const release = await getLatestRelease()
   .pkg-format {
     font-family: var(--font-mono);
     font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .pkg-tag {
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid rgba(168, 148, 232, 0.24);
   }
 
   .pkg-size {

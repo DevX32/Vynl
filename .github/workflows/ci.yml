@@ -24,6 +24,24 @@ jobs:
       - run: bun run typecheck
       - run: bun run build
 
+  site:
+    name: Site · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Build
+        working-directory: site
+        env:
+          # The download section reads the latest release at build time. Without a
+          # token the API call is rate limited on shared CI IPs, so exercise the
+          # offline path instead and let pages.yml build against the real API.
+          GITHUB_TOKEN: ''
+          VYNL_OFFLINE_BUILD: '1'
+        run: bun install --frozen-lockfile && bun run build
+
   rust:
     name: Rust · fmt + check
     runs-on: ubuntu-24.04
