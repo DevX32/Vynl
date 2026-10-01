@@ -3,10 +3,10 @@
   import ColorPicker from "@components/ColorPicker.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
-  import { getInstalledPlugins, openPluginsUi } from "@state/plugins.svelte";
+  import { openPluginsUi } from "@state/plugins.svelte";
+  import MobileSyncSettings from "./MobileSyncSettings.svelte";
 
   const settings = $derived(getCurrentSettings());
-  const installedCount = $derived(getInstalledPlugins().length);
 
   let _displayNameTimer: ReturnType<typeof setTimeout> | null = null;
   function debouncedDisplayNamePatch(value: string): void {
@@ -39,14 +39,13 @@
       <div class="hint mono">{t("plugins.openHint")}</div>
     </div>
     <div class="eq-actions">
-      <span class="eq-status mono on">
-        {t("plugins.installedCount", { n: installedCount })}
-      </span>
       <button class="chip mono" onclick={openPluginsUi}>
         {t("plugins.open")}
       </button>
     </div>
   </div>
+
+  <MobileSyncSettings />
 
   <div class="section">
     <div class="label mono">{t("settings.accentColor")}</div>
@@ -269,17 +268,5 @@
     align-items: center;
     gap: 10px;
     flex-shrink: 0;
-  }
-
-  .eq-status {
-    font-size: 10.5px;
-    color: var(--faint);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    transition: color 0.15s;
-  }
-
-  .eq-status.on {
-    color: var(--accent);
   }
 </style>

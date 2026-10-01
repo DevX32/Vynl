@@ -47,7 +47,12 @@
     <ArtBackdrop path={getCurrentTrack()!.cover} showGlow={true} />
   {/if}
 
-  <button class="fs-close" onclick={close} aria-label={t("player.closeFullscreen")}>
+  <button
+    class="fs-close"
+    onclick={close}
+    aria-label={t("player.closeFullscreen")}
+    title={t("player.closeFullscreen")}
+  >
     <X size={14} stroke-width={1.5} />
   </button>
 
@@ -129,17 +134,17 @@
     z-index: 210;
     width: 28px;
     height: 28px;
-    border-radius: var(--radius-sm);
-    background: var(--bg-raise);
-    border: 1px solid var(--line);
-    color: var(--text);
+    border-radius: 6px;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--faint);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transform: translateY(-50%) rotate(45deg);
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.15s ease, color 0.15s, background 0.15s, border-color 0.15s;
   }
 
   .fs-close :global(svg) {
@@ -149,8 +154,9 @@
   .fs-close:hover,
   .fs-overlay:hover .fs-close {
     opacity: 1;
-    background: color-mix(in srgb, var(--bg-raise) 80%, var(--accent-soft));
-    border-color: var(--line-strong);
+    color: var(--text);
+    background: var(--hover-surface);
+    border-color: var(--hover-border);
   }
 
   .fs-art {

@@ -57,6 +57,9 @@
   --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.42);
   --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.55);
 
+  --hover-surface: color-mix(in srgb, var(--accent) 14%, var(--bg-raise));
+  --hover-border: color-mix(in srgb, var(--accent) 30%, transparent);
+
   --font-display: 'Geist', sans-serif;
   --font-mono: 'Geist Mono', monospace;
 }

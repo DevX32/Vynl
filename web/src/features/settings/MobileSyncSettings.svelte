@@ -1,10 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "@lib/i18n";
-  import { getMobileSyncStatus, openMobileSyncUi, refreshMobileSync } from "@state/mobile-sync.svelte";
-
-  const status = $derived(getMobileSyncStatus());
-  const live = $derived(!!status?.enabled && !!status?.running);
+  import { openMobileSyncUi, refreshMobileSync } from "@state/mobile-sync.svelte";
 
   onMount(() => {
     void refreshMobileSync();
@@ -17,15 +14,6 @@
     <div class="hint mono">{t("settings.mobileSyncHint")}</div>
   </div>
   <div class="row-actions">
-    {#if status}
-      <span class="status mono" class:on={live}>
-        {live
-          ? t("settings.mobileSyncLive")
-          : status.enabled
-            ? t("settings.mobileSyncStopped")
-            : t("settings.mobileSyncOff")}
-      </span>
-    {/if}
     <button class="chip mono" onclick={openMobileSyncUi}>
       {t("plugins.open")}
     </button>
@@ -67,18 +55,6 @@
     flex-shrink: 0;
   }
 
-  .status {
-    font-size: 10.5px;
-    color: var(--faint);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    transition: color 0.15s;
-  }
-
-  .status.on {
-    color: var(--accent);
-  }
-
   .chip {
     font-size: 11px;
     color: var(--dim);
@@ -94,6 +70,7 @@
 
   .chip:hover {
     color: var(--text);
-    background: var(--bg-raise);
+    background: var(--hover-surface);
+    border-color: var(--hover-border);
   }
 </style>
