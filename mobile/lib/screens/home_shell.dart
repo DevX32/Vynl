@@ -16,8 +16,6 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _tab = 0;
-
   static const _titles = ['Library', 'Playlists', 'Settings'];
 
   @override
@@ -25,7 +23,7 @@ class _HomeShellState extends State<HomeShell> {
     final app = context.watch<AppState>();
 
     if (app.loading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: VynlColors.bg,
         body: Center(
           child: SizedBox(
@@ -51,7 +49,7 @@ class _HomeShellState extends State<HomeShell> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: Text(_titles[_tab]),
+          title: Text(_titles[app.tabIndex]),
           actions: [
             if (app.syncing)
               Padding(
@@ -75,14 +73,14 @@ class _HomeShellState extends State<HomeShell> {
               ),
           ],
         ),
-        body: IndexedStack(index: _tab, children: pages),
+        body: IndexedStack(index: app.tabIndex, children: pages),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const MiniPlayer(),
             NavigationBar(
-              selectedIndex: _tab,
-              onDestinationSelected: (i) => setState(() => _tab = i),
+              selectedIndex: app.tabIndex,
+              onDestinationSelected: app.setTab,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.music_note_outlined),

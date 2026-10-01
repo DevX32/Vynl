@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models.dart';
@@ -14,6 +16,10 @@ class AppState extends ChangeNotifier {
     required this.notifications,
   }) : syncService = SyncService(db: db, notifications: notifications);
 
+  static const tabLibrary = 0;
+  static const tabPlaylists = 1;
+  static const tabSettings = 2;
+
   final AuthStore authStore;
   final LibraryDb db;
   final SyncNotifications notifications;
@@ -28,6 +34,32 @@ class AppState extends ChangeNotifier {
   SyncProgress? syncProgress;
   String? lastError;
   int cacheBytes = 0;
+  int tabIndex = tabLibrary;
+
+  void setTab(int index) {
+    if (tabIndex == index) return;
+    tabIndex = index;
+    notifyListeners();
+  }
+
+  static String describePairFailure(Object error) {
+    final text = error.toString();
+    const networkHints = [
+      'SocketException',
+      'Failed host lookup',
+      'Connection refused',
+      'Connection timed out',
+      'Network is unreachable',
+      'No address associated with hostname',
+      'TimeoutException',
+      'HandshakeException',
+    ];
+    if (networkHints.any(text.contains)) {
+      return "Couldn't reach the desktop. Vynl pairs over the local "
+          'network, so both devices need to be on the same Wi-Fi.';
+    }
+    return text;
+  }
 
   Future<void> bootstrap() async {
     loading = true;
@@ -61,10 +93,27 @@ class AppState extends ChangeNotifier {
   List<CatalogTrack> get downloadedTracks =>
       tracks.where((t) => t.isDownloaded).toList();
 
-  Future<void> pair(String host, String pin) async {
+  Future<void> pair(String host, String pin, {List<String> alts = const []}) async {
     lastError = null;
     notifyListeners();
-    var base = host.trim();
+
+    Object? failure;
+    for (final candidate in [host, ...alts]) {
+      try {
+        await _pairOne(candidate, pin);
+        return;
+      } catch (e) {
+        failure = e;
+      }
+    }
+
+    lastError = describePairFailure(failure ?? StateError('pairing failed'));
+    notifyListeners();
+    throw StateError(lastError!);
+  }
+
+  Future<void> _pairOne(String candidate, String pin) async {
+    var base = candidate.trim();
     if (!base.startsWith('http://') && !base.startsWith('https://')) {
       base = 'http://$base';
     }
@@ -79,18 +128,12 @@ class AppState extends ChangeNotifier {
     } else {
       base = '${uri.scheme.isEmpty ? 'http' : uri.scheme}://$hostOnly:17865';
     }
-    try {
-      final creds = await VynlApi.pair(baseUrl: base, pin: pin);
-      await authStore.save(creds);
-      credentials = creds;
-      api = VynlApi(baseUrl: creds.baseUrl, token: creds.token);
-      notifyListeners();
-      await runSync();
-    } catch (e) {
-      lastError = e.toString();
-      notifyListeners();
-      rethrow;
-    }
+    final creds = await VynlApi.pair(baseUrl: base, pin: pin);
+    await authStore.save(creds);
+    credentials = creds;
+    api = VynlApi(baseUrl: creds.baseUrl, token: creds.token);
+    notifyListeners();
+    unawaited(runSync());
   }
 
   Future<void> unpair() async {

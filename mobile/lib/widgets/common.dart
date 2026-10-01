@@ -188,6 +188,78 @@ class SectionHeader extends StatelessWidget {
 
 enum VynlControlStyle { accent, raised, plain }
 
+class VynlSwitch extends StatelessWidget {
+  const VynlSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.accent,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final Color? accent;
+
+  static const _trackW = 36.0;
+  static const _trackH = 20.0;
+  static const _knob = 14.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = accent ?? VynlColors.accent;
+    final enabled = onChanged != null;
+    return Semantics(
+      toggled: value,
+      button: true,
+      enabled: enabled,
+      child: GestureDetector(
+        onTap: enabled ? () => onChanged!(!value) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          widthFactor: 1,
+          child: SizedBox(
+            width: 48,
+            height: 44,
+            child: Center(
+              child: AnimatedOpacity(
+                duration: VynlMotion.fast,
+                opacity: enabled ? 1 : 0.4,
+                child: AnimatedContainer(
+                  duration: VynlMotion.fast,
+                  curve: VynlMotion.emphasized,
+                  width: _trackW,
+                  height: _trackH,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: value
+                        ? tint.withValues(alpha: 0.11)
+                        : VynlColors.text.withValues(alpha: 0.20),
+                    borderRadius: BorderRadius.circular(VynlRadius.control),
+                  ),
+                  child: AnimatedAlign(
+                    duration: VynlMotion.fast,
+                    curve: VynlMotion.emphasized,
+                    alignment:
+                        value ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      width: _knob,
+                      height: _knob,
+                      decoration: BoxDecoration(
+                        color: value ? tint : VynlColors.faint,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class VynlControl extends StatefulWidget {
   const VynlControl({
     super.key,
@@ -232,7 +304,7 @@ class _VynlControlState extends State<VynlControl> {
     switch (widget.style) {
       case VynlControlStyle.accent:
         bg = widget.color ?? VynlColors.accent;
-        fg = widget.iconColor ?? const Color(0xFF17131A);
+        fg = widget.iconColor ?? VynlColors.accentOn;
         side = BorderSide.none;
       case VynlControlStyle.raised:
         bg = widget.color ?? VynlColors.surfaceRaised;

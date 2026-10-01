@@ -1,5 +1,6 @@
 mod server;
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -239,8 +240,13 @@ fn pair_urls(port: u16) -> Vec<String> {
     out
 }
 
-fn pairing_payload(host: &str, port: u16, pin: &str) -> String {
-    format!("vynl://pair?h={host}&p={port}&pin={pin}")
+fn pairing_payload(hosts: &[String], port: u16, pin: &str) -> String {
+    let primary = hosts.first().map(String::as_str).unwrap_or_default();
+    let mut payload = format!("vynl://pair?h={primary}&p={port}&pin={pin}");
+    if hosts.len() > 1 {
+        payload.push_str(&format!("&a={}", hosts[1..].join(",")));
+    }
+    payload
 }
 
 fn qr_for_payload(payload: &str) -> Option<String> {
@@ -259,19 +265,18 @@ fn qr_for_payload(payload: &str) -> Option<String> {
 pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
     let cfg = load_config(user_data_dir);
     let urls = pair_urls(cfg.port);
-    let primary = urls
+    let mut hosts: Vec<String> = list_lan_addresses()
         .iter()
-        .find(|u| u.contains(".local"))
-        .or_else(|| urls.first())
-        .cloned();
-    let qr_svg = primary.and_then(|url| {
-        let host = url
-            .trim_start_matches("http://")
-            .split(':')
-            .next()
-            .unwrap_or_default();
-        qr_for_payload(&pairing_payload(host, cfg.port, &cfg.pairing_pin))
-    });
+        .map(ToString::to_string)
+        .collect();
+    if let Some(mdns) = mdns_hostname() {
+        let label = mdns.trim_end_matches(".local").to_string();
+        if !hosts.contains(&label) {
+            hosts.push(label);
+        }
+    }
+
+    let qr_svg = qr_for_payload(&pairing_payload(&hosts, cfg.port, &cfg.pairing_pin));
     MobileSyncStatus {
         enabled: cfg.enabled,
         running,
@@ -353,6 +358,7 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         user_data: user_data.clone(),
         pin: Mutex::new(pin),
         token: Mutex::new(token),
+        attempts: Mutex::new(HashMap::new()),
     });
 
     tokio::spawn(async move {

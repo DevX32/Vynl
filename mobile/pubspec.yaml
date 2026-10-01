@@ -1,13 +1,17 @@
 name: vynl_mobile
 description: Vynl offline music player for Android
 publish_to: "none"
-version: 0.1.6+2001
+version: 0.1.7+2001
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
 
 dependency_overrides:
   path_provider_android: 2.2.23
+  audio_service:
+    path: third_party/audio_service
+  just_audio_background:
+    path: third_party/just_audio_background
 
 dependencies:
   flutter:
@@ -28,6 +32,9 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   collection: ^1.18.0
   palette_generator: ^0.3.3
+  just_audio_background: ^0.0.1-beta.17
+  package_info_plus: ^9.0.1
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

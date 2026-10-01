@@ -5,6 +5,18 @@ import 'package:http/http.dart' as http;
 
 import '../models.dart';
 
+class RemoteLyrics {
+  const RemoteLyrics({
+    required this.kind,
+    required this.text,
+    required this.source,
+  });
+
+  final String kind;
+  final String text;
+  final String source;
+}
+
 class ApiException implements Exception {
   ApiException(this.message, {this.statusCode});
   final String message;
@@ -46,6 +58,12 @@ class VynlApi {
           body: jsonEncode({'pin': pin.trim()}),
         )
         .timeout(const Duration(seconds: 12));
+    if (res.statusCode == 429) {
+      throw ApiException(
+        'Too many attempts. Wait a moment and try again.',
+        statusCode: 429,
+      );
+    }
     if (res.statusCode == 403) {
       throw ApiException('Wrong PIN', statusCode: 403);
     }
@@ -113,6 +131,25 @@ class VynlApi {
     required File dest,
   }) async {
     await _downloadFile(path: '/v1/tracks/$trackId/cover', dest: dest);
+  }
+
+  Future<RemoteLyrics?> syncedLyrics(String trackId) async {
+    try {
+      final res = await http
+          .get(_uri('/v1/tracks/$trackId/synced-lyrics'), headers: _headers)
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final text = body['text'] as String? ?? '';
+      if (text.trim().isEmpty) return null;
+      return RemoteLyrics(
+        kind: body['kind'] as String? ?? 'lrc',
+        text: text,
+        source: body['source'] as String? ?? 'remote',
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _downloadFile({

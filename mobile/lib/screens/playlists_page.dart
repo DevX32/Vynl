@@ -60,7 +60,6 @@ class PlaylistsPage extends StatelessWidget {
           _PlaylistRow(
             playlist: pl,
             trackCount: pl.trackIds.length,
-            readyCount: app.tracksForPlaylist(pl).length,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => PlaylistDetailPage(playlist: pl),
@@ -115,13 +114,11 @@ class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
     required this.playlist,
     required this.trackCount,
-    required this.readyCount,
     required this.onTap,
   });
 
   final PlaylistDto playlist;
   final int trackCount;
-  final int readyCount;
   final VoidCallback onTap;
 
   @override
@@ -160,7 +157,7 @@ class _PlaylistRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$readyCount offline  ·  $trackCount tracks',
+                      '$trackCount tracks',
                       style: const TextStyle(
                         color: VynlColors.dim,
                         fontSize: 12.5,
@@ -233,7 +230,9 @@ class PlaylistDetailPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                '${tracks.length} tracks offline',
+                                tracks.length == 1
+                                    ? '1 track'
+                                    : '${tracks.length} tracks',
                                 style: const TextStyle(
                                   color: VynlColors.dim,
                                   fontSize: 13,
@@ -258,6 +257,7 @@ class PlaylistDetailPage extends StatelessWidget {
                         return TrackTile(
                           track: track,
                           active: current?.id == track.id,
+                          showStatus: false,
                           onTap: () => player.playTrack(
                             track,
                             context: tracks,

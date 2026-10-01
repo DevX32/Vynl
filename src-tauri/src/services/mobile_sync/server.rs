@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Request, State};
-use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -14,18 +14,49 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, oneshot};
-use tower_http::cors::{Any, CorsLayer};
 
 use crate::commands::types::LibraryTrack;
 use crate::services::mobile_sync::{self, load_library_tracks, load_playlists};
+use axum::extract::ConnectInfo;
 
 pub struct AppStateInner {
     pub user_data: PathBuf,
     pub pin: Mutex<String>,
     pub token: Mutex<String>,
+    pub attempts: Mutex<HashMap<String, Attempt>>,
+}
+
+#[derive(Clone, Copy)]
+pub struct Attempt {
+    pub failures: u32,
+    pub locked_until: Option<u64>,
+    pub lockouts: u32,
 }
 
 type SharedState = Arc<AppStateInner>;
+
+const MAX_PAIR_FAILURES: u32 = 5;
+const LOCKOUT_SECS: u64 = 30;
+const LOCKOUT_MAX_SECS: u64 = 900;
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn secret_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,6 +87,14 @@ pub struct MobilePlaylistDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MobileLyrics {
+    pub kind: String,
+    pub text: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MobileSyncManifestEntry {
     pub id: String,
     pub mtime: Option<u64>,
@@ -81,11 +120,6 @@ pub async fn serve(
     state: SharedState,
     stop: oneshot::Receiver<()>,
 ) -> Result<(), String> {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS, Method::HEAD])
-        .allow_headers(Any);
-
     let app = Router::new()
         .route("/pair", post(pair))
         .route("/v1/catalog", get(catalog))
@@ -93,6 +127,7 @@ pub async fn serve(
         .route("/v1/sync-manifest", get(sync_manifest))
         .route("/v1/tracks/{id}/audio", get(track_audio))
         .route("/v1/tracks/{id}/cover", get(track_cover))
+        .route("/v1/tracks/{id}/synced-lyrics", get(track_synced_lyrics))
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"ok": true})) }),
@@ -101,19 +136,21 @@ pub async fn serve(
             state.clone(),
             auth_middleware,
         ))
-        .layer(cors)
         .with_state(state);
 
     let listener = TcpListener::bind(("0.0.0.0", port))
         .await
         .map_err(|e| format!("bind {port}: {e}"))?;
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = stop.await;
-        })
-        .await
-        .map_err(|e| e.to_string())
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = stop.await;
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 async fn auth_middleware(State(state): State<SharedState>, req: Request, next: Next) -> Response {
@@ -128,7 +165,7 @@ async fn auth_middleware(State(state): State<SharedState>, req: Request, next: N
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|t| !expected.is_empty() && t == expected);
+        .is_some_and(|t| !expected.is_empty() && secret_eq(t, &expected));
 
     if authorized {
         next.run(req).await
@@ -139,18 +176,68 @@ async fn auth_middleware(State(state): State<SharedState>, req: Request, next: N
 
 async fn pair(
     State(state): State<SharedState>,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
     Json(body): Json<PairBody>,
-) -> Result<Json<PairResponse>, StatusCode> {
-    let pin = state.pin.lock().await.clone();
-    if body.pin.trim() != pin {
-        return Err(StatusCode::FORBIDDEN);
+) -> Result<Json<PairResponse>, (StatusCode, &'static str)> {
+    let key = addr.ip().to_string();
+
+    if lockout_for(&state, &key).await {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "too many attempts"));
     }
+
+    let pin = state.pin.lock().await.clone();
+    if !secret_eq(body.pin.trim(), &pin) {
+        record_failure(&state, &key).await;
+        return Err((StatusCode::FORBIDDEN, "wrong pin"));
+    }
+
+    clear_attempts(&state, &key).await;
+
     let token = state.token.lock().await.clone();
     let cfg = mobile_sync::load_config(&state.user_data);
     Ok(Json(PairResponse {
         token,
         port: cfg.port,
     }))
+}
+
+async fn lockout_for(state: &SharedState, key: &str) -> bool {
+    let mut attempts = state.attempts.lock().await;
+    let Some(entry) = attempts.get_mut(key) else {
+        return false;
+    };
+    match entry.locked_until {
+        Some(until) if until > now_secs() => true,
+        Some(_) => {
+            entry.locked_until = None;
+            false
+        }
+        None => false,
+    }
+}
+
+async fn record_failure(state: &SharedState, key: &str) {
+    let mut attempts = state.attempts.lock().await;
+    let entry = attempts.entry(key.to_string()).or_insert(Attempt {
+        failures: 0,
+        locked_until: None,
+        lockouts: 0,
+    });
+    entry.failures += 1;
+    if entry.failures < MAX_PAIR_FAILURES {
+        return;
+    }
+    entry.failures = 0;
+    entry.lockouts = entry.lockouts.saturating_add(1);
+    let shift = entry.lockouts.min(6) - 1;
+    let secs = LOCKOUT_SECS
+        .saturating_mul(1u64 << shift)
+        .min(LOCKOUT_MAX_SECS);
+    entry.locked_until = Some(now_secs() + secs);
+}
+
+async fn clear_attempts(state: &SharedState, key: &str) {
+    state.attempts.lock().await.remove(key);
 }
 
 fn to_catalog(track: &LibraryTrack) -> MobileCatalogTrack {
@@ -173,7 +260,6 @@ fn path_to_id_map(tracks: &[LibraryTrack]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for t in tracks {
         map.insert(t.path.clone(), t.id.clone());
-        // Also index by normalized separators for Windows playlists.
         let alt = t.path.replace('/', "\\");
         if alt != t.path {
             map.insert(alt, t.id.clone());
@@ -307,6 +393,71 @@ async fn track_cover(State(state): State<SharedState>, AxumPath(id): AxumPath<St
         _ => "image/jpeg",
     };
     serve_file_with_range(path, HeaderMap::new(), ct).await
+}
+
+async fn track_synced_lyrics(
+    State(state): State<SharedState>,
+    AxumPath(id): AxumPath<String>,
+) -> Response {
+    let tracks = tokio::task::spawn_blocking({
+        let ud = state.user_data.clone();
+        move || load_library_tracks(&ud)
+    })
+    .await
+    .unwrap_or_default();
+
+    let Some(track) = find_track(&tracks, &id) else {
+        return (StatusCode::NOT_FOUND, "track not found").into_response();
+    };
+
+    let embedded = track
+        .lyrics
+        .as_deref()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let is_synced = |t: &str| t.contains('[') && t.contains(':');
+
+    if !embedded.is_empty() && is_synced(&embedded) {
+        return Json(MobileLyrics {
+            kind: "lrc".into(),
+            text: embedded,
+            source: "embedded".into(),
+        })
+        .into_response();
+    }
+
+    let lookup = crate::commands::types::LyricsLookup {
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        album: track.album.clone(),
+        duration: track.duration,
+    };
+    let ud = state.user_data.clone();
+
+    let fetched = tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build();
+        match rt {
+            Ok(rt) => rt.block_on(crate::services::lyrics::fetch_lyrics_with_cache(
+                &lookup, &ud,
+            )),
+            Err(_) => None,
+        }
+    })
+    .await
+    .unwrap_or(None);
+
+    match fetched {
+        Some(res) if is_synced(&res.text) => Json(MobileLyrics {
+            kind: "lrc".into(),
+            text: res.text,
+            source: format!("{:?}", res.source).to_lowercase(),
+        })
+        .into_response(),
+        _ => (StatusCode::NOT_FOUND, "no synced lyrics").into_response(),
+    }
 }
 
 fn content_type_for_ext(ext: &str) -> &'static str {

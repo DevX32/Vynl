@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/app_update.dart';
 import '../state/app_state.dart';
+import '../state/theme_controller.dart';
 import '../theme.dart';
+import '../widgets/accent_picker.dart';
 import '../widgets/common.dart';
+import '../widgets/update_sheet.dart';
 import 'pair_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -43,9 +47,21 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _pickAccent(BuildContext context, ThemeController theme) async {
+    final picked = await showModalBottomSheet<Color>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => AccentSheet(onChanged: theme.previewAccent),
+    );
+    if (picked != null) await theme.setAccent(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
+    final theme = context.watch<ThemeController>();
+    final updates = context.watch<AppUpdate>();
     final paired = app.isPaired;
 
     return ListView(
@@ -70,14 +86,49 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
 
+        const _Section(child: _Kicker('APPEARANCE')),
+        _Section(
+          child: _Row(
+            label: 'Accent colour',
+            hint: theme.dynamicAccent
+                ? 'Turn off Dynamic Accent to change this'
+                : theme.isPreset
+                    ? 'Preset'
+                    : 'Custom ${hexOf(theme.chosen)}',
+            onTap:
+                theme.dynamicAccent ? null : () => _pickAccent(context, theme),
+            trailing: AccentSwatch(
+              color: theme.accent,
+              selected: false,
+              checked: false,
+              size: 26,
+              muted: theme.dynamicAccent,
+              onTap: theme.dynamicAccent
+                  ? null
+                  : () => _pickAccent(context, theme),
+            ),
+          ),
+        ),
+        _Section(
+          child: _Row(
+            label: 'Dynamic accent',
+            hint: theme.dynamicAccent
+                ? 'Matching the current track artwork'
+                : 'Use the accent colour above',
+            trailing: VynlSwitch(
+              value: theme.dynamicAccent,
+              onChanged: theme.setDynamicAccent,
+            ),
+          ),
+        ),
+
         const _Section(child: _Kicker('DESKTOP')),
         _Section(
           child: _Row(
             label: 'Connection',
             hint: paired
-                ? (app.credentials?.baseUrl ?? '')
+                ? 'Synced over your local network'
                 : 'Not paired yet',
-            hintMono: paired,
             trailing: _Status(text: paired ? 'PAIRED' : 'OFF', on: paired),
           ),
         ),
@@ -151,10 +202,30 @@ class SettingsPage extends StatelessWidget {
         ),
 
         const _Section(child: _Kicker('ABOUT')),
-        const _Section(
+        _Section(
           child: _Row(
-            label: 'Vynl',
-            hint: 'Offline companion for Vynl desktop',
+            label: updates.available
+                ? 'Update to ${updates.release!.version}'
+                : 'Vynl',
+            hint: updates.available
+                ? 'A newer version is ready'
+                : 'Offline companion for Vynl desktop',
+            labelColor: updates.available ? VynlColors.accent : null,
+            onTap: updates.available
+                ? () => showModalBottomSheet<void>(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (_) => const UpdateSheet(),
+                    )
+                : () => updates.check(force: true),
+            trailing: updates.downloading
+                ? const SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : _Chip(label: updates.available ? 'Update' : 'Check'),
           ),
         ),
       ],
@@ -227,7 +298,7 @@ class _ChipState extends State<_Chip> {
       bg = hover
           ? Color.lerp(VynlColors.accent, Colors.white, 0.18)!
           : VynlColors.accent;
-      fg = const Color(0xFF17131A);
+      fg = accentTextFor(bg);
       border = bg;
     } else if (widget.danger) {
       bg = hover
@@ -295,7 +366,6 @@ class _Row extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.labelColor,
-    this.hintMono = false,
   });
 
   final String label;
@@ -303,7 +373,6 @@ class _Row extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final Color? labelColor;
-  final bool hintMono;
 
   @override
   Widget build(BuildContext context) {
@@ -327,10 +396,9 @@ class _Row extends StatelessWidget {
                 hint,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: VynlColors.faint,
-                  fontSize: hintMono ? 12 : 12.5,
-                  letterSpacing: hintMono ? 0.2 : 0,
+                  fontSize: 12.5,
                 ),
               ),
             ],

@@ -5852,7 +5852,7 @@ dependencies = [
 
 [[package]]
 name = "vynl"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "axum",
  "ctrlc",
@@ -5882,7 +5882,6 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "tower",
- "tower-http",
  "urlencoding",
  "uuid 1.25.0",
  "winreg",

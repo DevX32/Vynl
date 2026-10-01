@@ -4,9 +4,28 @@ import 'dart:io';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
+
+enum RepeatPreset { off, all, one }
+
+const _repeatCycle = [RepeatPreset.off, RepeatPreset.all, RepeatPreset.one];
+
+const _repeatKey = 'vynl.repeat';
+
+LoopMode _toLoopMode(RepeatPreset mode) {
+  switch (mode) {
+    case RepeatPreset.off:
+      return LoopMode.off;
+    case RepeatPreset.all:
+      return LoopMode.all;
+    case RepeatPreset.one:
+      return LoopMode.one;
+  }
+}
 
 class PlayerController extends ChangeNotifier {
   PlayerController() {
@@ -15,18 +34,28 @@ class PlayerController extends ChangeNotifier {
 
   final AudioPlayer _player = AudioPlayer();
   List<CatalogTrack> _queue = [];
-  int _index = 0;
   Future<void>? _initFuture;
   Color _accent = const Color(0xFFA894E8);
+  RepeatPreset _repeat = RepeatPreset.off;
+  bool _accentFromArt = false;
 
   Color get accent => _accent;
+  bool get accentFromArt => _accentFromArt;
+  RepeatPreset get repeatMode => _repeat;
+  bool get repeatActive => _repeat != RepeatPreset.off;
 
   Future<void> _ensureInit() => _initFuture ??= _init();
 
   List<CatalogTrack> get queue => List.unmodifiable(_queue);
-  int get index => _index;
-  CatalogTrack? get current =>
-      (_index >= 0 && _index < _queue.length) ? _queue[_index] : null;
+
+  int get index => _player.currentIndex ?? 0;
+
+  CatalogTrack? get current {
+    final i = _player.currentIndex;
+    if (i == null || i < 0 || i >= _queue.length) return null;
+    return _queue[i];
+  }
+
   AudioPlayer get player => _player;
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
@@ -36,40 +65,93 @@ class PlayerController extends ChangeNotifier {
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    _player.processingStateStream.listen((state) {
-      if (state == ProcessingState.completed) {
-        unawaited(next());
-      }
-    });
+    _player.currentIndexStream.listen((_) => _onTrackChanged());
+    await _loadRepeat();
   }
 
-  Future<void> playTracks(List<CatalogTrack> tracks, {int startIndex = 0}) async {
+  void _onTrackChanged() {
+    _accentFromArt = false;
+    final track = current;
+    if (track != null) unawaited(_extractAccent(track));
+    notifyListeners();
+  }
+
+  Future<void> _loadRepeat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_repeatKey);
+      _repeat = RepeatPreset.values.firstWhere(
+        (m) => m.name == saved,
+        orElse: () => RepeatPreset.off,
+      );
+      await _player.setLoopMode(_toLoopMode(_repeat));
+      notifyListeners();
+    } catch (e) {
+      debugPrint('repeat load failed: $e');
+    }
+  }
+
+  Future<void> toggleRepeat() async {
+    final i = _repeatCycle.indexOf(_repeat);
+    _repeat = _repeatCycle[(i + 1) % _repeatCycle.length];
+    await _player.setLoopMode(_toLoopMode(_repeat));
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_repeatKey, _repeat.name);
+    } catch (e) {
+      debugPrint('repeat save failed: $e');
+    }
+  }
+
+  Future<void> playTracks(
+    List<CatalogTrack> tracks, {
+    int startIndex = 0,
+  }) async {
+    await _ensureInit();
     final playable = tracks.where((t) => t.isDownloaded).toList();
     if (playable.isEmpty) return;
+    final start = startIndex.clamp(0, playable.length - 1);
     _queue = playable;
-    _index = startIndex.clamp(0, playable.length - 1);
-    await _loadCurrent(play: true);
+    try {
+      await _player.setAudioSource(
+        ConcatenatingAudioSource(
+          children: [for (final t in playable) _sourceFor(t)],
+        ),
+        initialIndex: start,
+      );
+      await _player.play();
+    } catch (e) {
+      debugPrint('play error: $e');
+    }
+    _onTrackChanged();
   }
 
-  Future<void> playTrack(CatalogTrack track, {List<CatalogTrack>? context}) async {
+  Future<void> playTrack(
+    CatalogTrack track, {
+    List<CatalogTrack>? context,
+  }) async {
     final list = (context ?? [track]).where((t) => t.isDownloaded).toList();
     if (list.isEmpty) return;
     final idx = list.indexWhere((t) => t.id == track.id);
     await playTracks(list, startIndex: idx < 0 ? 0 : idx);
   }
 
-  Future<void> _loadCurrent({required bool play}) async {
-    await _ensureInit();
-    final track = current;
-    if (track == null || track.localAudioPath == null) return;
-    unawaited(_extractAccent(track));
-    try {
-      await _player.setFilePath(track.localAudioPath!);
-      if (play) await _player.play();
-      notifyListeners();
-    } catch (e) {
-      debugPrint('play error: $e');
-    }
+  AudioSource _sourceFor(CatalogTrack t) {
+    final art = t.localCoverPath;
+    return AudioSource.file(
+      t.localAudioPath!,
+      tag: MediaItem(
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        artUri: art == null || art.isEmpty ? null : Uri.file(art),
+        duration: t.duration <= 0
+            ? null
+            : Duration(milliseconds: (t.duration * 1000).round()),
+      ),
+    );
   }
 
   Future<void> _extractAccent(CatalogTrack track) async {
@@ -88,6 +170,7 @@ class PlayerController extends ChangeNotifier {
           .withLightness(hsl.lightness.clamp(0.62, 0.80))
           .withSaturation(hsl.saturation.clamp(0.35, 0.75))
           .toColor();
+      _accentFromArt = true;
       notifyListeners();
     } catch (e) {
       debugPrint('palette failed: $e');
@@ -112,14 +195,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> next() async {
     if (_queue.isEmpty) return;
-    if (_index >= _queue.length - 1) {
-      await _player.seek(Duration.zero);
-      await _player.pause();
-      notifyListeners();
-      return;
-    }
-    _index += 1;
-    await _loadCurrent(play: true);
+    await _player.seekToNext();
   }
 
   Future<void> previous() async {
@@ -128,18 +204,13 @@ class PlayerController extends ChangeNotifier {
       await _player.seek(Duration.zero);
       return;
     }
-    if (_index <= 0) {
-      await _player.seek(Duration.zero);
-      return;
-    }
-    _index -= 1;
-    await _loadCurrent(play: true);
+    await _player.seekToPrevious();
   }
 
   Future<void> playAt(int i) async {
     if (i < 0 || i >= _queue.length) return;
-    _index = i;
-    await _loadCurrent(play: true);
+    await _player.seek(Duration.zero, index: i);
+    if (!_player.playing) await _player.play();
   }
 
   @override
