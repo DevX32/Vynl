@@ -94,9 +94,11 @@ const groups = [
     padding: 24px 22px;
   }
 
-  .item:hover {
-    transform: translateY(-3px);
-    background: var(--bg-raise);
+  @media (hover: hover) and (pointer: fine) {
+    .item:hover {
+      transform: translateY(-3px);
+      background: var(--bg-raise);
+    }
   }
 
   .item h3 {

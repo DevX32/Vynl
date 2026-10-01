@@ -193,8 +193,10 @@ export default {
       var(--surface);
   }
 
-  .spotlight:hover {
-    border-color: rgba(168, 148, 232, 0.32);
+  @media (hover: hover) and (pointer: fine) {
+    .spotlight:hover {
+      border-color: rgba(168, 148, 232, 0.32);
+    }
   }
 
   .spotlight-tag {

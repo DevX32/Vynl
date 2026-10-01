@@ -124,10 +124,12 @@ const highlights = [
       background-color 0.15s ease;
   }
 
-  .pill:hover {
-    color: var(--text);
-    border-color: rgba(168, 148, 232, 0.45);
-    background: var(--accent-soft);
+  @media (hover: hover) and (pointer: fine) {
+    .pill:hover {
+      color: var(--text);
+      border-color: rgba(168, 148, 232, 0.45);
+      background: var(--accent-soft);
+    }
   }
 
   .pill-dot {

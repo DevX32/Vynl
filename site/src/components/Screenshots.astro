@@ -83,9 +83,11 @@ const shots = [
       transform 0.2s ease;
   }
 
-  .shot:hover {
-    border-color: rgba(168, 148, 232, 0.42);
-    transform: translateY(-3px);
+  @media (hover: hover) and (pointer: fine) {
+    .shot:hover {
+      border-color: rgba(168, 148, 232, 0.42);
+      transform: translateY(-3px);
+    }
   }
 
   .shot img {
@@ -109,10 +111,16 @@ const shots = [
       transform 0.22s ease;
   }
 
-  .shot:hover .caption,
   .shot:focus-visible .caption {
     opacity: 1;
     transform: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .shot:hover .caption {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   .caption strong {
@@ -139,9 +147,15 @@ const shots = [
     display: grid;
     place-items: center;
     padding: 32px;
+    /* The close button sits under the notch and the image under the home
+       indicator without these. */
+    padding-top: calc(32px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
     background: rgba(6, 6, 8, 0.9);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    /* Stop a flick past the image from chaining out to the page behind. */
+    overscroll-behavior: contain;
   }
 
   .lightbox[hidden] {
@@ -183,8 +197,10 @@ const shots = [
     transition: background-color 0.15s ease;
   }
 
-  .lightbox-close:hover {
-    background: rgba(255, 255, 255, 0.14);
+  @media (hover: hover) and (pointer: fine) {
+    .lightbox-close:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
   }
 </style>
 

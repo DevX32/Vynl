@@ -116,8 +116,10 @@ const release = await getLatestRelease()
     gap: 20px;
   }
 
-  .platform:hover {
-    border-color: rgba(168, 148, 232, 0.32);
+  @media (hover: hover) and (pointer: fine) {
+    .platform:hover {
+      border-color: rgba(168, 148, 232, 0.32);
+    }
   }
 
   .platform header {
@@ -179,10 +181,16 @@ const release = await getLatestRelease()
       transform 0.15s ease;
   }
 
-  .pkg:hover {
-    border-color: rgba(168, 148, 232, 0.5);
-    background: var(--accent-soft);
-    transform: translateY(-1px);
+  .pkg:active {
+    transform: translateY(0);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .pkg:hover {
+      border-color: rgba(168, 148, 232, 0.5);
+      background: var(--accent-soft);
+      transform: translateY(-1px);
+    }
   }
 
   .pkg-format {

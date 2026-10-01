@@ -107,9 +107,11 @@ const links = [
       background-color 0.15s ease;
   }
 
-  .nav-desktop a:hover {
-    color: var(--text);
-    background: rgba(255, 255, 255, 0.05);
+  @media (hover: hover) and (pointer: fine) {
+    .nav-desktop a:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
   }
 
   .header-actions {
