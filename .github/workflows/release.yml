@@ -18,18 +18,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check tag against tauri.conf.json and Cargo.toml
+      - name: Check tag against every published version field
         run: |
           tag="${GITHUB_REF_NAME#v}"
           conf="$(jq -r '.version' src-tauri/tauri.conf.json)"
           cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)"
-          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo"
+          root_pkg="$(jq -r '.version' package.json)"
+          # Strip the Flutter build number (0.1.7+2001) so only the version remains.
+          pubspec="$(sed -n 's/^version: *\([0-9][^+ ]*\).*/\1/p' mobile/pubspec.yaml | head -n1)"
+          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg pubspec=$pubspec"
           if [ "$tag" != "$conf" ]; then
             echo "::error::Tag v$tag does not match tauri.conf.json version ($conf) — bump it before tagging."
             exit 1
           fi
           if [ "$tag" != "$cargo" ]; then
             echo "::error::Tag v$tag does not match Cargo.toml version ($cargo) — bump it before tagging."
+            exit 1
+          fi
+          # The site reads these two at build time. Left unchecked they drift,
+          # and the site then advertises a version that was never published.
+          if [ "$tag" != "$root_pkg" ]; then
+            echo "::error::Tag v$tag does not match root package.json version ($root_pkg) — the site shows this version."
+            exit 1
+          fi
+          if [ "$tag" != "$pubspec" ]; then
+            echo "::error::Tag v$tag does not match mobile/pubspec.yaml version ($pubspec) — the APK reports this version."
             exit 1
           fi
 

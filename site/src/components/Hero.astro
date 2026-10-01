@@ -4,9 +4,10 @@ import { base } from '../lib/base'
 import { getLatestRelease } from '../lib/releases'
 import { getAppVersion, RELEASES_URL, REPO_URL } from '../lib/repo'
 
-const version = getAppVersion()
-
 const release = await getLatestRelease()
+
+const version = release?.version ?? getAppVersion()
+
 const windowsUrl = release?.windows?.url ?? RELEASES_URL
 const linuxUrl =
   release?.linux.find((asset) => asset.format === 'AppImage')?.url ??
