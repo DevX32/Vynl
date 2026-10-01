@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
 import '../models.dart';
-import '../services/api.dart';
 import '../services/lyrics.dart';
+import '../state/app_state.dart';
 import '../services/player_controller.dart';
 import '../theme.dart';
 import '../widgets/artwork.dart';
@@ -74,7 +74,12 @@ class _PlayerPageState extends State<PlayerPage> {
           centerTitle: true,
           actions: [
             IconButton(
-              icon: const Icon(Icons.more_horiz_rounded, size: 24),
+              icon: const Icon(
+                Icons.queue_music_rounded,
+                size: 24,
+                color: VynlColors.dim,
+              ),
+              tooltip: 'Queue',
               onPressed: () => _showQueueSheet(context, player),
             ),
           ],
@@ -144,11 +149,17 @@ class _LyricsOverlay extends StatefulWidget {
 class _LyricsOverlayState extends State<_LyricsOverlay> {
   final _scroll = ScrollController();
   final _cardScroll = ScrollController();
+  final Map<int, GlobalKey> _lineKeys = {};
+
   LyricsResult? _remote;
-  String? _remoteFor;
-  bool _fetching = false;
+  String? _shownFor;
+  String? _triedFor;
+  DateTime? _failedAt;
+  int _request = 0;
   bool _userScrolling = false;
   Timer? _resume;
+
+  static const _retryAfter = Duration(seconds: 20);
 
   @override
   void initState() {
@@ -156,25 +167,43 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
     _scroll.addListener(_onScroll);
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _maybeFetch();
+  bool _shouldAttempt(String trackId) {
+    if (_triedFor != trackId) return true;
+    final at = _failedAt;
+    if (at == null) return false; // already succeeded
+    return DateTime.now().difference(at) >= _retryAfter;
   }
 
   Future<void> _maybeFetch() async {
     final track = widget.player.current;
-    final api = context.read<VynlApi?>();
+    final api = context.read<AppState>().api;
     if (track == null || api == null) return;
-    if (_remoteFor == track.id || _fetching) return;
-    _fetching = true;
-    _remoteFor = track.id;
+
+    if (_shownFor != null && _shownFor != track.id) {
+      _remote = null;
+      _shownFor = null;
+      _lineKeys.clear();
+    }
+
+    if (!_shouldAttempt(track.id)) return;
+    _triedFor = track.id;
+
+    final req = ++_request;
     final res = await api.syncedLyrics(track.id);
-    if (!mounted || widget.player.current?.id != track.id) return;
-    _fetching = false;
-    final parsed = res == null ? null : lyricsFromRemote(track.id, res.text);
-    if (parsed != null && mounted) {
-      setState(() => _remote = parsed);
+    if (!mounted || req != _request) return;
+
+    if (res == null) {
+      _failedAt = DateTime.now();
+      return;
+    }
+
+    final parsed = lyricsFromRemote(track.id, res.text);
+    if (parsed != null) {
+      setState(() {
+        _remote = parsed;
+        _shownFor = track.id;
+        _failedAt = null;
+      });
     }
   }
 
@@ -189,31 +218,72 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
-    final atEnd =
-        _scroll.position.pixels >= _scroll.position.maxScrollExtent - 24;
-    if (!_userScrolling && !atEnd) {
+    if (_scroll.position.userScrollDirection == ScrollDirection.idle) return;
+    if (!_userScrolling) {
       _userScrolling = true;
-      _resume?.cancel();
-      _resume = Timer(const Duration(seconds: 4), () {
-        if (mounted) _userScrolling = false;
-      });
+      if (mounted) setState(() {});
     }
+    _resume?.cancel();
+    _resume = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _userScrolling = false);
+    });
   }
 
   void _centre(int index, int count) {
-    if (_userScrolling || !_scroll.hasClients || index < 0 || index >= count) {
+    if (_userScrolling || index < 0 || index >= count) return;
+
+    void snap() {
+      if (!mounted || _userScrolling || !_scroll.hasClients) return;
+      final ctx = _lineKeys[index]?.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.34,
+        duration: VynlMotion.normal,
+        curve: VynlMotion.emphasized,
+      );
+    }
+
+    final ctx = _lineKeys[index]?.currentContext;
+    if (ctx != null) {
+      snap();
       return;
     }
+
+    if (!_scroll.hasClients) return;
     final viewport = _scroll.position.viewportDimension;
-    final target = index * 38.0 - viewport * 0.66;
+    final estimate = index * _estimatedExtent - viewport * 0.34;
     final max = _scroll.position.maxScrollExtent;
-    final to = target.clamp(0.0, max > 0 ? max : 0.0);
-    if ((_scroll.offset - to).abs() < 6) return;
-    _scroll.animateTo(to, duration: VynlMotion.normal, curve: VynlMotion.emphasized);
+    final to = estimate.clamp(0.0, max > 0 ? max : 0.0);
+    if ((_scroll.offset - to).abs() < 4) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => snap());
+      return;
+    }
+    _scroll.animateTo(
+      to,
+      duration: VynlMotion.normal,
+      curve: VynlMotion.emphasized,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => snap());
   }
+
+  double get _estimatedExtent {
+    if (_lineKeys.isEmpty) return 38;
+    var sum = 0.0;
+    for (final key in _lineKeys.values) {
+      final box = key.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) sum += box.size.height;
+    }
+    return _lineKeys.isEmpty ? 38 : (sum / _lineKeys.length).clamp(28.0, 64.0);
+  }
+
+  Key _keyFor(int index) =>
+      _lineKeys.putIfAbsent(index, () => GlobalKey(debugLabel: 'lyr$index'));
 
   @override
   Widget build(BuildContext context) {
+    _maybeFetch();
+
     final track = widget.player.current;
     final embedded = lyricsFromTrack(track?.lyrics);
     final result = _remote ?? embedded;
@@ -230,41 +300,18 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
       decoration: BoxDecoration(
         color: VynlColors.bg.withValues(alpha: hasArt ? 0.30 : 0.62),
         borderRadius: BorderRadius.circular(VynlRadius.art),
-        border: Border.all(color: VynlColors.text.withValues(alpha: 0.07)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (hasArt)
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
-              child: Transform.scale(
-                scale: 1.5,
-                child: Image.file(
-                  File(cover),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              ),
-            ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  const Color(0xFF171310).withValues(alpha: 0.30),
-                  const Color(0xFF100D0B).withValues(alpha: 0.62),
-                ],
-              ),
-            ),
-          ),
+          const ColoredBox(color: Color(0x660E0E10)),
           canSync
               ? _SyncedLines(
                   player: widget.player,
                   lines: toLyricLines(result),
                   scroll: _scroll,
+                  keyFor: _keyFor,
                   onActive: _centre,
                 )
               : _PlainStanzas(result: result, scroll: _cardScroll),
@@ -293,26 +340,27 @@ class _PlainStanzas extends StatelessWidget {
     }
     return ListView.builder(
         controller: scroll,
-        padding: const EdgeInsets.fromLTRB(13, 15, 13, 20),
+        padding: const EdgeInsets.fromLTRB(16, 22, 16, 26),
         itemCount: stanzas.length,
         itemBuilder: (context, i) => Padding(
-          padding: EdgeInsets.only(bottom: i == stanzas.length - 1 ? 0 : 13),
+          padding: EdgeInsets.only(bottom: i == stanzas.length - 1 ? 0 : 16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final line in stanzas[i])
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 2.5),
+                  padding: const EdgeInsets.only(bottom: 5),
                   child: Text(
                     line,
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontFamily: VynlFonts.display,
+                      fontFamily: VynlFonts.lyrics,
                       color: VynlColors.text,
-                      fontSize: 12,
-                      height: 1.38,
-                      letterSpacing: -0.15,
+                      fontSize: 14.5,
+                      height: 1.45,
+                      fontVariations: [FontVariation.weight(460)],
+                      letterSpacing: -0.2,
                       shadows: [
-                        Shadow(color: Color(0x59000000), blurRadius: 3),
+                        Shadow(color: Color(0x73000000), blurRadius: 5),
                       ],
                     ),
                   ),
@@ -324,62 +372,91 @@ class _PlainStanzas extends StatelessWidget {
   }
 }
 
-class _SyncedLines extends StatelessWidget {
+class _SyncedLines extends StatefulWidget {
   const _SyncedLines({
     required this.player,
     required this.lines,
     required this.scroll,
+    required this.keyFor,
     required this.onActive,
   });
 
   final PlayerController player;
   final List<LyricLine> lines;
   final ScrollController scroll;
+  final Key Function(int index) keyFor;
   final void Function(int index, int count) onActive;
 
   @override
+  State<_SyncedLines> createState() => _SyncedLinesState();
+}
+
+class _SyncedLinesState extends State<_SyncedLines> {
+  int _lastActive = -2;
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Duration>(
-      stream: player.positionStream,
+    final lines = widget.lines;
+    return StreamBuilder<int>(
+      stream: widget.player.positionStream
+          .map((p) => activeLineIndex(lines, p))
+          .distinct(),
       builder: (context, snap) {
-        final active = activeLineIndex(lines, snap.data ?? Duration.zero);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          onActive(active, lines.length);
-        });
+        final active = snap.data ?? -1;
+
+        if (active != _lastActive) {
+          _lastActive = active;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) widget.onActive(active, lines.length);
+          });
+        }
+
         return ListView.builder(
-          controller: scroll,
+          controller: widget.scroll,
           padding: const EdgeInsets.fromLTRB(14, 34, 14, 44),
           itemCount: lines.length,
           itemBuilder: (context, i) {
             final line = lines[i];
             final isActive = i == active;
+            final instrumental = isInstrumental(line.text);
+
+            final TextStyle base = TextStyle(
+              fontFamily: VynlFonts.lyrics,
+              color: isActive
+                  ? VynlColors.text
+                  : (active >= 0 && i < active)
+                      ? VynlColors.faint
+                      : VynlColors.dim,
+              fontSize: isActive ? 16 : 12.5,
+              height: 1.32,
+              fontVariations: [FontVariation.weight(isActive ? 700 : 520)],
+              letterSpacing: isActive ? -0.4 : -0.15,
+              shadows: const [
+                Shadow(color: Color(0x8A000000), blurRadius: 6),
+                Shadow(color: Color(0x40000000), blurRadius: 1),
+              ],
+            );
+
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: line.time < 0
                   ? null
-                  : () => player.seek(
+                  : () => widget.player.seek(
                         Duration(milliseconds: (line.time * 1000).round()),
                       ),
               child: Padding(
+                key: widget.keyFor(i),
                 padding: const EdgeInsets.symmetric(vertical: 5),
-                child: Text(
-                  line.text.isEmpty ? '♪' : line.text,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: VynlFonts.display,
-                    color: isActive
-                        ? VynlColors.text
-                        : (active >= 0 && i < active)
-                            ? VynlColors.faint
-                            : VynlColors.dim,
-                    fontSize: isActive ? 16 : 12.5,
-                    height: 1.32,
-                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                    letterSpacing: isActive ? -0.4 : -0.15,
-                    shadows: const [
-                      Shadow(color: Color(0x8A000000), blurRadius: 6),
-                      Shadow(color: Color(0x40000000), blurRadius: 1),
-                    ],
+                child: AnimatedScale(
+                  duration: VynlMotion.fast,
+                  curve: VynlMotion.emphasized,
+                  scale: isActive ? 1.0 : 0.96,
+                  child: _LineBody(
+                    player: widget.player,
+                    line: line,
+                    style: base,
+                    instrumental: instrumental,
+                    active: isActive,
                   ),
                 ),
               ),
@@ -387,6 +464,160 @@ class _SyncedLines extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _LineBody extends StatelessWidget {
+  const _LineBody({
+    required this.player,
+    required this.line,
+    required this.style,
+    required this.instrumental,
+    required this.active,
+  });
+
+  final PlayerController player;
+  final LyricLine line;
+  final TextStyle style;
+  final bool instrumental;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    if (instrumental) {
+      return _InstrumentalDots(active: active);
+    }
+
+    final words = line.words;
+    if (active && words != null && words.isNotEmpty) {
+      return _KaraokeWords(player: player, words: words, style: style);
+    }
+
+    return Text(line.text, textAlign: TextAlign.center, style: style);
+  }
+}
+
+class _KaraokeWords extends StatelessWidget {
+  const _KaraokeWords({
+    required this.player,
+    required this.words,
+    required this.style,
+  });
+
+  final PlayerController player;
+  final List<LyricWord> words;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: player.positionStream
+          .map((p) => activeWordIndex(words, p))
+          .distinct(),
+      builder: (context, snap) {
+        final sung = snap.data ?? -1;
+        return Text.rich(
+          TextSpan(
+            children: [
+              for (var i = 0; i < words.length; i++)
+                TextSpan(
+                  text: words[i].text,
+                  style: TextStyle(
+                    color: i <= sung ? VynlColors.accent : style.color,
+                    fontVariations: [
+                      FontVariation.weight(i <= sung ? 700 : 520),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+          style: style,
+        );
+      },
+    );
+  }
+}
+
+class _InstrumentalDots extends StatefulWidget {
+  const _InstrumentalDots({required this.active});
+
+  final bool active;
+
+  @override
+  State<_InstrumentalDots> createState() => _InstrumentalDotsState();
+}
+
+class _InstrumentalDotsState extends State<_InstrumentalDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _c.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InstrumentalDots old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !_c.isAnimating) {
+      _c.repeat();
+    } else if (!widget.active && _c.isAnimating) {
+      _c.stop();
+      _c.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) return _row(baseAlpha: 0.3);
+
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        double wave(int i) {
+          final phase = (_c.value + i * 0.18) % 1.0;
+          return (phase - 0.5).abs() * 2;
+        }
+
+        return _row(baseAlpha: 1.0, wave: wave);
+      },
+    );
+  }
+
+  Widget _row({required double baseAlpha, double Function(int)? wave}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(3, (i) {
+        final w = wave?.call(i);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Transform.translate(
+            offset: Offset(0, w == null ? 0.0 : -4 * (1 - w)),
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: VynlColors.text.withValues(
+                  alpha: w == null ? baseAlpha : baseAlpha * (0.35 + 0.65 * (1 - w)),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 }
@@ -537,40 +768,110 @@ void _showQueueSheet(BuildContext context, PlayerController player) {
         return SafeArea(
           child: SizedBox(
             height: 420,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(22, 20, 22, 6),
-                  child: Text(
-                    'UP NEXT',
-                    style: TextStyle(
-                      color: VynlColors.faint,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.3,
+            child: ListenableBuilder(
+              listenable: player,
+              builder: (context, _) {
+                final queue = player.queue;
+                final current = player.current;
+                final index = player.index;
+                final upcoming = queue.asMap().entries
+                    .where((e) => e.key > index || current == null)
+                    .toList(growable: false);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 10),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'QUEUE',
+                              style: TextStyle(
+                                color: VynlColors.faint,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.3,
+                              ),
+                            ),
+                          ),
+                          if (queue.isNotEmpty)
+                            Text(
+                              '${index + 1} / ${queue.length}',
+                              style: const TextStyle(
+                                color: VynlColors.dim,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    itemCount: player.queue.length,
-                    itemBuilder: (context, i) {
-                      final t = player.queue[i];
-                      return TrackTile(
-                        track: t,
-                        active: i == player.index,
-                        showStatus: false,
-                        onTap: () {
-                          player.playAt(i);
-                          Navigator.of(ctx).pop();
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
+                    if (current != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: VynlColors.accentSoft,
+                            borderRadius:
+                                BorderRadius.circular(VynlRadius.tile),
+                          ),
+                          child: TrackTile(
+                            track: current,
+                            active: true,
+                            subtitle: current.artist,
+                            showStatus: false,
+                            durationLabel:
+                                formatDurationSeconds(current.duration),
+                          ),
+                        ),
+                      ),
+                    if (upcoming.isNotEmpty)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(22, 0, 22, 2),
+                        child: Text(
+                          'NEXT UP',
+                          style: TextStyle(
+                            color: VynlColors.faint,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.3,
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: upcoming.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Nothing queued',
+                                style: TextStyle(
+                                  color: VynlColors.faint,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.only(bottom: 20),
+                              itemCount: upcoming.length,
+                              itemBuilder: (context, n) {
+                                final entry = upcoming[n];
+                                return TrackTile(
+                                  track: entry.value,
+                                  subtitle: entry.value.artist,
+                                  showStatus: false,
+                                  onTap: () {
+                                    player.playAt(entry.key);
+                                    Navigator.of(ctx).pop();
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );
@@ -855,18 +1156,18 @@ class _PlayButton extends StatelessWidget {
       color: color,
       size: 58,
       child: buffering
-          ? const SizedBox(
+          ? SizedBox(
               width: 26,
               height: 26,
               child: CircularProgressIndicator(
                 strokeWidth: 2.4,
-                color: Color(0xFF17131A),
+                color: VynlColors.accentOn,
               ),
             )
           : Icon(
               playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
               size: 33,
-              color: const Color(0xFF17131A),
+              color: VynlColors.accentOn,
             ),
     );
   }

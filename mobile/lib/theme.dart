@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-const kDefaultAccent = Color(0xFFB9A5E8);
+const kDefaultAccent = Color(0xFFA894E8);
 
 const kAccentPresets = <Color>[
-  Color(0xFFB9A5E8),
+  Color(0xFFA894E8),
   Color(0xFF7AA2F7),
   Color(0xFF8FD694),
   Color(0xFFE8C86A),
@@ -29,22 +29,23 @@ const kVynlOverlayStyle = SystemUiOverlayStyle(
 );
 
 class VynlColors {
-  static const bg = Color(0xFF131110);
-  static const bgTop = Color(0xFF1D1916);
-  static const surface = Color(0xFF1C1917);
-  static const surfaceRaised = Color(0xFF272220);
-  static const line = Color(0xFF302A26);
-  static const text = Color(0xFFF4EFE8);
-  static const dim = Color(0xFFA9A096);
-  static const faint = Color(0xFF736B63);
-  static const warm = Color(0xFFE7A97E);
-  static const danger = Color(0xFFE8836B);
-  static const warning = Color(0xFFDCB060);
-  static const success = Color(0xFF86C79A);
+  static const bg = Color(0xFF0E0E10);
+  static const bgTop = Color(0xFF151519);
+  static const surface = Color(0xFF131317);
+  static const surfaceRaised = Color(0xFF151519);
+  static const line = Color(0x17F0F0EC);
+  static const lineStrong = Color(0x33F0F0EC);
+  static const text = Color(0xFFF0F0EC);
+  static const dim = Color(0xFFA3A39B);
+  static const faint = Color(0xFF7A7A74);
+  static const warm = Color(0xFFD9A15C);
+  static const danger = Color(0xFFFF6B61);
+  static const warning = Color(0xFFD9A15C);
+  static const success = Color(0xFF8FD694);
 
   static Color accent = kDefaultAccent;
   static Color accentOn = _accentTextDark;
-  static Color accentSoft = const Color(0x1FB9A5E8);
+  static Color accentSoft = const Color(0x1CB9A7FF);
 
   static void setAccent(Color value) {
     accent = value;
@@ -67,6 +68,8 @@ class VynlFonts {
   static const mono = 'Geist Mono';
 
   static const display = 'Geist';
+
+  static const lyrics = 'Sora';
 }
 
 class VynlMotion {
@@ -78,12 +81,7 @@ class VynlMotion {
   static Curve get standard => Curves.easeOutQuart;
 }
 
-const kVynlBackground = RadialGradient(
-  center: Alignment(0, -0.95),
-  radius: 1.5,
-  colors: [Color(0xFF221E23), VynlColors.bg, VynlColors.bg],
-  stops: [0, 0.5, 1],
-);
+const kVynlBackground = BoxDecoration(color: VynlColors.bg);
 
 ThemeData buildVynlTheme({Color? seed}) {
   final accent = seed ?? VynlColors.accent;
@@ -95,7 +93,7 @@ ThemeData buildVynlTheme({Color? seed}) {
     primary: accent,
     onPrimary: accentOn,
     secondary: VynlColors.warm,
-    onSecondary: const Color(0xFF1A1410),
+    onSecondary: const Color(0xFF161128),
     surface: VynlColors.bg,
     onSurface: VynlColors.text,
     outline: VynlColors.line,

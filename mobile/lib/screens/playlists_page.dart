@@ -193,7 +193,7 @@ class PlaylistDetailPage extends StatelessWidget {
     final art = tracks.take(4).toList();
 
     return Container(
-      decoration: const BoxDecoration(gradient: kVynlBackground),
+      decoration: kVynlBackground,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(title: Text(playlist.name)),

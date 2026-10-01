@@ -36,6 +36,7 @@ class _LibraryPageState extends State<LibraryPage> {
           t.album.toLowerCase().contains(q);
     }).toList();
     final downloaded = app.downloadedTracks;
+    final playable = tracks.where((t) => t.isDownloaded).toList();
 
     return Column(
       children: [
@@ -67,7 +68,8 @@ class _LibraryPageState extends State<LibraryPage> {
               ? TextButton.icon(
                   onPressed: () {
                     final pool = downloaded.isNotEmpty ? downloaded : tracks;
-                    player.playTracks(pool);
+                    if (pool.isEmpty) return;
+                    player.playTracks([...pool]..shuffle());
                   },
                   icon: const Icon(Icons.shuffle_rounded, size: 16),
                   label: const Text(
@@ -113,14 +115,22 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           ),
         Expanded(
-          child: tracks.isEmpty
+          child: RefreshIndicator(
+            onRefresh: () async {
+              final state = context.read<AppState>();
+              if (state.isPaired && !state.syncing) await state.runSync();
+            },
+            color: VynlColors.accent,
+            backgroundColor: VynlColors.surface,
+            displacement: 24,
+            child: tracks.isEmpty
               ? _EmptyState(
                   icon: q.isEmpty
                       ? Icons.music_off_rounded
                       : Icons.search_off_rounded,
                   title: q.isEmpty ? 'Nothing synced yet' : 'No matches',
                   subtitle: q.isEmpty
-                      ? 'Pair with your desktop under Settings to pull your library across.'
+                      ? 'Pull down to sync, or pair with your desktop under Settings.'
                       : 'Try a different title, artist or album.',
                 )
               : ListView.builder(
@@ -128,8 +138,6 @@ class _LibraryPageState extends State<LibraryPage> {
                   itemCount: tracks.length,
                   itemBuilder: (context, i) {
                     final track = tracks[i];
-                    final playable =
-                        tracks.where((t) => t.isDownloaded).toList();
                     return TrackTile(
                       track: track,
                       active: current?.id == track.id,
@@ -147,6 +155,7 @@ class _LibraryPageState extends State<LibraryPage> {
                     );
                   },
                 ),
+          ),
         ),
       ],
     );
@@ -166,12 +175,17 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 44),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
             Container(
               width: 84,
               height: 84,
@@ -203,6 +217,9 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
           ],
+              ),
+            ),
+          ),
         ),
       ),
     );

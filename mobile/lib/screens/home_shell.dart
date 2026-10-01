@@ -16,7 +16,13 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  static const _titles = ['Library', 'Playlists', 'Settings'];
+  static const _titles = ['Library', 'Playlists'];
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const _SettingsShell()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,36 +47,20 @@ class _HomeShellState extends State<HomeShell> {
     const pages = [
       LibraryPage(),
       PlaylistsPage(),
-      SettingsPage(),
     ];
 
     return Container(
-      decoration: const BoxDecoration(gradient: kVynlBackground),
+      decoration: kVynlBackground,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: Text(_titles[app.tabIndex]),
+          title: Text(_titles[app.tabIndex.clamp(0, _titles.length - 1)]),
           actions: [
-            if (app.syncing)
-              Padding(
-                padding: const EdgeInsets.only(right: 18),
-                child: Center(
-                  child: SizedBox(
-                    width: 17,
-                    height: 17,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: VynlColors.accent,
-                    ),
-                  ),
-                ),
-              )
-            else if (app.isPaired)
-              IconButton(
-                tooltip: 'Sync library',
-                onPressed: () => app.runSync(),
-                icon: const Icon(Icons.sync_rounded, size: 22),
-              ),
+            IconButton(
+              tooltip: 'Settings',
+              onPressed: _openSettings,
+              icon: const Icon(Icons.tune_rounded, size: 22),
+            ),
           ],
         ),
         body: IndexedStack(index: app.tabIndex, children: pages),
@@ -79,28 +69,39 @@ class _HomeShellState extends State<HomeShell> {
           children: [
             const MiniPlayer(),
             NavigationBar(
-              selectedIndex: app.tabIndex,
+              selectedIndex: app.tabIndex.clamp(0, _titles.length - 1),
               onDestinationSelected: app.setTab,
               destinations: const [
                 NavigationDestination(
-                  icon: Icon(Icons.music_note_outlined),
-                  selectedIcon: Icon(Icons.music_note_rounded),
+                  icon: Icon(Icons.library_music_outlined),
+                  selectedIcon: Icon(Icons.library_music_rounded),
                   label: 'Library',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.playlist_play_outlined),
-                  selectedIcon: Icon(Icons.playlist_play_rounded),
+                  icon: Icon(Icons.queue_music_outlined),
+                  selectedIcon: Icon(Icons.queue_music_rounded),
                   label: 'Playlists',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.tune_outlined),
-                  selectedIcon: Icon(Icons.tune_rounded),
-                  label: 'Settings',
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SettingsShell extends StatelessWidget {
+  const _SettingsShell();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: kVynlBackground,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('Settings')),
+        body: const SafeArea(top: false, child: SettingsPage()),
       ),
     );
   }

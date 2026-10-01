@@ -18,7 +18,6 @@ class AppState extends ChangeNotifier {
 
   static const tabLibrary = 0;
   static const tabPlaylists = 1;
-  static const tabSettings = 2;
 
   final AuthStore authStore;
   final LibraryDb db;

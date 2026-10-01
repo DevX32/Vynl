@@ -174,6 +174,7 @@ class AppUpdate extends ChangeNotifier {
   Future<void> check({bool force = false}) async {
     if (_busy) return;
     _busy = true;
+    _error = null;
     if (!force && _dismissedVersion.isNotEmpty) {
       _current = await _installedVersion();
       _busy = false;

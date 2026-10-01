@@ -59,7 +59,7 @@ class _PairPageState extends State<PairPage> {
     if (kIsWeb || Platform.isWindows) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('QR scanning needs a phone camera — use Android.'),
+          content: Text('QR scanning needs a phone camera â€” use Android.'),
         ),
       );
       return;
@@ -90,7 +90,7 @@ class _PairPageState extends State<PairPage> {
       app.setTab(AppState.tabLibrary);
       navigator.maybePop();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Paired — syncing library…')),
+        const SnackBar(content: Text('Paired â€” syncing libraryâ€¦')),
       );
     } catch (e) {
       if (mounted) {
@@ -106,7 +106,7 @@ class _PairPageState extends State<PairPage> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: kVynlBackground),
+      decoration: kVynlBackground,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -130,12 +130,12 @@ class _PairPageState extends State<PairPage> {
                       decoration: BoxDecoration(
                         borderRadius:
                             BorderRadius.circular(VynlRadius.control),
-                        gradient: const LinearGradient(
+                        gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Color(0x55B9A5E8),
-                            Color(0x1AB9A5E8),
+                            VynlColors.accent.withValues(alpha: 0.33),
+                            VynlColors.accent.withValues(alpha: 0.10),
                           ],
                         ),
                       ),
@@ -158,7 +158,7 @@ class _PairPageState extends State<PairPage> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'On your PC open Vynl → Settings → Mobile Sync, '
+                      'On your PC open Vynl â†’ Settings â†’ Mobile Sync, '
                       'then point your camera at the code shown there.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -176,16 +176,16 @@ class _PairPageState extends State<PairPage> {
                 child: FilledButton.icon(
                   onPressed: _busy ? null : _scan,
                   icon: _busy
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.2,
-                            color: Color(0xFF17131A),
+                            color: VynlColors.accentOn,
                           ),
                         )
                       : const Icon(Icons.qr_code_scanner_rounded),
-                  label: Text(_busy ? 'Scanning…' : 'Scan pairing code'),
+                  label: Text(_busy ? 'Scanningâ€¦' : 'Scan pairing code'),
                 ),
               ),
             ],
