@@ -175,11 +175,6 @@ export const vynl = {
   }): Promise<import("../lib/types").LrcSearchResult[]> =>
     cmd("lyrics_search", opts),
 
-  lyricsExport: (opts: {
-    content: string;
-    defaultName: string;
-  }): Promise<string | null> => cmd("lyrics_export", opts),
-
   rpcUpdate: (state: RpcPresence | null): Promise<void> =>
     cmd("rpc_update", { state }),
 

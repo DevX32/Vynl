@@ -649,6 +649,7 @@
   }
 
   .lyr-line {
+    font-family: var(--font-lyrics);
     font-size: 18px;
     line-height: 1.65;
     color: var(--faint);
@@ -702,6 +703,7 @@
   .lyr-text.karaoke > span.karaoke-active {
     color: var(--accent);
     transform: scale(1.03);
+    font-weight: 700;
   }
 
   .lyr-dots {

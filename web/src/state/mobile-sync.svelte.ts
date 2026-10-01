@@ -71,11 +71,6 @@ export async function rotateMobileSyncPin(): Promise<void> {
   }
 }
 
-export function copyMobileSyncValue(value: string): void {
-  vynl.copyText(value);
-  toasts.success(t("settings.mobileSyncCopy"));
-}
-
 export function openMobileSyncUi(): void {
   _uiOpen = true;
   void refreshMobileSync();

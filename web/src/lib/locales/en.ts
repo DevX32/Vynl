@@ -192,7 +192,6 @@ export const en = {
     mobileSyncScanOnly:
       "The QR carries the address and PIN. Scan it with the Vynl Android app to pair.",
     mobileSyncNewQr: "New QR",
-    mobileSyncCopy: "Copy",
     mobileSyncQr: "Scan with the Vynl Android app",
     mobileSyncFoot:
       "Regenerating invalidates every paired phone — they'll need to scan the new code. Downloads stay on your local network.",

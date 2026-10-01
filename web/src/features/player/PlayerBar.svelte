@@ -122,7 +122,6 @@
         {/if}
       </button>
       <VolumeSlider />
-      <span class="vol-pct mono">{Math.round(getCurrentVolume() * 100)}%</span>
     </div>
     <button
       class="icon-btn small"
@@ -404,14 +403,6 @@
     color: var(--text);
   }
 
-  .vol-pct {
-    font-size: 11px;
-    color: var(--faint);
-    width: 30px;
-    text-align: right;
-    flex-shrink: 0;
-  }
-
   @container player (max-width: 780px) {
     .player-bar {
       padding: 14px 16px;
@@ -429,10 +420,6 @@
     .vol {
       --vol-width: 48px;
       gap: 5px;
-    }
-
-    .vol-pct {
-      display: none;
     }
 
     .bar-right {
