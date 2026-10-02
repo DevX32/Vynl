@@ -4,7 +4,7 @@ import { runLyricsProviders } from "@lib/plugins/providers";
 import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
 
 type Word = { time: number; text: string };
-export type LyricLine = { time: number; text: string; words?: Word[] };
+type LyricLine = { time: number; text: string; words?: Word[] };
 
 let _loading = $state(false);
 let _result = $state<LyricsResult | null>(null);

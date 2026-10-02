@@ -13,7 +13,6 @@ export const en = {
       afternoon: "Good Afternoon",
       evening: "Good Evening",
       night: "Good Night",
-      named: "{greeting}, {name}",
     },
     shuffleAll: "Shuffle All",
     addMusic: "Add Music",
@@ -23,7 +22,6 @@ export const en = {
     emptySub: "Paste a link in Vault to start building your collection",
     openVault: "Open Vault",
     jumpBackIn: "Jump back in",
-    trackCount: "{n} track{s}",
   },
   player: {
     nothingPlaying: "Nothing playing",
@@ -102,7 +100,6 @@ export const en = {
     noResultsFor: "No results for “{q}”",
     searchHint: "Type a song, artist, or album",
     saveToPlaylist: "Save to playlist",
-    savingPlaylist: "Saving…",
     nothingDownloadedYet: "Download some tracks first",
   },
   playlistPicker: {
