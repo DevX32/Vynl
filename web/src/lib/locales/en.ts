@@ -23,7 +23,6 @@ export const en = {
     openVault: "Open Vault",
     jumpBackIn: "Jump back in",
     trackCount: "{n} track{s}",
-    artistCount: "{n} artist{s}",
   },
   player: {
     nothingPlaying: "Nothing playing",

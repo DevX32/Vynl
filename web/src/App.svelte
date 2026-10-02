@@ -23,6 +23,7 @@
     deletePlaylist,
     setPlaylistCover,
     createPlaylist,
+    reorderPlaylists,
   } from "@state/playlists.svelte";
   import ContextMenu, { type CtxEntry } from "./components/ContextMenu.svelte";
   import Dialog from "./components/Dialog.svelte";
@@ -350,6 +351,7 @@
       onOpenPlaylist={(id) => void openPlaylist(id)}
       onShowCtx={showCtx}
       onShowRailCtx={showRailCtx}
+      onReorderPlaylists={(fromId, toId) => void reorderPlaylists(fromId, toId)}
     />
 
     <main>

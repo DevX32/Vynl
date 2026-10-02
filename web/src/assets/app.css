@@ -21,6 +21,13 @@
 }
 
 @font-face {
+  font-family: 'Fraunces';
+  src: url('../assets/fonts/Fraunces-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'Geist Mono';
   src: url('../assets/fonts/GeistMono-Variable.woff2') format('woff2');
   font-weight: 100 900;
@@ -285,23 +292,6 @@ select {
   }
 }
 
-
-.drag-ghost {
-  position: fixed;
-  z-index: 1000;
-  pointer-events: none;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--text);
-  box-shadow: var(--shadow-lg);
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .row.dragging {
   opacity: 0.3;

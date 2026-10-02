@@ -129,6 +129,9 @@ export const vynl = {
   createPlaylist: (name: string): Promise<Playlist> =>
     cmd("create_playlist", { name }),
 
+  reorderPlaylists: (ids: string[]): Promise<void> =>
+    cmd("reorder_playlists", { ids }),
+
   renamePlaylist: (id: string, name: string): Promise<Playlist> =>
     cmd("rename_playlist", { id, name }),
 

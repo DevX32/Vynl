@@ -76,10 +76,6 @@
     }
   });
 
-  const artistCount = $derived(
-    new Set(library.map((track) => track.artist)).size,
-  );
-
   function shuffleAll(): void {
     if (library.length === 0) return;
     setShuffle(true);
@@ -101,23 +97,9 @@
 <section class="home-page">
   <div class="home-scroll">
     <header class="home-hdr">
-      <span class="greeting">{greeting.base}{#if greeting.name},
+      <span class="greeting display">{greeting.base}{#if greeting.name},
       <span class="greeting-name">{greeting.name}</span>{/if}</span>
       <span class="quote">{quote}</span>
-      {#if library.length > 0}
-        <span class="stat-line">
-          {t("home.trackCount", {
-            n: library.length,
-            s: library.length === 1 ? "" : "s",
-          })}
-          {#if artistCount > 0}
-            · {t("home.artistCount", {
-              n: artistCount,
-              s: artistCount === 1 ? "" : "s",
-            })}
-          {/if}
-        </span>
-      {/if}
     </header>
 
     {#if library.length > 0}
@@ -285,33 +267,28 @@
   .home-hdr {
     display: flex;
     flex-direction: column;
-    margin-bottom: 28px;
+    margin-bottom: 25px;
   }
 
   .greeting {
-    font-family: 'Sora', var(--font-display);
-    font-size: 30px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: 40px;
     line-height: 1.2;
     color: var(--text);
     margin-bottom: 6px;
   }
 
   .greeting-name {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
     color: var(--accent);
   }
 
   .quote {
-    font-size: 12px;
+    font-size: 13px;
     font-style: italic;
-    color: var(--faint);
-  }
-
-  .stat-line {
-    font-size: 11px;
-    color: var(--faint);
-    margin-top: 10px;
+    color: var(--dim);
+    border-left: 2px solid var(--line-strong);
+    padding-left: 10px;
   }
 
   .featured {

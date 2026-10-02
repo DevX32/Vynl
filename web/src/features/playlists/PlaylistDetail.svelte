@@ -35,7 +35,6 @@
   import ContextMenu, {
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
-  import DragGhostLayer from "../../components/DragGhostLayer.svelte";
   import {
     addToPlaylist,
     getCurrentPlaylist,
@@ -75,7 +74,7 @@
       : currentTracks,
   );
 
-  const { drag, start, shouldSkipClick, setupWindowListeners } = useDragList({
+  const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (_section, idx) => plHits[idx]?.path,
     onReorder: (fromPath, toPath) => void moveTrack(fromPath, toPath),
   });
@@ -146,11 +145,9 @@
     if (!!q) return;
     const track = plHits[idx];
     if (track) {
-      start(e, { idx, path: track.path, label: track.title });
+      start(e, { idx, path: track.path });
     }
   }
-
-  $effect(() => setupWindowListeners());
 
   function pickCover(): void {
     coverInput?.click();
@@ -368,8 +365,6 @@
     />
   {/if}
 </div>
-
-<DragGhostLayer ghost={drag.ghost} />
 
 <style>
   .pl-detail {

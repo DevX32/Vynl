@@ -198,7 +198,7 @@ pub fn embed_lyrics(file: &str, text: &str, ffmpeg_path: Option<&str>) -> Result
 }
 
 fn cache_key(lookup: &LyricsLookup) -> String {
-    serde_json::to_string(lookup).unwrap_or_default()
+    format!("v2:{}", serde_json::to_string(lookup).unwrap_or_default())
 }
 
 fn now_millis() -> u64 {
@@ -333,7 +333,31 @@ fn is_synced(result: &Option<LyricsResult>) -> bool {
     )
 }
 
-fn score_lyrics_match(title: &str, artist: &str, lookup: &LyricsLookup) -> i32 {
+const DURATION_EXACT_SECS: f64 = 2.0;
+const DURATION_TOLERANCE_SECS: f64 = 5.0;
+const DURATION_HARD_REJECT_SECS: f64 = 8.0;
+const SYNCED_BONUS: i32 = 100;
+
+fn item_duration(data: &serde_json::Value) -> Option<f64> {
+    data.get("duration")
+        .and_then(|v| v.as_f64())
+        .filter(|d| d.is_finite() && *d > 0.0)
+}
+
+fn duration_acceptable(data: &serde_json::Value, lookup: &LyricsLookup) -> bool {
+    if lookup.duration <= 0.0 {
+        return true;
+    }
+    match item_duration(data) {
+        Some(candidate) => (candidate - lookup.duration).abs() <= DURATION_HARD_REJECT_SECS,
+        None => true,
+    }
+}
+
+fn score_lyrics_match(data: &serde_json::Value, lookup: &LyricsLookup) -> i32 {
+    let title = data["trackName"].as_str().unwrap_or("");
+    let artist = data["artistName"].as_str().unwrap_or("");
+
     let title_lower = title.to_lowercase();
     let artist_lower = artist.to_lowercase();
     let lookup_title = lookup.title.to_lowercase();
@@ -355,7 +379,21 @@ fn score_lyrics_match(title: &str, artist: &str, lookup: &LyricsLookup) -> i32 {
         0
     };
 
-    title_match + artist_match
+    let duration_match = match (item_duration(data), lookup.duration > 0.0) {
+        (Some(candidate), true) => {
+            let diff = (candidate - lookup.duration).abs();
+            if diff <= DURATION_EXACT_SECS {
+                10
+            } else if diff <= DURATION_TOLERANCE_SECS {
+                5
+            } else {
+                -20
+            }
+        }
+        _ => 0,
+    };
+
+    title_match + artist_match + duration_match
 }
 
 async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
@@ -380,6 +418,7 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
     match client.get(&url).send().await {
         Ok(resp) if resp.status().as_u16() == 200 => {
             if let Ok(data) = resp.json::<serde_json::Value>().await
+                && duration_acceptable(&data, lookup)
                 && let Some(r) = parse_lrclib_response(Some(&data))
             {
                 return Some(r);
@@ -407,16 +446,21 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
         Ok(resp) if resp.status().as_u16() == 200 => {
             let items: Vec<serde_json::Value> = resp.json().await.unwrap_or_default();
             let mut best: Option<LyricsResult> = None;
-            let mut best_score: i32 = -1;
+            let mut best_score: i32 = i32::MIN;
             for item in &items {
-                let title = item["trackName"].as_str().unwrap_or("");
-                let artist = item["artistName"].as_str().unwrap_or("");
-                let score = score_lyrics_match(title, artist, lookup);
-                if score > best_score
-                    && let Some(r) = parse_lrclib_response(Some(item))
-                {
+                if !duration_acceptable(item, lookup) {
+                    continue;
+                }
+                let Some(result) = parse_lrclib_response(Some(item)) else {
+                    continue;
+                };
+                let mut score = score_lyrics_match(item, lookup);
+                if result.kind == crate::commands::types::LyricsKind::Lrc {
+                    score += SYNCED_BONUS;
+                }
+                if score > best_score {
                     best_score = score;
-                    best = Some(r);
+                    best = Some(result);
                 }
             }
             best

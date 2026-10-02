@@ -1,5 +1,6 @@
 import type { LibraryTrack, Playlist, PlaylistMeta } from "@lib/types";
 import { getLibrary } from "./library.svelte";
+import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
 
 let _meta = $state<PlaylistMeta[]>([]);
@@ -70,6 +71,23 @@ export async function createPlaylist(name: string): Promise<Playlist> {
   _current = pl;
   await refreshPlaylists();
   return pl;
+}
+
+export async function reorderPlaylists(fromId: string, toId: string): Promise<void> {
+  const from = _meta.findIndex((p) => p.id === fromId);
+  const to = _meta.findIndex((p) => p.id === toId);
+  if (from < 0 || to < 0 || from === to) return;
+
+  const next = moveItem(_meta, from, to);
+  _meta = next;
+  try {
+    await vynl.reorderPlaylists(next.map((p) => p.id));
+  } catch (e) {
+    console.warn("reorderPlaylists failed:", e);
+    try {
+      _meta = await vynl.listPlaylists();
+    } catch {}
+  }
 }
 
 function syncAfterMutation(pl: Playlist): void {

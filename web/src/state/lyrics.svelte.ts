@@ -15,7 +15,7 @@ const _cache = new Map<string, { result: LyricsResult; lines: LyricLine[] }>();
 let _activeId: string | null = null;
 let _loadVersion = 0;
 
-function parseEnhancedWords(body: string): Word[] | null {
+function parseEnhancedWords(body: string, offset = 0): Word[] | null {
   const wordTagRe = /<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>/g;
   const wordTimestamps: number[] = [];
   let wm: RegExpExecArray | null;
@@ -24,7 +24,7 @@ function parseEnhancedWords(body: string): Word[] | null {
     const min = Number(wm[1]);
     const sec = Number(wm[2]);
     const frac = wm[3] ? Number(wm[3].padEnd(3, "0")) / 1000 : 0;
-    wordTimestamps.push(min * 60 + sec + frac);
+    wordTimestamps.push(min * 60 + sec + frac + offset);
   }
   if (wordTimestamps.length === 0) return null;
   const textSegments = body.split(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/);
@@ -39,9 +39,23 @@ function parseEnhancedWords(body: string): Word[] | null {
 const METADATA_TAG_RE =
   /^\[(ar|ti|al|au|by|offset|re|ve|length|created|tool|version|application):/i;
 
+const OFFSET_TAG_RE = /^\[offset:\s*([+-]?\d+)\s*\]/i;
+
+function readOffsetSecs(text: string): number {
+  for (const raw of text.split(/\r?\n/)) {
+    const m = OFFSET_TAG_RE.exec(raw.trim());
+    if (m) {
+      const ms = Number(m[1]);
+      if (Number.isFinite(ms)) return ms / 1000;
+    }
+  }
+  return 0;
+}
+
 function parseLrc(text: string): LyricLine[] {
   const out: LyricLine[] = [];
   const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+  const offset = readOffsetSecs(text);
   for (const raw of text.split(/\r?\n/)) {
     if (METADATA_TAG_RE.test(raw.trim())) continue;
 
@@ -52,7 +66,7 @@ function parseLrc(text: string): LyricLine[] {
       const min = Number(m[1]);
       const sec = Number(m[2]);
       const frac = m[3] ? Number(m[3].padEnd(3, "0")) / 1000 : 0;
-      stamps.push(min * 60 + sec + frac);
+      stamps.push(min * 60 + sec + frac + offset);
     }
     const body = raw.replace(re, "").trim();
 
@@ -62,7 +76,7 @@ function parseLrc(text: string): LyricLine[] {
       continue;
     }
 
-    const words = parseEnhancedWords(body);
+    const words = parseEnhancedWords(body, offset);
     const cleanBody = body
       .replace(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/g, "")
       .trim();

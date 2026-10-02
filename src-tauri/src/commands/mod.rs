@@ -361,6 +361,12 @@ pub async fn create_playlist(name: String, app: AppHandle) -> Result<Playlist, S
 }
 
 #[tauri::command]
+pub async fn reorder_playlists(ids: Vec<String>, app: AppHandle) -> Result<(), String> {
+    let output = output_dir_from_settings(&app)?;
+    crate::services::playlists::reorder_playlists(&output, &ids)
+}
+
+#[tauri::command]
 pub async fn rename_playlist(id: String, name: String, app: AppHandle) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
     crate::services::playlists::rename_playlist(&output, &id, &name)

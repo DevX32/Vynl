@@ -2,17 +2,10 @@ import { nearestIndex } from "@lib/reorder";
 
 const DEFAULT_THRESHOLD = 4;
 
-export interface DragGhost {
-  x: number;
-  y: number;
-  label: string;
-}
-
 interface DragStartOptions {
   section?: string | null;
   idx: number;
   path: string;
-  label: string;
 }
 
 interface DragListOptions {
@@ -35,17 +28,14 @@ export function useDragList(options: DragListOptions) {
     grabIdx: null as number | null,
     overIdx: null as number | null,
     dragging: false,
-    ghost: null as DragGhost | null,
     rowsEl: undefined as HTMLElement | undefined,
   });
 
   let grabPath: string | null = null;
-  let ghostX = 0;
-  let ghostLabel = "";
-  let grabOffsetY = 0;
   let startY = 0;
   let pressed = false;
   let suppressClick = false;
+  let teardown: (() => void) | null = null;
 
   function rowCenters(): number[] {
     if (!drag.rowsEl) return [];
@@ -60,19 +50,15 @@ export function useDragList(options: DragListOptions) {
 
   function start(e: PointerEvent, opts: DragStartOptions): void {
     if (e.button !== 0) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     drag.section = opts.section ?? null;
     drag.grabIdx = opts.idx;
     drag.overIdx = opts.idx;
     drag.dragging = false;
-    drag.ghost = null;
     grabPath = opts.path;
-    ghostX = rect.left;
-    ghostLabel = opts.label;
-    grabOffsetY = e.clientY - rect.top;
     startY = e.clientY;
     pressed = true;
     suppressClick = false;
+    attach();
   }
 
   function onMove(e: PointerEvent): void {
@@ -81,7 +67,6 @@ export function useDragList(options: DragListOptions) {
       if (Math.abs(e.clientY - startY) < threshold) return;
       drag.dragging = true;
     }
-    drag.ghost = { x: ghostX, y: e.clientY - grabOffsetY, label: ghostLabel };
     drag.overIdx = nearestIndex(rowCenters(), e.clientY);
   }
 
@@ -106,8 +91,8 @@ export function useDragList(options: DragListOptions) {
     drag.grabIdx = null;
     drag.overIdx = null;
     drag.dragging = false;
-    drag.ghost = null;
     grabPath = null;
+    detach();
   }
 
   function cancel(): void {
@@ -121,25 +106,31 @@ export function useDragList(options: DragListOptions) {
     return true;
   }
 
-  function setupWindowListeners(): (() => void) | undefined {
-    if (drag.grabIdx === null) return undefined;
+  function detach(): void {
+    if (!teardown) return;
+    teardown();
+  }
+
+  function attach(): void {
+    if (teardown) return;
     const onMoveEvent = (e: PointerEvent) => onMove(e);
     const onUp = () => finish();
-    const onCancel = () => cancel();
+    const onCancelEvent = () => cancel();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
     window.addEventListener("pointermove", onMoveEvent);
     window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("pointercancel", onCancelEvent);
     window.addEventListener("keydown", onKey);
-    return () => {
+    teardown = () => {
       window.removeEventListener("pointermove", onMoveEvent);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("pointercancel", onCancelEvent);
       window.removeEventListener("keydown", onKey);
+      teardown = null;
     };
   }
 
-  return { drag, start, cancel, shouldSkipClick, setupWindowListeners };
+  return { drag, start, cancel, shouldSkipClick };
 }

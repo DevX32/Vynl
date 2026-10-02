@@ -49,7 +49,14 @@ static SHORT_LINK_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(
 });
 
 static LRC_TIME_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*").unwrap()
+    Regex::new(r"(?m)^\s*(?:\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*)+").unwrap()
+});
+
+static LRC_META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    Regex::new(
+        r"(?im)^\s*\[(ar|ti|al|au|by|offset|re|ve|length|created|tool|version|application):[^\]]*\]\s*",
+    )
+    .unwrap()
 });
 
 static LAST_ERROR_RE: once_cell::sync::Lazy<Regex> =
@@ -1390,7 +1397,10 @@ async fn process_lyrics_lookup(
             if lr.kind == crate::commands::types::LyricsKind::Lrc && !lr.text.trim().is_empty() =>
         {
             let lrc_text = lr.text.clone();
-            let plain = LRC_TIME_RE.replace_all(&lr.text, "").trim().to_string();
+            let plain = LRC_META_RE
+                .replace_all(&LRC_TIME_RE.replace_all(&lr.text, ""), "")
+                .trim()
+                .to_string();
             let embed = if plain.is_empty() { None } else { Some(plain) };
             (embed, Some(lrc_text))
         }
