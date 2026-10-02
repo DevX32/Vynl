@@ -143,14 +143,14 @@
 
       <div class="queue-body" bind:this={drag.rowsEl}>
         {#if userQueue.length > 0}
-          <span class="section-label mono">QUEUE</span>
+          <span class="section-label mono">{t("player.queue")}</span>
           {#each userQueue as q, i (q.path)}
             {@render qrow(q, "user", i)}
           {/each}
         {/if}
 
         {#if contextUpcoming.length > 0}
-          <span class="section-label mono">NEXT UP</span>
+          <span class="section-label mono">{t("player.nextUp")}</span>
           {#each contextUpcoming as q, i (q.path)}
             {@render qrow(q, "context", i)}
           {/each}
@@ -374,6 +374,7 @@
     font-size: 9px;
     color: var(--faint);
     letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .queue-body {

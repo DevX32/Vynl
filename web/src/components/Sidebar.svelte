@@ -67,7 +67,7 @@
   }
 </script>
 
-<nav class="sidebar" class:collapsed={!sidebarOpen} aria-label="Main navigation">
+<nav class="sidebar" class:collapsed={!sidebarOpen} aria-label={t("nav.mainNavigation")}>
   <div class="nav-group">
     <button class="nav-link" class:active={page === "home"} onclick={onHome}>
       <span class="nav-icon"><Home size={15} stroke-width={1.5} /></span>

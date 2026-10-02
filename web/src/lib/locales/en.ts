@@ -5,6 +5,7 @@ export const en = {
     nowPlaying: "Now Playing",
     vault: "Vault",
     settings: "Settings",
+    mainNavigation: "Main navigation",
   },
   home: {
     greeting: {
@@ -47,6 +48,7 @@ export const en = {
     closeFullscreen: "Close fullscreen",
     lyrics: "Lyrics",
     queue: "Queue",
+    nextUp: "Next up",
     expandQueue: "Expand queue",
     collapseQueue: "Collapse queue",
     pickFromLibrary: "Pick a track from the library",
@@ -357,6 +359,35 @@ export const en = {
   },
   shortcuts: {
     title: "Keyboard Shortcuts",
+    categories: {
+      playback: "Playback",
+      volume: "Volume",
+      interface: "Interface",
+    },
+    actions: {
+      playPause: "Play / Pause",
+      nextTrack: "Next track",
+      previousTrack: "Previous track",
+      muteUnmute: "Mute / Unmute",
+      volumeUp: "Volume up",
+      volumeDown: "Volume down",
+      toggleShuffle: "Toggle shuffle",
+      toggleLoop: "Toggle loop",
+      toggleLyrics: "Toggle lyrics",
+      fullscreenPlayer: "Fullscreen player",
+      equalizer: "Equalizer",
+      showShortcuts: "Show shortcuts",
+    },
+  },
+  eq: {
+    presets: {
+      flat: "Flat",
+      bass: "Bass Boost",
+      treble: "Treble Boost",
+      vocal: "Vocal",
+      rock: "Rock",
+      podcast: "Podcast",
+    },
   },
   artist: {
     genres: "Genres",
@@ -370,6 +401,7 @@ export const en = {
   },
   common: {
     close: "Close",
+    select: "Select…",
   },
   plugins: {
     title: "Plugins",

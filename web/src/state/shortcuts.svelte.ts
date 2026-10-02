@@ -15,23 +15,23 @@ import { closeEq, toggleEq, getEqOpen } from "@state/equalizer.svelte";
 
 interface Shortcut {
   key: string;
-  label: string;
-  category: string;
+  labelKey: string;
+  categoryKey: string;
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  { key: "Space", label: "Play / Pause", category: "Playback" },
-  { key: "N", label: "Next track", category: "Playback" },
-  { key: "P", label: "Previous track", category: "Playback" },
-  { key: "M", label: "Mute / Unmute", category: "Volume" },
-  { key: "ArrowUp", label: "Volume up", category: "Volume" },
-  { key: "ArrowDown", label: "Volume down", category: "Volume" },
-  { key: "S", label: "Toggle shuffle", category: "Playback" },
-  { key: "R", label: "Toggle loop", category: "Playback" },
-  { key: "L", label: "Toggle lyrics", category: "Playback" },
-  { key: "F", label: "Fullscreen player", category: "Interface" },
-  { key: "E", label: "Equalizer", category: "Interface" },
-  { key: "?", label: "Show shortcuts", category: "Interface" },
+  { key: "Space", labelKey: "shortcuts.actions.playPause", categoryKey: "shortcuts.categories.playback" },
+  { key: "N", labelKey: "shortcuts.actions.nextTrack", categoryKey: "shortcuts.categories.playback" },
+  { key: "P", labelKey: "shortcuts.actions.previousTrack", categoryKey: "shortcuts.categories.playback" },
+  { key: "M", labelKey: "shortcuts.actions.muteUnmute", categoryKey: "shortcuts.categories.volume" },
+  { key: "ArrowUp", labelKey: "shortcuts.actions.volumeUp", categoryKey: "shortcuts.categories.volume" },
+  { key: "ArrowDown", labelKey: "shortcuts.actions.volumeDown", categoryKey: "shortcuts.categories.volume" },
+  { key: "S", labelKey: "shortcuts.actions.toggleShuffle", categoryKey: "shortcuts.categories.playback" },
+  { key: "R", labelKey: "shortcuts.actions.toggleLoop", categoryKey: "shortcuts.categories.playback" },
+  { key: "L", labelKey: "shortcuts.actions.toggleLyrics", categoryKey: "shortcuts.categories.playback" },
+  { key: "F", labelKey: "shortcuts.actions.fullscreenPlayer", categoryKey: "shortcuts.categories.interface" },
+  { key: "E", labelKey: "shortcuts.actions.equalizer", categoryKey: "shortcuts.categories.interface" },
+  { key: "?", labelKey: "shortcuts.actions.showShortcuts", categoryKey: "shortcuts.categories.interface" },
 ];
 
 let _showOverlay = $state(false);

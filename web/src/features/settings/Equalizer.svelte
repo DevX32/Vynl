@@ -153,7 +153,7 @@
           disabled={!settings.eqEnabled}
           onclick={() => applyPreset(preset)}
         >
-          {preset.label}
+          {t(preset.labelKey)}
         </button>
       {/each}
     </div>
