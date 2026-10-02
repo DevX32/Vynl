@@ -77,7 +77,9 @@ fn read_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
     if pl.name.trim().is_empty() {
         pl.name = "Untitled".into();
     }
-    pl.paths.retain(|p| !p.is_empty());
+    let mut seen_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+    pl.paths
+        .retain(|p| !p.is_empty() && seen_paths.insert(p.clone()));
     let now = util::now_ms();
     if pl.created_at == 0 {
         pl.created_at = now;
@@ -278,9 +280,9 @@ pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<
     }
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
-    let existing: std::collections::HashSet<String> = pl.paths.iter().cloned().collect();
+    let mut existing: std::collections::HashSet<String> = pl.paths.iter().cloned().collect();
     for p in paths {
-        if !existing.contains(p) {
+        if existing.insert(p.clone()) {
             pl.paths.push(p.clone());
         }
     }

@@ -119,6 +119,8 @@ pub async fn downloaded_paths(
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
     let settings = load_settings(&app)?;
+    let ext = crate::services::downloader::audio_format_ext(&settings.format);
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     Ok(collection
         .tracks
         .iter()
@@ -126,16 +128,13 @@ pub async fn downloaded_paths(
             let base = crate::services::downloader::sanitize(
                 &crate::services::downloader::render_pattern(&settings.filename_pattern, t),
             );
-            let path = std::path::PathBuf::from(&settings.output_dir).join(format!(
-                "{}.{}",
-                base,
-                crate::services::downloader::audio_format_ext(&settings.format)
-            ));
-            if path.is_file() {
-                Some(path.to_string_lossy().to_string())
-            } else {
-                None
+            let path =
+                std::path::PathBuf::from(&settings.output_dir).join(format!("{}.{}", base, ext));
+            if !path.is_file() {
+                return None;
             }
+            let path = path.to_string_lossy().to_string();
+            seen.insert(path.clone()).then_some(path)
         })
         .collect())
 }
