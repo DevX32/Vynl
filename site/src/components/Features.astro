@@ -39,27 +39,27 @@ const groups = [
 
 <section class="section" id="features">
   <div class="container">
-    <div class="section-head section-head--center reveal">
-      <span class="eyebrow">Features</span>
-      <h2 class="section-title">Everything you need,<br />nothing you don’t</h2>
+    <div class="reveal">
+      <span class="section-index">01 — Capabilities</span>
+      <h2 class="section-title">Everything you need, <em>nothing you don’t.</em></h2>
       <p class="section-sub">
-        A focused feature set. Only the things a music player does well, and no dashboard to configure.
+        A focused feature set — only the things a music player does well, with no dashboard to configure.
       </p>
     </div>
 
     <div class="groups">
       {groups.map((group, index) => (
         <div class="group reveal" style={`transition-delay:${index * 70}ms`}>
-          <div class="group-label">{group.label}</div>
-
-          <div class="grid">
+          <h3 class="group-label">{group.label}</h3>
+          <ul class="rows">
             {group.items.map((item) => (
-              <article class="card item">
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </article>
+              <li>
+                <span class="row-title">{item.title}</span>
+                <span class="leader" aria-hidden="true"></span>
+                <span class="row-text">{item.text}</span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       ))}
     </div>
@@ -69,47 +69,72 @@ const groups = [
 <style>
   .groups {
     display: grid;
-    gap: 44px;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px 64px;
+    margin-top: 56px;
   }
 
   .group-label {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--faint);
-    padding-bottom: 16px;
-    margin-bottom: 20px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 22px;
+    font-weight: 480;
+    margin-bottom: 6px;
+  }
+
+  .rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .rows li {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 12px 0;
     border-bottom: 1px solid var(--line);
   }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 16px;
+  .row-title {
+    font-weight: 550;
+    font-size: 15px;
+    white-space: nowrap;
   }
 
-  .item {
-    padding: 24px 22px;
+  .leader {
+    flex: 1;
+    border-bottom: 1px dotted var(--line-strong);
+    transform: translateY(-4px);
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .item:hover {
-      transform: translateY(-3px);
-      background: var(--bg-raise);
+  .row-text {
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    text-align: right;
+    max-width: 46%;
+  }
+
+  @media (max-width: 900px) {
+    .groups {
+      grid-template-columns: 1fr;
+      gap: 40px;
     }
   }
 
-  .item h3 {
-    font-size: 16px;
-    font-weight: 600;
-  }
+  @media (max-width: 640px) {
+    .rows li {
+      flex-wrap: wrap;
+      gap: 4px 14px;
+    }
 
-  .item p {
-    margin-top: 8px;
-    color: var(--dim);
-    font-size: 14.5px;
-    line-height: 1.55;
+    .leader {
+      display: none;
+    }
+
+    .row-text {
+      max-width: none;
+      text-align: left;
+    }
   }
 </style>

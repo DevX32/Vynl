@@ -38,12 +38,12 @@ export default {
 
 <section class="section" id="plugins">
   <div class="container">
-    <div class="section-head section-head--center reveal">
-      <span class="eyebrow">Plugins</span>
-      <h2 class="section-title">Pluggable by design</h2>
+    <div class="reveal">
+      <span class="section-index">03 — Plugins</span>
+      <h2 class="section-title">Pluggable <em>by design.</em></h2>
       <p class="section-sub">
-        Vynl has a real plugin runtime, not an extension bolted on afterwards.
-        Write JavaScript, get a whole new capability.
+        Vynl ships a real plugin runtime, not an extension bolted on afterwards. Write JavaScript,
+        get a whole new capability.
       </p>
     </div>
 
@@ -52,7 +52,7 @@ export default {
         <ul class="caps">
           {capabilities.map((cap) => (
             <li>
-              <span class="tick"><Icon name="check" size={13} /></span>
+              <span class="tick"><Icon name="check" size={12} /></span>
               {cap}
             </li>
           ))}
@@ -60,25 +60,24 @@ export default {
 
         <div class="btn-row">
           <a class="btn btn--primary" href={STORE_URL} target="_blank" rel="noopener">
-            <Icon name="box" size={17} />
+            <Icon name="box" size={16} />
             Browse the plugin store
-            <Icon name="external-link" size={15} />
+            <Icon name="external-link" size={14} />
           </a>
         </div>
       </div>
 
       <div class="split-code reveal" style="transition-delay:90ms">
         <div class="code-bar">
-          <span></span><span></span><span></span>
           <em>plugin.js</em>
         </div>
         <pre><code>{sample}</code></pre>
       </div>
     </div>
 
-    <article class="spotlight card reveal">
+    <article class="spotlight reveal">
       <div class="spotlight-body">
-        <span class="spotlight-tag">Store plugin</span>
+        <span class="kicker">Store plugin</span>
         <h3>Listen Along</h3>
         <p>
           Host a listening session, share a short code, and let friends follow your playback in
@@ -92,7 +91,7 @@ export default {
         target="_blank"
         rel="noopener"
       >
-        <Icon name="github" size={17} />
+        <Icon name="github" size={16} />
         View the source
       </a>
     </article>
@@ -103,8 +102,9 @@ export default {
   .split {
     display: grid;
     grid-template-columns: 1fr 1.05fr;
-    gap: 40px;
+    gap: 48px;
     align-items: center;
+    margin-top: 56px;
   }
 
   .caps {
@@ -112,28 +112,26 @@ export default {
     margin: 0 0 28px;
     padding: 0;
     display: grid;
-    gap: 13px;
+    gap: 0;
+    border-top: 1px solid var(--line);
   }
 
   .caps li {
     display: flex;
-    align-items: flex-start;
-    gap: 11px;
-    color: var(--dim);
-    font-size: 15px;
+    align-items: baseline;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 14.5px;
     line-height: 1.5;
   }
 
   .tick {
-    display: grid;
+    display: inline-grid;
     place-items: center;
-    width: 20px;
-    height: 20px;
+    color: var(--signal);
     flex-shrink: 0;
-    margin-top: 2px;
-    border-radius: 50%;
-    background: rgba(143, 214, 148, 0.14);
-    color: var(--green);
   }
 
   .split-code {
@@ -141,33 +139,24 @@ export default {
     border-radius: var(--radius);
     overflow: hidden;
     background: #0a0a0c;
-    box-shadow: var(--shadow-md);
+    color: var(--ink);
   }
 
   .code-bar {
     display: flex;
     align-items: center;
-    gap: 6px;
     height: 38px;
-    padding: 0 14px;
-    background: #16161b;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .code-bar span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: rgba(240, 240, 236, 0.16);
+    padding: 0 16px;
+    border-bottom: 1px solid rgba(245, 242, 234, 0.18);
   }
 
   .code-bar em {
-    margin-inline: auto;
-    padding-right: 28px;
     font-family: var(--font-mono);
     font-style: normal;
     font-size: 11.5px;
-    color: var(--faint);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(245, 242, 234, 0.55);
   }
 
   .split-code pre {
@@ -177,7 +166,7 @@ export default {
     font-family: var(--font-mono);
     font-size: 12.8px;
     line-height: 1.75;
-    color: #c9c6d6;
+    color: rgba(245, 242, 234, 0.85);
     tab-size: 2;
   }
 
@@ -188,33 +177,18 @@ export default {
     grid-template-columns: 1fr auto;
     align-items: center;
     gap: 24px;
-    background:
-      radial-gradient(600px 200px at 12% 0%, rgba(168, 148, 232, 0.12), transparent 70%),
-      var(--surface);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .spotlight:hover {
-      border-color: rgba(168, 148, 232, 0.32);
-    }
-  }
-
-  .spotlight-tag {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--accent);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
   }
 
   .spotlight h3 {
-    font-size: 20px;
-    margin-top: 6px;
+    font-size: 26px;
+    margin-top: 8px;
   }
 
   .spotlight p {
-    margin-top: 8px;
-    color: var(--dim);
+    margin-top: 10px;
+    color: var(--ink-soft);
     font-size: 14.5px;
     max-width: 72ch;
   }
@@ -230,7 +204,6 @@ export default {
     .spotlight {
       grid-template-columns: 1fr;
       gap: 18px;
-      text-align: left;
     }
   }
 </style>

@@ -1,44 +1,46 @@
 @font-face {
   font-family: 'Geist';
-  src: url('/fonts/Geist-Variable.woff2') format('woff2');
+  src: url('/Vynl/fonts/Geist-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Geist Mono';
-  src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
+  src: url('/Vynl/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/Vynl/fonts/Fraunces-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-display: swap;
 }
 
 :root {
-  --bg: #0e0e10;
-  --bg-raise: #151519;
-  --surface: #131317;
-  --text: #f0f0ec;
-  --dim: #a3a39b;
+  --paper: #0e0e10;
+  --paper-deep: #151519;
+  --ink: #f0f0ec;
+  --ink-soft: #a3a39b;
   --faint: #7a7a74;
   --line: rgba(240, 240, 236, 0.09);
   --line-strong: rgba(240, 240, 236, 0.2);
-  --accent: #a894e8;
-  --accent-soft: rgba(185, 167, 255, 0.11);
-  --accent-glow: rgba(185, 167, 255, 0.38);
-  --green: #8fd694;
+  --signal: #a894e8;
+  --signal-soft: rgba(185, 167, 255, 0.12);
   --accent-text: #161128;
 
-  --radius-sm: 4px;
-  --radius: 6px;
-  --radius-lg: 10px;
-
-  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.42);
-  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.6);
+  --radius-sm: 2px;
+  --radius: 3px;
+  --radius-lg: 4px;
 
   --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', monospace;
 
-  --container: 1120px;
-  --nav-height: 64px;
+  --container: 1160px;
+  --nav-height: 60px;
 }
 
 *,
@@ -49,24 +51,16 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: calc(var(--nav-height) + 24px);
+  scroll-padding-top: 24px;
   -webkit-text-size-adjust: 100%;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
 
-html::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
-
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.6;
@@ -74,14 +68,27 @@ body {
   overflow-x: hidden;
 }
 
+/* Subtle paper grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
 h1,
 h2,
 h3,
 h4 {
   margin: 0;
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  font-weight: 560;
+  font-family: var(--font-serif);
 }
 
 p {
@@ -108,15 +115,12 @@ button {
   color: inherit;
 }
 
-/* Controls respond on press, not on release, and never double-tap zoom. */
 button,
 a,
 [role='button'] {
   touch-action: manipulation;
 }
 
-/* Text that acts as a control must not be selectable on long press. Body copy
-   stays selectable, so this is scoped to the control itself. */
 button,
 [role='button'],
 .pill,
@@ -127,13 +131,12 @@ button,
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--signal);
   outline-offset: 3px;
-  border-radius: var(--radius-sm);
 }
 
 ::selection {
-  background: var(--accent);
+  background: var(--signal);
   color: var(--accent-text);
 }
 
@@ -141,53 +144,73 @@ button,
   width: 100%;
   max-width: var(--container);
   margin-inline: auto;
-  padding-inline: 24px;
+  padding-inline: 28px;
 }
 
 .section {
-  padding-block: 96px;
+  padding-block: 90px;
+  border-top: 1px solid var(--line);
   position: relative;
-}
-
-.section--tight {
-  padding-block: 64px;
 }
 
 @media (max-width: 640px) {
   .section {
-    padding-block: 64px;
+    padding-block: 60px;
   }
 }
 
-.section-head {
-  max-width: 620px;
-  margin-bottom: 48px;
-}
-
-.section-head--center {
-  margin-inline: auto;
-  text-align: center;
-}
-
-.eyebrow {
-  display: block;
+.section-index {
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.section-index::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--line);
 }
 
 .section-title {
-  font-size: clamp(28px, 4.2vw, 42px);
-  margin-top: 14px;
+  font-size: clamp(34px, 5vw, 56px);
+  margin-top: 20px;
+  font-weight: 480;
+}
+
+.section-title em {
+  font-style: italic;
+  font-weight: 420;
 }
 
 .section-sub {
   margin-top: 16px;
-  color: var(--dim);
-  font-size: 17px;
+  color: var(--ink-soft);
+  font-size: 16px;
+  max-width: 56ch;
+}
+
+.grad {
+  font-style: italic;
+  padding-right: 0.12em;
+  margin-right: -0.12em;
+  background: linear-gradient(100deg, #cdbfff 0%, #a894e8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--signal);
 }
 
 .btn {
@@ -197,56 +220,65 @@ button,
   gap: 9px;
   padding: 12px 22px;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  font-size: 15px;
+  border: 1px solid var(--line-strong);
+  font-size: 14.5px;
   font-weight: 500;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: pointer;
+  background: transparent;
+  color: var(--ink);
   transition:
-    transform 0.15s ease,
     background-color 0.15s ease,
-    border-color 0.15s ease;
-}
-
-/* Touch has no hover, so browsers fake one and leave it stuck after the tap.
-   Every hover style is gated behind a capability query instead. */
-@media (hover: hover) and (pointer: fine) {
-  .btn:hover {
-    transform: translateY(-1px);
-  }
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .btn:active {
-  transform: translateY(0);
+  transform: translateY(1px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: var(--signal-soft);
+    border-color: var(--signal);
+    color: var(--ink);
+  }
 }
 
 .btn--primary {
-  background: var(--accent);
+  background: var(--signal);
+  border-color: var(--signal);
   color: var(--accent-text);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .btn--primary:hover {
-    background: #b9a7ff;
+    background: color-mix(in srgb, var(--signal) 85%, #ffffff);
+    border-color: color-mix(in srgb, var(--signal) 85%, #ffffff);
+    color: var(--accent-text);
   }
 }
 
 .btn--ghost {
-  background: rgba(255, 255, 255, 0.03);
   border-color: var(--line-strong);
-  color: var(--text);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .btn--ghost:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(240, 240, 236, 0.34);
+    border-color: var(--signal);
+    background: var(--signal-soft);
   }
 }
 
 .btn--lg {
-  padding: 14px 28px;
-  font-size: 16px;
+  padding: 15px 30px;
+  font-size: 15px;
+}
+
+.btn--sm {
+  padding: 8px 14px;
+  font-size: 13.5px;
 }
 
 .btn-row {
@@ -256,42 +288,16 @@ button,
 }
 
 .card {
-  background: var(--surface);
+  background: rgba(240, 240, 236, 0.04);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  transition:
-    border-color 0.18s ease,
-    transform 0.18s ease,
-    background-color 0.18s ease;
+  transition: border-color 0.18s ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .card:hover {
     border-color: var(--line-strong);
   }
-}
-
-.aura {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(900px 520px at 50% -180px, rgba(168, 148, 232, 0.22), transparent 70%),
-    radial-gradient(700px 460px at 88% 8%, rgba(143, 214, 148, 0.07), transparent 70%);
-}
-
-.aura::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.35;
-  mask-image: radial-gradient(1000px 620px at 50% 0%, #000 10%, transparent 78%);
-  -webkit-mask-image: radial-gradient(1000px 620px at 50% 0%, #000 10%, transparent 78%);
 }
 
 .page {
@@ -301,15 +307,11 @@ button,
 
 .reveal {
   opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .reveal.is-visible {
   opacity: 1;
-  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

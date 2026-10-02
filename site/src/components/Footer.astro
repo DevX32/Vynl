@@ -1,106 +1,23 @@
 ---
-import Icon from './Icon.astro'
-import { base } from '../lib/base'
-
 const year = new Date().getFullYear()
-
-const links = [
-  { label: 'Download', href: '#download' },
-  { label: 'Plugin store', href: 'https://github.com/DevX32/vynl-store', external: true },
-  { label: 'Source code', href: 'https://github.com/DevX32/Vynl', external: true },
-  { label: 'Issues', href: 'https://github.com/DevX32/Vynl/issues', external: true }
-]
 ---
 
 <footer class="footer">
-  <div class="container footer-inner">
-    <a class="brand" href={base}>
-      <img src={`${base}app-icon.png`} alt="" width="20" height="20" />
-      <span>Vynl</span>
-    </a>
-
-    <nav class="footer-links" aria-label="Footer">
-      {links.map((link) => (
-        <a href={link.href} target={link.external ? '_blank' : undefined} rel={link.external ? 'noopener' : undefined}>
-          {link.label}
-          {link.external && <Icon name="external-link" size={11} class="ext" />}
-        </a>
-      ))}
-    </nav>
-
-    <p class="copyright">© {year} Vynl</p>
+  <div class="container">
+    <p class="copyright">© {year} Vynl — A Minimal, Music Player</p>
   </div>
 </footer>
 
 <style>
   .footer {
-    border-top: 1px solid var(--line);
-    padding-block: 22px 24px;
     position: relative;
     z-index: 1;
-  }
-
-  .footer-inner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px 28px;
-  }
-
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-    font-size: 15px;
-  }
-
-  .brand img {
-    border-radius: var(--radius-sm);
-  }
-
-  .footer-links {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 18px;
-  }
-
-  .footer-links a {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--dim);
-    font-size: 13.5px;
-    white-space: nowrap;
-    transition: color 0.15s ease;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .footer-links a:hover {
-      color: var(--accent);
-    }
-  }
-
-  .ext {
-    opacity: 0.5;
+    padding-block: 40px 32px;
   }
 
   .copyright {
     color: var(--faint);
-    font-size: 13px;
-    white-space: nowrap;
-  }
-
-  @media (max-width: 620px) {
-    .footer-inner {
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .footer-links {
-      justify-content: center;
-    }
+    font-size: 14.5px;
+    text-align: center;
   }
 </style>
