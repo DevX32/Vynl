@@ -13,18 +13,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-version:
+  verify:
     name: Tag matches app version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      - name: Check tag against every published version field
+      - id: check
+        name: Check tag against every published version field
         run: |
           tag="${GITHUB_REF_NAME#v}"
           conf="$(jq -r '.version' src-tauri/tauri.conf.json)"
           cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)"
           root_pkg="$(jq -r '.version' package.json)"
-          # Strip the Flutter build number (0.1.7+2001) so only the version remains.
           pubspec="$(sed -n 's/^version: *\([0-9][^+ ]*\).*/\1/p' mobile/pubspec.yaml | head -n1)"
           echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg pubspec=$pubspec"
           if [ "$tag" != "$conf" ]; then
@@ -35,8 +37,6 @@ jobs:
             echo "::error::Tag v$tag does not match Cargo.toml version ($cargo) — bump it before tagging."
             exit 1
           fi
-          # The site reads these two at build time. Left unchecked they drift,
-          # and the site then advertises a version that was never published.
           if [ "$tag" != "$root_pkg" ]; then
             echo "::error::Tag v$tag does not match root package.json version ($root_pkg) — the site shows this version."
             exit 1
@@ -45,10 +45,11 @@ jobs:
             echo "::error::Tag v$tag does not match mobile/pubspec.yaml version ($pubspec) — the APK reports this version."
             exit 1
           fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build · ${{ matrix.platform }}
-    needs: verify-version
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -78,17 +79,35 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Vynl ${{ github.ref_name }}
+          releaseName: Vynl ${{ needs.verify.outputs.version }}
           releaseBody: |
-            Vynl ${{ github.ref_name }}
+            ## Desktop
 
-            **Desktop**
-            - **Windows:** NSIS installer (`.exe`)
-            - **Linux:** `.deb`, `.rpm`, or `.AppImage`
+            - **Windows** — grab the `.exe`. It is a 64-bit NSIS installer and needs Windows 10 or newer.
+            - **Linux** — grab the `.AppImage` to run it straight from disk, the `.deb` for Debian/Ubuntu, or the `.rpm` for Fedora/openSUSE.
 
-            **Mobile (Android)**
-            - Sideloadable APK, one per ABI - install `app-arm64-v8a` on most modern phones
-            - Pairs with the desktop app via **Settings → Mobile Sync**
+            There is no macOS build. On Windows, SmartScreen may warn on first run because
+            the installers are not code-signed.
+
+            ## Android
+
+            Grab the APK that matches your phone's CPU architecture. `arm64-v8a` covers
+            essentially every phone from the last decade; older or Intel-based devices
+            want `armeabi-v7a` or `x86_64`.
+
+            Allow your browser to "install unknown apps", then open the APK. These are
+            sideloaded builds and are not distributed through a store.
+
+            ## Pairing with the desktop app
+
+            The mobile app syncs over your local network, so the desktop app has to be
+            running. On the desktop, open **Settings → Mobile Sync** and scan the QR code
+            shown there.
+
+            ## About the `.sig` files
+
+            Those are updater signatures the built-in auto-updater uses to verify what it
+            downloads. The app fetches them itself, so you do not need to grab them.
           releaseDraft: true
           prerelease: false
 
@@ -138,9 +157,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keystore"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/keystore/release.jks"
 
-          # java.util.Properties treats backslashes as escapes, so a Windows-style
-          # path loses its separators and resolves against the Gradle daemon dir.
-          # Forward slashes are valid on every platform and survive the round trip.
           store_path="${RUNNER_TEMP}/keystore/release.jks"
 
           cat > android/key.properties <<EOF
@@ -150,7 +166,6 @@ jobs:
           keyPassword=${KEY_PASS}
           EOF
 
-          # A UTF-8 BOM on the first line corrupts the first key name.
           if [ "$(head -c3 android/key.properties | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
             echo "::error::key.properties has a UTF-8 BOM - strip it or the first property will be unreadable"
             exit 1
@@ -167,8 +182,6 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # tauri-action creates the draft release during `build`, but asset
-          # upload can race its finalisation. Poll rather than fail outright.
           for attempt in 1 2 3 4 5 6; do
             if gh release view "$TAG" >/dev/null 2>&1; then
               break
@@ -200,9 +213,18 @@ jobs:
     name: Publish release
     needs: [build, mobile]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false
+
+      - name: Rebuild site for the new version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pages.yml --ref main
