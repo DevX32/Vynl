@@ -68,9 +68,10 @@
   --hover-surface: color-mix(in srgb, var(--accent) 14%, var(--bg-raise));
   --hover-border: color-mix(in srgb, var(--accent) 30%, transparent);
 
-  --font-display: 'Geist', sans-serif;
-  --font-mono: 'Geist Mono', monospace;
+  --font-display: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', monospace;
   --font-lyrics: 'Sora', var(--font-display);
+  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
 }
 
 * {
@@ -151,6 +152,10 @@ select {
 
 .display {
   font-family: var(--font-display);
+}
+
+.serif {
+  font-family: var(--font-serif);
 }
 
 .btn {

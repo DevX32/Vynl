@@ -278,7 +278,7 @@
   }
 
   .greeting-name {
-    font-family: 'Fraunces', serif;
+    font-family: var(--font-serif);
     font-style: italic;
     color: var(--accent);
   }
