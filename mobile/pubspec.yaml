@@ -56,3 +56,8 @@ flutter:
     - family: Sora
       fonts:
         - asset: assets/fonts/Sora-Variable.ttf
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-Variable.ttf
+        - asset: assets/fonts/Fraunces-Italic-Variable.ttf
+          style: italic

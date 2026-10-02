@@ -115,6 +115,11 @@ Future<void> _openRepo(BuildContext context) async {
             ),
           ),
 
+        const _Kicker('PROFILE'),
+        _Group(
+          children: const [_DisplayNameField()],
+        ),
+
         const _Kicker('APPEARANCE'),
         _Group(
           children: [
@@ -359,6 +364,67 @@ class _Group extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
+      ),
+    );
+  }
+}
+
+class _DisplayNameField extends StatefulWidget {
+  const _DisplayNameField();
+
+  @override
+  State<_DisplayNameField> createState() => _DisplayNameFieldState();
+}
+
+class _DisplayNameFieldState extends State<_DisplayNameField> {
+  late final TextEditingController _ctrl = TextEditingController(
+    text: context.read<AppState>().displayName,
+  );
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'DISPLAY NAME',
+            style: TextStyle(
+              color: VynlColors.faint,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _ctrl,
+            onChanged: app.setDisplayName,
+            textInputAction: TextInputAction.done,
+            maxLength: 32,
+            style: const TextStyle(fontSize: 14, color: VynlColors.text),
+            decoration: const InputDecoration(
+              hintText: 'e.g. Cosmic Panda',
+              counterText: '',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            app.displayName.isEmpty
+                ? 'Leave blank for a plain greeting'
+                : 'Shown in your home greeting',
+            style: const TextStyle(color: VynlColors.faint, fontSize: 12),
+          ),
+        ],
       ),
     );
   }

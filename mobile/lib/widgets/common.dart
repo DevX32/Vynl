@@ -157,15 +157,21 @@ class TrackTile extends StatelessWidget {
 }
 
 class SectionHeader extends StatelessWidget {
-  const SectionHeader({super.key, required this.title, this.trailing});
+  const SectionHeader({
+    super.key,
+    required this.title,
+    this.trailing,
+    this.padding = const EdgeInsets.fromLTRB(20, 18, 16, 8),
+  });
 
   final String title;
   final Widget? trailing;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 16, 8),
+      padding: padding,
       child: Row(
         children: [
           Expanded(
@@ -181,6 +187,78 @@ class SectionHeader extends StatelessWidget {
           ),
           if (trailing != null) trailing!,
         ],
+      ),
+    );
+  }
+}
+
+class VynlEmptyState extends StatelessWidget {
+  const VynlEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(VynlRadius.control),
+                      color: VynlColors.surfaceRaised,
+                    ),
+                    child: Icon(icon, size: 34, color: VynlColors.faint),
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: VynlFonts.display,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                      color: VynlColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: VynlColors.dim,
+                      fontSize: 13.5,
+                      height: 1.55,
+                    ),
+                  ),
+                  if (action != null) ...[
+                    const SizedBox(height: 20),
+                    action!,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

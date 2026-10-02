@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
 import '../services/api.dart';
@@ -17,8 +18,12 @@ class AppState extends ChangeNotifier {
     required this.notifications,
   }) : syncService = SyncService(db: db, notifications: notifications);
 
-  static const tabLibrary = 0;
-  static const tabPlaylists = 1;
+  static const tabHome = 0;
+  static const tabLibrary = 1;
+  static const tabPlaylists = 2;
+
+  static const _displayNameKey = 'vynl.display_name';
+  static const _maxDisplayName = 32;
 
   final AuthStore authStore;
   final LibraryDb db;
@@ -34,12 +39,38 @@ class AppState extends ChangeNotifier {
   SyncProgress? syncProgress;
   String? lastError;
   int cacheBytes = 0;
-  int tabIndex = tabLibrary;
+  int tabIndex = tabHome;
+  String displayName = '';
 
   void setTab(int index) {
     if (tabIndex == index) return;
     tabIndex = index;
     notifyListeners();
+  }
+
+  Future<void> setDisplayName(String value) async {
+    final next = value.trim();
+    final clipped = next.length > _maxDisplayName
+        ? next.substring(0, _maxDisplayName)
+        : next;
+    if (clipped == displayName) return;
+    displayName = clipped;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_displayNameKey, clipped);
+    } catch (e) {
+      debugPrint('display name save failed: $e');
+    }
+  }
+
+  Future<void> _loadDisplayName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      displayName = prefs.getString(_displayNameKey) ?? '';
+    } catch (e) {
+      debugPrint('display name load failed: $e');
+    }
   }
 
   static String describePairFailure(Object error) {
@@ -70,6 +101,7 @@ class AppState extends ChangeNotifier {
     try {
       await db.open();
       await notifications.init();
+      await _loadDisplayName();
       credentials = await authStore.load();
       if (credentials != null) {
         api = VynlApi(baseUrl: credentials!.baseUrl, token: credentials!.token);

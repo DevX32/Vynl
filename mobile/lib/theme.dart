@@ -70,6 +70,8 @@ class VynlFonts {
   static const display = 'Geist';
 
   static const lyrics = 'Sora';
+
+  static const serif = 'Fraunces';
 }
 
 class VynlMotion {
@@ -131,7 +133,7 @@ ThemeData buildVynlTheme({Color? seed}) {
         color: VynlColors.text,
         fontFamily: VynlFonts.display,
         fontSize: 21,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.4,
       ),
       systemOverlayStyle: kVynlOverlayStyle,
@@ -203,19 +205,19 @@ ThemeData buildVynlTheme({Color? seed}) {
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: VynlColors.surface,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: VynlColors.accent.withValues(alpha: 0.16),
+      indicatorColor: accent.withValues(alpha: 0.16),
       indicatorShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(VynlRadius.control),
+        borderRadius: BorderRadius.circular(VynlRadius.control * 2),
       ),
-      height: 68,
+      height: 66,
       elevation: 0,
-      labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return TextStyle(
           fontSize: 10.5,
-          height: 1.1,
-          fontWeight: FontWeight.w700,
+          height: 1.15,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
           letterSpacing: 0.1,
           color: selected ? VynlColors.text : VynlColors.faint,
         );
@@ -223,8 +225,8 @@ ThemeData buildVynlTheme({Color? seed}) {
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
-          size: 23,
-          color: selected ? VynlColors.text : VynlColors.faint,
+          size: 22,
+          color: selected ? accent : VynlColors.faint,
         );
       }),
     ),

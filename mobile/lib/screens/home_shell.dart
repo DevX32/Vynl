@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/splash.dart';
+import 'home_page.dart';
 import 'library_page.dart';
 import 'playlists_page.dart';
 import 'settings_page.dart';
@@ -17,7 +18,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
-  static const _titles = ['Library', 'Playlists'];
+  static const _titles = ['Home', 'Library', 'Playlists'];
 
   bool _exiting = false;
   bool _showSplash = true;
@@ -76,6 +77,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     }
 
     const pages = [
+      HomePage(),
       LibraryPage(),
       PlaylistsPage(),
     ];
@@ -99,28 +101,38 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
               ],
             ),
             body: IndexedStack(index: app.tabIndex, children: pages),
-            bottomNavigationBar: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const MiniPlayer(),
-                NavigationBar(
-                  selectedIndex:
-                      app.tabIndex.clamp(0, _titles.length - 1),
-                  onDestinationSelected: app.setTab,
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.library_music_outlined),
-                      selectedIcon: Icon(Icons.library_music_rounded),
-                      label: 'Library',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.queue_music_outlined),
-                      selectedIcon: Icon(Icons.queue_music_rounded),
-                      label: 'Playlists',
-                    ),
-                  ],
-                ),
-              ],
+            bottomNavigationBar: DecoratedBox(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: VynlColors.line)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const MiniPlayer(),
+                  NavigationBar(
+                    selectedIndex:
+                        app.tabIndex.clamp(0, _titles.length - 1),
+                    onDestinationSelected: app.setTab,
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
+                        label: 'Home',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.library_music_outlined),
+                        selectedIcon: Icon(Icons.library_music_rounded),
+                        label: 'Library',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.queue_music_outlined),
+                        selectedIcon: Icon(Icons.queue_music_rounded),
+                        label: 'Playlists',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

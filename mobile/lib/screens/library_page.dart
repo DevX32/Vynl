@@ -124,7 +124,7 @@ class _LibraryPageState extends State<LibraryPage> {
             backgroundColor: VynlColors.surface,
             displacement: 24,
             child: tracks.isEmpty
-              ? _EmptyState(
+              ? VynlEmptyState(
                   icon: q.isEmpty
                       ? Icons.music_off_rounded
                       : Icons.search_off_rounded,
@@ -158,70 +158,6 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(VynlRadius.control),
-                color: VynlColors.surfaceRaised,
-              ),
-              child: Icon(icon, size: 34, color: VynlColors.faint),
-            ),
-            const SizedBox(height: 22),
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: VynlFonts.display,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-                color: VynlColors.text,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: VynlColors.dim,
-                fontSize: 13.5,
-                height: 1.55,
-              ),
-            ),
-          ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
