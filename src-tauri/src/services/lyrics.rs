@@ -198,7 +198,7 @@ pub fn embed_lyrics(file: &str, text: &str, ffmpeg_path: Option<&str>) -> Result
 }
 
 fn cache_key(lookup: &LyricsLookup) -> String {
-    format!("v2:{}", serde_json::to_string(lookup).unwrap_or_default())
+    format!("v3:{}", serde_json::to_string(lookup).unwrap_or_default())
 }
 
 fn now_millis() -> u64 {
@@ -313,24 +313,7 @@ pub async fn fetch_lyrics_with_cache(
 }
 
 async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    let lrclib = do_fetch_lrclib(lookup).await;
-    if is_synced(&lrclib) {
-        return lrclib;
-    }
-
-    let ovh = do_fetch_lyrics_ovh(lookup).await;
-    if is_synced(&ovh) {
-        return ovh;
-    }
-
-    lrclib.or(ovh)
-}
-
-fn is_synced(result: &Option<LyricsResult>) -> bool {
-    matches!(
-        result,
-        Some(r) if matches!(r.kind, crate::commands::types::LyricsKind::Lrc)
-    )
+    do_fetch_lrclib(lookup).await
 }
 
 const DURATION_EXACT_SECS: f64 = 2.0;
@@ -496,39 +479,6 @@ fn parse_lrclib_response(data: Option<&serde_json::Value>) -> Option<LyricsResul
         source: crate::commands::types::LyricsSource::Remote,
         file: None,
     })
-}
-
-async fn do_fetch_lyrics_ovh(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    let client = http_client();
-    let artist = urlencoding::encode(&lookup.artist);
-    let title = urlencoding::encode(&lookup.title);
-    let url = format!("https://api.lyrics.ovh/v1/{}/{}", artist, title);
-
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => match resp.json::<serde_json::Value>().await {
-            Ok(data) => {
-                if let Some(text) = data["lyrics"].as_str() {
-                    let text = text.trim().to_string();
-                    if !text.is_empty() {
-                        let is_lrc = text.contains("[00:") || text.contains("[01:");
-                        return Some(LyricsResult {
-                            kind: if is_lrc {
-                                crate::commands::types::LyricsKind::Lrc
-                            } else {
-                                crate::commands::types::LyricsKind::Txt
-                            },
-                            text,
-                            source: crate::commands::types::LyricsSource::Remote,
-                            file: None,
-                        });
-                    }
-                }
-                None
-            }
-            Err(_) => None,
-        },
-        _ => None,
-    }
 }
 
 pub async fn search_lyrics(

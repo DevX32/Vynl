@@ -26,7 +26,7 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 ### Lyrics
 
 - Synced (LRC) and plain text lyrics
-- Multi-source fetching (LRCLIB, lyrics.ovh)
+- Lyrics from LRCLIB (synced LRC and plain text)
 - Lyrics embedding into audio files
 - Lyrics overlay in the player
 
