@@ -6,6 +6,27 @@ let _library = $state<LibraryTrack[]>([]);
 let _listenerReady: Promise<void> | null = null;
 let _libraryRevision = 0;
 let _refreshPromise: Promise<void> | null = null;
+let _libraryLoaded = false;
+let _libraryLoadedPromise: Promise<void> | null = null;
+let _resolveLibraryLoaded: (() => void) | null = null;
+
+function markLibraryLoaded(): void {
+  if (_libraryLoaded) return;
+  _libraryLoaded = true;
+  _resolveLibraryLoaded?.();
+  _resolveLibraryLoaded = null;
+}
+
+export function whenLibraryLoaded(): Promise<void> {
+  if (_libraryLoaded) return Promise.resolve();
+  if (!_libraryLoadedPromise) {
+    _libraryLoadedPromise = new Promise<void>((resolve) => {
+      _resolveLibraryLoaded = resolve;
+    });
+    void refreshLibrary();
+  }
+  return _libraryLoadedPromise;
+}
 
 function sameTrack(a: LibraryTrack, b: LibraryTrack): boolean {
   return (
@@ -37,6 +58,7 @@ function startListening(): Promise<void> {
   if (_listenerReady) return _listenerReady;
   _listenerReady = new Promise((resolve) => {
     vynl.onLibraryUpdated((tracks) => {
+      markLibraryLoaded();
       if (!libraryChanged(tracks)) return;
       _library = tracks;
       _libraryRevision += 1;
@@ -62,6 +84,7 @@ export function refreshLibrary(): Promise<void> {
       console.warn("refreshLibrary failed:", e);
     } finally {
       _refreshPromise = null;
+      markLibraryLoaded();
     }
   })();
   _refreshPromise = promise;

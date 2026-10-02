@@ -2,7 +2,7 @@ import type { LibraryTrack, NowPlaying } from "@lib/types";
 import { RPC_THROTTLE } from "@lib/constants";
 import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
-import { getLibrary } from "./library.svelte";
+import { getLibrary, whenLibraryLoaded } from "./library.svelte";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -17,28 +17,47 @@ let _shuffleRedo = $state<string[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const SAVE_DEBOUNCE = 3000;
 
+function writeNowPlaying(): void {
+  if (!_state) {
+    void vynl.clearNowPlaying();
+    return;
+  }
+  void vynl.saveNowPlaying({
+    id: _state.id,
+    path: _state.path,
+    time: _currentTime,
+    queue: _contextQueue,
+    userQueue: _userQueue,
+    contextQueue: _contextQueue,
+    contextIndex: _contextIndex,
+    timestamp: Date.now(),
+  });
+}
+
 function persistNowPlaying(): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (!_state) {
-      void vynl.clearNowPlaying();
-      return;
-    }
-    void vynl.saveNowPlaying({
-      id: _state.id,
-      path: _state.path,
-      time: _currentTime,
-      queue: _contextQueue,
-      userQueue: _userQueue,
-      contextQueue: _contextQueue,
-      contextIndex: _contextIndex,
-      timestamp: Date.now(),
-    });
+    saveTimer = null;
+    writeNowPlaying();
   }, SAVE_DEBOUNCE);
+}
+
+function flushNowPlaying(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  writeNowPlaying();
 }
 
 export function checkpointNowPlaying(): void {
   persistNowPlaying();
+}
+
+if (typeof window !== "undefined") {
+  const flush = () => flushNowPlaying();
+  window.addEventListener("pagehide", flush);
+  window.addEventListener("beforeunload", flush);
 }
 
 const currentId = $derived(_state?.id ?? null);
@@ -318,12 +337,14 @@ export function requestPlay(id: string, queue?: string[]): void {
 export function addToQueue(path: string): void {
   if (!_userQueue.includes(path)) {
     _userQueue = [..._userQueue, path];
+    flushNowPlaying();
   }
 }
 
 export function addToQueueFront(path: string): void {
   if (!_userQueue.includes(path)) {
     _userQueue = [path, ..._userQueue];
+    flushNowPlaying();
   }
 }
 
@@ -333,7 +354,7 @@ export function removeFromUserQueue(path: string): void {
   const next = [..._userQueue];
   next.splice(idx, 1);
   _userQueue = next;
-  persistNowPlaying();
+  flushNowPlaying();
 }
 
 function findContextSlot(path: string): number {
@@ -354,7 +375,7 @@ export function removeFromContextQueue(path: string): void {
     next.splice(idx, 1);
     _contextQueue = next;
     if (idx < _contextIndex) _contextIndex -= 1;
-    persistNowPlaying();
+    flushNowPlaying();
   }
   if (inUpcoming) {
     _shuffleUpcoming = _shuffleUpcoming.filter((queued) => queued !== path);
@@ -366,7 +387,7 @@ export function reorderUserQueue(fromPath: string, toPath: string): void {
   const to = _userQueue.indexOf(toPath);
   if (from === to || from < 0 || to < 0) return;
   _userQueue = moveItem(_userQueue, from, to);
-  persistNowPlaying();
+  flushNowPlaying();
 }
 
 export function reorderContextQueue(fromPath: string, toPath: string): void {
@@ -390,7 +411,7 @@ export function reorderContextQueue(fromPath: string, toPath: string): void {
       : to < currentIndex
         ? currentIndex + 1
         : currentIndex;
-  persistNowPlaying();
+  flushNowPlaying();
 }
 
 export function pickNextId(
@@ -497,19 +518,24 @@ export function advanceContextIndex(newTrackId: string): void {
 }
 
 export function clearUserQueue(): void {
+  if (_userQueue.length === 0) return;
   _userQueue = [];
+  flushNowPlaying();
 }
 
 export async function restoreNowPlaying(): Promise<{
   id: string;
   queue: string[];
 } | null> {
-  const saved = await vynl.loadNowPlaying();
+  const [saved] = await Promise.all([
+    vynl.loadNowPlaying(),
+    whenLibraryLoaded(),
+  ]);
   if (!saved) return null;
   const library = getLibrary();
   const track = library.find((t) => t.id === saved.id);
   if (!track) {
-    void vynl.clearNowPlaying();
+    if (library.length > 0) void vynl.clearNowPlaying();
     return null;
   }
   setSeekDragging(false);
