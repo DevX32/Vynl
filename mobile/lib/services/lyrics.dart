@@ -33,6 +33,11 @@ enum LyricsSource { embedded }
 
 final _stampRe = RegExp(r'\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]');
 final _wordTagRe = RegExp(r'<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>');
+final _wordTagSplitRe = RegExp(r'<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>');
+final _offsetRe = RegExp(
+  r'^\[offset:\s*([+-]?\d+)\s*\]',
+  caseSensitive: false,
+);
 final _metadataRe = RegExp(
   r'^\[(ar|ti|al|au|by|offset|re|ve|length|created|tool|version|application):',
   caseSensitive: false,
@@ -51,14 +56,25 @@ double _seconds(RegExpMatch m) {
   return (min * 60 + sec + ms).toDouble();
 }
 
-List<LyricWord>? _parseEnhancedWords(String body) {
+double readOffsetSecs(String text) {
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final m = _offsetRe.firstMatch(raw.trim());
+    if (m != null) {
+      final ms = int.tryParse(m.group(1)!);
+      if (ms != null) return ms / 1000;
+    }
+  }
+  return 0;
+}
+
+List<LyricWord>? _parseEnhancedWords(String body, double offset) {
   final stamps = <double>[];
   for (final m in _wordTagRe.allMatches(body)) {
-    stamps.add(_seconds(m));
+    stamps.add(_seconds(m) + offset);
   }
   if (stamps.isEmpty) return null;
 
-  final segments = body.split(_wordTagRe);
+  final segments = body.split(_wordTagSplitRe);
   final words = <LyricWord>[];
   for (var i = 0; i < stamps.length; i++) {
     final text = (i + 1 < segments.length ? segments[i + 1] : '').trim();
@@ -71,12 +87,13 @@ List<LyricWord>? _parseEnhancedWords(String body) {
 
 List<LyricLine> parseLrcText(String text) {
   final out = <LyricLine>[];
+  final offset = readOffsetSecs(text);
   for (final raw in text.split(RegExp(r'\r?\n'))) {
     if (_metadataRe.hasMatch(raw.trim())) continue;
 
     final stamps = <double>[];
     for (final m in _stampRe.allMatches(raw)) {
-      stamps.add(_seconds(m));
+      stamps.add(_seconds(m) + offset);
     }
 
     final body = raw.replaceAll(_stampRe, '').trim();
@@ -86,7 +103,7 @@ List<LyricLine> parseLrcText(String text) {
       continue;
     }
 
-    final words = _parseEnhancedWords(body);
+    final words = _parseEnhancedWords(body, offset);
     final clean = body.replaceAll(_wordTagRe, '').trim();
     for (final s in stamps) {
       out.add(LyricLine(time: s, text: clean, words: words));
