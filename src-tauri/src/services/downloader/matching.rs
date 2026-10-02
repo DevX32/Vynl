@@ -199,16 +199,24 @@ pub(crate) fn title_tokens(title: &str) -> HashSet<String> {
     tokens
 }
 
-fn has_reject_variant(text: &str) -> bool {
-    REJECT_VARIANTS.iter().any(|v| contains_phrase(text, v))
+fn is_expected_term(term: &str, expected_title: &str) -> bool {
+    contains_phrase(expected_title, term)
 }
 
-fn is_non_music(text: &str) -> bool {
-    NON_MUSIC_TERMS.iter().any(|v| contains_phrase(text, v))
+fn has_reject_variant(text: &str, expected_title: &str) -> bool {
+    REJECT_VARIANTS
+        .iter()
+        .any(|v| !is_expected_term(v, expected_title) && contains_phrase(text, v))
 }
 
-fn is_rejected(text: &str) -> bool {
-    has_reject_variant(text) || is_non_music(text)
+fn is_non_music(text: &str, expected_title: &str) -> bool {
+    NON_MUSIC_TERMS
+        .iter()
+        .any(|v| !is_expected_term(v, expected_title) && contains_phrase(text, v))
+}
+
+fn is_rejected(text: &str, expected_title: &str) -> bool {
+    has_reject_variant(text, expected_title) || is_non_music(text, expected_title)
 }
 
 fn is_official_music_channel(channel: &str) -> bool {
@@ -216,9 +224,10 @@ fn is_official_music_channel(channel: &str) -> bool {
     tokens.contains("topic") || tokens.contains("vevo")
 }
 
-fn variant_penalty(text: &str) -> f64 {
+fn variant_penalty(text: &str, expected_title_tokens: &HashSet<String>) -> f64 {
     VARIANT_PENALTY_TOKENS
         .iter()
+        .filter(|v| !expected_title_tokens.contains(**v))
         .filter(|v| contains_phrase(text, v))
         .count() as f64
         * -30.0
@@ -292,8 +301,8 @@ pub(crate) fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) ->
         score += OFFICIAL_CHANNEL_BONUS;
     }
 
-    score += variant_penalty(&c_title);
-    score += variant_penalty(&c_channel) / 2.0;
+    score += variant_penalty(&c_title, &track_title_tokens);
+    score += variant_penalty(&c_channel, &track_title_tokens) / 2.0;
 
     score
 }
@@ -337,7 +346,8 @@ pub(crate) fn filter_and_rank_candidates(
     let clean: Vec<SearchCandidate> = relevant
         .iter()
         .filter(|c| {
-            !is_rejected(&c.title) && !has_reject_variant(c.channel.as_deref().unwrap_or(""))
+            !is_rejected(&c.title, &track.title)
+                && !has_reject_variant(c.channel.as_deref().unwrap_or(""), &track.title)
         })
         .cloned()
         .collect();
@@ -353,4 +363,89 @@ pub(crate) fn filter_and_rank_candidates(
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     scored.into_iter().map(|(_, c)| c).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track(title: &str, artist: &str) -> TrackMeta {
+        TrackMeta {
+            id: "t1".into(),
+            title: title.into(),
+            artist: artist.into(),
+            album: String::new(),
+            year: None,
+            duration: Some(200.0),
+            cover: None,
+            track_number: None,
+            url: "https://example.com".into(),
+        }
+    }
+
+    fn candidate(title: &str, channel: Option<&str>) -> SearchCandidate {
+        SearchCandidate {
+            url: "https://example.com/v".into(),
+            title: title.into(),
+            duration: Some(200.0),
+            channel: channel.map(str::to_string),
+            source: crate::commands::types::MatchSource::YouTube,
+            view_count: None,
+            channel_verified: None,
+            upload_date: None,
+        }
+    }
+
+    #[test]
+    fn title_word_cover_is_not_penalised_when_the_track_is_called_cover() {
+        let t = track("Cover", "The Band");
+        let exact = candidate("The Band - Cover", Some("The Band Topic"));
+        let other = candidate("The Band - Paper Roses", Some("The Band Topic"));
+
+        let ranked = filter_and_rank_candidates(vec![other, exact], &t);
+        assert_eq!(
+            ranked.first().map(|c| c.title.as_str()),
+            Some("The Band - Cover"),
+            "the exact match must win even though 'cover' is a penalty token"
+        );
+    }
+
+    #[test]
+    fn cover_is_still_penalised_when_the_track_title_does_not_contain_it() {
+        let t = track("Paper Roses", "The Band");
+        let exact = candidate("The Band - Paper Roses", Some("The Band Topic"));
+        let cover_version = candidate("The Band - Paper Roses (Cover)", Some("Someone Else"));
+
+        let ranked = filter_and_rank_candidates(vec![cover_version, exact], &t);
+        assert_eq!(
+            ranked.first().map(|c| c.title.as_str()),
+            Some("The Band - Paper Roses"),
+            "a genuine cover version must still lose to the original"
+        );
+    }
+
+    #[test]
+    fn reject_phrase_in_the_track_title_is_not_treated_as_a_variant() {
+        let t = track("Blue Monday (Speed Up)", "New Order");
+        assert!(!is_rejected("New Order - Blue Monday (Speed Up)", &t.title));
+    }
+
+    #[test]
+    fn reject_phrase_outside_the_track_title_still_rejects() {
+        let t = track("Blue Monday", "New Order");
+        assert!(is_rejected("New Order - Blue Monday (Speed Up)", &t.title));
+    }
+
+    #[test]
+    fn speed_up_candidate_survives_for_a_track_titled_speed_up() {
+        let t = track("Speed Up", "Artist");
+        let exact = candidate("Artist - Speed Up", Some("Artist Topic"));
+        let nightcore = candidate("Artist - Speed Up (Nightcore)", Some("Artist Topic"));
+
+        let ranked = filter_and_rank_candidates(vec![nightcore, exact], &t);
+        assert_eq!(
+            ranked.first().map(|c| c.title.as_str()),
+            Some("Artist - Speed Up")
+        );
+    }
 }

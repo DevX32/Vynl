@@ -18,6 +18,9 @@
     picked,
     allowPick,
     onpick,
+    selectable = false,
+    checked = false,
+    ontoggle,
   }: {
     track: TrackMeta;
     progress: TrackProgress | undefined;
@@ -25,6 +28,9 @@
     picked?: number;
     allowPick?: boolean;
     onpick?: (trackId: string, index: number) => void;
+    selectable?: boolean;
+    checked?: boolean;
+    ontoggle?: (trackId: string) => void;
   } = $props();
 
   const SOURCE: Record<MatchSource, string> = {
@@ -69,8 +75,21 @@
   class:failed={status === "error"}
   class:active={isDownloading || status === "processing" || status === "searching"}
 >
-  <span class="c-num mono" class:hidden={!track.trackNumber}>
-    {track.trackNumber != null ? String(track.trackNumber).padStart(2, "0") : "··"}
+  <span class="c-num mono" class:hidden={!track.trackNumber && !selectable}>
+    {#if selectable}
+      <input
+        class="pick"
+        type="checkbox"
+        checked={checked}
+        aria-label={track.title}
+        onclick={(e) => {
+          e.stopPropagation();
+          ontoggle?.(track.id);
+        }}
+      />
+    {:else}
+      {track.trackNumber != null ? String(track.trackNumber).padStart(2, "0") : "··"}
+    {/if}
   </span>
 
   <span class="c-cover">
@@ -157,6 +176,15 @@
 
   .c-num.hidden {
     visibility: hidden;
+  }
+
+  .pick {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+    vertical-align: middle;
   }
 
   .c-cover {

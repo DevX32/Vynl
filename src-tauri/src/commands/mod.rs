@@ -622,7 +622,36 @@ fn update_error_status(version: Option<String>, error: &str) -> UpdateStatus {
         progress: None,
         ready: Some(false),
         error: Some(error.to_string()),
+        silent: None,
     }
+}
+
+fn spawn_silent_update_install(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let update = {
+            let state = app.state::<crate::services::update::UpdateState>();
+            let mut guard = match state.pending.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            guard.take()
+        };
+        let Some(update) = update else { return };
+        let version = update.version.clone();
+        if let Err(e) = crate::services::update::download_and_install(&app, update, true).await {
+            let status = UpdateStatus {
+                available: true,
+                version: Some(version),
+                current_version: env!("CARGO_PKG_VERSION").to_string(),
+                downloading: Some(false),
+                progress: None,
+                ready: Some(false),
+                error: Some(e),
+                silent: Some(true),
+            };
+            crate::services::update::emit_status(&app, &status).await;
+        }
+    });
 }
 
 #[tauri::command]
@@ -634,10 +663,11 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 available: true,
                 version: Some(update.version.clone()),
                 current_version: env!("CARGO_PKG_VERSION").to_string(),
-                downloading: None,
+                downloading: Some(true),
                 progress: None,
                 ready: None,
                 error: None,
+                silent: Some(true),
             };
             {
                 let state = app.state::<crate::services::update::UpdateState>();
@@ -645,6 +675,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 *guard = Some(update);
             }
             update_svc::emit_status(&app, &status).await;
+            spawn_silent_update_install(app);
             Ok(status)
         }
         Ok(None) => {
@@ -657,6 +688,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 progress: None,
                 ready: None,
                 error: None,
+                silent: None,
             };
             update_svc::emit_status(&app, &status).await;
             Ok(status)
@@ -672,6 +704,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 progress: None,
                 ready: None,
                 error: None,
+                silent: None,
             })
         }
     }
@@ -715,10 +748,11 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
         progress: Some(0.0),
         ready: None,
         error: None,
+        silent: Some(false),
     };
     update_svc::emit_status(&app, &downloading_status).await;
 
-    if let Err(e) = update_svc::download_and_install(&app, update).await {
+    if let Err(e) = update_svc::download_and_install(&app, update, false).await {
         let error_status = UpdateStatus {
             available: true,
             version: Some(version),
@@ -727,6 +761,7 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
             progress: None,
             ready: None,
             error: Some(e.clone()),
+            silent: Some(false),
         };
         update_svc::emit_status(&app, &error_status).await;
         return Err(e);

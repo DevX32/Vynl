@@ -26,9 +26,15 @@ pub async fn emit_status(app: &AppHandle, status: &UpdateStatus) {
     let _ = app.emit("vynl:update:status", status);
 }
 
-pub async fn download_and_install(app: &AppHandle, update: Update) -> Result<(), String> {
+pub async fn download_and_install(
+    app: &AppHandle,
+    update: Update,
+    silent: bool,
+) -> Result<(), String> {
+    let version = update.version.clone();
     let mut downloaded: u64 = 0;
     let mut content_length: u64 = 0;
+    let mut last_emit = std::time::Instant::now();
 
     update
         .download_and_install(
@@ -42,26 +48,32 @@ pub async fn download_and_install(app: &AppHandle, update: Update) -> Result<(),
                 } else {
                     0.0
                 };
+                if silent && last_emit.elapsed() < std::time::Duration::from_secs(2) {
+                    return;
+                }
+                last_emit = std::time::Instant::now();
                 let status = UpdateStatus {
                     available: true,
-                    version: None,
+                    version: Some(version.clone()),
                     current_version: env!("CARGO_PKG_VERSION").to_string(),
                     downloading: Some(true),
                     progress: Some(progress),
                     ready: None,
                     error: None,
+                    silent: Some(silent),
                 };
                 let _ = app.emit("vynl:update:status", &status);
             },
             || {
                 let status = UpdateStatus {
                     available: true,
-                    version: None,
+                    version: Some(version.clone()),
                     current_version: env!("CARGO_PKG_VERSION").to_string(),
                     downloading: Some(false),
                     progress: Some(100.0),
                     ready: Some(true),
                     error: None,
+                    silent: Some(silent),
                 };
                 let _ = app.emit("vynl:update:status", &status);
             },

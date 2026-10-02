@@ -49,6 +49,6 @@ mdns-sd = "0.21"
 winreg = "0.55"
 
 [profile.release]
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 strip = true

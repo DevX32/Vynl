@@ -51,6 +51,33 @@
   let searchError = $state<string | null>(null);
   let searchGen = $state(0);
   let addedTrackIds = $state<Set<string>>(new Set());
+  let selectedFailed = $state<Set<string>>(new Set());
+  const failedIds = $derived(
+    (collection?.tracks ?? [])
+      .filter((t) => progress[t.id]?.status === "error")
+      .map((t) => t.id),
+  );
+  const allFailedSelected = $derived(
+    failedIds.length > 0 && failedIds.every((id) => selectedFailed.has(id)),
+  );
+
+  function toggleFailed(id: string): void {
+    const next = new Set(selectedFailed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selectedFailed = next;
+  }
+
+  function toggleAllFailed(): void {
+    selectedFailed = allFailedSelected ? new Set() : new Set(failedIds);
+  }
+
+  $effect(() => {
+    const live = new Set(failedIds);
+    if (selectedFailed.size === 0) return;
+    const kept = new Set([...selectedFailed].filter((id) => live.has(id)));
+    if (kept.size !== selectedFailed.size) selectedFailed = kept;
+  });
   let showSearchResults = $state(false);
   let showPlaylistPicker = $state(false);
   let pendingPaths = $state<string[]>([]);
@@ -306,10 +333,11 @@
     return next;
   }
 
-  function buildRetryCollection(): Collection | null {
+  function buildRetryCollection(only?: Set<string>): Collection | null {
     if (!collection) return null;
     const failed = collection.tracks.filter(
-      (t) => progress[t.id]?.status === "error",
+      (t) =>
+        progress[t.id]?.status === "error" && (!only || only.has(t.id)),
     );
     if (failed.length === 0) return null;
     return { ...collection, tracks: failed };
@@ -418,10 +446,11 @@
     return { done, skipped, failed, queued, active };
   });
 
-  async function retryFailed(): Promise<void> {
+  async function retryFailed(only?: Set<string>): Promise<void> {
     if (!collection || running) return;
-    const sub = buildRetryCollection();
+    const sub = buildRetryCollection(only);
     if (!sub) return;
+    selectedFailed = new Set();
     const subMatches = Object.fromEntries(
       sub.tracks
         .map((t) => [t.id, matches[t.id]])
@@ -478,6 +507,7 @@
     page = 0;
     trackFilter = "all";
     addedTrackIds = new Set();
+    selectedFailed = new Set();
     closePicker();
   }
 
@@ -567,7 +597,23 @@
       <div class="review-note">
         <span class="sync-text mono">{t("vault.reviewNote")}</span>
         {#if counts.failed > 0}
-          <Button variant="ghost" size="sm" onclick={retryFailed}>
+          <button
+            type="button"
+            class="select-all mono"
+            onclick={toggleAllFailed}
+          >
+            {allFailedSelected ? t("vault.selectNone") : t("vault.selectAllFailed")}
+          </button>
+          {#if selectedFailed.size > 0}
+            <Button
+              variant="ghost"
+              size="sm"
+              onclick={() => retryFailed(selectedFailed)}
+            >
+              {t("vault.retrySelected", { n: selectedFailed.size })}
+            </Button>
+          {/if}
+          <Button variant="ghost" size="sm" onclick={() => retryFailed()}>
             {t("vault.retryFailed", { n: counts.failed })}
           </Button>
         {/if}
@@ -591,6 +637,9 @@
           picked={picks[track.id]}
           allowPick={reviewing && !running}
           onpick={(id, i) => (picks[id] = i)}
+          selectable={progress[track.id]?.status === "error" && !running}
+          checked={selectedFailed.has(track.id)}
+          ontoggle={toggleFailed}
         />
       {/each}
     </div>
@@ -733,6 +782,21 @@
   .sync-text {
     font-size: 11px;
     color: var(--dim);
+  }
+
+  .select-all {
+    font-size: 11px;
+    color: var(--dim);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .select-all:hover {
+    color: var(--text);
   }
 
   .tbl-head {
