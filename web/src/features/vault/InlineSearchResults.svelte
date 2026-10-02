@@ -28,15 +28,16 @@
   <header class="head">
     <span class="title mono">
       {#if loading}
-        searching…
+        {t("vault.searching")}
       {:else if error}
-        search failed
+        {t("vault.searchFailed")}
       {:else if results.length > 0}
         {t("vault.searchResults", { n: results.length })}
         {#if addedCount > 0}
-          · {addedCount} added{/if}
+          {t("vault.addedCount", { n: addedCount })}
+        {/if}
       {:else if q}
-        no matches
+        {t("vault.noMatches")}
       {:else}
         {t("vault.searchTitle")}
       {/if}
@@ -61,7 +62,7 @@
       <div class="empty mono bad">{error}</div>
     {:else if results.length === 0}
       <div class="empty mono">
-        {q ? `No results for “${q}”` : "Type a song, artist, or album"}
+        {q ? t("vault.noResultsFor", { q }) : t("vault.searchHint")}
       </div>
     {:else}
       {#each results as r (r.id)}

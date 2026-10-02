@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { Search, Plus, ListMusic, Check } from "lucide-svelte";
   import { toPascalCase } from "../../lib/format";
+  import { t } from "@lib/i18n";
 
   type Playlist = { id: string; name: string; trackCount: number };
 
@@ -83,15 +84,17 @@
     onkeydown={handleKey}
     role="dialog"
     aria-modal="true"
-    aria-label="Add to playlist"
+    aria-label={t("playlistPicker.title")}
     tabindex="-1"
   >
     <header class="head">
       <div class="head-text">
-        <span class="title">Add to playlist</span>
+        <span class="title">{t("playlistPicker.title")}</span>
         <span class="sub mono">
           {trackCount}
-          {trackCount === 1 ? "track" : "tracks"}
+          {trackCount === 1
+            ? t("playlistPicker.track")
+            : t("playlistPicker.tracks")}
           {#if suggestedName}
             · {toPascalCase(suggestedName)}{/if}
         </span>
@@ -103,7 +106,7 @@
         <Search size={13} stroke-width={1.5} />
         <input
           class="search-input"
-          placeholder="Filter playlists"
+          placeholder={t("playlistPicker.filter")}
           bind:value={query}
           spellcheck={false}
         />
@@ -127,13 +130,13 @@
           </span>
           <span class="name">{toPascalCase(pl.name)}</span>
           {#if existingMatch?.id === pl.id}
-            <span class="tag mono">same name</span>
+            <span class="tag mono">{t("playlistPicker.sameName")}</span>
           {/if}
           <span class="count mono">{pl.trackCount}</span>
         </button>
       {:else}
         <div class="empty mono">
-          {query ? "No playlist matches that" : "No playlists yet"}
+          {query ? t("playlistPicker.noMatch") : t("playlistPicker.noneYet")}
         </div>
       {/each}
     </div>
@@ -144,21 +147,23 @@
           class="name-input"
           bind:this={nameEl}
           bind:value={newName}
-          placeholder="Playlist name"
+          placeholder={t("playlistPicker.namePlaceholder")}
           spellcheck={false}
           onkeydown={(e) => {
             if (e.key === "Enter") submitCreate();
           }}
         />
         <button class="btn primary" disabled={!canCreate || busy} onclick={submitCreate}>
-          Create
+          {t("playlistPicker.create")}
         </button>
       {:else}
         <button class="btn primary" disabled={busy} onclick={() => (creating = true)}>
           <Plus size={13} stroke-width={2} />
-          <span>New playlist</span>
+          <span>{t("playlistPicker.newPlaylist")}</span>
         </button>
-        <button class="btn ghost" disabled={busy} onclick={onSkip}>Skip</button>
+        <button class="btn ghost" disabled={busy} onclick={onSkip}
+          >{t("playlistPicker.skip")}</button
+        >
       {/if}
     </footer>
   </div>

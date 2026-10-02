@@ -172,7 +172,7 @@ export function markCoverFailed(path: string | null | undefined): void {
 
 export function resolvePlaylistCovers(
   custom: string | null | undefined,
-  tracks: LibraryTrack[],
+  tracks: readonly { cover: string | null }[],
 ): string[] {
   if (custom && !_failedCovers.has(custom)) return [custom];
   const covers = tracks

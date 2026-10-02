@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, X } from "lucide-svelte";
+  import { Download, X, ListPlus, Loader } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { fmtDuration } from "../../lib/format";
   import type { DownloadSummary } from "../../lib/types";
@@ -11,10 +11,13 @@
     summary,
     counts,
     totalDuration,
+    savingPlaylist = false,
+    saveHint = null,
     onBeginDownload,
     onConfirmDownload,
     onRetryFailed,
     onCancel,
+    onSaveToPlaylist,
     onDone,
   }: {
     collection: { tracks: unknown[] } | null;
@@ -23,10 +26,13 @@
     summary: DownloadSummary | null;
     counts: { done: number; skipped: number; failed: number; queued: number; active: number };
     totalDuration: number;
+    savingPlaylist?: boolean;
+    saveHint?: string | null;
     onBeginDownload: () => void;
     onConfirmDownload: () => void;
     onRetryFailed: () => void;
     onCancel: () => void;
+    onSaveToPlaylist: () => void;
     onDone: () => void;
   } = $props();
 
@@ -68,6 +74,19 @@
           </div>
         {/if}
         <button
+          class="save-btn"
+          disabled={savingPlaylist}
+          title={saveHint ?? t("vault.saveToPlaylist")}
+          onclick={onSaveToPlaylist}
+        >
+          {#if savingPlaylist}
+            <Loader size={14} stroke-width={2} class="spin" />
+          {:else}
+            <ListPlus size={14} stroke-width={1.75} />
+          {/if}
+          <span>{t("vault.saveToPlaylist")}</span>
+        </button>
+        <button
           class="download-btn"
           class:done={finishedOk}
           onclick={finishedOk
@@ -91,6 +110,9 @@
         </button>
       {/if}
     </div>
+    {#if saveHint}
+      <span class="save-hint mono">{saveHint}</span>
+    {/if}
   </div>
 </footer>
 
@@ -109,6 +131,57 @@
     align-items: center;
     justify-content: flex-end;
     gap: 14px;
+  }
+
+  .save-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 16px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 0.15s,
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .save-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+
+  .save-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .save-btn :global(.spin) {
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .save-hint {
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--faint);
+    text-align: right;
+    min-width: 0;
   }
 
   .controls {

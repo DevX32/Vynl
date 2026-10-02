@@ -571,7 +571,6 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     padding-right: 2px;
@@ -579,7 +578,12 @@
   }
 
   .tracks::-webkit-scrollbar {
-    display: none;
+    width: 6px;
+  }
+
+  .tracks::-webkit-scrollbar-thumb {
+    background: rgba(240, 240, 236, 0.12);
+    border-radius: 3px;
   }
 
   .tbl-head {
