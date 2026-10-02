@@ -34,14 +34,6 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Geist Mono';
-  src: url('../assets/fonts/GeistMono-Italic.woff2') format('woff2');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
 :root {
   --bg: #0e0e10;
   --bg-raise: #151519;
@@ -57,6 +49,8 @@
   --green: #8fd694;
   --red: #ff6b61;
   --red-bg: rgba(255, 107, 97, 0.5);
+  --danger-border: color-mix(in srgb, var(--red) 35%, transparent);
+  --danger-border-hover: color-mix(in srgb, var(--red) 60%, transparent);
   --amber: #d9a15c;
   --accent-text: #161128;
   --placeholder-gradient:
@@ -199,17 +193,6 @@ select {
   box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.btn-danger {
-  background: transparent;
-  border-color: rgba(255, 107, 97, 0.5);
-  color: var(--red);
-}
-
-.btn-danger:not(:disabled):hover {
-  background: rgba(255, 107, 97, 0.1);
-  border-color: var(--red);
-}
-
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -278,10 +261,6 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .logo-vinyl {
-    animation: none !important;
-  }
-
   *,
   *::before,
   *::after {

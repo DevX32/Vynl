@@ -299,7 +299,7 @@
     if (!m || m.type !== "playlist" || !m.playlistId || !m.playlistName) return [];
     const id = m.playlistId;
     const name = m.playlistName;
-    return [
+    const items: CtxEntry[] = [
       {
         label: t("contextMenu.rename"),
         icon: Pencil,
@@ -307,13 +307,20 @@
           renameTarget = { id, name };
         },
       },
-      { type: "separator" },
-      {
-        label: t("playlist.removeCover"),
-        icon: ImageOff,
-        disabled: !getPlaylistCustomCover(id),
-        action: () => void removePlaylistCover(id),
-      },
+    ];
+
+    if (getPlaylistCustomCover(id)) {
+      items.push(
+        { type: "separator" },
+        {
+          label: t("playlist.removeCover"),
+          icon: ImageOff,
+          action: () => void removePlaylistCover(id),
+        },
+      );
+    }
+
+    items.push(
       { type: "separator" },
       {
         label: t("contextMenu.delete"),
@@ -323,7 +330,9 @@
           deleteTarget = { id, name };
         },
       },
-    ];
+    );
+
+    return items;
   }
 </script>
 

@@ -3,11 +3,7 @@
   import type { ToolStatus } from "../../lib/types";
   import { vynl } from "../../lib/vynl";
   import { t } from "@lib/i18n";
-  import {
-    getCurrentTools,
-    installTool,
-    updateTool,
-  } from "@state/settings.svelte";
+  import { getCurrentTools, installTool } from "@state/settings.svelte";
   import Button from "../../components/Button.svelte";
 
   const tools = $derived(getCurrentTools());
@@ -112,7 +108,7 @@
             <Button
               variant="ghost"
               size="sm"
-              onclick={() => void updateTool(tool.name)}
+              onclick={() => void installTool(tool.name)}
               >{t("tools.update")}</Button
             >
           {/if}

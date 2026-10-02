@@ -336,7 +336,6 @@ enum PlayerCmd {
     Volume(u32),
     GetPosition(u64),
     IsPlaying(u64),
-    CheckFinished(u64),
 }
 
 #[derive(Clone)]
@@ -628,17 +627,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             && sink.as_ref().is_some_and(|sink| !sink.empty())
                             && !PAUSED.load(Ordering::Relaxed),
                     ),
-                    PlayerCmd::CheckFinished(generation) => {
-                        if generation != active_generation {
-                            PlayerResp::Bool(false)
-                        } else {
-                            let finished = sink.as_ref().map(|s| s.empty()).unwrap_or(true);
-                            if finished && PLAYING.load(Ordering::Relaxed) {
-                                PLAYING.store(false, Ordering::Relaxed);
-                            }
-                            PlayerResp::Bool(finished)
-                        }
-                    }
                 };
 
                 let _ = reply_tx.send(resp);
@@ -705,15 +693,6 @@ pub fn get_position(generation: u64) -> Result<f64, String> {
 
 pub fn is_playing(generation: u64) -> Result<bool, String> {
     match send(PlayerCmd::IsPlaying(generation)) {
-        Ok(PlayerResp::Bool(v)) => Ok(v),
-        Ok(PlayerResp::Err(e)) => Err(e),
-        Ok(_) => Err("unexpected".into()),
-        Err(e) => Err(e),
-    }
-}
-
-pub fn check_finished(generation: u64) -> Result<bool, String> {
-    match send(PlayerCmd::CheckFinished(generation)) {
         Ok(PlayerResp::Bool(v)) => Ok(v),
         Ok(PlayerResp::Err(e)) => Err(e),
         Ok(_) => Err("unexpected".into()),

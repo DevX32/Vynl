@@ -7,7 +7,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_dialog::DialogExt;
 
 use types::*;
 
@@ -537,36 +536,6 @@ pub async fn lyrics_search(
 }
 
 #[tauri::command]
-pub async fn lyrics_export(
-    content: String,
-    default_name: String,
-    app: AppHandle,
-) -> Result<Option<String>, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title("Save Lyrics")
-        .set_file_name(&default_name)
-        .save_file(move |path| {
-            let _ = tx.send(path);
-        });
-
-    let path = rx.await.map_err(|e| e.to_string())?;
-
-    match path {
-        Some(fp) => {
-            let p = fp.into_path().map_err(|e| e.to_string())?;
-            let path_str = p.to_string_lossy().to_string();
-            tokio::fs::write(&p, &content)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(Some(path_str))
-        }
-        None => Ok(None),
-    }
-}
-
-#[tauri::command]
 pub async fn rpc_update(state: Option<RpcPresence>, app: AppHandle) -> Result<(), String> {
     let enabled = {
         let s = app.state::<AppState>();
@@ -790,11 +759,6 @@ pub async fn player_get_position(generation: u64) -> Result<f64, String> {
 #[tauri::command]
 pub async fn player_is_playing(generation: u64) -> Result<bool, String> {
     crate::services::player::is_playing(generation)
-}
-
-#[tauri::command]
-pub async fn player_check_finished(generation: u64) -> Result<bool, String> {
-    crate::services::player::check_finished(generation)
 }
 
 #[tauri::command]

@@ -107,13 +107,13 @@
     background: rgba(255, 107, 97, 0.08);
     color: var(--red);
     font-weight: 500;
-    border-color: rgba(255, 107, 97, 0.35);
+    border-color: var(--danger-border);
     box-shadow: none;
   }
 
   .danger:not(:disabled):hover {
     background: rgba(255, 107, 97, 0.15);
-    border-color: var(--red);
+    border-color: var(--danger-border-hover);
     color: var(--red);
     box-shadow: none;
   }

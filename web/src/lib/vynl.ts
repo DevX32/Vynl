@@ -114,8 +114,6 @@ export const vynl = {
 
   installTool: (name: ToolName): Promise<void> => cmd("install_tool", { name }),
 
-  updateTool: (name: ToolName): Promise<void> => cmd("install_tool", { name }),
-
   getLibrary: (): Promise<LibraryTrack[]> => cmd("get_library"),
 
   deleteLibraryTrack: (path: string, id?: string): Promise<void> =>
