@@ -254,6 +254,18 @@ pub(crate) fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) ->
     score += artist_sim * 30.0;
     score += channel_artist_sim * 15.0;
 
+    if track_artist_tokens.len() > 1 {
+        let mut c_meta: HashSet<String> = candidate_title_tokens.clone();
+        c_meta.extend(candidate_channel_tokens.iter().cloned());
+        let covered = track_artist_tokens.intersection(&c_meta).count();
+        if covered == 0 {
+            score -= 80.0;
+        } else if covered < track_artist_tokens.len() {
+            score -= 30.0 * (track_artist_tokens.len() - covered) as f64
+                / track_artist_tokens.len() as f64;
+        }
+    }
+
     if let (Some(expected), Some(actual)) = (track.duration, candidate.duration) {
         if expected > 0.0 && actual > 0.0 {
             let diff = (actual - expected).abs();
@@ -310,7 +322,7 @@ pub(crate) fn filter_and_rank_candidates(
             if dur > 0.0 && c_dur > 0.0 {
                 let diff = (c_dur - dur).abs();
                 let ratio = diff / dur;
-                return !(ratio > 0.5 || diff > 120.0);
+                return !(ratio > 0.2 || diff > 30.0);
             }
             true
         } else {

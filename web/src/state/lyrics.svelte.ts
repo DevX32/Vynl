@@ -155,22 +155,20 @@ export function loadLyrics(id: string | null): void {
       return;
     }
 
-    const local = await vynl.lyricsLocal(t.path);
+    let res: LyricsResult | null = null;
+
+    const viaPlugin = await runLyricsProviders({
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      duration: t.duration,
+    });
     if (version !== _loadVersion) return;
-    let res = local;
-    if (!res) {
-      const viaPlugin = await runLyricsProviders({
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        duration: t.duration,
-      });
-      if (version !== _loadVersion) return;
-      if (viaPlugin) {
-        res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
-        tryParseEmbeddedLyrics(res, t);
-      }
+    if (viaPlugin) {
+      res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
+      tryParseEmbeddedLyrics(res, t);
     }
+
     if (!res) {
       res = await vynl.lyricsFetch({
         title: t.title,
@@ -179,6 +177,10 @@ export function loadLyrics(id: string | null): void {
         duration: t.duration,
       });
       if (res) tryParseEmbeddedLyrics(res, t);
+    }
+
+    if (!res) {
+      res = await vynl.lyricsLocal(t.path);
     }
     if (version !== _loadVersion) return;
     if (!res && embeddedLyrics) {

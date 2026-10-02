@@ -447,6 +447,17 @@ fn parse_track_entity(
     if !entity_artists.is_empty() {
         track.artist = entity_artists;
     }
+    let entity_album = entity
+        .pointer("/albumOfTrack/name")
+        .and_then(|v| v.as_str())
+        .or_else(|| entity.pointer("/album/name").and_then(|v| v.as_str()))
+        .or_else(|| entity.get("album").and_then(|v| v.as_str()))
+        .or_else(|| entity.get("title").and_then(|v| v.as_str()))
+        .or_else(|| entity.get("name").and_then(|v| v.as_str()))
+        .unwrap_or("");
+    if !entity_album.is_empty() {
+        track.album = entity_album.to_string();
+    }
     track.cover = cover.clone();
 
     let track_id = entity

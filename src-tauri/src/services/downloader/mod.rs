@@ -175,7 +175,14 @@ pub fn get_done_track_ids(
         if output.exists() {
             for track in &collection.tracks {
                 let path = final_output_path(track, s);
-                if path.exists() {
+                if path.exists()
+                    || crate::services::history::has_downloaded_same_song(
+                        user_data_dir,
+                        &track.title,
+                        &track.artist,
+                        &track.album,
+                    )
+                {
                     done.insert(track.id.clone());
                 }
             }
@@ -889,6 +896,24 @@ async fn process_track(
 
     if final_path.exists() && !settings.overwrite {
         emit_track(app, track, TrackStatus::Skipped, 0.0, None);
+        return TrackOutcome::Skipped;
+    }
+
+    if !settings.overwrite
+        && crate::services::history::has_downloaded_same_song(
+            user_data_dir,
+            &track.title,
+            &track.artist,
+            &track.album,
+        )
+    {
+        emit_track(
+            app,
+            track,
+            TrackStatus::Skipped,
+            0.0,
+            Some("already downloaded"),
+        );
         return TrackOutcome::Skipped;
     }
 
