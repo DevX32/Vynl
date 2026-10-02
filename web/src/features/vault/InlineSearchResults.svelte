@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SearchResult } from "../../lib/types";
-  import { Music, Plus, Check } from "lucide-svelte";
+  import { Music, Check } from "lucide-svelte";
   import { fmtDuration } from "../../lib/format";
   import { t } from "@lib/i18n";
 
@@ -90,13 +90,11 @@
           {#if r.duration}
             <span class="dur mono">{fmtDuration(r.duration)}</span>
           {/if}
-          <span class="action" aria-hidden="true">
-            {#if added}
+          {#if added}
+            <span class="action" aria-hidden="true">
               <Check size={13} stroke-width={2} />
-            {:else}
-              <Plus size={14} stroke-width={2} />
-            {/if}
-          </span>
+            </span>
+          {/if}
         </button>
       {/each}
     {/if}
@@ -245,11 +243,6 @@
     transition:
       background 0.15s,
       color 0.15s;
-  }
-
-  .row:hover:not(:disabled) .action {
-    background: var(--accent-soft);
-    color: var(--accent);
   }
 
   .row.added .action {

@@ -39,6 +39,8 @@
   const finishedOk = $derived(
     summary != null && !summary.cancelled && counts.failed === 0,
   );
+
+  const canSave = $derived(counts.done + counts.skipped > 0);
 </script>
 
 <footer>
@@ -73,19 +75,21 @@
             <span class="pill-dur">{fmtDuration(totalDuration)}</span>
           </div>
         {/if}
-        <button
-          class="save-btn"
-          disabled={savingPlaylist}
-          title={saveHint ?? t("vault.saveToPlaylist")}
-          onclick={onSaveToPlaylist}
-        >
-          {#if savingPlaylist}
-            <Loader size={14} stroke-width={2} class="spin" />
-          {:else}
-            <ListPlus size={14} stroke-width={1.75} />
-          {/if}
-          <span>{t("vault.saveToPlaylist")}</span>
-        </button>
+        {#if canSave}
+          <button
+            class="save-btn"
+            disabled={savingPlaylist}
+            title={saveHint ?? t("vault.saveToPlaylist")}
+            onclick={onSaveToPlaylist}
+          >
+            {#if savingPlaylist}
+              <Loader size={14} stroke-width={2} class="spin" />
+            {:else}
+              <ListPlus size={14} stroke-width={1.75} />
+            {/if}
+            <span>{t("vault.saveToPlaylist")}</span>
+          </button>
+        {/if}
         <button
           class="download-btn"
           class:done={finishedOk}

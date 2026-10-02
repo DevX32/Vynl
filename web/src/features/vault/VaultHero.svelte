@@ -1,10 +1,31 @@
 <script lang="ts">
   import { Search, Loader, Link2, ListChecks, FolderDown } from "lucide-svelte";
+  import type { Snippet } from "svelte";
   import { t } from "@lib/i18n";
+
+  function collapse(
+    node: HTMLElement,
+    { duration = 200 }: { duration?: number } = {},
+  ): { duration: number; css: (t: number) => string } {
+    const calm =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const height = node.getBoundingClientRect().height;
+
+    return {
+      duration: calm ? 0 : duration,
+      css: (t: number) =>
+        `height: ${height * t}px;` +
+        `opacity: ${t};` +
+        `overflow: hidden;`,
+    };
+  }
 
   let {
     value = $bindable(""),
     compact = false,
+    children,
     onResolve,
     onSearch,
     onClear,
@@ -13,6 +34,7 @@
   }: {
     value?: string;
     compact?: boolean;
+    children?: Snippet;
     onResolve: () => void;
     onSearch: (query: string) => void;
     onClear: () => void;
@@ -94,12 +116,14 @@
 <section class="hero" class:compact>
   <div class="hero-main">
     {#if !compact}
-      <div class="kicker mono">{t("vault.kicker")}</div>
-      <h1 class="display">
-        {t("vault.heroLine1")}
-        <em class="accent-italic">{t("vault.heroItalic")}</em>
-        {t("vault.heroLine2")}
-      </h1>
+      <div class="hero-head" transition:collapse={{ duration: 220 }}>
+        <div class="kicker mono">{t("vault.kicker")}</div>
+        <h1 class="display">
+          {t("vault.heroLine1")}
+          <em class="accent-italic">{t("vault.heroItalic")}</em>
+          {t("vault.heroLine2")}
+        </h1>
+      </div>
     {/if}
 
     <div class="input-wrap" class:focused={!!value}>
@@ -133,6 +157,7 @@
         <span>{t("vault.hintClear")}</span>
       </div>
     {/if}
+    {@render children?.()}
   </div>
 
   {#if !compact}
@@ -196,8 +221,12 @@
     margin-bottom: 14px;
   }
 
+  .hero-head {
+    padding-bottom: 26px;
+  }
+
   h1 {
-    margin: 0 0 26px;
+    margin: 0;
     font-size: 46px;
     font-weight: 400;
     line-height: 1.06;
@@ -397,7 +426,10 @@
 
     h1 {
       font-size: 32px;
-      margin-bottom: 18px;
+    }
+
+    .hero-head {
+      padding-bottom: 18px;
     }
 
     .input-wrap {
@@ -430,7 +462,10 @@
 
     h1 {
       font-size: 26px;
-      margin-bottom: 14px;
+    }
+
+    .hero-head {
+      padding-bottom: 14px;
     }
 
     .input-wrap {

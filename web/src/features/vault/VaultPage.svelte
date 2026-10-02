@@ -13,6 +13,7 @@
   import { resolveCollectionWithPlugins } from "@lib/plugins/providers";
   import { getCurrentSettings } from "@state/settings.svelte";
   import { blobSrc, fmtDuration, totalSeconds } from "../../lib/format";
+  import { toasts } from "@lib/toast";
   import { t } from "@lib/i18n";
   import {
     getCurrentPlaylists,
@@ -330,6 +331,7 @@
     reviewing = false;
     error = null;
     summary = null;
+    saveHint = null;
 
     const skipIds = syncOnlyNew ? buildSkipIds(collection.tracks, doneIds) : [];
     const baseProgress = initProgress("queued");
@@ -405,16 +407,29 @@
     pendingPaths = [];
     pendingCollectionTitle = "";
     pickerBusy = false;
+    saveHint = null;
+  }
+
+  function notifyPlaylistSaved(name: string, added: number): void {
+    if (added > 0) toasts.success(t("vault.addedToPlaylist", { n: added, name }));
+    else toasts.info(t("vault.playlistAlreadyHas", { name }));
   }
 
   async function addToSelectedPlaylist(playlistId: string): Promise<void> {
     if (pickerBusy) return;
     pickerBusy = true;
+    const before = getCurrentPlaylists().find((p) => p.id === playlistId);
     try {
       await addToPlaylist(playlistId, pendingPaths);
       await refreshPlaylists();
+      const after = getCurrentPlaylists().find((p) => p.id === playlistId);
+      notifyPlaylistSaved(
+        after?.name ?? before?.name ?? "",
+        (after?.trackCount ?? 0) - (before?.trackCount ?? 0),
+      );
     } catch (e) {
       console.warn("addToPlaylist error:", e);
+      toasts.error(t("vault.playlistSaveFailed"));
     }
     closePicker();
   }
@@ -426,8 +441,12 @@
       const pl = await createPlaylist(name.trim() || "Untitled");
       await addToPlaylist(pl.id, pendingPaths);
       await refreshPlaylists();
+      const added =
+        getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
+      notifyPlaylistSaved(pl.name, added);
     } catch (e) {
       console.warn("createAndAddPlaylist error:", e);
+      toasts.error(t("vault.playlistSaveFailed"));
     }
     closePicker();
   }
@@ -471,6 +490,7 @@
     reviewing = false;
     error = null;
     summary = null;
+    saveHint = null;
     {
       const next = { ...progress };
       for (const t of sub.tracks)
@@ -566,18 +586,18 @@
     onClear={dismissSearch}
     resolving={resolving}
     searching={searching}
-  />
-
-  {#if showSearchResults}
-    <InlineSearchResults
-      query={url}
-      results={searchResults}
-      loading={searching}
-      error={searchError}
-      addedIds={addedTrackIds}
-      onSelect={addTrack}
-    />
-  {/if}
+  >
+    {#if showSearchResults}
+      <InlineSearchResults
+        query={url}
+        results={searchResults}
+        loading={searching}
+        error={searchError}
+        addedIds={addedTrackIds}
+        onSelect={addTrack}
+      />
+    {/if}
+  </VaultHero>
 
   {#if collection && !showSearchResults}
     <div class="coll-header">

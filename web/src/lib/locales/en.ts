@@ -101,6 +101,9 @@ export const en = {
     searchHint: "Type a song, artist, or album",
     saveToPlaylist: "Save to playlist",
     nothingDownloadedYet: "Download some tracks first",
+    addedToPlaylist: "Added {n} tracks to {name}",
+    playlistAlreadyHas: "Those tracks are already in {name}",
+    playlistSaveFailed: "Couldn't save to playlist",
   },
   playlistPicker: {
     title: "Add to playlist",
