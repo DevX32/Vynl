@@ -16,6 +16,8 @@ const _repeatCycle = [RepeatPreset.off, RepeatPreset.all, RepeatPreset.one];
 
 const _repeatKey = 'vynl.repeat';
 
+const _paletteWidth = 64;
+
 LoopMode _toLoopMode(RepeatPreset mode) {
   switch (mode) {
     case RepeatPreset.off:
@@ -33,7 +35,9 @@ class PlayerController extends ChangeNotifier {
   }
 
   final AudioPlayer _player = AudioPlayer();
-  List<CatalogTrack> _queue = [];
+
+  Map<String, CatalogTrack> _tracksById = {};
+  ConcatenatingAudioSource? _sequence;
   Future<void>? _initFuture;
   Color _accent = const Color(0xFFA894E8);
   RepeatPreset _repeat = RepeatPreset.off;
@@ -46,14 +50,39 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _ensureInit() => _initFuture ??= _init();
 
-  List<CatalogTrack> get queue => List.unmodifiable(_queue);
+  int get _length => _player.sequence?.length ?? 0;
+
+  CatalogTrack? _trackAt(int i) {
+    final sequence = _player.sequence;
+    if (sequence == null || i < 0 || i >= sequence.length) return null;
+    final tag = sequence[i].tag;
+    if (tag is! MediaItem) return null;
+    return _tracksById[tag.id];
+  }
+
+  List<CatalogTrack> get queue => List.unmodifiable([
+        for (var i = 0; i < _length; i++)
+          if (_trackAt(i) case final CatalogTrack t) t,
+      ]);
 
   int get index => _player.currentIndex ?? 0;
 
   CatalogTrack? get current {
     final i = _player.currentIndex;
-    if (i == null || i < 0 || i >= _queue.length) return null;
-    return _queue[i];
+    return i == null ? null : _trackAt(i);
+  }
+
+  Future<void> move(int from, int to) async {
+    final sequence = _sequence;
+    if (sequence == null || from < 0 || from >= _length) return;
+    final target = to.clamp(0, _length - 1);
+    if (from == target) return;
+    try {
+      await sequence.move(from, target);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('reorder failed: $e');
+    }
   }
 
   AudioPlayer get player => _player;
@@ -112,14 +141,13 @@ class PlayerController extends ChangeNotifier {
     final playable = tracks.where((t) => t.isDownloaded).toList();
     if (playable.isEmpty) return;
     final start = startIndex.clamp(0, playable.length - 1);
-    _queue = playable;
+    _tracksById = {for (final t in playable) t.id: t};
+    final sequence = ConcatenatingAudioSource(
+      children: [for (final t in playable) _sourceFor(t)],
+    );
+    _sequence = sequence;
     try {
-      await _player.setAudioSource(
-        ConcatenatingAudioSource(
-          children: [for (final t in playable) _sourceFor(t)],
-        ),
-        initialIndex: start,
-      );
+      await _player.setAudioSource(sequence, initialIndex: start);
       await _player.play();
     } catch (e) {
       debugPrint('play error: $e');
@@ -156,11 +184,10 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _extractAccent(CatalogTrack track) async {
     final path = track.localCoverPath;
-    if (path == null || !File(path).existsSync()) return;
+    if (path == null || path.isEmpty) return;
     try {
-      final bytes = await File(path).readAsBytes();
       final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(bytes),
+        ResizeImage(FileImage(File(path)), width: _paletteWidth),
         maximumColorCount: 8,
       );
       final tone = palette.dominantColor;
@@ -194,12 +221,12 @@ class PlayerController extends ChangeNotifier {
   Future<void> seek(Duration position) => _player.seek(position);
 
   Future<void> next() async {
-    if (_queue.isEmpty) return;
+    if (_length == 0) return;
     await _player.seekToNext();
   }
 
   Future<void> previous() async {
-    if (_queue.isEmpty) return;
+    if (_length == 0) return;
     if (_player.position > const Duration(seconds: 3)) {
       await _player.seek(Duration.zero);
       return;
@@ -208,7 +235,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> playAt(int i) async {
-    if (i < 0 || i >= _queue.length) return;
+    if (i < 0 || i >= _length) return;
     await _player.seek(Duration.zero, index: i);
     if (!_player.playing) await _player.play();
   }

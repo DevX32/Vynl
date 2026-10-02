@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -294,7 +293,7 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
     final canSync = result.synced;
 
     final cover = track.localCoverPath;
-    final hasArt = cover != null && File(cover).existsSync();
+    final hasArt = cover != null && cover.isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -852,19 +851,41 @@ void _showQueueSheet(BuildContext context, PlayerController player) {
                                 ),
                               ),
                             )
-                          : ListView.builder(
+                          : ReorderableListView.builder(
+                              buildDefaultDragHandles: false,
                               padding: const EdgeInsets.only(bottom: 20),
                               itemCount: upcoming.length,
+                              onReorderItem: (oldIndex, newIndex) {
+                                final base = current == null ? 0 : index + 1;
+                                player.move(base + oldIndex, base + newIndex);
+                              },
                               itemBuilder: (context, n) {
                                 final entry = upcoming[n];
-                                return TrackTile(
-                                  track: entry.value,
-                                  subtitle: entry.value.artist,
-                                  showStatus: false,
-                                  onTap: () {
-                                    player.playAt(entry.key);
-                                    Navigator.of(ctx).pop();
-                                  },
+                                return Padding(
+                                  key: ValueKey('${entry.value.id}-$n'),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  child: TrackTile(
+                                    track: entry.value,
+                                    subtitle: entry.value.artist,
+                                    showStatus: false,
+                                    trailing: ReorderableDragStartListener(
+                                      index: n,
+                                      child: const Padding(
+                                        padding: EdgeInsets.only(left: 8),
+                                        child: Icon(
+                                          Icons.drag_handle_rounded,
+                                          size: 20,
+                                          color: VynlColors.faint,
+                                        ),
+                                      ),
+                                    ),
+                                    onTap: () {
+                                      player.playAt(entry.key);
+                                      Navigator.of(ctx).pop();
+                                    },
+                                  ),
                                 );
                               },
                             ),
@@ -893,45 +914,59 @@ class _SeekBarState extends State<_SeekBar> {
   static const _touchHeight = 30.0;
   static const _restingSide = 9.0;
   static const _activeSide = 13.0;
+  static const _dragSlop = 8.0;
 
   double? _preview;
+  double? _anchor;
   bool _dragging = false;
 
-  void _begin(double dx, double width, Duration dur) {
-    setState(() {
-      _dragging = true;
-      _preview = width <= 0 || dur.inMilliseconds <= 0
-          ? null
-          : (dx / width).clamp(0.0, 1.0);
-    });
+  double? _fraction(double dx, double width, Duration dur) {
+    if (width <= 0 || dur.inMilliseconds <= 0) return null;
+    return (dx / width).clamp(0.0, 1.0);
+  }
+
+  void _begin(double dx) {
+    _anchor = dx;
   }
 
   void _move(double dx, double width, Duration dur) {
-    if (_preview == null || width <= 0 || dur.inMilliseconds <= 0) return;
-    final next = (dx / width).clamp(0.0, 1.0);
+    final anchor = _anchor;
+    if (anchor == null || width <= 0 || dur.inMilliseconds <= 0) return;
+    final armed = _dragging || (dx - anchor).abs() >= _dragSlop;
+    if (!armed) return;
+    final next = _fraction(dx, width, dur);
+    if (next == null) return;
     if (next == _preview) return;
-    setState(() => _preview = next);
+    setState(() {
+      _dragging = true;
+      _preview = next;
+    });
   }
 
   void _end() {
     final dur = widget.player.player.duration ?? Duration.zero;
     final preview = _preview;
-    final target = preview == null || dur.inMilliseconds <= 0
-        ? null
-        : Duration(milliseconds: (preview * dur.inMilliseconds).round());
+    final target = preview == null ? null : _durationAt(preview, dur);
     setState(() {
       _preview = null;
+      _anchor = null;
       _dragging = false;
     });
     if (target != null) widget.player.seek(target);
   }
 
   void _cancel() {
-    if (_preview == null && !_dragging) return;
+    if (_preview == null && _anchor == null && !_dragging) return;
     setState(() {
       _preview = null;
+      _anchor = null;
       _dragging = false;
     });
+  }
+
+  Duration? _durationAt(double fraction, Duration dur) {
+    if (dur.inMilliseconds <= 0) return null;
+    return Duration(milliseconds: (fraction * dur.inMilliseconds).round());
   }
 
   @override
@@ -951,9 +986,7 @@ class _SeekBarState extends State<_SeekBar> {
             final live =
                 total <= 0 ? 0.0 : (pos.inMilliseconds / total).clamp(0.0, 1.0);
             final progress = _preview ?? live;
-            final shown = _preview != null && total > 0
-                ? Duration(milliseconds: (_preview! * total).round())
-                : pos;
+            final shown = _preview != null ? _durationAt(_preview!, dur) ?? pos : pos;
             final buffered = total <= 0
                 ? 0.0
                 : (player.player.bufferedPosition.inMilliseconds / total)
@@ -976,8 +1009,7 @@ class _SeekBarState extends State<_SeekBar> {
                         value: formatDuration(shown),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onPanDown: (d) =>
-                              _begin(d.localPosition.dx, width, dur),
+                          onPanDown: (d) => _begin(d.localPosition.dx),
                           onPanUpdate: (d) =>
                               _move(d.localPosition.dx, width, dur),
                           onPanEnd: (_) => _end(),

@@ -8,6 +8,7 @@ import '../services/auth_store.dart';
 import '../services/library_db.dart';
 import '../services/notifications.dart';
 import '../services/sync_service.dart';
+import '../theme.dart';
 
 class AppState extends ChangeNotifier {
   AppState({
@@ -60,7 +61,10 @@ class AppState extends ChangeNotifier {
     return text;
   }
 
+  static final _minSplashMs = VynlMotion.splashEntrance.inMilliseconds;
+
   Future<void> bootstrap() async {
+    final started = DateTime.now();
     loading = true;
     notifyListeners();
     try {
@@ -75,6 +79,12 @@ class AppState extends ChangeNotifier {
       lastError = 'Startup failed: $e';
       debugPrint('bootstrap failed: $e\n$st');
     } finally {
+      final elapsed = DateTime.now().difference(started).inMilliseconds;
+      if (elapsed < _minSplashMs) {
+        await Future<void>.delayed(
+          Duration(milliseconds: _minSplashMs - elapsed),
+        );
+      }
       loading = false;
       notifyListeners();
     }

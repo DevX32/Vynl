@@ -21,6 +21,10 @@ import 'widgets/update_sheet.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 3000
+    ..maximumSizeBytes = 300 << 20;
+
   await configurePlatform();
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {

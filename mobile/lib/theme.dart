@@ -78,7 +78,11 @@ class VynlMotion {
   static const slow = Duration(milliseconds: 520);
 
   static Curve get emphasized => Curves.easeOutCubic;
+
   static Curve get standard => Curves.easeOutQuart;
+
+  static const splashEntrance = Duration(milliseconds: 1020);
+  static const splashExit = Duration(milliseconds: 400);
 }
 
 const kVynlBackground = BoxDecoration(color: VynlColors.bg);

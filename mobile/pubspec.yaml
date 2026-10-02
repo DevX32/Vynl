@@ -50,12 +50,9 @@ flutter:
     - family: Geist
       fonts:
         - asset: assets/fonts/Geist-Variable.ttf
-          weight: 400
     - family: Geist Mono
       fonts:
         - asset: assets/fonts/GeistMono-Variable.ttf
-          weight: 400
     - family: Sora
       fonts:
         - asset: assets/fonts/Sora-Variable.ttf
-          weight: 400

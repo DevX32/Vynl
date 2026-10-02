@@ -42,7 +42,7 @@ class ArtBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = coverPath;
-    final hasArt = path != null && File(path).existsSync();
+    final hasArt = path != null && path.isNotEmpty;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -54,31 +54,17 @@ class ArtBackdrop extends StatelessWidget {
           final height = constraints.maxHeight / shrink;
           final ratio = MediaQuery.devicePixelRatioOf(context);
 
-          Widget source;
-          if (hasArt) {
-            source = Image.file(
-              File(path),
-              fit: BoxFit.cover,
-              width: width,
-              height: height,
-              cacheWidth: (width * ratio).round(),
-              gaplessPlayback: true,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            );
-          } else {
-            source = DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    (tint ?? VynlColors.accent).withValues(alpha: 0.26),
-                    VynlColors.bg,
-                  ],
-                ),
-              ),
-            );
-          }
+          final source = hasArt
+              ? Image.file(
+                  File(path),
+                  fit: BoxFit.cover,
+                  width: width,
+                  height: height,
+                  cacheWidth: (width * ratio).round(),
+                  gaplessPlayback: true,
+                  errorBuilder: (_, __, ___) => _fallback(),
+                )
+              : _fallback();
 
           final picture = RepaintBoundary(
             child: FittedBox(
@@ -113,6 +99,21 @@ class ArtBackdrop extends StatelessWidget {
       ),
     );
   }
+
+  Widget _fallback() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            (tint ?? VynlColors.accent).withValues(alpha: 0.26),
+            VynlColors.bg,
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class ArtTile extends StatelessWidget {
@@ -134,7 +135,8 @@ class ArtTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = coverPath;
-    final hasArt = path != null && File(path).existsSync();
+    final hasArt = path != null && path.isNotEmpty;
+    final ratio = MediaQuery.devicePixelRatioOf(context);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -145,7 +147,7 @@ class ArtTile extends StatelessWidget {
             ? Image.file(
                 File(path),
                 fit: BoxFit.cover,
-                cacheWidth: (size * 2).round(),
+                cacheWidth: (size * ratio).round(),
                 errorBuilder: (_, __, ___) => _fallback(),
               )
             : _fallback(),
