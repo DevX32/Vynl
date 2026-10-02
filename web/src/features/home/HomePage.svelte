@@ -31,7 +31,7 @@
     else base = t("home.greeting.evening");
 
     const name = getCurrentSettings().displayName?.trim();
-    return name ? t("home.greeting.named", { greeting: base, name }) : base;
+    return { base, name: name ?? "" };
   });
 
   const quote = $derived.by(() => {
@@ -101,7 +101,8 @@
 <section class="home-page">
   <div class="home-scroll">
     <header class="home-hdr">
-      <span class="greeting display">{greeting}</span>
+      <span class="greeting">{greeting.base}{#if greeting.name},
+      <span class="greeting-name">{greeting.name}</span>{/if}</span>
       <span class="quote">{quote}</span>
       {#if library.length > 0}
         <span class="stat-line">
@@ -288,10 +289,17 @@
   }
 
   .greeting {
+    font-family: 'Sora', var(--font-display);
     font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.2;
     color: var(--text);
     margin-bottom: 6px;
+  }
+
+  .greeting-name {
+    color: var(--accent);
   }
 
   .quote {
