@@ -48,26 +48,34 @@ pub fn sidecar_path(file: &str, ext: &str) -> PathBuf {
     let p = Path::new(file);
     let parent = p.parent().unwrap_or(Path::new("."));
     let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+    parent.join("lyrics").join(format!("{}.{}", stem, ext))
+}
+
+pub fn legacy_sidecar_path(file: &str, ext: &str) -> PathBuf {
+    let p = Path::new(file);
+    let parent = p.parent().unwrap_or(Path::new("."));
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
     parent.join(format!("{}.{}", stem, ext))
 }
 
 pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
     for kind in &["lrc", "txt"] {
-        let p = sidecar_path(file, kind);
-        match fs::read_to_string(&p) {
-            Ok(text) if !text.trim().is_empty() => {
-                let lyrics_kind = match *kind {
-                    "lrc" => crate::commands::types::LyricsKind::Lrc,
-                    _ => crate::commands::types::LyricsKind::Txt,
-                };
-                return Some(LyricsResult {
-                    kind: lyrics_kind,
-                    text,
-                    source: crate::commands::types::LyricsSource::Local,
-                    file: Some(p.to_string_lossy().to_string()),
-                });
+        for p in [sidecar_path(file, kind), legacy_sidecar_path(file, kind)] {
+            match fs::read_to_string(&p) {
+                Ok(text) if !text.trim().is_empty() => {
+                    let lyrics_kind = match *kind {
+                        "lrc" => crate::commands::types::LyricsKind::Lrc,
+                        _ => crate::commands::types::LyricsKind::Txt,
+                    };
+                    return Some(LyricsResult {
+                        kind: lyrics_kind,
+                        text,
+                        source: crate::commands::types::LyricsSource::Local,
+                        file: Some(p.to_string_lossy().to_string()),
+                    });
+                }
+                _ => continue,
             }
-            _ => continue,
         }
     }
     None

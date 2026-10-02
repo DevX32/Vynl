@@ -1432,6 +1432,11 @@ async fn move_tagged_to_output(
         && !lrc.trim().is_empty()
     {
         let sidecar = lyrics::sidecar_path(&final_path.to_string_lossy(), "lrc");
+        if let Some(parent) = sidecar.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            eprintln!("lyrics sidecar mkdir failed for {parent:?}: {e}");
+        }
         let _ = std::fs::write(&sidecar, lrc);
     }
 

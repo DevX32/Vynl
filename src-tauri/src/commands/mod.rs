@@ -305,6 +305,8 @@ pub async fn delete_library_track(
     for sidecar_ext in &["lrc", "txt"] {
         let sidecar = crate::services::lyrics::sidecar_path(&canonical_str, sidecar_ext);
         let _ = fs::remove_file(sidecar);
+        let legacy = crate::services::lyrics::legacy_sidecar_path(&canonical_str, sidecar_ext);
+        let _ = fs::remove_file(legacy);
     }
 
     let mut stale = vec![path];
