@@ -68,10 +68,6 @@
 
   const featuredTrack = $derived.by(() => {
     if (library.length === 0) return null;
-    if (currentId) {
-      const playing = library.find((track) => track.id === currentId);
-      if (playing) return playing;
-    }
     const now = new Date();
     return library[(now.getDate() * 31 + now.getMonth()) % library.length];
   });
@@ -137,15 +133,15 @@
 
       <div class="actions">
         <button class="action-btn" onclick={shuffleAll}>
-          <Shuffle size={16} stroke-width={1.5} />
+          <Shuffle size={14} stroke-width={1.5} />
           <span>{t("home.shuffleAll")}</span>
         </button>
         <button class="action-btn" onclick={() => onNavigate("vault")}>
-          <Link2 size={16} stroke-width={1.5} />
+          <Link2 size={14} stroke-width={1.5} />
           <span>{t("home.addMusic")}</span>
         </button>
           <button class="action-btn" onclick={() => onNavigate("library")}>
-            <Library size={16} stroke-width={1.5} />
+            <Library size={14} stroke-width={1.5} />
             <span>{t("nav.library")}</span>
           </button>
       </div>
@@ -191,7 +187,7 @@
         <span class="empty-title display">{t("home.emptyTitle")}</span>
         <span class="empty-sub">{t("home.emptySub")}</span>
         <button class="action-btn" onclick={() => onNavigate("vault")}>
-          <Link2 size={16} stroke-width={1.5} />
+          <Link2 size={14} stroke-width={1.5} />
           <span>{t("home.openVault")}</span>
         </button>
       </div>
@@ -295,7 +291,6 @@
     display: block;
     width: 100%;
     height: 182px;
-    border: 1px solid var(--bg);
     border-radius: var(--radius-sm);
     text-align: left;
     margin-bottom: 20px;
@@ -304,10 +299,10 @@
 
   .featured-art {
     position: absolute;
-    inset: var(--featured-pad);
+    inset: 0;
     overflow: hidden;
-    clip-path: inset(0 round var(--featured-radius));
-    border-radius: var(--featured-radius);
+    clip-path: inset(0 round var(--radius-sm));
+    border-radius: var(--radius-sm);
     background: var(--bg);
   }
 
@@ -315,6 +310,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transform: scale(1.02);
     filter: saturate(1.25) brightness(0.9) blur(2px);
   }
 
@@ -330,8 +326,8 @@
 
   .featured-scrim {
     position: absolute;
-    inset: var(--featured-pad);
-    border-radius: var(--featured-radius);
+    inset: 0;
+    border-radius: var(--radius-sm);
     pointer-events: none;
     background:
       linear-gradient(
@@ -502,12 +498,12 @@
   .action-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 9px 16px;
+    gap: 7px;
+    padding: 7px 14px;
     border-radius: var(--radius-sm);
     background: var(--bg-raise);
     border: 1px solid var(--line);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--dim);
     transition:
       background 0.15s,
