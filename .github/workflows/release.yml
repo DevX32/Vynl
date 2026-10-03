@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Set true to publish the draft release for the selected tag"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -50,6 +57,7 @@ jobs:
   build:
     name: Build · ${{ matrix.platform }}
     needs: verify
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -114,6 +122,7 @@ jobs:
   mobile:
     name: Build Android APKs
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -212,6 +221,7 @@ jobs:
   publish:
     name: Publish release
     needs: [build, mobile]
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
