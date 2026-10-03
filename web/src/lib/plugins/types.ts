@@ -2,7 +2,7 @@ import type { ArtistInfo, Collection } from "@lib/types";
 
 export const PLUGIN_API_VERSION = 1;
 
-export type PluginPermission = "network" | "shell" | "player";
+type PluginPermission = "network" | "shell" | "player";
 
 export const PLUGIN_PERMISSIONS: PluginPermission[] = [
   "network",

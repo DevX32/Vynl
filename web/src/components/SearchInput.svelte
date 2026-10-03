@@ -46,10 +46,6 @@
       background 0.15s;
   }
 
-  .search-input-wrap:focus-within {
-    background: var(--bg-raise);
-  }
-
   .search-input-wrap :global(svg) {
     flex-shrink: 0;
     color: var(--faint);

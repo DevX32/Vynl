@@ -151,10 +151,6 @@ select {
   font-family: var(--font-display);
 }
 
-.serif {
-  font-family: var(--font-serif);
-}
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -215,27 +211,6 @@ select {
 .icon-btn.active {
   color: var(--accent);
   background: var(--accent-soft);
-}
-
-.select {
-  background: var(--bg-raise);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  color: var(--text);
-  font-size: 12px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.select:focus {
-  border-color: var(--accent);
-}
-
-.select option {
-  background: var(--bg);
-  color: var(--text);
 }
 
 .dlg-input {

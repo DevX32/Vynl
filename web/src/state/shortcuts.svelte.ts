@@ -25,7 +25,7 @@ export function getShowShortcutsOverlay(): boolean {
   return _showOverlay;
 }
 
-export function openShortcutsOverlay(): void {
+function openShortcutsOverlay(): void {
   _showOverlay = true;
 }
 
