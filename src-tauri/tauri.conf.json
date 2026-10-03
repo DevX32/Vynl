@@ -72,7 +72,7 @@
         "https://github.com/devx32/Vynl/releases/latest/download/latest.json"
       ],
       "windows": {
-        "installMode": "passive"
+        "installMode": "quiet"
       }
     }
   }

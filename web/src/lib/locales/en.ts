@@ -21,7 +21,7 @@ export const en = {
     emptyTitle: "Your library is empty",
     emptySub: "Paste a link in Vault to start building your collection",
     openVault: "Open Vault",
-    jumpBackIn: "Jump back in",
+    jumpBackIn: "Jump Back In",
   },
   player: {
     nothingPlaying: "Nothing playing",

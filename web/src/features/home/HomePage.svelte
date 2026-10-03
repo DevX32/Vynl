@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Play, Shuffle, Link2, Music2, Library } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
-  import { requestPlay } from "@state/now-playing.svelte";
+  import { requestPlay, getCurrentId } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
   import { getPluginHomeSections } from "@state/plugins.svelte";
   import { vynl } from "@lib/vynl";
@@ -18,6 +18,7 @@
 
   const library = $derived(getLibrary());
   const pluginSections = $derived(getPluginHomeSections());
+  const currentId = $derived(getCurrentId());
 
   let _tick = $state(0);
 
@@ -62,7 +63,7 @@
           b.id.localeCompare(a.id)
         );
       })
-      .slice(0, 6),
+      .slice(0, 7),
   );
 
   let featuredTrack = $state<typeof library[number] | null>(null);
@@ -130,7 +131,7 @@
             <span class="featured-artist">{featuredTrack.artist}</span>
           </div>
           <div class="featured-play">
-            <Play size={20} fill="currentColor" stroke-width={0} />
+            <Play size={16} fill="currentColor" stroke-width={0} />
           </div>
         </button>
       {/if}
@@ -179,7 +180,9 @@
                     <Play size={14} fill="var(--text)" stroke-width={0} />
                   </div>
                 </div>
-                <span class="recent-title">{track.title}</span>
+                <span class="recent-title" class:playing={track.id === currentId}
+                  >{track.title}</span
+                >
                 <span class="recent-artist">{track.artist}</span>
               </button>
             {/each}
@@ -297,16 +300,16 @@
     width: 100%;
     height: 168px;
     border-radius: var(--radius-sm);
-    overflow: hidden;
     text-align: left;
     margin-bottom: 20px;
     background: var(--bg-raise);
-    border: 1px solid var(--line);
   }
 
   .featured-art {
     position: absolute;
     inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
   }
 
   .featured-art-img {
@@ -314,11 +317,6 @@
     height: 100%;
     object-fit: cover;
     filter: saturate(1.25) brightness(0.9) blur(2px);
-    transition: filter 0.4s ease;
-  }
-
-  .featured:hover .featured-art-img {
-    filter: saturate(1.35) brightness(0.95) blur(2px);
   }
 
   .featured-art-placeholder {
@@ -334,6 +332,7 @@
   .featured-scrim {
     position: absolute;
     inset: 0;
+    border-radius: inherit;
     pointer-events: none;
     background:
       linear-gradient(
@@ -388,8 +387,8 @@
     position: absolute;
     right: 18px;
     bottom: 18px;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: var(--radius-sm);
     background: var(--accent);
     color: var(--accent-text);
@@ -409,7 +408,7 @@
 
   .featured:hover .featured-play {
     background: color-mix(in srgb, var(--accent) 82%, #ffffff);
-    transform: rotate(45deg) scale(1.08);
+    transform: rotate(45deg);
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
   }
 
@@ -532,8 +531,7 @@
   .recent-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px;
+    padding: 4px;
     border-radius: var(--radius-sm);
     text-align: left;
     flex: 1 1 120px;
@@ -588,16 +586,23 @@
   }
 
   .recent-title {
-    font-size: 12px;
-    line-height: 1.3;
+    margin-top: 8px;
+    font-size: 12.5px;
+    letter-spacing: -0.1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--text);
+    transition: color 0.15s;
+  }
+
+  .recent-title.playing {
+    color: var(--accent);
   }
 
   .recent-artist {
-    font-size: 10.5px;
+    margin-top: 2px;
+    font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
