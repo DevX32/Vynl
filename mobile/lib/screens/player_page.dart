@@ -88,21 +88,12 @@ class _PlayerPageState extends State<PlayerPage> {
             behavior: HitTestBehavior.opaque,
             onDoubleTap: hasLyrics ? _toggleLyrics : null,
             child: Stack(
+              fit: StackFit.expand,
               children: [
-                AnimatedSwitcher(
-                  duration: VynlMotion.slow,
-                  switchInCurve: VynlMotion.emphasized,
-                  switchOutCurve: Curves.easeIn,
-                  layoutBuilder: (current, previous) => Stack(
-                    fit: StackFit.expand,
-                    children: [...previous, if (current != null) current],
-                  ),
-                  child: _PlayerBody(
-                    key: ValueKey(lyricsOn ? 'lyr' : 'art'),
-                    player: player,
-                    track: track,
-                    lyricsOn: lyricsOn,
-                  ),
+                _PlayerBody(
+                  player: player,
+                  track: track,
+                  lyricsOn: lyricsOn,
                 ),
                 if (hasLyrics)
                   Positioned(
@@ -156,6 +147,8 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   DateTime? _failedAt;
   int _request = 0;
   bool _userScrolling = false;
+  bool _fetchScheduled = false;
+  bool _centred = false;
   Timer? _resume;
 
   static const _retryAfter = Duration(seconds: 20);
@@ -164,6 +157,15 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+  }
+
+  void _scheduleFetch() {
+    if (_fetchScheduled) return;
+    _fetchScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchScheduled = false;
+      _maybeFetch();
+    });
   }
 
   bool _shouldAttempt(String trackId) {
@@ -182,6 +184,7 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
       _remote = null;
       _shownFor = null;
       _lineKeys.clear();
+      _centred = false;
     }
 
     if (!_shouldAttempt(track.id)) return;
@@ -231,6 +234,9 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   void _centre(int index, int count) {
     if (_userScrolling || index < 0 || index >= count) return;
 
+    final opening = !_centred;
+    _centred = true;
+
     void snap() {
       if (!mounted || _userScrolling || !_scroll.hasClients) return;
       final ctx = _lineKeys[index]?.currentContext;
@@ -238,7 +244,7 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
       Scrollable.ensureVisible(
         ctx,
         alignment: 0.34,
-        duration: VynlMotion.normal,
+        duration: opening ? Duration.zero : VynlMotion.normal,
         curve: VynlMotion.emphasized,
       );
     }
@@ -258,11 +264,15 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
       WidgetsBinding.instance.addPostFrameCallback((_) => snap());
       return;
     }
-    _scroll.animateTo(
-      to,
-      duration: VynlMotion.normal,
-      curve: VynlMotion.emphasized,
-    );
+    if (opening) {
+      _scroll.jumpTo(to);
+    } else {
+      _scroll.animateTo(
+        to,
+        duration: VynlMotion.normal,
+        curve: VynlMotion.emphasized,
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => snap());
   }
 
@@ -281,7 +291,7 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    _maybeFetch();
+    _scheduleFetch();
 
     final track = widget.player.current;
     final embedded = lyricsFromTrack(track?.lyrics);
@@ -623,7 +633,6 @@ class _InstrumentalDotsState extends State<_InstrumentalDots>
 
 class _PlayerBody extends StatelessWidget {
   const _PlayerBody({
-    super.key,
     required this.player,
     required this.track,
     required this.lyricsOn,
@@ -645,7 +654,7 @@ class _PlayerBody extends StatelessWidget {
           children: [
             const Spacer(flex: 1),
             AnimatedSwitcher(
-              duration: VynlMotion.slow,
+              duration: VynlMotion.normal,
               switchInCurve: VynlMotion.emphasized,
               switchOutCurve: Curves.easeIn,
               child: lyricsOn

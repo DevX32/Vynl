@@ -114,12 +114,19 @@ List<LyricLine> parseLrcText(String text) {
   return out;
 }
 
+final _linesCache = Expando<List<LyricLine>>('vynl.lyricLines');
+
 List<LyricLine> toLyricLines(LyricsResult result) {
-  if (result.kind == LyricsKind.lrc) return parseLrcText(result.text);
-  return result.text
-      .split(RegExp(r'\r?\n'))
-      .map((line) => LyricLine(time: -1, text: line))
-      .toList();
+  final cached = _linesCache[result];
+  if (cached != null) return cached;
+  final lines = result.kind == LyricsKind.lrc
+      ? parseLrcText(result.text)
+      : result.text
+          .split(RegExp(r'\r?\n'))
+          .map((line) => LyricLine(time: -1, text: line))
+          .toList();
+  _linesCache[result] = lines;
+  return lines;
 }
 
 final _remoteCache = <String, LyricsResult>{};
@@ -137,15 +144,20 @@ LyricsResult? lyricsFromRemote(String trackId, String text) {
   return result;
 }
 
+final _embeddedCache = <String, LyricsResult>{};
+
 LyricsResult? lyricsFromTrack(String? embedded) {
   final trimmed = embedded?.trim() ?? '';
   if (trimmed.isEmpty) return null;
-  final looksSynced = _stampRe.hasMatch(trimmed);
-  return LyricsResult(
-    kind: looksSynced ? LyricsKind.lrc : LyricsKind.text,
+  final cached = _embeddedCache[trimmed];
+  if (cached != null) return cached;
+  final result = LyricsResult(
+    kind: _stampRe.hasMatch(trimmed) ? LyricsKind.lrc : LyricsKind.text,
     text: trimmed,
     source: LyricsSource.embedded,
   );
+  _embeddedCache[trimmed] = result;
+  return result;
 }
 
 int activeLineIndex(List<LyricLine> lines, Duration position) {
@@ -183,7 +195,11 @@ bool isInstrumental(String text) {
   return _instrumentalRe.hasMatch(t);
 }
 
+final _stanzaCache = <String, List<List<String>>>{};
+
 List<List<String>> stanzasOf(String text) {
+  final cached = _stanzaCache[text];
+  if (cached != null) return cached;
   final stanzas = <List<String>>[];
   var current = <String>[];
   for (final line in text.split(RegExp(r'\r?\n'))) {
@@ -197,5 +213,6 @@ List<List<String>> stanzasOf(String text) {
     current.add(line.trim());
   }
   if (current.isNotEmpty) stanzas.add(current);
+  _stanzaCache[text] = stanzas;
   return stanzas;
 }
