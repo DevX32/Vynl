@@ -9,6 +9,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
+import '../theme.dart';
 
 enum RepeatPreset { off, all, one }
 
@@ -39,7 +40,7 @@ class PlayerController extends ChangeNotifier {
   Map<String, CatalogTrack> _tracksById = {};
   ConcatenatingAudioSource? _sequence;
   Future<void>? _initFuture;
-  Color _accent = const Color(0xFFA894E8);
+  Color _accent = VynlColors.accent;
   RepeatPreset _repeat = RepeatPreset.off;
   bool _accentFromArt = false;
 

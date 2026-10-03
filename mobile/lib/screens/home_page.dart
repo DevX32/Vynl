@@ -405,10 +405,13 @@ class _FeaturedCard extends StatelessWidget {
         children: [
           const ColoredBox(color: VynlColors.bg),
           const _Pinstripes(color: VynlColors.bgTop),
-          const DecoratedBox(
+          DecoratedBox(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                colors: [Color(0x14B9A7FF), Color(0x00B9A7FF)],
+                colors: [
+                  VynlColors.accent.withValues(alpha: 0.08),
+                  VynlColors.accent.withValues(alpha: 0.0),
+                ],
                 stops: [0.14, 0.30],
               ),
             ),
