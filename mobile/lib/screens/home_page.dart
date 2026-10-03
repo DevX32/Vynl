@@ -291,13 +291,10 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Mirrors the desktop card's `saturate(1.25) brightness(0.9)` filter so the
-/// artwork stays recognisable instead of turning into a flat smear.
 ColorFilter _coverFilter({
   double saturation = 1.25,
   double brightness = 0.9,
 }) {
-  // Luminance-preserving Rec.709 saturation, then a brightness scale.
   final sr = (1 - saturation) * 0.2126;
   final sg = (1 - saturation) * 0.7152;
   final sb = (1 - saturation) * 0.0722;
@@ -314,11 +311,19 @@ const _featuredScrim = LinearGradient(
   end: Alignment.bottomCenter,
   colors: [
     Color(0x0008080C),
+    Color(0x0008080C),
     Color(0x4708080C),
     Color(0xB808080C),
     Color(0xE608080C),
   ],
-  stops: [0.0, 0.55, 0.82, 1.0],
+  stops: [0.0, 0.28, 0.55, 0.82, 1.0],
+);
+
+const _featuredVignette = RadialGradient(
+  center: Alignment.bottomLeft,
+  radius: 0.9,
+  colors: [Color(0x73000000), Color(0x00000000)],
+  stops: [0.0, 0.65],
 );
 
 class _FeaturedCard extends StatelessWidget {
@@ -344,26 +349,29 @@ class _FeaturedCard extends StatelessWidget {
               const DecoratedBox(
                 decoration: BoxDecoration(gradient: _featuredScrim),
               ),
+              const DecoratedBox(
+                decoration: BoxDecoration(gradient: _featuredVignette),
+              ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 82, 16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 76, 18),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Jump back in',
+                      'Jump Back In',
                       style: TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xBFF0F0EC),
+                        fontSize: 11,
+                        color: Color(0xBFFFFFFF),
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 6),
                     Text(
                       track.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
@@ -382,12 +390,12 @@ class _FeaturedCard extends StatelessWidget {
                 ),
               ),
               Positioned(
-                right: 16,
+                right: 18,
                 bottom: 18,
                 child: VynlControl(
                   onTap: onTap,
                   style: VynlControlStyle.accent,
-                  size: 42,
+                  size: 40,
                   iconSize: 24,
                   icon: Icons.play_arrow_rounded,
                 ),
@@ -402,14 +410,27 @@ class _FeaturedCard extends StatelessWidget {
   Widget _cover() {
     final path = track.localCoverPath;
     if (path == null || path.isEmpty) {
-      return const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0x3DB9A7FF), Color(0xFF0E0E10)],
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: VynlColors.bg),
+          const _Pinstripes(color: VynlColors.bgTop),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                colors: [Color(0x14B9A7FF), Color(0x00B9A7FF)],
+                stops: [0.14, 0.30],
+              ),
+            ),
           ),
-        ),
+          const Center(
+            child: Icon(
+              Icons.music_note_rounded,
+              size: 40,
+              color: VynlColors.faint,
+            ),
+          ),
+        ],
       );
     }
 
@@ -436,6 +457,41 @@ class _FeaturedCard extends StatelessWidget {
       },
     );
   }
+}
+
+class _Pinstripes extends StatelessWidget {
+  const _Pinstripes({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _PinstripePainter(color));
+  }
+}
+
+class _PinstripePainter extends CustomPainter {
+  _PinstripePainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final reach = math.sqrt(size.width * size.width + size.height * size.height) / 2;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = color;
+
+    for (var r = 0.0; r < reach; r += 4) {
+      canvas.drawCircle(center, r, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PinstripePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _ActionPill extends StatelessWidget {
@@ -557,43 +613,10 @@ class _RecentCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Stack(
-                    children: [
-                      ArtTile(
-                        coverPath: track.localCoverPath,
-                        size: artSize,
-                        accent: accent,
-                      ),
-                      if (active)
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius:
-                                  BorderRadius.circular(VynlRadius.thumb),
-                              border: Border.all(
-                                color: accent.withValues(alpha: 0.55),
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: VynlControl(
-                      onTap: onTap,
-                      style: VynlControlStyle.accent,
-                      size: 30,
-                      iconSize: 19,
-                      icon: Icons.play_arrow_rounded,
-                    ),
-                  ),
-                ],
+              ArtTile(
+                coverPath: track.localCoverPath,
+                size: artSize,
+                accent: accent,
               ),
               const SizedBox(height: 8),
               Text(
