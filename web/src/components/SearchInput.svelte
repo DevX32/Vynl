@@ -63,5 +63,4 @@
   .search-field::placeholder {
     color: var(--faint);
   }
-
 </style>

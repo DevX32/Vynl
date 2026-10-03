@@ -1,7 +1,4 @@
-import {
-  getCurrentVolume,
-  toggleMute,
-} from "@state/player.svelte";
+import { getCurrentVolume, toggleMute } from "@state/player.svelte";
 import { toggle, setVolumeAt } from "@lib/player.svelte";
 import { closeEq, getEqOpen } from "@state/equalizer.svelte";
 
@@ -12,11 +9,31 @@ interface Shortcut {
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  { key: "Space", labelKey: "shortcuts.actions.playPause", categoryKey: "shortcuts.categories.playback" },
-  { key: "M", labelKey: "shortcuts.actions.muteUnmute", categoryKey: "shortcuts.categories.volume" },
-  { key: "ArrowUp", labelKey: "shortcuts.actions.volumeUp", categoryKey: "shortcuts.categories.volume" },
-  { key: "ArrowDown", labelKey: "shortcuts.actions.volumeDown", categoryKey: "shortcuts.categories.volume" },
-  { key: "F", labelKey: "shortcuts.actions.fullscreenPlayer", categoryKey: "shortcuts.categories.interface" },
+  {
+    key: "Space",
+    labelKey: "shortcuts.actions.playPause",
+    categoryKey: "shortcuts.categories.playback",
+  },
+  {
+    key: "M",
+    labelKey: "shortcuts.actions.muteUnmute",
+    categoryKey: "shortcuts.categories.volume",
+  },
+  {
+    key: "ArrowUp",
+    labelKey: "shortcuts.actions.volumeUp",
+    categoryKey: "shortcuts.categories.volume",
+  },
+  {
+    key: "ArrowDown",
+    labelKey: "shortcuts.actions.volumeDown",
+    categoryKey: "shortcuts.categories.volume",
+  },
+  {
+    key: "F",
+    labelKey: "shortcuts.actions.fullscreenPlayer",
+    categoryKey: "shortcuts.categories.interface",
+  },
 ];
 
 let _showOverlay = $state(false);
@@ -37,7 +54,12 @@ export function isInputField(element: EventTarget | null): boolean {
   const el = element as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    el.isContentEditable
+  );
 }
 
 export function handleGlobalKey(e: KeyboardEvent): void {
@@ -63,7 +85,7 @@ export function handleGlobalKey(e: KeyboardEvent): void {
 
   const key = e.key.toLowerCase();
 
-    if (key === "?") {
+  if (key === "?") {
     e.preventDefault();
     openShortcutsOverlay();
     return;

@@ -62,11 +62,8 @@ export interface PluginStoreResult {
 }
 
 declare global {
-  var __VYNL_PLUGIN_SDK__:
-    | { readonly PLUGIN_API_VERSION: number }
-    | undefined;
+  var __VYNL_PLUGIN_SDK__: { readonly PLUGIN_API_VERSION: number } | undefined;
 }
-
 
 type PluginSettingFieldKind = "boolean" | "number" | "text" | "select";
 
@@ -90,7 +87,6 @@ export interface PluginSettingsSection {
   pluginName?: string;
 }
 
-
 interface PluginHomeItem {
   id: string;
   title: string;
@@ -106,7 +102,6 @@ export interface PluginHomeSection {
   pluginId?: string;
   pluginName?: string;
 }
-
 
 export interface PluginLyricsLookup {
   title: string;
@@ -143,12 +138,9 @@ export interface PluginResolverProvider {
 }
 
 export type PluginProvider =
-  | PluginLyricsProvider
-  | PluginMetadataProvider
-  | PluginResolverProvider;
+  PluginLyricsProvider | PluginMetadataProvider | PluginResolverProvider;
 
 export type PluginProviderKind = PluginProvider["kind"];
-
 
 export interface PluginHttpInit {
   method?: string;
@@ -162,7 +154,6 @@ export interface PluginHttpResponse {
   headers: Record<string, string>;
   text: string;
 }
-
 
 export interface PluginPlayerState {
   playing: boolean;
@@ -192,7 +183,6 @@ export interface PluginSharedState {
   playing: boolean;
 }
 
-
 export interface PluginPage {
   title: string;
   pluginId?: string;
@@ -206,7 +196,6 @@ export interface PluginPageRecord extends PluginPage {
   pluginName: string;
   mount: PluginPageMount;
 }
-
 
 export interface VynlPluginAPI {
   readonly pluginId: string;
@@ -224,7 +213,10 @@ export interface VynlPluginAPI {
     register<T extends PluginProvider>(provider: T): string;
     unregister(id: string): boolean;
     list(kind?: PluginProviderKind): PluginProvider[];
-    get<T extends PluginProvider>(id: string, kind: PluginProviderKind): T | undefined;
+    get<T extends PluginProvider>(
+      id: string,
+      kind: PluginProviderKind,
+    ): T | undefined;
     subscribe(cb: () => void): () => void;
   };
 

@@ -55,7 +55,10 @@ impl PhraseMatcher {
     }
 
     fn count(&self, hay_norm: &str) -> usize {
-        self.phrases.iter().filter(|p| hay_norm.contains(*p)).count()
+        self.phrases
+            .iter()
+            .filter(|p| hay_norm.contains(*p))
+            .count()
             + self
                 .singles
                 .iter()
@@ -363,8 +366,8 @@ pub(crate) fn filter_and_rank_candidates(
         let artist_hit = !expected_artist.is_empty()
             && (expected_artist.intersection(&info.title_tokens).count() > 0
                 || expected_artist.intersection(&info.channel_tokens).count() > 0);
-        let title_hit =
-            !expected_title.is_empty() && expected_title.intersection(&info.title_tokens).count() > 0;
+        let title_hit = !expected_title.is_empty()
+            && expected_title.intersection(&info.title_tokens).count() > 0;
 
         (artist_hit || title_hit) && duration_ok(c)
     };

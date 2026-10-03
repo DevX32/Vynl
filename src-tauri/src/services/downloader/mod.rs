@@ -360,12 +360,7 @@ async fn tag(
             let cover_c = cover.map(|s| s.to_string());
             let lyrics_c = lyrics.map(|s| s.to_string());
             let lofty_res = tokio::task::spawn_blocking(move || {
-                try_tag_with_lofty(
-                    &out,
-                    &track_c,
-                    cover_c.as_deref(),
-                    lyrics_c.as_deref(),
-                )
+                try_tag_with_lofty(&out, &track_c, cover_c.as_deref(), lyrics_c.as_deref())
             })
             .await
             .map_err(|e| format!("lofty join failed: {e}"))
@@ -891,9 +886,7 @@ async fn process_track(
         return TrackOutcome::Skipped;
     }
 
-    if !settings.overwrite
-        && history_lookup.has_downloaded_same_song(&track.title, &track.artist)
-    {
+    if !settings.overwrite && history_lookup.has_downloaded_same_song(&track.title, &track.artist) {
         emit_track(
             app,
             track,
@@ -966,8 +959,7 @@ async fn process_track(
         }
     };
 
-    let (lyrics_text, lyrics_lrc_text) =
-        process_lyrics_lookup(track, user_data_dir).await;
+    let (lyrics_text, lyrics_lrc_text) = process_lyrics_lookup(track, user_data_dir).await;
 
     let ffmpeg = resolve_tool("ffmpeg", user_data_dir).unwrap_or_default();
     let mut tagged_file = tmp.join(format!(

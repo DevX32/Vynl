@@ -1,28 +1,27 @@
 @font-face {
-  font-family: 'Geist';
-  src: url('../assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-family: "Geist";
+  src: url("../assets/fonts/Geist-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Sora';
-  src: url('../assets/fonts/Sora-Variable.woff2') format('woff2');
+  font-family: "Sora";
+  src: url("../assets/fonts/Sora-Variable.woff2") format("woff2");
   font-weight: 100 800;
   font-display: swap;
 }
 
-
 @font-face {
-  font-family: 'Fraunces';
-  src: url('../assets/fonts/Fraunces-Variable.woff2') format('woff2');
+  font-family: "Fraunces";
+  src: url("../assets/fonts/Fraunces-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Geist Mono';
-  src: url('../assets/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-family: "Geist Mono";
+  src: url("../assets/fonts/GeistMono-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
@@ -48,8 +47,16 @@
   --accent-text: #161128;
   --vinyl: #14141c;
   --placeholder-gradient:
-    radial-gradient(circle at 50% 50%, rgba(185, 167, 255, 0.08) 0 14%, transparent 30%),
-    repeating-radial-gradient(circle at 50% 50%, var(--bg-raise) 0 2px, var(--bg) 2px 4px);
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(185, 167, 255, 0.08) 0 14%,
+      transparent 30%
+    ),
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      var(--bg-raise) 0 2px,
+      var(--bg) 2px 4px
+    );
 
   --radius-sm: 4px;
   --radius: 10px;
@@ -65,10 +72,10 @@
   --hover-surface: color-mix(in srgb, var(--accent) 14%, var(--bg-raise));
   --hover-border: color-mix(in srgb, var(--accent) 30%, transparent);
 
-  --font-display: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', monospace;
-  --font-lyrics: 'Sora', var(--font-display);
-  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "Cascadia Code", monospace;
+  --font-lyrics: "Sora", var(--font-display);
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
 }
 
 * {
@@ -200,7 +207,10 @@ select {
   border-radius: var(--radius-sm);
   color: var(--faint);
   border: 1px solid transparent;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .icon-btn:hover {
@@ -248,7 +258,6 @@ select {
   }
 }
 
-
 .row.dragging {
   opacity: 0.3;
 }
@@ -293,7 +302,9 @@ select {
   height: 14px;
   background: var(--faint);
   border-radius: 3px;
-  transition: transform 0.2s, background 0.2s;
+  transition:
+    transform 0.2s,
+    background 0.2s;
 }
 
 .switch.on .knob {
