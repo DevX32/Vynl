@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 
 static HTTP: once_cell::sync::Lazy<reqwest::Client> = once_cell::sync::Lazy::new(|| {
@@ -12,6 +12,8 @@ static HTTP: once_cell::sync::Lazy<reqwest::Client> = once_cell::sync::Lazy::new
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 const CHUNK_STALL_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_CACHE_FILES: usize = 300;
+const MAX_CACHE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub(crate) fn cache_dir() -> PathBuf {
     dirs::cache_dir()
@@ -34,6 +36,7 @@ fn safe_name(key: &str) -> String {
 pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> {
     let dir = cache_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("cache dir: {e}"))?;
+    prune_cache();
 
     let dest = dir.join(safe_name(key));
     if dest.exists()
@@ -92,6 +95,46 @@ async fn stream_body(
         }
     }
     file.flush().await.map_err(|e| format!("write cache: {e}"))
+}
+
+fn prune_cache() {
+    let dir = cache_dir();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+
+    let mut files: Vec<(PathBuf, u64, u64)> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = path.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let mtime = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        files.push((path, mtime, meta.len()));
+    }
+
+    files.sort_by_key(|(_, mtime, _)| *mtime);
+
+    let total_bytes: u64 = files.iter().map(|(_, _, len)| *len).sum();
+    let mut excess_files = files.len().saturating_sub(MAX_CACHE_FILES);
+    let mut excess_bytes = total_bytes.saturating_sub(MAX_CACHE_BYTES);
+
+    for (path, _, len) in files {
+        if excess_files == 0 && excess_bytes == 0 {
+            break;
+        }
+        let _ = std::fs::remove_file(&path);
+        if excess_files > 0 {
+            excess_files -= 1;
+        }
+        excess_bytes = excess_bytes.saturating_sub(len);
+    }
 }
 
 pub fn clear_cache() -> Result<(), String> {
