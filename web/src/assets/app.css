@@ -46,6 +46,7 @@
   --danger-border-hover: color-mix(in srgb, var(--red) 60%, transparent);
   --amber: #d9a15c;
   --accent-text: #161128;
+  --vinyl: #14141c;
   --placeholder-gradient:
     radial-gradient(circle at 50% 50%, rgba(185, 167, 255, 0.08) 0 14%, transparent 30%),
     repeating-radial-gradient(circle at 50% 50%, var(--bg-raise) 0 2px, var(--bg) 2px 4px);

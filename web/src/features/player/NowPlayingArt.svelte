@@ -186,7 +186,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: #14141c;
+    background: var(--vinyl);
     overflow: hidden;
     will-change: transform;
     box-shadow:
@@ -221,7 +221,7 @@
       radial-gradient(
         circle at 50% 50%,
         var(--accent) 0 9px,
-        color-mix(in srgb, var(--accent) 55%, #14141c) 9px 20px,
+        color-mix(in srgb, var(--accent) 55%, var(--vinyl)) 9px 20px,
         transparent 20px
       ),
       linear-gradient(

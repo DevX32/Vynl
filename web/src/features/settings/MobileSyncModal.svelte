@@ -271,7 +271,7 @@
   }
 
   .notice.warn {
-    color: #d9a441;
+    color: var(--amber);
     border-color: rgba(217, 164, 65, 0.3);
   }
 

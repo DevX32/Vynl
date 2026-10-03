@@ -39,8 +39,8 @@
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-sm);
-    color: #ff5e5b;
-    background: rgba(255, 94, 91, 0.12);
+    color: var(--red);
+    background: color-mix(in srgb, var(--red) 12%, transparent);
   }
 
   .info {
@@ -69,8 +69,8 @@
     gap: 6px;
     font-size: 11px;
     letter-spacing: 0.04em;
-    color: #ff5e5b;
-    background: rgba(255, 94, 91, 0.1);
+    color: var(--red);
+    background: color-mix(in srgb, var(--red) 10%, transparent);
     border-radius: var(--radius-sm);
     padding: 8px 16px;
     white-space: nowrap;
@@ -81,7 +81,7 @@
   }
 
   .kofi-btn:hover {
-    background: rgba(255, 94, 91, 0.18);
+    background: color-mix(in srgb, var(--red) 18%, transparent);
   }
 
   .kofi-btn:active {
