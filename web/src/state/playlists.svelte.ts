@@ -73,7 +73,10 @@ export async function createPlaylist(name: string): Promise<Playlist> {
   return pl;
 }
 
-export async function reorderPlaylists(fromId: string, toId: string): Promise<void> {
+export async function reorderPlaylists(
+  fromId: string,
+  toId: string,
+): Promise<void> {
   const from = _meta.findIndex((p) => p.id === fromId);
   const to = _meta.findIndex((p) => p.id === toId);
   if (from < 0 || to < 0 || from === to) return;
@@ -150,7 +153,7 @@ export async function setPlaylistCover(
 let _pathSource: LibraryTrack[] | null = null;
 let _pathMap = new Map<string, LibraryTrack>();
 
-function tracksOf(pl: Playlist): LibraryTrack[] {
+export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
   if (_pathSource !== library) {
     const next = new Map<string, LibraryTrack>();

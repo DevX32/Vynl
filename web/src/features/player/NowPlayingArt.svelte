@@ -30,21 +30,30 @@
 
   const VINYL_DEG_PER_FRAME = 360 / 8.2 / 60;
   const EASE = 0.045;
+  const SPEED_EPSILON = 0.01;
 
   let vinylDeg = $state(0);
   let vinylSpeed = 0;
   let raf = 0;
 
-  function loop() {
-    const targetVinyl = playing ? VINYL_DEG_PER_FRAME : 0;
-    vinylSpeed += (targetVinyl - vinylSpeed) * EASE;
+  function loop(target: number): void {
+    vinylSpeed += (target - vinylSpeed) * EASE;
     vinylDeg = (vinylDeg + vinylSpeed) % 360;
-    raf = requestAnimationFrame(loop);
+    if (target === 0 && Math.abs(vinylSpeed) < SPEED_EPSILON) {
+      vinylSpeed = 0;
+      raf = 0;
+      return;
+    }
+    raf = requestAnimationFrame(() => loop(target));
   }
 
   $effect(() => {
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    const target = playing ? VINYL_DEG_PER_FRAME : 0;
+    raf = requestAnimationFrame(() => loop(target));
+    return () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
   });
 </script>
 

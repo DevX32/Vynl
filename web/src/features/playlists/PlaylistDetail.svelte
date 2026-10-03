@@ -43,6 +43,7 @@
     removeFromPlaylist,
     resolvePlaylistCovers,
     setPlaylistCover,
+    tracksOf,
   } from "@state/playlists.svelte";
   import { t } from "@lib/i18n";
   import AddTracksOverlay from "./AddTracksOverlay.svelte";
@@ -58,18 +59,15 @@
     q = "";
   });
 
-  const currentTracks = $derived(
-    pl
-      ? pl.paths
-          .map((p) => library.find((t) => t.path === p))
-          .filter((t): t is import("../../lib/types").LibraryTrack => !!t)
-      : [],
-  );
+  const currentTracks = $derived(pl ? tracksOf(pl) : []);
   const covers = $derived(resolvePlaylistCovers(pl?.cover, currentTracks));
   const plHits = $derived(
     q
       ? currentTracks.filter((t) =>
-          matchesQuery(q.toLowerCase(), `${t.title} ${t.artist} ${t.album}`.toLowerCase()),
+          matchesQuery(
+            q.toLowerCase(),
+            `${t.title} ${t.artist} ${t.album}`.toLowerCase(),
+          ),
         )
       : currentTracks,
   );
@@ -95,7 +93,10 @@
     const first = shuffle
       ? currentTracks[Math.floor(Math.random() * currentTracks.length)]
       : currentTracks[0];
-    requestPlay(first.id, currentTracks.map((track) => track.path));
+    requestPlay(
+      first.id,
+      currentTracks.map((track) => track.path),
+    );
   }
 
   async function addPaths(paths: string[]): Promise<void> {
@@ -307,14 +308,23 @@
             class:dragging={drag.dragging && drag.grabIdx === i}
             role="button"
             tabindex="-1"
-            style:cursor={!q ? (drag.dragging ? "grabbing" : "grab") : "pointer"}
+            style:cursor={!q
+              ? drag.dragging
+                ? "grabbing"
+                : "grab"
+              : "pointer"}
             onpointerdown={(e) => onRowPointerDown(e, i)}
             oncontextmenu={(e) => showTrackCtx(e, i)}
             onclick={() => {
               if (shouldSkipClick()) return;
               requestPlay(trk.id, pl.paths);
             }}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); requestPlay(trk.id, pl.paths); } }}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                requestPlay(trk.id, pl.paths);
+              }
+            }}
           >
             <span class="c-num mono">
               {#if trk.id === getCurrentTrack()?.id}

@@ -37,6 +37,10 @@ export function useDragList(options: DragListOptions) {
   let suppressClick = false;
   let teardown: (() => void) | null = null;
 
+  let centers: number[] | null = null;
+  let bandTop = Number.NEGATIVE_INFINITY;
+  let bandBottom = Number.POSITIVE_INFINITY;
+
   function rowCenters(): number[] {
     if (!drag.rowsEl) return [];
     const rows = drag.rowsEl.querySelectorAll<HTMLElement>(
@@ -46,6 +50,35 @@ export function useDragList(options: DragListOptions) {
       const rect = row.getBoundingClientRect();
       return rect.top + rect.height / 2;
     });
+  }
+
+  function measureCenters(y: number): number | null {
+    const measured = rowCenters();
+    centers = measured;
+    const idx = nearestIndex(measured, y);
+    if (idx === null) {
+      bandTop = Number.NEGATIVE_INFINITY;
+      bandBottom = Number.POSITIVE_INFINITY;
+    } else {
+      bandTop =
+        idx > 0
+          ? (measured[idx - 1] + measured[idx]) / 2
+          : Number.NEGATIVE_INFINITY;
+      bandBottom =
+        idx < measured.length - 1
+          ? (measured[idx] + measured[idx + 1]) / 2
+          : Number.POSITIVE_INFINITY;
+    }
+    return idx;
+  }
+
+  function overIndex(y: number): number | null {
+    if (!centers || y <= bandTop || y > bandBottom) return measureCenters(y);
+    return nearestIndex(centers, y);
+  }
+
+  function invalidateCenters(): void {
+    centers = null;
   }
 
   function start(e: PointerEvent, opts: DragStartOptions): void {
@@ -58,6 +91,7 @@ export function useDragList(options: DragListOptions) {
     startY = e.clientY;
     pressed = true;
     suppressClick = false;
+    invalidateCenters();
     attach();
   }
 
@@ -67,7 +101,11 @@ export function useDragList(options: DragListOptions) {
       if (Math.abs(e.clientY - startY) < threshold) return;
       drag.dragging = true;
     }
-    drag.overIdx = nearestIndex(rowCenters(), e.clientY);
+    const next = overIndex(e.clientY);
+    if (next !== drag.overIdx) {
+      invalidateCenters();
+    }
+    drag.overIdx = next;
   }
 
   function finish(): void {
@@ -92,6 +130,7 @@ export function useDragList(options: DragListOptions) {
     drag.overIdx = null;
     drag.dragging = false;
     grabPath = null;
+    invalidateCenters();
     detach();
   }
 
@@ -116,17 +155,20 @@ export function useDragList(options: DragListOptions) {
     const onMoveEvent = (e: PointerEvent) => onMove(e);
     const onUp = () => finish();
     const onCancelEvent = () => cancel();
+    const onScrollEvent = () => invalidateCenters();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
     window.addEventListener("pointermove", onMoveEvent);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancelEvent);
+    window.addEventListener("scroll", onScrollEvent, true);
     window.addEventListener("keydown", onKey);
     teardown = () => {
       window.removeEventListener("pointermove", onMoveEvent);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancelEvent);
+      window.removeEventListener("scroll", onScrollEvent, true);
       window.removeEventListener("keydown", onKey);
       teardown = null;
     };
