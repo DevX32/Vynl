@@ -109,10 +109,6 @@ fn parse_search_entries(data: &Value, source: &MatchSource, out: &mut Vec<Search
             source: source.clone(),
             view_count: entry.get("view_count").and_then(|v| v.as_i64()),
             channel_verified: entry.get("channel_is_verified").and_then(|v| v.as_bool()),
-            upload_date: entry
-                .get("upload_date")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
         });
     }
 }

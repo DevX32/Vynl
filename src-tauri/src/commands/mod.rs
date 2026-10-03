@@ -323,13 +323,12 @@ pub async fn get_library(app: AppHandle) -> Result<Vec<LibraryTrack>, String> {
 
     if let Some(cached) = crate::services::library::load_cache(&user_data) {
         let app_clone = app.clone();
-        let baseline = cached.clone();
         tokio::task::spawn_blocking(move || {
             let ud = user_data_dir(&app_clone).ok();
             let od = output_dir_from_settings(&app_clone).ok();
             if let (Some(ud), Some(od)) = (ud, od) {
-                let result = crate::services::library::scan_cached_library(&od, &ud);
-                if result != baseline {
+                let (result, changed) = crate::services::library::scan_cached_library(&od, &ud);
+                if changed {
                     let _ = app_clone.emit("library-updated", &result);
                 }
             }
@@ -620,7 +619,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 let mut guard = state.pending.lock().map_err(|e| e.to_string())?;
                 *guard = Some(update);
             }
-            update_svc::emit_status(&app, &status).await;
+            update_svc::emit_status(&app, &status);
             Ok(status)
         }
         Ok(None) => {
@@ -634,7 +633,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 ready: None,
                 error: None,
             };
-            update_svc::emit_status(&app, &status).await;
+            update_svc::emit_status(&app, &status);
             Ok(status)
         }
         Err(error) => {
@@ -670,12 +669,12 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
             Ok(None) => {
                 let error = "No update available";
                 let status = update_error_status(None, error);
-                update_svc::emit_status(&app, &status).await;
+                update_svc::emit_status(&app, &status);
                 return Err(error.to_string());
             }
             Err(error) => {
                 let status = update_error_status(None, &error);
-                update_svc::emit_status(&app, &status).await;
+                update_svc::emit_status(&app, &status);
                 return Err(error);
             }
         },
@@ -692,7 +691,7 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
         ready: None,
         error: None,
     };
-    update_svc::emit_status(&app, &downloading_status).await;
+    update_svc::emit_status(&app, &downloading_status);
 
     if let Err(e) = update_svc::download_and_install(&app, update).await {
         let error_status = UpdateStatus {
@@ -704,7 +703,7 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
             ready: None,
             error: Some(e.clone()),
         };
-        update_svc::emit_status(&app, &error_status).await;
+        update_svc::emit_status(&app, &error_status);
         return Err(e);
     }
 

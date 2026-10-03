@@ -227,32 +227,33 @@ fn disk_cache_path(user_data_dir: &Path) -> PathBuf {
     user_data_dir.join(DISK_CACHE_FILE)
 }
 
-fn load_disk_cache(user_data_dir: &Path) -> HashMap<String, Option<LyricsResult>> {
+fn load_disk_cache(user_data_dir: &Path) -> (HashMap<String, DiskCacheEntry>, Option<SystemTime>) {
     let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let path = disk_cache_path(user_data_dir);
-    let data = match fs::read_to_string(&path) {
-        Ok(d) => d,
-        Err(_) => return HashMap::new(),
-    };
-    let entries: Vec<DiskCacheEntry> = serde_json::from_str(&data).unwrap_or_default();
-    entries.into_iter().map(|e| (e.key, e.result)).collect()
+    let mtime = fs::metadata(&path).and_then(|m| m.modified()).ok();
+    let entries: Vec<DiskCacheEntry> = fs::read_to_string(&path)
+        .ok()
+        .and_then(|d| serde_json::from_str(&d).ok())
+        .unwrap_or_default();
+    let map = entries.into_iter().map(|e| (e.key.clone(), e)).collect();
+    (map, mtime)
 }
 
-fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, Option<LyricsResult>>) {
+fn disk_cache_mtime(user_data_dir: &Path) -> Option<SystemTime> {
     let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    let mut entries: Vec<DiskCacheEntry> = cache
-        .iter()
-        .map(|(k, v)| DiskCacheEntry {
-            key: k.clone(),
-            result: v.clone(),
-            accessed_at: now_millis(),
-        })
-        .collect();
+    fs::metadata(disk_cache_path(user_data_dir))
+        .and_then(|m| m.modified())
+        .ok()
+}
+
+fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, DiskCacheEntry>) {
+    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let mut entries: Vec<&DiskCacheEntry> = cache.values().collect();
     entries.sort_by_key(|entry| std::cmp::Reverse(entry.accessed_at));
     entries.truncate(DISK_CACHE_MAX);
 
     let path = disk_cache_path(user_data_dir);
-    if let Ok(json) = serde_json::to_string_pretty(&entries) {
+    if let Ok(json) = serde_json::to_string(&entries) {
         let _ = fs::write(&path, json);
     }
 }
@@ -277,13 +278,12 @@ pub async fn fetch_lyrics_with_cache(
         }
     }
 
-    {
-        let disk = load_disk_cache(user_data_dir);
-        if let Some(cached) = disk.get(&key) {
-            let mut mem_cache = remote_cache().write().await;
-            mem_cache.insert(key.clone(), cached.clone());
-            return cached.clone();
-        }
+    let (mut disk, disk_loaded_mtime) = load_disk_cache(user_data_dir);
+    if let Some(entry) = disk.get(&key) {
+        let hit = entry.result.clone();
+        let mut mem_cache = remote_cache().write().await;
+        mem_cache.insert(key, hit.clone());
+        return hit;
     }
 
     let result = do_fetch(lookup).await;
@@ -311,11 +311,18 @@ pub async fn fetch_lyrics_with_cache(
         }
     }
 
-    {
-        let mut disk = load_disk_cache(user_data_dir);
-        disk.insert(key, result.clone());
-        save_disk_cache(user_data_dir, &disk);
+    if disk_cache_mtime(user_data_dir) != disk_loaded_mtime {
+        disk = load_disk_cache(user_data_dir).0;
     }
+    disk.insert(
+        key.clone(),
+        DiskCacheEntry {
+            key,
+            result: result.clone(),
+            accessed_at: now_millis(),
+        },
+    );
+    save_disk_cache(user_data_dir, &disk);
 
     result
 }

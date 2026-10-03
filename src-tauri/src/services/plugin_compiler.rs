@@ -178,6 +178,7 @@ async fn download_esbuild(app: &AppHandle, user_data: &Path) -> Result<String, S
     if !esbuild_runs(&dest.to_string_lossy()) {
         return Err("esbuild was installed but failed to run".into());
     }
+    tools::invalidate_tool_path_cache(Some("esbuild"));
     Ok(dest.to_string_lossy().into_owned())
 }
 

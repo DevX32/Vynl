@@ -368,11 +368,21 @@ async fn enrich_covers(client: &Client, tracks: &mut [TrackMeta]) {
         }
     }
 
-    for (id, cover) in results {
-        if let Some(c) = cover {
-            for t in tracks.iter_mut() {
-                if t.id == id {
-                    t.cover = Some(c.clone());
+    let with_covers: Vec<(String, String)> = results
+        .into_iter()
+        .filter_map(|(id, cover)| cover.map(|c| (id, c)))
+        .collect();
+
+    if !with_covers.is_empty() {
+        let mut index_by_id: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (i, t) in tracks.iter().enumerate() {
+            index_by_id.entry(t.id.clone()).or_default().push(i);
+        }
+        for (id, cover) in with_covers {
+            if let Some(indices) = index_by_id.get(&id) {
+                for &i in indices {
+                    tracks[i].cover = Some(cover.clone());
                 }
             }
         }

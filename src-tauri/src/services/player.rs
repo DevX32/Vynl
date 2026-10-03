@@ -10,7 +10,6 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 static VOLUME: AtomicU32 = AtomicU32::new(75);
-static PLAYING: AtomicBool = AtomicBool::new(false);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 
 pub const PLAYBACK_TICK_EVENT: &str = "vynl:player:tick";
@@ -502,7 +501,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             }
                             current_path = Some(path.clone());
                             active_generation = 0;
-                            PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             match File::open(&path) {
                                 Ok(file) => match Decoder::new(BufReader::new(file)) {
@@ -527,7 +525,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                                         sink = Some(new_sink);
                                                         duration_secs = total;
                                                         active_generation = generation;
-                                                        PLAYING.store(true, Ordering::Relaxed);
                                                         PAUSED.store(false, Ordering::Relaxed);
                                                         PlayerResp::Ok
                                                     }
@@ -555,7 +552,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             if let Some(s) = sink.take() {
                                 s.stop();
                             }
-                            PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Ok
                         }
@@ -576,11 +572,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Bool(false)
                         } else if let Some(s) = sink.as_ref().filter(|sink| !sink.empty()) {
                             s.play();
-                            PLAYING.store(true, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Bool(true)
                         } else {
-                            PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Bool(false)
                         }

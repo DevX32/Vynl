@@ -97,15 +97,30 @@ fn file_exists(p: &str) -> bool {
     !p.trim().is_empty() && Path::new(p.trim()).exists()
 }
 
-pub fn has_downloaded_same_song(
-    user_data_dir: &Path,
-    title: &str,
-    artist: &str,
-    _album: &str,
-) -> bool {
-    let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    let data = read_history(user_data_dir);
-    data_entries_any_match(&data, title, artist, _album)
+pub struct HistoryLookup {
+    entries: Vec<(String, String)>,
+}
+
+impl HistoryLookup {
+    pub fn load(user_data_dir: &Path) -> Self {
+        let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
+        let data = read_history(user_data_dir);
+        let entries = data
+            .entries
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| e.ok && file_exists(&e.file))
+            .map(|e| (e.title, e.artist))
+            .collect();
+        Self { entries }
+    }
+
+    pub fn has_downloaded_same_song(&self, title: &str, artist: &str) -> bool {
+        let title = title.trim();
+        self.entries
+            .iter()
+            .any(|(t, a)| t.trim().eq_ignore_ascii_case(title) && artist_matches(a, artist))
+    }
 }
 
 fn artist_matches(a: &str, b: &str) -> bool {
@@ -117,12 +132,4 @@ fn artist_matches(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
         || a.to_lowercase().contains(&b.to_lowercase())
         || b.to_lowercase().contains(&a.to_lowercase())
-}
-
-fn data_entries_any_match(data: &HistoryFile, title: &str, artist: &str, _album: &str) -> bool {
-    data.entries.as_deref().unwrap_or_default().iter().any(|e| {
-        e.ok && file_exists(&e.file)
-            && e.title.trim().eq_ignore_ascii_case(title.trim())
-            && artist_matches(&e.artist, artist)
-    })
 }
