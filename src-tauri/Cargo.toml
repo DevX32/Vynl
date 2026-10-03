@@ -4,7 +4,7 @@ version = "0.2.1"
 description = "Music Player"
 authors = ["Vynl"]
 edition = "2024"
-license = "AGPL-3.0-only"
+license = "GPL-3.0-only"
 
 [lib]
 name = "vynl_lib"

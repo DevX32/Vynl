@@ -2,6 +2,7 @@ name: vynl_mobile
 description: Vynl offline music player for Android
 publish_to: "none"
 version: 0.2.1+2005
+license: GPL-3.0-only
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

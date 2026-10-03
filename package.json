@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "description": "A minimal music player",
   "author": "DevX32",
-  "license": "AGPL-3.0-only",
+  "license": "GPL-3.0-only",
   "engines": {
     "node": ">=18"
   },
