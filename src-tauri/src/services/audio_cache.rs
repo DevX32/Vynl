@@ -130,9 +130,7 @@ fn prune_cache() {
             break;
         }
         let _ = std::fs::remove_file(&path);
-        if excess_files > 0 {
-            excess_files -= 1;
-        }
+        excess_files = excess_files.saturating_sub(1);
         excess_bytes = excess_bytes.saturating_sub(len);
     }
 }
