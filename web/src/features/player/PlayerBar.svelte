@@ -170,8 +170,6 @@
     gap: clamp(8px, 2cqi, 24px);
   }
 
-  /* Transport buttons live in TransportControls; pass the idle dim down as a
-     custom property so it doesn't stack on the component's own disabled dim. */
   .player-bar.empty .transport {
     --tc-idle-opacity: 0.4;
   }

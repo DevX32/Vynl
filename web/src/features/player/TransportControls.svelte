@@ -76,8 +76,6 @@
 </button>
 
 <style>
-  /* Visual knobs supplied by the host bar (PlayerBar / FullscreenPlayer):
-     --tc-icon-color, --tc-idle-opacity, --tc-disabled-opacity. */
   .icon-btn {
     width: 32px;
     height: 32px;
