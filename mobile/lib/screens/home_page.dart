@@ -98,17 +98,8 @@ class _HomePageState extends State<HomePage> {
     return sorted.take(_recentLimit).toList();
   }
 
-  static CatalogTrack _featured(
-    List<CatalogTrack> pool,
-    CatalogTrack? current,
-    DateTime now,
-  ) {
-    if (current != null) {
-      for (final t in pool) {
-        if (t.id == current.id) return t;
-      }
-    }
-    return pool[math.Random(now.day * 31 + now.month).nextInt(pool.length)];
+  static CatalogTrack _featured(List<CatalogTrack> pool, DateTime now) {
+    return pool[(now.day * 31 + (now.month - 1)) % pool.length];
   }
 
   @override
@@ -119,8 +110,7 @@ class _HomePageState extends State<HomePage> {
     final now = DateTime.now();
     final pool = app.downloadedTracks;
     final recent = _recent(pool);
-    final featured =
-        pool.isEmpty ? null : _featured(pool, player.current, now);
+    final featured = pool.isEmpty ? null : _featured(pool, now);
     final header = _Header(
       greeting: _greetingFor(now),
       quote: _quotes[(now.day - 1) % _quotes.length],

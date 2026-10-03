@@ -169,7 +169,7 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   bool _shouldAttempt(String trackId) {
     if (_triedFor != trackId) return true;
     final at = _failedAt;
-    if (at == null) return false; // already succeeded
+    if (at == null) return false;
     return DateTime.now().difference(at) >= _retryAfter;
   }
 
