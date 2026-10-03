@@ -66,15 +66,14 @@
       .slice(0, 7),
   );
 
-  let featuredTrack = $state<typeof library[number] | null>(null);
-
-  $effect(() => {
-    const lib = library;
-    if (lib.length > 0) {
-      featuredTrack = lib[Math.floor(Math.random() * lib.length)];
-    } else {
-      featuredTrack = null;
+  const featuredTrack = $derived.by(() => {
+    if (library.length === 0) return null;
+    if (currentId) {
+      const playing = library.find((track) => track.id === currentId);
+      if (playing) return playing;
     }
+    const now = new Date();
+    return library[(now.getDate() * 31 + now.getMonth()) % library.length];
   });
 
   function shuffleAll(): void {
@@ -176,9 +175,6 @@
                       <Music2 size={18} stroke-width={1.2} />
                     </div>
                   {/if}
-                  <div class="recent-play">
-                    <Play size={14} fill="var(--text)" stroke-width={0} />
-                  </div>
                 </div>
                 <span class="recent-title" class:playing={track.id === currentId}
                   >{track.title}</span
@@ -298,18 +294,21 @@
     position: relative;
     display: block;
     width: 100%;
-    height: 168px;
+    height: 182px;
+    border: 1px solid var(--bg);
     border-radius: var(--radius-sm);
     text-align: left;
     margin-bottom: 20px;
-    background: var(--bg-raise);
+    background: var(--bg);
   }
 
   .featured-art {
     position: absolute;
-    inset: 0;
+    inset: var(--featured-pad);
     overflow: hidden;
-    border-radius: inherit;
+    clip-path: inset(0 round var(--featured-radius));
+    border-radius: var(--featured-radius);
+    background: var(--bg);
   }
 
   .featured-art-img {
@@ -331,8 +330,8 @@
 
   .featured-scrim {
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
+    inset: var(--featured-pad);
+    border-radius: var(--featured-radius);
     pointer-events: none;
     background:
       linear-gradient(
@@ -385,8 +384,8 @@
 
   .featured-play {
     position: absolute;
-    right: 18px;
-    bottom: 18px;
+    right: 22px;
+    bottom: 22px;
     width: 36px;
     height: 36px;
     border-radius: var(--radius-sm);
@@ -545,7 +544,6 @@
   }
 
   .recent-art {
-    position: relative;
     width: 100%;
     aspect-ratio: 1;
     border-radius: var(--radius-sm);
@@ -568,21 +566,6 @@
     justify-content: center;
     color: var(--faint);
     background: var(--placeholder-gradient);
-  }
-
-  .recent-play {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-
-  .recent-card:hover .recent-play {
-    opacity: 1;
   }
 
   .recent-title {
@@ -645,7 +628,7 @@
     }
 
     .featured {
-      height: 140px;
+      height: 150px;
       margin-bottom: 16px;
     }
   }
