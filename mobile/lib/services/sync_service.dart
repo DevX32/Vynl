@@ -180,7 +180,7 @@ class SyncService {
 
     final errSummary = errors.isEmpty
         ? null
-        : '${errors.length} failed â€” ${errors.first}';
+        : '${errors.length} failed — ${errors.first}';
     await notifications.showDone(count: done, error: errSummary);
     onProgress(
       SyncProgress(

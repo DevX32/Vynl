@@ -496,10 +496,12 @@ class _ChipState extends State<_Chip> {
 
     if (widget.accent) {
       bg = hover
-          ? Color.lerp(VynlColors.accent, Colors.white, 0.18)!
-          : VynlColors.accent;
-      fg = accentTextFor(bg);
-      border = bg;
+          ? VynlColors.accent.withValues(alpha: 0.10)
+          : Colors.transparent;
+      fg = VynlColors.accent;
+      border = hover
+          ? VynlColors.accent
+          : VynlColors.accent.withValues(alpha: 0.5);
     } else if (widget.danger) {
       bg = hover
           ? VynlColors.danger.withValues(alpha: 0.10)

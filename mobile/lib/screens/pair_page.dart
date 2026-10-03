@@ -59,7 +59,7 @@ class _PairPageState extends State<PairPage> {
     if (kIsWeb || Platform.isWindows) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('QR scanning needs a phone camera â€” use Android.'),
+          content: Text('QR scanning needs a phone camera — use Android.'),
         ),
       );
       return;
@@ -90,7 +90,7 @@ class _PairPageState extends State<PairPage> {
       app.setTab(AppState.tabLibrary);
       navigator.maybePop();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Paired â€” syncing libraryâ€¦')),
+        const SnackBar(content: Text('Paired — syncing library…')),
       );
     } catch (e) {
       if (mounted) {
@@ -158,7 +158,7 @@ class _PairPageState extends State<PairPage> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'On your PC open Vynl â†’ Settings â†’ Mobile Sync, '
+                      'On your PC open Vynl → Settings → Mobile Sync, '
                       'then point your camera at the code shown there.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -185,7 +185,7 @@ class _PairPageState extends State<PairPage> {
                           ),
                         )
                       : const Icon(Icons.qr_code_scanner_rounded),
-                  label: Text(_busy ? 'Scanningâ€¦' : 'Scan pairing code'),
+                  label: Text(_busy ? 'Scanning…' : 'Scan pairing code'),
                 ),
               ),
             ],
