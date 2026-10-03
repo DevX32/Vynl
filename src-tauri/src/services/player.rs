@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rodio::source::SeekError;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
@@ -14,7 +14,8 @@ static PLAYING: AtomicBool = AtomicBool::new(false);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 
 pub const PLAYBACK_TICK_EVENT: &str = "vynl:player:tick";
-const TICK_INTERVAL: Duration = Duration::from_millis(50);
+const TICK_INTERVAL: Duration = Duration::from_millis(100);
+const DEVICE_POLL_INTERVAL: Duration = Duration::from_secs(2);
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
 pub fn set_app_handle(app: &AppHandle) {
@@ -464,6 +465,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
     let mut pending_seek: Option<(f64, u64)> = None;
     let mut duration_secs: Option<f64> = None;
     let mut last_tick_key: Option<TickKey> = None;
+    let mut last_device_poll = Instant::now();
 
     loop {
         match rx.recv_timeout(TICK_INTERVAL) {
@@ -632,10 +634,13 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                 let _ = reply_tx.send(resp);
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                let now = default_output_device_name();
-                if now != output_device_name {
-                    output_device_name = now;
-                    reopen_output(&mut output, &mut handle, &mut sink, &current_path);
+                if last_device_poll.elapsed() >= DEVICE_POLL_INTERVAL {
+                    last_device_poll = Instant::now();
+                    let now = default_output_device_name();
+                    if now != output_device_name {
+                        output_device_name = now;
+                        reopen_output(&mut output, &mut handle, &mut sink, &current_path);
+                    }
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
