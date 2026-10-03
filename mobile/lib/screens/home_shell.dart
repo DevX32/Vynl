@@ -101,38 +101,32 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
               ],
             ),
             body: IndexedStack(index: app.tabIndex, children: pages),
-            bottomNavigationBar: DecoratedBox(
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: VynlColors.line)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const MiniPlayer(),
-                  NavigationBar(
-                    selectedIndex:
-                        app.tabIndex.clamp(0, _titles.length - 1),
-                    onDestinationSelected: app.setTab,
-                    destinations: const [
-                      NavigationDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: 'Home',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.library_music_outlined),
-                        selectedIcon: Icon(Icons.library_music_rounded),
-                        label: 'Library',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.queue_music_outlined),
-                        selectedIcon: Icon(Icons.queue_music_rounded),
-                        label: 'Playlists',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            bottomNavigationBar: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const MiniPlayer(),
+                NavigationBar(
+                  selectedIndex: app.tabIndex.clamp(0, _titles.length - 1),
+                  onDestinationSelected: app.setTab,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.library_music_outlined),
+                      selectedIcon: Icon(Icons.library_music_rounded),
+                      label: 'Library',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.queue_music_outlined),
+                      selectedIcon: Icon(Icons.queue_music_rounded),
+                      label: 'Playlists',
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),

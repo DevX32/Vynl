@@ -207,7 +207,7 @@ ThemeData buildVynlTheme({Color? seed}) {
       surfaceTintColor: Colors.transparent,
       indicatorColor: accent.withValues(alpha: 0.16),
       indicatorShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(VynlRadius.control * 2),
+        borderRadius: BorderRadius.circular(VynlRadius.control),
       ),
       height: 66,
       elevation: 0,
