@@ -11,7 +11,3 @@ export function openEq(): void {
 export function closeEq(): void {
   _open = false;
 }
-
-export function toggleEq(): void {
-  _open = !_open;
-}

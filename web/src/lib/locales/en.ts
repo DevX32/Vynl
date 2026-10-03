@@ -366,17 +366,10 @@ export const en = {
     },
     actions: {
       playPause: "Play / Pause",
-      nextTrack: "Next track",
-      previousTrack: "Previous track",
       muteUnmute: "Mute / Unmute",
       volumeUp: "Volume up",
       volumeDown: "Volume down",
-      toggleShuffle: "Toggle shuffle",
-      toggleLoop: "Toggle loop",
-      toggleLyrics: "Toggle lyrics",
       fullscreenPlayer: "Fullscreen player",
-      equalizer: "Equalizer",
-      showShortcuts: "Show shortcuts",
     },
   },
   eq: {
