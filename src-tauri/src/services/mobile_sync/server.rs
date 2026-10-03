@@ -1,19 +1,24 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::extract::{Path as AxumPath, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use tokio::io::{AsyncRead, AsyncSeekExt, ReadBuf, SeekFrom};
 use tokio::net::TcpListener;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, RwLock, oneshot};
 
 use crate::commands::types::LibraryTrack;
 use crate::services::mobile_sync::{self, load_library_tracks, load_playlists};
@@ -24,6 +29,11 @@ pub struct AppStateInner {
     pub pin: Mutex<String>,
     pub token: Mutex<String>,
     pub attempts: Mutex<HashMap<String, Attempt>>,
+    pub tracks: RwLock<Option<Arc<TrackSnapshot>>>,
+    pub tracks_load: Mutex<()>,
+    pub manifest: RwLock<Option<Arc<ManifestSnapshot>>>,
+    pub manifest_load: Mutex<()>,
+    pub next_generation: AtomicU64,
 }
 
 #[derive(Clone, Copy)]
@@ -38,6 +48,132 @@ type SharedState = Arc<AppStateInner>;
 const MAX_PAIR_FAILURES: u32 = 5;
 const LOCKOUT_SECS: u64 = 30;
 const LOCKOUT_MAX_SECS: u64 = 900;
+const SNAPSHOT_TTL: Duration = Duration::from_secs(10);
+const STREAM_CHUNK: usize = 128 * 1024;
+
+pub struct TrackSnapshot {
+    tracks: Arc<Vec<LibraryTrack>>,
+    by_id: HashMap<String, usize>,
+    generation: u64,
+    loaded_at: Instant,
+}
+
+impl TrackSnapshot {
+    fn build(tracks: Vec<LibraryTrack>, generation: u64) -> Self {
+        let by_id = tracks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.id.clone(), i))
+            .collect();
+        Self {
+            tracks: Arc::new(tracks),
+            by_id,
+            generation,
+            loaded_at: Instant::now(),
+        }
+    }
+
+    fn is_fresh(&self) -> bool {
+        self.loaded_at.elapsed() < SNAPSHOT_TTL
+    }
+
+    fn get(&self, id: &str) -> Option<&LibraryTrack> {
+        self.by_id.get(id).and_then(|i| self.tracks.get(*i))
+    }
+}
+
+async fn track_snapshot(state: &SharedState) -> Arc<TrackSnapshot> {
+    {
+        let cached = state.tracks.read().await;
+        if let Some(snap) = cached.as_ref()
+            && snap.is_fresh()
+        {
+            return Arc::clone(snap);
+        }
+    }
+
+    let _load = state.tracks_load.lock().await;
+    {
+        let cached = state.tracks.read().await;
+        if let Some(snap) = cached.as_ref()
+            && snap.is_fresh()
+        {
+            return Arc::clone(snap);
+        }
+    }
+
+    let user_data = state.user_data.clone();
+    let generation = state.next_generation.fetch_add(1, Ordering::Relaxed) + 1;
+    let snap = tokio::task::spawn_blocking(move || {
+        TrackSnapshot::build(load_library_tracks(&user_data), generation)
+    })
+    .await
+    .unwrap_or_else(|_| TrackSnapshot::build(Vec::new(), generation));
+
+    let snap = Arc::new(snap);
+    *state.tracks.write().await = Some(Arc::clone(&snap));
+    snap
+}
+
+/// The manifest is derived from the track snapshot, so it is cached against
+/// that snapshot's generation. A fresh library load produces a new generation
+/// and the manifest is rebuilt with it, which keeps a desktop rescan visible
+/// without re-stat'ing every file on every request.
+async fn cached_manifest(state: &SharedState) -> Arc<Vec<MobileSyncManifestEntry>> {
+    let snap = track_snapshot(state).await;
+
+    {
+        let cached = state.manifest.read().await;
+        if let Some(entries) = cached.as_ref()
+            && entries.generation == snap.generation
+        {
+            return Arc::clone(&entries.entries);
+        }
+    }
+
+    let _load = state.manifest_load.lock().await;
+    {
+        let cached = state.manifest.read().await;
+        if let Some(entries) = cached.as_ref()
+            && entries.generation == snap.generation
+        {
+            return Arc::clone(&entries.entries);
+        }
+    }
+
+    let tracks = Arc::clone(&snap.tracks);
+    let generation = snap.generation;
+    let entries = tokio::task::spawn_blocking(move || build_manifest(&tracks))
+        .await
+        .unwrap_or_default();
+
+    let entries = Arc::new(ManifestSnapshot {
+        entries: Arc::new(entries),
+        generation,
+    });
+    *state.manifest.write().await = Some(Arc::clone(&entries));
+    Arc::clone(&entries.entries)
+}
+
+pub struct ManifestSnapshot {
+    entries: Arc<Vec<MobileSyncManifestEntry>>,
+    generation: u64,
+}
+
+fn build_manifest(tracks: &[LibraryTrack]) -> Vec<MobileSyncManifestEntry> {
+    let mut out = Vec::with_capacity(tracks.len());
+    for t in tracks {
+        let size = std::fs::metadata(&t.path).map(|m| m.len()).unwrap_or(0);
+        out.push(MobileSyncManifestEntry {
+            id: t.id.clone(),
+            mtime: t.mtime,
+            size,
+            has_cover: t.cover.as_ref().is_some_and(|c| Path::new(c).is_file()),
+            ext: t.ext.clone(),
+        });
+    }
+    out
+}
 
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
@@ -272,72 +408,48 @@ fn path_to_id_map(tracks: &[LibraryTrack]) -> HashMap<String, String> {
     map
 }
 
-fn find_track<'a>(tracks: &'a [LibraryTrack], id: &str) -> Option<&'a LibraryTrack> {
-    tracks.iter().find(|t| t.id == id)
-}
-
 async fn catalog(State(state): State<SharedState>) -> Json<Vec<MobileCatalogTrack>> {
-    let tracks = tokio::task::spawn_blocking({
-        let ud = state.user_data.clone();
-        move || load_library_tracks(&ud)
-    })
-    .await
-    .unwrap_or_default();
-    Json(tracks.iter().map(to_catalog).collect())
+    let snap = track_snapshot(&state).await;
+    let tracks = Arc::clone(&snap.tracks);
+    tokio::task::spawn_blocking(move || Json(tracks.iter().map(to_catalog).collect()))
+        .await
+        .unwrap_or_else(|_| Json(Vec::new()))
 }
 
 async fn playlists_handler(State(state): State<SharedState>) -> Json<Vec<MobilePlaylistDto>> {
+    let snap = track_snapshot(&state).await;
+    let tracks = Arc::clone(&snap.tracks);
     let user_data = state.user_data.clone();
-    let (tracks, playlists) = tokio::task::spawn_blocking(move || {
-        let tracks = load_library_tracks(&user_data);
+
+    tokio::task::spawn_blocking(move || {
         let playlists = load_playlists(&user_data);
-        (tracks, playlists)
+        let map = path_to_id_map(&tracks);
+        let out = playlists
+            .into_iter()
+            .map(|pl| {
+                let track_ids = pl
+                    .paths
+                    .iter()
+                    .filter_map(|p| map.get(p).cloned())
+                    .collect();
+                MobilePlaylistDto {
+                    id: pl.id,
+                    name: pl.name,
+                    track_ids,
+                    cover: None,
+                    created_at: pl.created_at,
+                    updated_at: pl.updated_at,
+                }
+            })
+            .collect();
+        Json(out)
     })
     .await
-    .unwrap_or_default();
-
-    let map = path_to_id_map(&tracks);
-    let out = playlists
-        .into_iter()
-        .map(|pl| {
-            let track_ids = pl
-                .paths
-                .iter()
-                .filter_map(|p| map.get(p).cloned())
-                .collect();
-            MobilePlaylistDto {
-                id: pl.id,
-                name: pl.name,
-                track_ids,
-                cover: None,
-                created_at: pl.created_at,
-                updated_at: pl.updated_at,
-            }
-        })
-        .collect();
-    Json(out)
+    .unwrap_or_else(|_| Json(Vec::new()))
 }
 
 async fn sync_manifest(State(state): State<SharedState>) -> Json<Vec<MobileSyncManifestEntry>> {
-    let tracks = tokio::task::spawn_blocking({
-        let ud = state.user_data.clone();
-        move || load_library_tracks(&ud)
-    })
-    .await
-    .unwrap_or_default();
-
-    let mut out = Vec::with_capacity(tracks.len());
-    for t in &tracks {
-        let size = std::fs::metadata(&t.path).map(|m| m.len()).unwrap_or(0);
-        out.push(MobileSyncManifestEntry {
-            id: t.id.clone(),
-            mtime: t.mtime,
-            size,
-            has_cover: t.cover.as_ref().is_some_and(|c| Path::new(c).is_file()),
-            ext: t.ext.clone(),
-        });
-    }
-    Json(out)
+    Json(cached_manifest(&state).await.as_ref().clone())
 }
 
 async fn track_audio(
@@ -345,42 +457,27 @@ async fn track_audio(
     AxumPath(id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Response {
-    let tracks = tokio::task::spawn_blocking({
-        let ud = state.user_data.clone();
-        move || load_library_tracks(&ud)
-    })
-    .await
-    .unwrap_or_default();
+    let snap = track_snapshot(&state).await;
 
-    let Some(track) = find_track(&tracks, &id) else {
+    let Some(track) = snap.get(&id) else {
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     };
     let path = PathBuf::from(&track.path);
-    if !path.is_file() {
-        return (StatusCode::NOT_FOUND, "file missing").into_response();
-    }
+    let ext = track.ext.clone();
 
-    serve_file_with_range(path, headers, content_type_for_ext(&track.ext)).await
+    serve_file_with_range(path, headers, content_type_for_ext(&ext)).await
 }
 
 async fn track_cover(State(state): State<SharedState>, AxumPath(id): AxumPath<String>) -> Response {
-    let tracks = tokio::task::spawn_blocking({
-        let ud = state.user_data.clone();
-        move || load_library_tracks(&ud)
-    })
-    .await
-    .unwrap_or_default();
+    let snap = track_snapshot(&state).await;
 
-    let Some(track) = find_track(&tracks, &id) else {
+    let Some(track) = snap.get(&id) else {
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     };
     let Some(cover) = track.cover.as_ref() else {
         return (StatusCode::NOT_FOUND, "no cover").into_response();
     };
     let path = PathBuf::from(cover);
-    if !path.is_file() {
-        return (StatusCode::NOT_FOUND, "cover missing").into_response();
-    }
 
     let ext = path
         .extension()
@@ -399,14 +496,9 @@ async fn track_synced_lyrics(
     State(state): State<SharedState>,
     AxumPath(id): AxumPath<String>,
 ) -> Response {
-    let tracks = tokio::task::spawn_blocking({
-        let ud = state.user_data.clone();
-        move || load_library_tracks(&ud)
-    })
-    .await
-    .unwrap_or_default();
+    let snap = track_snapshot(&state).await;
 
-    let Some(track) = find_track(&tracks, &id) else {
+    let Some(track) = snap.get(&id) else {
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     };
 
@@ -471,6 +563,48 @@ fn content_type_for_ext(ext: &str) -> &'static str {
     }
 }
 
+struct FileStream {
+    file: File,
+    remaining: u64,
+    buf: Box<[u8]>,
+}
+
+impl FileStream {
+    fn new(file: File, remaining: u64) -> Self {
+        Self {
+            file,
+            remaining,
+            buf: vec![0u8; STREAM_CHUNK].into_boxed_slice(),
+        }
+    }
+}
+
+impl Stream for FileStream {
+    type Item = std::io::Result<Bytes>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = self.get_mut();
+        if me.remaining == 0 {
+            return Poll::Ready(None);
+        }
+
+        let want = me.buf.len().min(me.remaining as usize);
+        let mut read_buf = ReadBuf::new(&mut me.buf[..want]);
+        match Pin::new(&mut me.file).poll_read(cx, &mut read_buf) {
+            Poll::Ready(Ok(())) => {
+                let filled = read_buf.filled().len();
+                if filled == 0 {
+                    return Poll::Ready(None);
+                }
+                me.remaining -= filled as u64;
+                Poll::Ready(Some(Ok(Bytes::copy_from_slice(read_buf.filled()))))
+            }
+            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
 async fn serve_file_with_range(path: PathBuf, headers: HeaderMap, content_type: &str) -> Response {
     let meta = match tokio::fs::metadata(&path).await {
         Ok(m) => m,
@@ -488,62 +622,46 @@ async fn serve_file_with_range(path: PathBuf, headers: HeaderMap, content_type: 
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "open failed").into_response(),
     };
 
-    if let Some((start, end_inclusive)) = range {
-        if start >= len {
-            return (
-                StatusCode::RANGE_NOT_SATISFIABLE,
-                [(header::CONTENT_RANGE, format!("bytes */{len}"))],
-                "range not satisfiable",
-            )
-                .into_response();
+    let (status, start, content_len) = match range {
+        Some((start, end_inclusive)) => {
+            if start >= len {
+                return (
+                    StatusCode::RANGE_NOT_SATISFIABLE,
+                    [(header::CONTENT_RANGE, format!("bytes */{len}"))],
+                    "range not satisfiable",
+                )
+                    .into_response();
+            }
+            let end = end_inclusive.unwrap_or(len - 1).min(len - 1);
+            if file.seek(SeekFrom::Start(start)).await.is_err() {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "seek failed").into_response();
+            }
+            (StatusCode::PARTIAL_CONTENT, Some(start), end - start + 1)
         }
-        let end = end_inclusive.unwrap_or(len - 1).min(len - 1);
-        let content_len = end - start + 1;
-        if file.seek(SeekFrom::Start(start)).await.is_err() {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "seek failed").into_response();
-        }
-        let mut buf = vec![0u8; content_len as usize];
-        if file.read_exact(&mut buf).await.is_err() {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "read failed").into_response();
-        }
-        let mut res = Response::new(Body::from(buf));
-        *res.status_mut() = StatusCode::PARTIAL_CONTENT;
-        let headers = res.headers_mut();
-        headers.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(content_type)
-                .unwrap_or(HeaderValue::from_static("application/octet-stream")),
-        );
-        headers.insert(
-            header::CONTENT_LENGTH,
-            HeaderValue::from_str(&content_len.to_string()).unwrap(),
-        );
-        headers.insert(
+        None => (StatusCode::OK, None, len),
+    };
+
+    let mut res = Response::new(Body::from_stream(FileStream::new(file, content_len)));
+    *res.status_mut() = status;
+    let res_headers = res.headers_mut();
+    res_headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_str(content_type)
+            .unwrap_or(HeaderValue::from_static("application/octet-stream")),
+    );
+    res_headers.insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&content_len.to_string()).unwrap(),
+    );
+    if let Some(start) = start {
+        let end = start + content_len - 1;
+        res_headers.insert(
             header::CONTENT_RANGE,
             HeaderValue::from_str(&format!("bytes {start}-{end}/{len}")).unwrap(),
         );
-        headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
-        res
-    } else {
-        let mut buf = Vec::with_capacity(len as usize);
-        if file.read_to_end(&mut buf).await.is_err() {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "read failed").into_response();
-        }
-        let mut res = Response::new(Body::from(buf));
-        *res.status_mut() = StatusCode::OK;
-        let headers = res.headers_mut();
-        headers.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(content_type)
-                .unwrap_or(HeaderValue::from_static("application/octet-stream")),
-        );
-        headers.insert(
-            header::CONTENT_LENGTH,
-            HeaderValue::from_str(&len.to_string()).unwrap(),
-        );
-        headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
-        res
     }
+    res_headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    res
 }
 
 fn parse_bytes_range(header: &str) -> Option<(u64, Option<u64>)> {

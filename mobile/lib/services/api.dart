@@ -32,6 +32,8 @@ class VynlApi {
   String baseUrl;
   String token;
 
+  final http.Client _client = http.Client();
+
   Uri _uri(String path) {
     final root = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
@@ -82,7 +84,7 @@ class VynlApi {
   }
 
   Future<List<SyncManifestEntry>> syncManifest() async {
-    final res = await http
+    final res = await _client
         .get(_uri('/v1/sync-manifest'), headers: _headers)
         .timeout(const Duration(seconds: 30));
     _ensureOk(res);
@@ -93,7 +95,7 @@ class VynlApi {
   }
 
   Future<List<CatalogTrack>> catalog() async {
-    final res = await http
+    final res = await _client
         .get(_uri('/v1/catalog'), headers: _headers)
         .timeout(const Duration(seconds: 60));
     _ensureOk(res);
@@ -104,7 +106,7 @@ class VynlApi {
   }
 
   Future<List<PlaylistDto>> playlists() async {
-    final res = await http
+    final res = await _client
         .get(_uri('/v1/playlists'), headers: _headers)
         .timeout(const Duration(seconds: 30));
     _ensureOk(res);
@@ -113,6 +115,8 @@ class VynlApi {
         .map((e) => PlaylistDto.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  void dispose() => _client.close();
 
   Future<void> downloadAudio({
     required String trackId,
@@ -135,7 +139,7 @@ class VynlApi {
 
   Future<RemoteLyrics?> syncedLyrics(String trackId) async {
     try {
-      final res = await http
+      final res = await _client
           .get(_uri('/v1/tracks/$trackId/synced-lyrics'), headers: _headers)
           .timeout(const Duration(seconds: 12));
       if (res.statusCode != 200) return null;
@@ -169,45 +173,42 @@ class VynlApi {
       headers['Range'] = 'bytes=$existing-';
     }
 
-    final client = http.Client();
-    try {
-      final req = http.Request('GET', _uri(path));
-      req.headers.addAll(headers);
-      final streamed = await client.send(req).timeout(const Duration(minutes: 5));
+    final req = http.Request('GET', _uri(path));
+    req.headers.addAll(headers);
+    final streamed = await _client
+        .send(req)
+        .timeout(const Duration(minutes: 5));
 
-      if (streamed.statusCode == 404) {
-        throw ApiException('File not found', statusCode: 404);
-      }
-      if (streamed.statusCode != 200 && streamed.statusCode != 206) {
-        throw ApiException(
-          'Download failed (${streamed.statusCode})',
-          statusCode: streamed.statusCode,
+    if (streamed.statusCode == 404) {
+      throw ApiException('File not found', statusCode: 404);
+    }
+    if (streamed.statusCode != 200 && streamed.statusCode != 206) {
+      throw ApiException(
+        'Download failed (${streamed.statusCode})',
+        statusCode: streamed.statusCode,
+      );
+    }
+
+    final totalHeader = streamed.contentLength;
+    final sink = partial.openWrite(mode: FileMode.append);
+    var received = existing;
+    try {
+      await for (final chunk in streamed.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(
+          received,
+          totalHeader == null ? null : existing + totalHeader,
         );
       }
-
-      final totalHeader = streamed.contentLength;
-      final sink = partial.openWrite(mode: FileMode.append);
-      var received = existing;
-      try {
-        await for (final chunk in streamed.stream) {
-          sink.add(chunk);
-          received += chunk.length;
-          onProgress?.call(
-            received,
-            totalHeader == null ? null : existing + totalHeader,
-          );
-        }
-      } finally {
-        await sink.close();
-      }
-
-      if (await dest.exists()) {
-        await dest.delete();
-      }
-      await partial.rename(dest.path);
     } finally {
-      client.close();
+      await sink.close();
     }
+
+    if (await dest.exists()) {
+      await dest.delete();
+    }
+    await partial.rename(dest.path);
   }
 
   void _ensureOk(http.Response res) {

@@ -206,17 +206,19 @@ class LibraryDb {
     return out;
   }
 
-  Future<Map<String, int>> localMtimes() async {
-    final rows = await db.query('tracks', columns: ['id', 'mtime']);
+  Future<Map<String, ({int mtime, String? audio, String? cover})>>
+  localSyncState() async {
+    final rows = await db.query(
+      'tracks',
+      columns: ['id', 'mtime', 'local_audio_path', 'local_cover_path'],
+    );
     return {
-      for (final r in rows) r['id'] as String: (r['mtime'] as int?) ?? 0,
-    };
-  }
-
-  Future<Map<String, String?>> localAudioPaths() async {
-    final rows = await db.query('tracks', columns: ['id', 'local_audio_path']);
-    return {
-      for (final r in rows) r['id'] as String: r['local_audio_path'] as String?,
+      for (final r in rows)
+        r['id'] as String: (
+          mtime: (r['mtime'] as int?) ?? 0,
+          audio: r['local_audio_path'] as String?,
+          cover: r['local_cover_path'] as String?,
+        ),
     };
   }
 

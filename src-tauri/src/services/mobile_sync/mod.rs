@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, RwLock, oneshot};
 
 use crate::commands::types::{LibraryTrack, Playlist};
 use crate::services::{library, playlists, settings, util};
@@ -359,6 +359,11 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         pin: Mutex::new(pin),
         token: Mutex::new(token),
         attempts: Mutex::new(HashMap::new()),
+        tracks: RwLock::new(None),
+        tracks_load: Mutex::new(()),
+        manifest: RwLock::new(None),
+        manifest_load: Mutex::new(()),
+        next_generation: std::sync::atomic::AtomicU64::new(0),
     });
 
     tokio::spawn(async move {

@@ -5858,6 +5858,7 @@ dependencies = [
  "ctrlc",
  "dirs",
  "discord-rich-presence",
+ "futures-util",
  "hex",
  "hmac",
  "http-body-util",

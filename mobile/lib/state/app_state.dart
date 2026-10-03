@@ -178,6 +178,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> unpair() async {
+    syncService.cancel();
+    api?.dispose();
     await authStore.clear();
     credentials = null;
     api = null;
