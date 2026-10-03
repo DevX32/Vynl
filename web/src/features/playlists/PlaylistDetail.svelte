@@ -391,7 +391,7 @@
     --hero-cover: 128px;
     width: var(--hero-cover);
     height: var(--hero-cover);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg-raise);
     box-shadow:

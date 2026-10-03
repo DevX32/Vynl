@@ -396,7 +396,7 @@
   .rail-cover {
     width: var(--cover);
     height: var(--cover);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     object-fit: cover;
     flex-shrink: 0;
     background: var(--bg-raise);
@@ -419,7 +419,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg);
     box-shadow: var(--shadow-sm);
