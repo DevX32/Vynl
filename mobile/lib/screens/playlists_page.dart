@@ -95,7 +95,7 @@ class _PlaylistArt extends StatelessWidget {
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(VynlRadius.hero),
+      borderRadius: BorderRadius.circular(VynlRadius.art),
       child: SizedBox(
         width: size,
         height: size,
