@@ -10,12 +10,13 @@
   import { t } from "@lib/i18n";
 
   let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
+  let canSeek = $derived(seekDur > 0);
 
   let el: HTMLDivElement = $state()!;
   let dragging = $state(false);
 
   let pct = $derived(
-    seekDur > 0 ? Math.min((getCurrentTime() / seekDur) * 100, 100) : 0,
+    canSeek ? Math.min(Math.max(getCurrentTime() / seekDur, 0) * 100, 100) : 0,
   );
 
   function onSeek(e: PointerEvent): void {
@@ -34,7 +35,7 @@
   }
 
   function onKey(e: KeyboardEvent): void {
-    if (!getCurrentTrack()) return;
+    if (!canSeek) return;
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
       e.stopPropagation();
@@ -55,14 +56,14 @@
   class:active={dragging}
   bind:this={el}
   onpointerdown={(e) => {
-    if (!getCurrentTrack()) return;
+    if (!canSeek) return;
     dragging = true;
     setSeekDragging(true);
     el.setPointerCapture(e.pointerId);
     onSeek(e);
   }}
   onpointermove={(e) => {
-    if (dragging) onSeek(e);
+    if (dragging && canSeek) onSeek(e);
   }}
   onpointerup={endSeekDrag}
   onpointercancel={endSeekDrag}
@@ -71,8 +72,8 @@
   aria-label={t("player.seek")}
   aria-valuemin="0"
   aria-valuemax={seekDur}
-  aria-valuenow={Math.round(getCurrentTime())}
-  aria-disabled={!getCurrentTrack()}
+  aria-valuenow={canSeek ? Math.round(getCurrentTime()) : 0}
+  aria-disabled={!canSeek}
   tabindex="0"
   onkeydown={onKey}
 >
@@ -91,6 +92,10 @@
     border-radius: 2px;
     transition: opacity 0.15s;
     touch-action: none;
+  }
+
+  .seek[aria-disabled="true"] {
+    cursor: default;
   }
 
   .seek::before {
@@ -112,6 +117,11 @@
     background: var(--accent);
     pointer-events: none;
     transform: translateY(-50%);
+    transition: width 0.1s linear;
+  }
+
+  .seek.active .seek-fill {
+    transition: none;
   }
 
   .seek-thumb {
@@ -126,8 +136,15 @@
     opacity: 0;
     transition:
       opacity 0.18s ease-out,
-      box-shadow 0.18s ease-out;
+      box-shadow 0.18s ease-out,
+      left 0.1s linear;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+
+  .seek.active .seek-thumb {
+    transition:
+      opacity 0.18s ease-out,
+      box-shadow 0.18s ease-out;
   }
 
   .seek:hover .seek-thumb,

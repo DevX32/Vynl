@@ -44,7 +44,7 @@
   >
     <div class="mini-cover-wrap">
       {#if getCurrentTrack()?.cover}
-        {#key getCurrentTrack()!.cover}
+        {#key getCurrentTrack()!.id}
           <img
             class="mini-cover"
             use:blobSrc={getCurrentTrack()!.cover}
@@ -182,7 +182,6 @@
 
   .now-mini {
     width: 100%;
-    max-width: 340px;
     min-width: 0;
     justify-self: start;
     display: flex;

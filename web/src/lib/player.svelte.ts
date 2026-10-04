@@ -658,6 +658,10 @@ function requestSeek(time: number): void {
 export function seekRatio(ratio: number, total?: number): void {
   if (!getCurrentTrack() || !Number.isFinite(ratio)) return;
   const duration = normalizeDuration(total);
+  if (duration <= 0) {
+    cancelSeek();
+    return;
+  }
   const target = clampSeekTarget(ratio * duration, duration);
   if (target === null) return;
   seekRequestId += 1;

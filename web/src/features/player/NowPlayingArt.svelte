@@ -62,7 +62,7 @@
     <div class="vinyl-slot" aria-hidden="true">
       <div class="vinyl" style:transform={`rotate(${vinylDeg}deg)`}></div>
     </div>
-    {#key current?.cover ?? current?.title ?? "none"}
+    {#key current?.id ?? "none"}
       {#if current?.cover}
         <img
           class="now-cover"
