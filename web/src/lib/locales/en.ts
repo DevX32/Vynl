@@ -116,7 +116,7 @@ export const en = {
     namePlaceholder: "Playlist name",
     create: "Create",
     newPlaylist: "New playlist",
-    skip: "Skip",
+    cancel: "Cancel",
   },
   trackRow: {
     done: "Done",
@@ -286,6 +286,7 @@ export const en = {
     deleteBody:
       '"{title}" will be permanently removed from your library and deleted from disk. This action cannot be undone.',
     deleteFailed: "Failed to delete track",
+    deleted: 'Deleted "{title}"',
   },
   playlist: {
     searchPlaceholder: "Search this playlist...",
@@ -295,6 +296,12 @@ export const en = {
     emptyRip: "Empty -- rip something first",
     noMatchesQuery: 'Nothing matches "{query}"',
     searchLibrary: "Search library...",
+    removeTrackTitle: "Remove from playlist",
+    removeTrackBody:
+      '"{title}" will be removed from this playlist. The track stays in your library. This action cannot be undone.',
+    removeTrackConfirm: "Remove",
+    removeTrackFailed: "Failed to remove track",
+    removedTrack: 'Removed "{title}" from {name}',
     changeCover: "Change cover",
     removeCover: "Remove cover",
     coverFailed: "Couldn't use that image",

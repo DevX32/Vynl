@@ -35,6 +35,7 @@
   import ContextMenu, {
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
+  import Dialog from "../../components/Dialog.svelte";
   import {
     addToPlaylist,
     getCurrentPlaylist,
@@ -50,6 +51,8 @@
 
   let q = $state("");
   let ctxMenu = $state<{ x: number; y: number; idx: number } | null>(null);
+  let removeTarget = $state<(typeof plHits)[number] | null>(null);
+  let removeBusy = $state(false);
 
   const pl = $derived(getCurrentPlaylist());
   const library = $derived(getLibrary());
@@ -112,9 +115,26 @@
     await moveInPlaylist(pl.id, from, to);
   }
 
-  async function dropTrack(trackPath: string): Promise<void> {
-    if (!pl) return;
-    await removeFromPlaylist(pl.id, trackPath);
+  async function confirmRemoveTrack(): Promise<void> {
+    const target = removeTarget;
+    if (!target || !pl || removeBusy) return;
+    removeBusy = true;
+    const playlistName = toPascalCase(pl.name);
+    try {
+      await removeFromPlaylist(pl.id, target.path);
+      toasts.success(
+        t("playlist.removedTrack", {
+          title: target.title,
+          name: playlistName,
+        }),
+      );
+    } catch (e) {
+      console.warn("removeFromPlaylist error:", e);
+      toasts.error(t("playlist.removeTrackFailed"));
+    } finally {
+      removeBusy = false;
+      removeTarget = null;
+    }
   }
 
   function showTrackCtx(e: MouseEvent, idx: number): void {
@@ -137,7 +157,9 @@
         label: t("playlist.remove"),
         icon: X,
         danger: true,
-        action: () => void dropTrack(trk.path),
+        action: () => {
+          removeTarget = trk;
+        },
       },
     ];
   }
@@ -294,7 +316,7 @@
           <span class="mono sub"
             >{pl.paths.length === 0
               ? t("playlist.addSomeTracks")
-              : t("playlist.noMatchesQuery", { q })}</span
+              : t("playlist.noMatchesQuery", { query: q })}</span
           >
         </div>
       {:else}
@@ -372,6 +394,20 @@
       y={ctxMenu.y}
       onclose={() => (ctxMenu = null)}
       items={trackCtxItems()}
+    />
+  {/if}
+
+  {#if removeTarget}
+    <Dialog
+      open
+      title={t("playlist.removeTrackTitle")}
+      description={t("playlist.removeTrackBody", {
+        title: removeTarget.title,
+      })}
+      confirmLabel={t("playlist.removeTrackConfirm")}
+      danger
+      onconfirm={() => void confirmRemoveTrack()}
+      oncancel={() => (removeTarget = null)}
     />
   {/if}
 </div>

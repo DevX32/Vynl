@@ -162,7 +162,7 @@
           <span>{t("playlistPicker.newPlaylist")}</span>
         </button>
         <button class="btn ghost" disabled={busy} onclick={onSkip}
-          >{t("playlistPicker.skip")}</button
+          >{t("playlistPicker.cancel")}</button
         >
       {/if}
     </footer>

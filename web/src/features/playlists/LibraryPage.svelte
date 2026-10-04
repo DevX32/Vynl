@@ -9,7 +9,6 @@
     ListPlus,
     Trash2,
     Clock,
-    ListMusic as ListMusicIcon,
   } from "lucide-svelte";
   import { vynl } from "../../lib/vynl";
   import { refreshLibrary, getLibrary } from "@state/library.svelte";
@@ -28,7 +27,6 @@
     fmtTime,
     totalSeconds,
     matchesQuery,
-    toPascalCase,
   } from "../../lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
@@ -39,8 +37,10 @@
   import ContextMenu, {
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
+  import PlaylistPicker from "../vault/PlaylistPicker.svelte";
   import {
     addToPlaylist,
+    createPlaylist,
     getCurrentPlaylists,
     refreshPlaylists,
   } from "@state/playlists.svelte";
@@ -65,6 +65,9 @@
   } | null>(null);
 
   let deleteTarget = $state<(typeof hits)[number] | null>(null);
+
+  let pickerTarget = $state<(typeof hits)[number] | null>(null);
+  let pickerBusy = $state(false);
 
   const library = $derived(getLibrary());
   const nowPlaying = $derived(getCurrentTrack());
@@ -131,14 +134,8 @@
       { type: "separator" },
       {
         label: t("library.addToPlaylist"),
-        items: playlists.map((p) => ({
-          label: toPascalCase(p.name),
-          icon: ListMusicIcon,
-          action: () => void addTo(p.id, trk.path),
-          secondary: justAdded.has(`${p.id}:${trk.path}`)
-            ? t("trackRow.done")
-            : undefined,
-        })),
+        icon: ListPlus,
+        action: () => openPicker(trk),
       },
       { type: "separator" },
       {
@@ -191,14 +188,62 @@
     }
   }
 
-  async function addTo(plId: string, path: string): Promise<void> {
+  function openPicker(trk: (typeof hits)[number]): void {
+    pickerTarget = trk;
+  }
+
+  function closePicker(): void {
+    pickerTarget = null;
+    pickerBusy = false;
+  }
+
+  function markAdded(plId: string, path: string): void {
     const key = `${plId}:${path}`;
-    await addToPlaylist(plId, [path]);
     justAdded = new Set([...justAdded, key]);
     window.setTimeout(() => {
       justAdded = new Set([...justAdded].filter((k) => k !== key));
-      if (ctx?.track.path === path) ctx = null;
     }, 1200);
+  }
+
+  async function addToSelectedPlaylist(plId: string): Promise<void> {
+    const target = pickerTarget;
+    if (!target || pickerBusy) return;
+    pickerBusy = true;
+    const before = getCurrentPlaylists().find((p) => p.id === plId);
+    try {
+      await addToPlaylist(plId, [target.path]);
+      await refreshPlaylists();
+      const after = getCurrentPlaylists().find((p) => p.id === plId);
+      markAdded(plId, target.path);
+      const added = (after?.trackCount ?? 0) - (before?.trackCount ?? 0);
+      if (added > 0) {
+        toasts.success(t("vault.addedToPlaylist", { n: added, name: after?.name ?? before?.name ?? "" }));
+      } else {
+        toasts.info(t("vault.playlistAlreadyHas", { name: after?.name ?? before?.name ?? "" }));
+      }
+    } catch (e) {
+      console.warn("addToPlaylist error:", e);
+      toasts.error(t("vault.playlistSaveFailed"));
+    }
+    closePicker();
+  }
+
+  async function createAndAddPlaylist(name: string): Promise<void> {
+    const target = pickerTarget;
+    if (!target || pickerBusy) return;
+    pickerBusy = true;
+    try {
+      const pl = await createPlaylist(name.trim() || "Untitled");
+      await addToPlaylist(pl.id, [target.path]);
+      await refreshPlaylists();
+      markAdded(pl.id, target.path);
+      const added = getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
+      toasts.success(t("vault.addedToPlaylist", { n: added, name: pl.name }));
+    } catch (e) {
+      console.warn("createAndAddPlaylist error:", e);
+      toasts.error(t("vault.playlistSaveFailed"));
+    }
+    closePicker();
   }
 
   async function handleDelete(): Promise<void> {
@@ -208,7 +253,7 @@
       await vynl.deleteLibraryTrack(target.path, target.id);
       await refreshLibrary();
       await refreshPlaylists();
-      toasts.success(t("library.deleteConfirm"));
+      toasts.success(t("library.deleted", { title: target.title }));
     } catch {
       toasts.error(t("library.deleteFailed"));
     }
@@ -332,6 +377,18 @@
     y={ctx.y}
     items={ctxMenuItems()}
     onclose={() => (ctx = null)}
+  />
+{/if}
+
+{#if pickerTarget}
+  <PlaylistPicker
+    suggestedName={pickerTarget.title}
+    trackCount={1}
+    playlists={playlists}
+    busy={pickerBusy}
+    onAddExisting={addToSelectedPlaylist}
+    onCreate={createAndAddPlaylist}
+    onSkip={closePicker}
   />
 {/if}
 
