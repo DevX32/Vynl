@@ -132,9 +132,7 @@ fn generate_totp_from_key(key_bytes: &[u8], offset_secs: i64) -> Result<String, 
 pub struct Session {
     pub access_token: String,
     pub client_token: String,
-    pub client_id: String,
     pub client_version: String,
-    pub device_id: String,
 }
 
 pub async fn init_session(client: &Client) -> Result<Session, String> {
@@ -169,9 +167,7 @@ pub async fn init_session(client: &Client) -> Result<Session, String> {
     let session = Session {
         access_token,
         client_token,
-        client_id,
         client_version,
-        device_id,
     };
 
     {

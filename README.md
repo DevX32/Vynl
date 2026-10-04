@@ -2,12 +2,7 @@
 
 A Minimal Music Player built with Tauri, Svelte, and Rust.
 
-## Features
-
-- Playlists, albums, and single tracks from supported links
-- Embedded cover art and metadata
-- Parallel downloads with progress tracking
-- Auto-installs `yt-dlp` and `ffmpeg`
+[![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/devx32)
 
 ### Player
 
@@ -26,7 +21,7 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 ### Lyrics
 
 - Synced (LRC) and plain text lyrics
-- Multi-source fetching (LRCLIB, lyrics.ovh)
+- Lyrics from LRCLIB (synced LRC and plain text)
 - Lyrics embedding into audio files
 - Lyrics overlay in the player
 
@@ -47,7 +42,7 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 - Plugin-contributed settings sections, Home page sections, and full pages
 - Player observation + shared playback control (gated by a `player` permission)
 - Dev folder installs with live reload, plus `.zip` sideloading
-- **Listen Along** — real-time synchronized listening sessions (host a session, share a code, friends follow your playback) — ships as a store plugin in [vynl-store](https://github.com/DevX32/vynl-store/tree/main/plugins/listen-along)
+- **Listen Along** real-time synchronized listening sessions (host a session, share a code, friends follow your playback) ships as a store plugin in [vynl-store](https://github.com/DevX32/vynl-store/tree/main/plugins/listen-along)
 
 ## Platform Support
 
@@ -55,6 +50,8 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 | -------- | ------ |
 | Windows  | Supported |
 | Linux    | Supported |
+| Android  | Supported — Companion App |
+| macOS    | Not available |
 
 ## Development
 
@@ -81,6 +78,23 @@ bun run tauri:dev
 | `bun run tauri:build` | Build and package for current platform |
 | `bun run typecheck` | TypeScript + Svelte checks |
 
-## License
+## Support
 
-AGPL-3.0. See [LICENSE](LICENSE).
+Vynl is free and open source, and development happens in spare time. If the app is useful to you, you can support it here:
+
+[![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/devx32)
+
+Every contribution goes back into maintenance, fixes, and new features.
+
+## Caution
+
+How you use the app is entirely up to you, and you are responsible for your own actions — including any content you download and any legal consequences that may follow. The Vynl maintainers take no responsibility for misuse, and the software is provided "as is", without warranty of any kind.
+
+If you enjoy a track, buy it. Purchasing directly from the artists is the best way to support them and keep their work going.
+
+## License
+Copyright © 2026 Vynl Contributors
+
+Vynl is a player and library manager for audio you already have the right to listen to. It does not provide, host, or distribute any music itself, and it does not endorse or encourage obtaining copyrighted material without permission. Copyright law varies by country, so make sure you understand the rules that apply to you before using any tool that can save audio to your device.
+
+GPL-3.0. See [LICENSE](LICENSE).

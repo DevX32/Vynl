@@ -5852,12 +5852,13 @@ dependencies = [
 
 [[package]]
 name = "vynl"
-version = "0.1.5"
+version = "0.2.2"
 dependencies = [
  "axum",
  "ctrlc",
  "dirs",
  "discord-rich-presence",
+ "futures-util",
  "hex",
  "hmac",
  "http-body-util",
@@ -5882,7 +5883,6 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "tower",
- "tower-http",
  "urlencoding",
  "uuid 1.25.0",
  "winreg",

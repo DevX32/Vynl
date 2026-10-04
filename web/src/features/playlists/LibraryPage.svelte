@@ -36,7 +36,9 @@
   import TrackCover from "../../components/TrackCover.svelte";
   import EqualizerBars from "../../components/EqualizerBars.svelte";
   import Dialog from "../../components/Dialog.svelte";
-  import ContextMenu, { type CtxEntry } from "../../components/ContextMenu.svelte";
+  import ContextMenu, {
+    type CtxEntry,
+  } from "../../components/ContextMenu.svelte";
   import {
     addToPlaylist,
     getCurrentPlaylists,
@@ -51,6 +53,8 @@
 
   let scanning = $state(false);
   let query = $state("");
+  let debouncedQuery = $state("");
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let justAdded = $state(new Set<string>());
   let searchInput: SearchInput | undefined = $state();
 
@@ -71,16 +75,23 @@
   const sorted = $derived(
     [...library].sort((a, b) => titleCollator.compare(a.title, b.title)),
   );
-  const hits = $derived(
-    query
-      ? sorted.filter((t) =>
-          matchesQuery(
-            query.toLowerCase(),
-            `${t.title} ${t.artist} ${t.album}`.toLowerCase(),
-          ),
-        )
-      : sorted,
-  );
+  const hits = $derived.by(() => {
+    if (!debouncedQuery) return sorted;
+    const needle = debouncedQuery.toLowerCase();
+    return sorted.filter((t) =>
+      matchesQuery(needle, `${t.title} ${t.artist} ${t.album}`.toLowerCase()),
+    );
+  });
+
+  $effect(() => {
+    const q = query;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debouncedQuery = q;
+      debounceTimer = undefined;
+    }, 200);
+    return () => clearTimeout(debounceTimer);
+  });
 
   $effect(() => {
     if (active) void refresh();
@@ -124,7 +135,9 @@
           label: toPascalCase(p.name),
           icon: ListMusicIcon,
           action: () => void addTo(p.id, trk.path),
-          secondary: justAdded.has(`${p.id}:${trk.path}`) ? t("trackRow.done") : undefined,
+          secondary: justAdded.has(`${p.id}:${trk.path}`)
+            ? t("trackRow.done")
+            : undefined,
         })),
       },
       { type: "separator" },
@@ -161,7 +174,10 @@
     const first = shuffle
       ? hits[Math.floor(Math.random() * hits.length)]
       : hits[0];
-    requestPlay(first.id, hits.map((track) => track.path));
+    requestPlay(
+      first.id,
+      hits.map((track) => track.path),
+    );
   }
 
   function rowAction(t: (typeof hits)[number]): void {
@@ -263,11 +279,13 @@
         <div class="tbl-empty">
           <ListMusic size={28} stroke-width={1.1} />
           <span class="empty-title display"
-            >{query ? t("library.noMatches") : t("library.nothingHere")}</span
+            >{debouncedQuery
+              ? t("library.noMatches")
+              : t("library.nothingHere")}</span
           >
           <span class="empty-sub mono"
-            >{query
-              ? t("library.noMatchesQuery", { query })
+            >{debouncedQuery
+              ? t("library.noMatchesQuery", { query: debouncedQuery })
               : t("library.pasteToStart")}</span
           >
         </div>

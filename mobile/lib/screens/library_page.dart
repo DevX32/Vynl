@@ -36,6 +36,7 @@ class _LibraryPageState extends State<LibraryPage> {
           t.album.toLowerCase().contains(q);
     }).toList();
     final downloaded = app.downloadedTracks;
+    final playable = tracks.where((t) => t.isDownloaded).toList();
 
     return Column(
       children: [
@@ -67,7 +68,8 @@ class _LibraryPageState extends State<LibraryPage> {
               ? TextButton.icon(
                   onPressed: () {
                     final pool = downloaded.isNotEmpty ? downloaded : tracks;
-                    player.playTracks(pool);
+                    if (pool.isEmpty) return;
+                    player.playTracks([...pool]..shuffle());
                   },
                   icon: const Icon(Icons.shuffle_rounded, size: 16),
                   label: const Text(
@@ -113,14 +115,22 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           ),
         Expanded(
-          child: tracks.isEmpty
-              ? _EmptyState(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              final state = context.read<AppState>();
+              if (state.isPaired && !state.syncing) await state.runSync();
+            },
+            color: VynlColors.accent,
+            backgroundColor: VynlColors.surface,
+            displacement: 24,
+            child: tracks.isEmpty
+              ? VynlEmptyState(
                   icon: q.isEmpty
                       ? Icons.music_off_rounded
                       : Icons.search_off_rounded,
                   title: q.isEmpty ? 'Nothing synced yet' : 'No matches',
                   subtitle: q.isEmpty
-                      ? 'Pair with your desktop under Settings to pull your library across.'
+                      ? 'Pull down to sync, or pair with your desktop under Settings.'
                       : 'Try a different title, artist or album.',
                 )
               : ListView.builder(
@@ -128,8 +138,6 @@ class _LibraryPageState extends State<LibraryPage> {
                   itemCount: tracks.length,
                   itemBuilder: (context, i) {
                     final track = tracks[i];
-                    final playable =
-                        tracks.where((t) => t.isDownloaded).toList();
                     return TrackTile(
                       track: track,
                       active: current?.id == track.id,
@@ -147,64 +155,9 @@ class _LibraryPageState extends State<LibraryPage> {
                     );
                   },
                 ),
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 44),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(VynlRadius.control),
-                color: VynlColors.surfaceRaised,
-              ),
-              child: Icon(icon, size: 34, color: VynlColors.faint),
-            ),
-            const SizedBox(height: 22),
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: VynlFonts.display,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-                color: VynlColors.text,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: VynlColors.dim,
-                fontSize: 13.5,
-                height: 1.55,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

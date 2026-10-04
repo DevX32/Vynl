@@ -1,20 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+const kDefaultAccent = Color(0xFFA894E8);
+
+const kAccentPresets = <Color>[
+  Color(0xFFA894E8),
+  Color(0xFF7AA2F7),
+  Color(0xFF8FD694),
+  Color(0xFFE8C86A),
+  Color(0xFFE8945C),
+  Color(0xFFFF6B61),
+  Color(0xFFF06BA8),
+];
+
+const _accentTextDark = Color(0xFF161128);
+const _accentTextLight = Color(0xFFF5F3FF);
+
+Color accentTextFor(Color accent) =>
+    accent.computeLuminance() > 0.55 ? _accentTextDark : _accentTextLight;
+
+const kVynlOverlayStyle = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.light,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarDividerColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.light,
+  systemNavigationBarContrastEnforced: false,
+);
+
 class VynlColors {
-  static const bg = Color(0xFF131110);
-  static const bgTop = Color(0xFF1D1916);
-  static const surface = Color(0xFF1C1917);
-  static const surfaceRaised = Color(0xFF272220);
-  static const line = Color(0xFF302A26);
-  static const text = Color(0xFFF4EFE8);
-  static const dim = Color(0xFFA9A096);
-  static const faint = Color(0xFF736B63);
-  static const accent = Color(0xFFB9A5E8);
-  static const warm = Color(0xFFE7A97E);
-  static const danger = Color(0xFFE8836B);
-  static const warning = Color(0xFFDCB060);
-  static const success = Color(0xFF86C79A);
+  static const bg = Color(0xFF0E0E10);
+  static const bgTop = Color(0xFF151519);
+  static const surface = Color(0xFF131317);
+  static const surfaceRaised = Color(0xFF151519);
+  static const line = Color(0x17F0F0EC);
+  static const lineStrong = Color(0x33F0F0EC);
+  static const text = Color(0xFFF0F0EC);
+  static const dim = Color(0xFFA3A39B);
+  static const faint = Color(0xFF7A7A74);
+  static const warm = Color(0xFFD9A15C);
+  static const danger = Color(0xFFFF6B61);
+  static const warning = Color(0xFFD9A15C);
+  static const success = Color(0xFF8FD694);
+
+  static Color accent = kDefaultAccent;
+  static Color accentOn = _accentTextDark;
+  static Color accentSoft = const Color(0x1CB9A7FF);
+
+  static void setAccent(Color value) {
+    accent = value;
+    accentOn = accentTextFor(value);
+    accentSoft = value.withValues(alpha: 0.11);
+  }
 }
 
 class VynlRadius {
@@ -31,6 +68,10 @@ class VynlFonts {
   static const mono = 'Geist Mono';
 
   static const display = 'Geist';
+
+  static const lyrics = 'Sora';
+
+  static const serif = 'Fraunces';
 }
 
 class VynlMotion {
@@ -39,25 +80,26 @@ class VynlMotion {
   static const slow = Duration(milliseconds: 520);
 
   static Curve get emphasized => Curves.easeOutCubic;
+
   static Curve get standard => Curves.easeOutQuart;
+
+  static const splashEntrance = Duration(milliseconds: 1020);
+  static const splashExit = Duration(milliseconds: 400);
 }
 
-const kVynlBackground = RadialGradient(
-  center: Alignment(0, -0.95),
-  radius: 1.5,
-  colors: [Color(0xFF221E23), VynlColors.bg, VynlColors.bg],
-  stops: [0, 0.5, 1],
-);
+const kVynlBackground = BoxDecoration(color: VynlColors.bg);
 
-ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
+ThemeData buildVynlTheme({Color? seed}) {
+  final accent = seed ?? VynlColors.accent;
+  final accentOn = accentTextFor(accent);
   final scheme = ColorScheme.fromSeed(
-    seedColor: seed,
+    seedColor: accent,
     brightness: Brightness.dark,
   ).copyWith(
-    primary: VynlColors.accent,
-    onPrimary: const Color(0xFF17131A),
+    primary: accent,
+    onPrimary: accentOn,
     secondary: VynlColors.warm,
-    onSecondary: const Color(0xFF1A1410),
+    onSecondary: const Color(0xFF161128),
     surface: VynlColors.bg,
     onSurface: VynlColors.text,
     outline: VynlColors.line,
@@ -91,15 +133,10 @@ ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
         color: VynlColors.text,
         fontFamily: VynlFonts.display,
         fontSize: 21,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.4,
       ),
-      systemOverlayStyle: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ),
+      systemOverlayStyle: kVynlOverlayStyle,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -125,8 +162,8 @@ ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: VynlColors.accent,
-        foregroundColor: const Color(0xFF17131A),
+        backgroundColor: accent,
+        foregroundColor: accentOn,
         minimumSize: const Size.fromHeight(54),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(VynlRadius.control),
@@ -168,19 +205,19 @@ ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: VynlColors.surface,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: VynlColors.accent.withValues(alpha: 0.16),
+      indicatorColor: accent.withValues(alpha: 0.16),
       indicatorShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(VynlRadius.control),
       ),
-      height: 68,
+      height: 66,
       elevation: 0,
-      labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return TextStyle(
           fontSize: 10.5,
-          height: 1.1,
-          fontWeight: FontWeight.w700,
+          height: 1.15,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
           letterSpacing: 0.1,
           color: selected ? VynlColors.text : VynlColors.faint,
         );
@@ -188,8 +225,8 @@ ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
-          size: 23,
-          color: selected ? VynlColors.text : VynlColors.faint,
+          size: 22,
+          color: selected ? accent : VynlColors.faint,
         );
       }),
     ),
@@ -227,8 +264,8 @@ ThemeData buildVynlTheme({Color seed = VynlColors.accent}) {
       textColor: VynlColors.text,
       contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: VynlColors.accent,
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: accent,
       linearTrackColor: VynlColors.line,
     ),
   );

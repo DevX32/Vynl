@@ -1,12 +1,13 @@
 mod server;
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, RwLock, oneshot};
 
 use crate::commands::types::{LibraryTrack, Playlist};
 use crate::services::{library, playlists, settings, util};
@@ -136,11 +137,16 @@ fn local_addrs() -> Result<Vec<IpAddr>, String> {
 fn hostname() -> Result<String, String> {
     #[cfg(windows)]
     {
-        use std::process::Command;
-        let out = Command::new("hostname")
-            .output()
-            .map_err(|e| e.to_string())?;
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        unsafe extern "system" {
+            fn GetComputerNameW(lpBuffer: *mut u16, nSize: *mut u32) -> i32;
+        }
+        let mut size: u32 = 256;
+        let mut buf = vec![0u16; size as usize];
+        let ok = unsafe { GetComputerNameW(buf.as_mut_ptr(), &mut size) };
+        if ok == 0 {
+            return Err("GetComputerNameW failed".into());
+        }
+        Ok(String::from_utf16_lossy(&buf[..size as usize]))
     }
     #[cfg(not(windows))]
     {
@@ -234,8 +240,13 @@ fn pair_urls(port: u16) -> Vec<String> {
     out
 }
 
-fn pairing_payload(host: &str, port: u16, pin: &str) -> String {
-    format!("vynl://pair?h={host}&p={port}&pin={pin}")
+fn pairing_payload(hosts: &[String], port: u16, pin: &str) -> String {
+    let primary = hosts.first().map(String::as_str).unwrap_or_default();
+    let mut payload = format!("vynl://pair?h={primary}&p={port}&pin={pin}");
+    if hosts.len() > 1 {
+        payload.push_str(&format!("&a={}", hosts[1..].join(",")));
+    }
+    payload
 }
 
 fn qr_for_payload(payload: &str) -> Option<String> {
@@ -254,19 +265,18 @@ fn qr_for_payload(payload: &str) -> Option<String> {
 pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
     let cfg = load_config(user_data_dir);
     let urls = pair_urls(cfg.port);
-    let primary = urls
+    let mut hosts: Vec<String> = list_lan_addresses()
         .iter()
-        .find(|u| u.contains(".local"))
-        .or_else(|| urls.first())
-        .cloned();
-    let qr_svg = primary.and_then(|url| {
-        let host = url
-            .trim_start_matches("http://")
-            .split(':')
-            .next()
-            .unwrap_or_default();
-        qr_for_payload(&pairing_payload(host, cfg.port, &cfg.pairing_pin))
-    });
+        .map(ToString::to_string)
+        .collect();
+    if let Some(mdns) = mdns_hostname() {
+        let label = mdns.trim_end_matches(".local").to_string();
+        if !hosts.contains(&label) {
+            hosts.push(label);
+        }
+    }
+
+    let qr_svg = qr_for_payload(&pairing_payload(&hosts, cfg.port, &cfg.pairing_pin));
     MobileSyncStatus {
         enabled: cfg.enabled,
         running,
@@ -348,6 +358,12 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         user_data: user_data.clone(),
         pin: Mutex::new(pin),
         token: Mutex::new(token),
+        attempts: Mutex::new(HashMap::new()),
+        tracks: RwLock::new(None),
+        tracks_load: Mutex::new(()),
+        manifest: RwLock::new(None),
+        manifest_load: Mutex::new(()),
+        next_generation: std::sync::atomic::AtomicU64::new(0),
     });
 
     tokio::spawn(async move {

@@ -122,7 +122,6 @@
         {/if}
       </button>
       <VolumeSlider />
-      <span class="vol-pct mono">{Math.round(getCurrentVolume() * 100)}%</span>
     </div>
     <button
       class="icon-btn small"
@@ -171,8 +170,6 @@
     gap: clamp(8px, 2cqi, 24px);
   }
 
-  /* Transport buttons live in TransportControls; pass the idle dim down as a
-     custom property so it doesn't stack on the component's own disabled dim. */
   .player-bar.empty .transport {
     --tc-idle-opacity: 0.4;
   }
@@ -404,14 +401,6 @@
     color: var(--text);
   }
 
-  .vol-pct {
-    font-size: 11px;
-    color: var(--faint);
-    width: 30px;
-    text-align: right;
-    flex-shrink: 0;
-  }
-
   @container player (max-width: 780px) {
     .player-bar {
       padding: 14px 16px;
@@ -429,10 +418,6 @@
     .vol {
       --vol-width: 48px;
       gap: 5px;
-    }
-
-    .vol-pct {
-      display: none;
     }
 
     .bar-right {

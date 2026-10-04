@@ -12,6 +12,7 @@ use tokio::io::AsyncWriteExt;
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 const PROBE_CACHE_TTL: Duration = Duration::from_secs(10);
+const TOOL_PATH_TTL: Duration = Duration::from_secs(60);
 const PROGRESS_EMIT_STEP: f64 = 1.0;
 
 fn bin_dir(user_data_dir: &Path) -> PathBuf {
@@ -380,11 +381,63 @@ pub async fn check_tools(user_data_dir: &Path, app_handle: &AppHandle) -> Vec<To
     probe_all(user_data_dir, app_handle, true).await
 }
 
+struct ToolPathEntry {
+    name: String,
+    user_data_dir: PathBuf,
+    path: Option<String>,
+    at: std::time::Instant,
+}
+
+fn tool_path_cache() -> &'static std::sync::Mutex<Vec<ToolPathEntry>> {
+    static CACHE: OnceLock<std::sync::Mutex<Vec<ToolPathEntry>>> = OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+fn cached_tool_path(name: &str, user_data_dir: &Path) -> Option<Option<String>> {
+    let cache = tool_path_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache
+        .iter()
+        .find(|e| {
+            e.name == name && e.user_data_dir == user_data_dir && e.at.elapsed() < TOOL_PATH_TTL
+        })
+        .map(|e| e.path.clone())
+}
+
+fn store_tool_path(name: &str, user_data_dir: &Path, path: Option<String>) -> Option<String> {
+    let mut cache = tool_path_cache().lock().unwrap_or_else(|e| e.into_inner());
+    cache.retain(|e| !(e.name == name && e.user_data_dir == user_data_dir));
+    cache.push(ToolPathEntry {
+        name: name.to_string(),
+        user_data_dir: user_data_dir.to_path_buf(),
+        path: path.clone(),
+        at: std::time::Instant::now(),
+    });
+    path
+}
+
+pub fn invalidate_tool_path_cache(name: Option<&str>) {
+    let mut cache = tool_path_cache().lock().unwrap_or_else(|e| e.into_inner());
+    match name {
+        Some(n) => cache.retain(|e| e.name != n),
+        None => cache.clear(),
+    }
+}
+
 pub fn get_tool_path(name: &str, user_data_dir: &Path) -> Option<String> {
-    resolve_binary(name, user_data_dir)
+    if let Some(cached) = cached_tool_path(name, user_data_dir) {
+        return cached;
+    }
+    store_tool_path(name, user_data_dir, resolve_binary(name, user_data_dir))
 }
 
 pub fn get_ffprobe_path(user_data_dir: &Path) -> Option<String> {
+    if let Some(cached) = cached_tool_path("ffprobe", user_data_dir) {
+        return cached;
+    }
+    store_tool_path("ffprobe", user_data_dir, resolve_ffprobe(user_data_dir))
+}
+
+fn resolve_ffprobe(user_data_dir: &Path) -> Option<String> {
     let ffprobe_exe = exe_name("ffprobe");
 
     for dir in user_data_search_roots(user_data_dir) {
@@ -635,7 +688,7 @@ async fn extract_ffmpeg_from_tar(
         fs::create_dir_all(&extract_dir)
             .map_err(|e| format!("Failed to create extraction dir: {e}"))?;
 
-        let output = Command::new("tar")
+        let output = process::hidden_std(Command::new("tar"))
             .args([
                 "xf",
                 tar_path.to_string_lossy().as_ref(),
@@ -725,6 +778,8 @@ pub async fn install_tool(
             }
         }
     }
+
+    invalidate_tool_path_cache(None);
 
     let final_statuses = probe_all(user_data_dir, &app_handle, false).await;
     final_statuses

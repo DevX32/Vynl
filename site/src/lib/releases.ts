@@ -12,11 +12,17 @@ export interface LinuxAsset extends Asset {
   format: string
 }
 
+export interface AndroidAsset extends Asset {
+  abi: string
+  recommended: boolean
+}
+
 export interface LatestRelease {
   version: string
   publishedAt: string | null
   windows: Asset | null
   linux: LinuxAsset[]
+  android: AndroidAsset[]
 }
 
 const API_URL = 'https://api.github.com/repos/DevX32/Vynl/releases/latest'
@@ -62,6 +68,18 @@ function stripVersionPrefix(file: string): string {
   return file.replace(/^Vynl[_-]v?[\d.]+[_-]/, '')
 }
 
+const SUPPORTED_ABIS = ['arm64-v8a', 'armeabi-v7a', 'x86_64'] as const
+
+export const RECOMMENDED_ABI: string = 'arm64-v8a'
+
+function parseApkAbi(file: string): string | null {
+  if (!/^Vynl-mobile-.*\.apk$/.test(file)) return null
+  for (const abi of SUPPORTED_ABIS) {
+    if (file.endsWith(`-${abi}.apk`)) return abi
+  }
+  return null
+}
+
 export async function getLatestRelease(): Promise<LatestRelease | null> {
   if (process.env.VYNL_OFFLINE_BUILD) return null
 
@@ -95,11 +113,21 @@ export async function getLatestRelease(): Promise<LatestRelease | null> {
         format: a.name.endsWith('.AppImage') ? 'AppImage' : a.name.split('.').pop()!.toUpperCase()
       }))
 
+    const android = assets
+      .filter((a) => a.name.endsWith('.apk'))
+      .map<AndroidAsset>((a) => ({
+        ...toAsset(a),
+        abi: parseApkAbi(a.name) ?? 'unknown',
+        recommended: parseApkAbi(a.name) === RECOMMENDED_ABI
+      }))
+      .sort((a, b) => Number(b.recommended) - Number(a.recommended) || a.abi.localeCompare(b.abi))
+
     return {
       version: (data.tag_name ?? '').replace(/^v/, '') || 'latest',
       publishedAt: data.published_at ?? null,
       windows: windowsAsset ? toAsset(windowsAsset) : null,
-      linux
+      linux,
+      android
     }
   } catch {
     return null

@@ -4,7 +4,7 @@
   import { t } from "@lib/i18n";
   import { SHORTCUTS, closeShortcutsOverlay } from "@state/shortcuts.svelte";
 
-  const categories = [...new Set(SHORTCUTS.map((s) => s.category))];
+  const categories = [...new Set(SHORTCUTS.map((s) => s.categoryKey))];
 
   function formatKey(key: string): string {
     if (key === " ") return "Space";
@@ -29,11 +29,11 @@
     <div class="body">
       {#each categories as cat}
         <div class="cat">
-          <div class="cat-label mono">{cat}</div>
-          {#each SHORTCUTS.filter((s) => s.category === cat) as shortcut}
+          <div class="cat-label mono">{t(cat)}</div>
+          {#each SHORTCUTS.filter((s) => s.categoryKey === cat) as shortcut}
             <div class="row">
               <kbd class="key mono">{formatKey(shortcut.key)}</kbd>
-              <span class="desc mono">{shortcut.label}</span>
+              <span class="desc mono">{t(shortcut.labelKey)}</span>
             </div>
           {/each}
         </div>

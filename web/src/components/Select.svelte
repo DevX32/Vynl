@@ -11,11 +11,12 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { ChevronDown } from "lucide-svelte";
+  import { t } from "@lib/i18n";
 
   let {
     options,
     value = $bindable(),
-    placeholder = "Select…",
+    placeholder,
     disabled = false,
     size = "md",
     label,
@@ -163,7 +164,7 @@
     onclick={toggle}
     onkeydown={handleTriggerKey}
   >
-    <span class="select-value">{selected ? selected.label : placeholder}</span>
+    <span class="select-value">{selected ? selected.label : (placeholder ?? t("common.select"))}</span>
     <ChevronDown size={14} stroke-width={1.5} />
   </button>
 

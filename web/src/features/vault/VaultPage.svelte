@@ -12,13 +12,16 @@
   import { vynl } from "../../lib/vynl";
   import { resolveCollectionWithPlugins } from "@lib/plugins/providers";
   import { getCurrentSettings } from "@state/settings.svelte";
-  import { fmtDuration, totalSeconds } from "../../lib/format";
+  import { blobSrc, fmtDuration, totalSeconds } from "../../lib/format";
+  import { toasts } from "@lib/toast";
   import { t } from "@lib/i18n";
   import {
     getCurrentPlaylists,
     createPlaylist,
     addToPlaylist,
     refreshPlaylists,
+    markCoverFailed,
+    resolvePlaylistCovers,
   } from "@state/playlists.svelte";
   import TrackRow from "./TrackRow.svelte";
   import VaultHero from "./VaultHero.svelte";
@@ -26,6 +29,7 @@
   import DownloadFooter from "./DownloadFooter.svelte";
   import InlineSearchResults from "./InlineSearchResults.svelte";
   import PlaylistPicker from "./PlaylistPicker.svelte";
+  import { Disc3 } from "lucide-svelte";
   import Button from "../../components/Button.svelte";
 
   let { active = false }: { active?: boolean } = $props();
@@ -83,6 +87,8 @@
   let pendingPaths = $state<string[]>([]);
   let pendingCollectionTitle = $state("");
   let pickerBusy = $state(false);
+  let savingPlaylist = $state(false);
+  let saveHint = $state<string | null>(null);
   const PAGE_SIZE = 50;
   let page = $state(0);
   let trackFilter = $state<"all" | "queued" | "active" | "failed" | "done" | "skipped">("all");
@@ -353,6 +359,7 @@
     reviewing = false;
     error = null;
     summary = null;
+    saveHint = null;
 
     const skipIds = syncOnlyNew ? buildSkipIds(collection.tracks, doneIds) : [];
     const baseProgress = initProgress("queued");
@@ -378,11 +385,7 @@
 
   async function postDownload(dlCollection: Collection): Promise<void> {
     try {
-      const paths = await vynl.downloadedPaths(dlCollection);
-      const existingPaths = paths.filter((p) => {
-        const name = p.split(/[/\\]/).pop() ?? "";
-        return name && !name.startsWith(".");
-      });
+      const existingPaths = await collectDownloadedPaths(dlCollection);
       if (existingPaths.length === 0) return;
 
       await refreshPlaylists();
@@ -395,21 +398,66 @@
     }
   }
 
+  async function collectDownloadedPaths(
+    target: Collection,
+  ): Promise<string[]> {
+    const paths = await vynl.downloadedPaths(target);
+    return paths.filter((p) => {
+      const name = p.split(/[/\\]/).pop() ?? "";
+      return name && !name.startsWith(".");
+    });
+  }
+
+  async function saveToPlaylist(): Promise<void> {
+    if (!collection || savingPlaylist) return;
+    savingPlaylist = true;
+    saveHint = null;
+    try {
+      const existingPaths = await collectDownloadedPaths(collection);
+      if (existingPaths.length === 0) {
+        saveHint = t("vault.nothingDownloadedYet");
+        return;
+      }
+      await refreshPlaylists();
+      pendingPaths = existingPaths;
+      pendingCollectionTitle = collection.title;
+      pickerBusy = false;
+      showPlaylistPicker = true;
+    } catch (e) {
+      saveHint = e instanceof Error ? e.message : String(e);
+    } finally {
+      savingPlaylist = false;
+    }
+  }
+
   function closePicker(): void {
     showPlaylistPicker = false;
     pendingPaths = [];
     pendingCollectionTitle = "";
     pickerBusy = false;
+    saveHint = null;
+  }
+
+  function notifyPlaylistSaved(name: string, added: number): void {
+    if (added > 0) toasts.success(t("vault.addedToPlaylist", { n: added, name }));
+    else toasts.info(t("vault.playlistAlreadyHas", { name }));
   }
 
   async function addToSelectedPlaylist(playlistId: string): Promise<void> {
     if (pickerBusy) return;
     pickerBusy = true;
+    const before = getCurrentPlaylists().find((p) => p.id === playlistId);
     try {
       await addToPlaylist(playlistId, pendingPaths);
       await refreshPlaylists();
+      const after = getCurrentPlaylists().find((p) => p.id === playlistId);
+      notifyPlaylistSaved(
+        after?.name ?? before?.name ?? "",
+        (after?.trackCount ?? 0) - (before?.trackCount ?? 0),
+      );
     } catch (e) {
       console.warn("addToPlaylist error:", e);
+      toasts.error(t("vault.playlistSaveFailed"));
     }
     closePicker();
   }
@@ -421,12 +469,22 @@
       const pl = await createPlaylist(name.trim() || "Untitled");
       await addToPlaylist(pl.id, pendingPaths);
       await refreshPlaylists();
+      const added =
+        getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
+      notifyPlaylistSaved(pl.name, added);
     } catch (e) {
       console.warn("createAndAddPlaylist error:", e);
+      toasts.error(t("vault.playlistSaveFailed"));
     }
     closePicker();
   }
 
+  let coverTiles = $derived(
+    resolvePlaylistCovers(
+      collection?.cover,
+      collection?.tracks ?? [],
+    ),
+  );
 
   const counts = $derived.by(() => {
     if (!collection) return { done: 0, skipped: 0, failed: 0, queued: 0, active: 0 };
@@ -461,6 +519,7 @@
     reviewing = false;
     error = null;
     summary = null;
+    saveHint = null;
     {
       const next = { ...progress };
       for (const t of sub.tracks)
@@ -507,7 +566,8 @@
     page = 0;
     trackFilter = "all";
     addedTrackIds = new Set();
-    selectedFailed = new Set();
+    savingPlaylist = false;
+    saveHint = null;
     closePicker();
   }
 
@@ -549,26 +609,60 @@
 <div class="page">
   <VaultHero
     bind:value={url}
+    compact={!!collection && !showSearchResults}
     onResolve={resolve}
     onSearch={openSearch}
     onClear={dismissSearch}
     resolving={resolving}
     searching={searching}
-  />
-
-  {#if showSearchResults}
-    <InlineSearchResults
-      query={url}
-      results={searchResults}
-      loading={searching}
-      error={searchError}
-      addedIds={addedTrackIds}
-      onSelect={addTrack}
-    />
-  {/if}
+  >
+    {#if showSearchResults}
+      <InlineSearchResults
+        query={url}
+        results={searchResults}
+        loading={searching}
+        error={searchError}
+        addedIds={addedTrackIds}
+        onSelect={addTrack}
+      />
+    {/if}
+  </VaultHero>
 
   {#if collection && !showSearchResults}
     <div class="coll-header">
+      <div class="coll-cover">
+        {#if coverTiles.length >= 2}
+          <div class="coll-cover-grid">
+            {#each coverTiles as c (c)}
+              <img
+                class="coll-cover-tile"
+                use:blobSrc={c}
+                alt=""
+                loading="lazy"
+                draggable="false"
+                onerror={() => markCoverFailed(c)}
+              />
+            {/each}
+            {#each Array(4 - coverTiles.length) as _}
+              <div class="coll-cover-tile coll-cover-tile-empty"></div>
+            {/each}
+          </div>
+        {:else if coverTiles.length === 1}
+          <img
+            class="coll-cover-tile"
+            use:blobSrc={coverTiles[0]}
+            alt=""
+            loading="lazy"
+            draggable="false"
+            onerror={() => markCoverFailed(coverTiles[0])}
+          />
+        {:else}
+          <div class="coll-cover-tile placeholder">
+            <Disc3 size={16} stroke-width={1} />
+          </div>
+        {/if}
+      </div>
+
       <div class="coll-meta">
         <div class="coll-title display">{collection.title}</div>
         <div class="coll-sub mono">
@@ -676,10 +770,13 @@
     {summary}
     {counts}
     totalDuration={totalDur()}
+    {savingPlaylist}
+    {saveHint}
     onBeginDownload={beginDownload}
     onConfirmDownload={confirmDownload}
     onRetryFailed={retryFailed}
     onCancel={cancel}
+    onSaveToPlaylist={saveToPlaylist}
     onDone={clearAll}
   />
 </div>
@@ -719,6 +816,44 @@
     align-items: center;
     gap: 16px;
     padding: 20px 0 16px;
+  }
+
+  .coll-cover {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-raise);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+
+  .coll-cover-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--bg);
+  }
+
+  .coll-cover-tile {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: var(--bg-raise);
+  }
+
+  .coll-cover-tile-empty {
+    background: var(--placeholder-gradient);
+  }
+
+  .coll-cover-tile.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--faint);
+    background: var(--placeholder-gradient);
   }
 
   .coll-clear {
@@ -946,6 +1081,11 @@
 
     .h-num {
       display: none;
+    }
+
+    .coll-cover {
+      width: 40px;
+      height: 40px;
     }
 
     .coll-header {

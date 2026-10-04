@@ -16,6 +16,7 @@
   import { getPlaylistCovers, markCoverFailed } from "@state/playlists.svelte";
   import { getPluginPages } from "@state/plugins.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
+  import { useDragList } from "@lib/drag-list.svelte";
   import type { Page, PlaylistMeta } from "@lib/types";
 
   let {
@@ -34,6 +35,7 @@
     onOpenPlaylist,
     onShowCtx,
     onShowRailCtx,
+    onReorderPlaylists,
   }: {
     page: Page;
     sidebarOpen: boolean;
@@ -50,10 +52,22 @@
     onOpenPlaylist: (id: string) => void;
     onShowCtx: (e: MouseEvent, id: string, name: string) => void;
     onShowRailCtx: (e: MouseEvent) => void;
+    onReorderPlaylists: (fromId: string, toId: string) => void;
   } = $props();
+
+  const { drag, start, shouldSkipClick } = useDragList({
+    pathAt: (_section, idx) => playlists[idx]?.id,
+    onReorder: (fromId, toId) => onReorderPlaylists(fromId, toId),
+    rowSelector: () => ".rail-item",
+  });
+
+  function onRailPointerDown(e: PointerEvent, idx: number): void {
+    const p = playlists[idx];
+    if (p) start(e, { idx, path: p.id });
+  }
 </script>
 
-<nav class="sidebar" class:collapsed={!sidebarOpen} aria-label="Main navigation">
+<nav class="sidebar" class:collapsed={!sidebarOpen} aria-label={t("nav.mainNavigation")}>
   <div class="nav-group">
     <button class="nav-link" class:active={page === "home"} onclick={onHome}>
       <span class="nav-icon"><Home size={15} stroke-width={1.5} /></span>
@@ -98,13 +112,24 @@
       </button>
     </div>
 
-    <div class="rail" role="list" oncontextmenu={onShowRailCtx}>
-      {#each playlists as p (p.id)}
+    <div
+      class="rail"
+      role="list"
+      oncontextmenu={onShowRailCtx}
+      bind:this={drag.rowsEl}
+    >
+      {#each playlists as p, i (p.id)}
         {@const covers = getPlaylistCovers(p.id).slice(0, 4)}
         <button
           class="rail-item"
           class:active={page === "playlist" && selectedId === p.id}
-          onclick={() => onOpenPlaylist(p.id)}
+          class:dragging={drag.dragging && drag.grabIdx === i}
+          class:drag-over={drag.dragging && drag.overIdx === i && drag.grabIdx !== i}
+          onclick={() => {
+            if (shouldSkipClick()) return;
+            onOpenPlaylist(p.id);
+          }}
+          onpointerdown={(e) => onRailPointerDown(e, i)}
           oncontextmenu={(e) => onShowCtx(e, p.id, p.name)}
           title={sidebarOpen ? undefined : p.name}
           aria-label={sidebarOpen ? undefined : p.name}
@@ -211,7 +236,6 @@
   }
 
   .sidebar.collapsed .rail {
-    padding-right: 0;
     scrollbar-width: none;
   }
 
@@ -316,7 +340,6 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding-right: 2px;
   }
 
   .rail::-webkit-scrollbar {
@@ -333,13 +356,14 @@
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 6px var(--rail-pad-x);
+    padding: 3px var(--rail-pad-x);
     border-radius: var(--radius-sm);
     border: none;
     background: none;
     text-align: left;
     cursor: pointer;
     transition: background 0.15s;
+    user-select: none;
   }
 
   .rail-item:hover {
@@ -350,10 +374,29 @@
     background: var(--accent-soft);
   }
 
+  .rail-item.dragging {
+    opacity: 0.3;
+  }
+
+  .rail-item.drag-over {
+    background: transparent;
+  }
+
+  .rail-item.drag-over::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--line-strong);
+    border-radius: 1px;
+  }
+
   .rail-cover {
     width: var(--cover);
     height: var(--cover);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     object-fit: cover;
     flex-shrink: 0;
     background: var(--bg-raise);
@@ -376,7 +419,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg);
     box-shadow: var(--shadow-sm);
@@ -479,7 +522,7 @@
     }
 
     .rail-item {
-      padding-block: 6px;
+      padding-block: 3px;
       gap: 8px;
     }
 

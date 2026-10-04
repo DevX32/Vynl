@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rodio::source::SeekError;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
@@ -10,11 +10,11 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 static VOLUME: AtomicU32 = AtomicU32::new(75);
-static PLAYING: AtomicBool = AtomicBool::new(false);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 
 pub const PLAYBACK_TICK_EVENT: &str = "vynl:player:tick";
-const TICK_INTERVAL: Duration = Duration::from_millis(50);
+const TICK_INTERVAL: Duration = Duration::from_millis(100);
+const DEVICE_POLL_INTERVAL: Duration = Duration::from_secs(2);
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
 pub fn set_app_handle(app: &AppHandle) {
@@ -336,7 +336,6 @@ enum PlayerCmd {
     Volume(u32),
     GetPosition(u64),
     IsPlaying(u64),
-    CheckFinished(u64),
 }
 
 #[derive(Clone)]
@@ -465,6 +464,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
     let mut pending_seek: Option<(f64, u64)> = None;
     let mut duration_secs: Option<f64> = None;
     let mut last_tick_key: Option<TickKey> = None;
+    let mut last_device_poll = Instant::now();
 
     loop {
         match rx.recv_timeout(TICK_INTERVAL) {
@@ -501,7 +501,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             }
                             current_path = Some(path.clone());
                             active_generation = 0;
-                            PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             match File::open(&path) {
                                 Ok(file) => match Decoder::new(BufReader::new(file)) {
@@ -526,7 +525,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                                         sink = Some(new_sink);
                                                         duration_secs = total;
                                                         active_generation = generation;
-                                                        PLAYING.store(true, Ordering::Relaxed);
                                                         PAUSED.store(false, Ordering::Relaxed);
                                                         PlayerResp::Ok
                                                     }
@@ -554,7 +552,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             if let Some(s) = sink.take() {
                                 s.stop();
                             }
-                            PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Ok
                         }
@@ -575,11 +572,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Bool(false)
                         } else if let Some(s) = sink.as_ref().filter(|sink| !sink.empty()) {
                             s.play();
-                            PLAYING.store(true, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Bool(true)
                         } else {
-                            PLAYING.store(false, Ordering::Relaxed);
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Bool(false)
                         }
@@ -628,26 +623,18 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             && sink.as_ref().is_some_and(|sink| !sink.empty())
                             && !PAUSED.load(Ordering::Relaxed),
                     ),
-                    PlayerCmd::CheckFinished(generation) => {
-                        if generation != active_generation {
-                            PlayerResp::Bool(false)
-                        } else {
-                            let finished = sink.as_ref().map(|s| s.empty()).unwrap_or(true);
-                            if finished && PLAYING.load(Ordering::Relaxed) {
-                                PLAYING.store(false, Ordering::Relaxed);
-                            }
-                            PlayerResp::Bool(finished)
-                        }
-                    }
                 };
 
                 let _ = reply_tx.send(resp);
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                let now = default_output_device_name();
-                if now != output_device_name {
-                    output_device_name = now;
-                    reopen_output(&mut output, &mut handle, &mut sink, &current_path);
+                if last_device_poll.elapsed() >= DEVICE_POLL_INTERVAL {
+                    last_device_poll = Instant::now();
+                    let now = default_output_device_name();
+                    if now != output_device_name {
+                        output_device_name = now;
+                        reopen_output(&mut output, &mut handle, &mut sink, &current_path);
+                    }
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -705,15 +692,6 @@ pub fn get_position(generation: u64) -> Result<f64, String> {
 
 pub fn is_playing(generation: u64) -> Result<bool, String> {
     match send(PlayerCmd::IsPlaying(generation)) {
-        Ok(PlayerResp::Bool(v)) => Ok(v),
-        Ok(PlayerResp::Err(e)) => Err(e),
-        Ok(_) => Err("unexpected".into()),
-        Err(e) => Err(e),
-    }
-}
-
-pub fn check_finished(generation: u64) -> Result<bool, String> {
-    match send(PlayerCmd::CheckFinished(generation)) {
         Ok(PlayerResp::Bool(v)) => Ok(v),
         Ok(PlayerResp::Err(e)) => Err(e),
         Ok(_) => Err("unexpected".into()),

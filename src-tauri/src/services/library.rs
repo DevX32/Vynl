@@ -421,6 +421,8 @@ fn extract_or_cache_cover(
         return Some(path.to_string_lossy().to_string());
     }
 
+    pic_codec?;
+
     let dest = covers_dir.join(&filename);
     if extract_cover_via_lofty(file, &dest) {
         let has_data = dest.metadata().map(|m| m.len() > 0).unwrap_or(false);
@@ -647,20 +649,20 @@ fn save_cache(user_data_dir: &Path, tracks: &[LibraryTrack]) {
 }
 
 pub fn scan_library(output_dir: &Path, user_data_dir: &Path) -> Vec<LibraryTrack> {
-    scan_library_incremental(output_dir, user_data_dir, None)
+    scan_library_incremental(output_dir, user_data_dir, None).0
 }
 
-pub fn scan_cached_library(output_dir: &Path, user_data_dir: &Path) -> Vec<LibraryTrack> {
+pub fn scan_cached_library(output_dir: &Path, user_data_dir: &Path) -> (Vec<LibraryTrack>, bool) {
     let _scan_guard = SCAN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let existing = load_cache(user_data_dir);
     scan_library_incremental_unlocked(output_dir, user_data_dir, existing.as_deref())
 }
 
-pub fn scan_library_incremental(
+fn scan_library_incremental(
     output_dir: &Path,
     user_data_dir: &Path,
     existing: Option<&[LibraryTrack]>,
-) -> Vec<LibraryTrack> {
+) -> (Vec<LibraryTrack>, bool) {
     let _scan_guard = SCAN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     scan_library_incremental_unlocked(output_dir, user_data_dir, existing)
 }
@@ -669,7 +671,7 @@ fn scan_library_incremental_unlocked(
     output_dir: &Path,
     user_data_dir: &Path,
     existing: Option<&[LibraryTrack]>,
-) -> Vec<LibraryTrack> {
+) -> (Vec<LibraryTrack>, bool) {
     let ffmpeg_path = super::tools::get_tool_path("ffmpeg", user_data_dir);
     let ffprobe_path = super::tools::get_ffprobe_path(user_data_dir);
 
@@ -677,7 +679,7 @@ fn scan_library_incremental_unlocked(
     fs::create_dir_all(&covers_dir).ok();
 
     if !output_dir.exists() {
-        return vec![];
+        return (vec![], existing.is_none_or(|e| !e.is_empty()));
     }
 
     let files = list_audio_files(output_dir);
@@ -700,7 +702,7 @@ fn scan_library_incremental_unlocked(
 
             if cached.mtime == Some(current_mtime)
                 && current_mtime > 0
-                && !(cached.artist.is_empty() || cached.title.is_empty() || cached.cover.is_none())
+                && !(cached.artist.is_empty() || cached.title.is_empty())
             {
                 let mut track = (*cached).clone();
                 if track.added_at.unwrap_or(0) == 0 {
@@ -762,9 +764,10 @@ fn scan_library_incremental_unlocked(
         }
     }
 
-    out.sort_by(|a, b| format!("{}{}", a.artist, a.title).cmp(&format!("{}{}", b.artist, b.title)));
+    out.sort_by_cached_key(|t| format!("{}{}", t.artist, t.title));
 
+    let changed = existing.is_none_or(|e| e != out.as_slice());
     save_cache(user_data_dir, &out);
 
-    out
+    (out, changed)
 }

@@ -1,9 +1,31 @@
 <script lang="ts">
-  import { Search, Loader } from "lucide-svelte";
+  import { Search, Loader, Link2, ListChecks, FolderDown } from "lucide-svelte";
+  import type { Snippet } from "svelte";
   import { t } from "@lib/i18n";
+
+  function collapse(
+    node: HTMLElement,
+    { duration = 200 }: { duration?: number } = {},
+  ): { duration: number; css: (t: number) => string } {
+    const calm =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const height = node.getBoundingClientRect().height;
+
+    return {
+      duration: calm ? 0 : duration,
+      css: (t: number) =>
+        `height: ${height * t}px;` +
+        `opacity: ${t};` +
+        `overflow: hidden;`,
+    };
+  }
 
   let {
     value = $bindable(""),
+    compact = false,
+    children,
     onResolve,
     onSearch,
     onClear,
@@ -11,6 +33,8 @@
     searching,
   }: {
     value?: string;
+    compact?: boolean;
+    children?: Snippet;
     onResolve: () => void;
     onSearch: (query: string) => void;
     onClear: () => void;
@@ -21,6 +45,12 @@
   let debounceId: ReturnType<typeof setTimeout> | null = null;
   let inputEl = $state<HTMLInputElement>();
   let lastScheduled = "";
+
+  const STEPS = [
+    { icon: Link2, title: t("vault.step1Title"), body: t("vault.step1Body") },
+    { icon: ListChecks, title: t("vault.step2Title"), body: t("vault.step2Body") },
+    { icon: FolderDown, title: t("vault.step3Title"), body: t("vault.step3Body") },
+  ];
 
   function clearDebounce() {
     if (debounceId != null) {
@@ -83,21 +113,25 @@
   }
 </script>
 
-<section class="hero">
-  <div class="hero-copy">
-    <div class="kicker mono">{t("vault.kicker")}</div>
-    <h1 class="display">
-      {t("vault.heroLine1")}
-      <em class="accent-italic">{t("vault.heroItalic")}</em>
-      {t("vault.heroLine2")}
-    </h1>
+<section class="hero" class:compact>
+  <div class="hero-main">
+    {#if !compact}
+      <div class="hero-head" transition:collapse={{ duration: 220 }}>
+        <div class="kicker mono">{t("vault.kicker")}</div>
+        <h1 class="display">
+          {t("vault.heroLine1")}
+          <em class="accent-italic">{t("vault.heroItalic")}</em>
+          {t("vault.heroLine2")}
+        </h1>
+      </div>
+    {/if}
 
     <div class="input-wrap" class:focused={!!value}>
       <div class="input-icon">
         {#if resolving || searching}
-          <Loader size={15} stroke-width={2} class="spin" />
+          <Loader size={16} stroke-width={2} class="spin" />
         {:else}
-          <Search size={15} stroke-width={1.5} />
+          <Search size={16} stroke-width={1.5} />
         {/if}
       </div>
       <input
@@ -112,20 +146,71 @@
           if (e.key === "Escape") handleClear();
         }}
       />
-      {#if value}
-        <button type="button" class="clear-btn" onclick={handleClear}>Clear</button>
-      {/if}
     </div>
+
+    {#if !compact}
+      <div class="hint mono">
+        <span class="key">{t("vault.keyEnter")}</span>
+        <span>{t("vault.hintSearch")}</span>
+        <span class="hint-sep"></span>
+        <span class="key">{t("vault.keyEscape")}</span>
+        <span>{t("vault.hintClear")}</span>
+      </div>
+    {/if}
+    {@render children?.()}
   </div>
+
+  {#if !compact}
+    <aside class="steps-panel">
+      <div class="panel-label mono">{t("vault.howItWorks")}</div>
+
+      <ol class="steps">
+        {#each STEPS as step, i (step.title)}
+          {@const Icon = step.icon}
+          <li class="step">
+            <span class="step-index mono">{String(i + 1).padStart(2, "0")}</span>
+            <span class="step-icon"><Icon size={14} stroke-width={1.5} /></span>
+            <span class="step-copy">
+              <span class="step-title">{step.title}</span>
+              <span class="step-body">{step.body}</span>
+            </span>
+          </li>
+        {/each}
+      </ol>
+    </aside>
+  {/if}
 </section>
 
 <style>
   .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 296px;
+    align-items: start;
+    gap: 56px;
     padding: 32px 0 8px;
   }
 
-  .hero-copy {
-    max-width: 580px;
+  .hero.compact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 18px 0 4px;
+  }
+
+  .hero.compact .hero-main {
+    max-width: none;
+  }
+
+  .hero.compact .input-wrap {
+    height: 42px;
+  }
+
+  .hero.compact .search-input {
+    font-size: 13px;
+  }
+
+  .hero-main {
+    min-width: 0;
+    max-width: 620px;
   }
 
   .kicker {
@@ -136,12 +221,17 @@
     margin-bottom: 14px;
   }
 
+  .hero-head {
+    padding-bottom: 26px;
+  }
+
   h1 {
-    margin: 0 0 24px;
-    font-size: 40px;
+    margin: 0;
+    font-size: 46px;
     font-weight: 400;
-    line-height: 1.08;
-    letter-spacing: -0.01em;
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
     overflow-wrap: break-word;
     min-width: 0;
   }
@@ -159,7 +249,7 @@
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
     padding: 0 14px;
-    height: 44px;
+    height: 52px;
     transition:
       border-color 0.2s,
       box-shadow 0.2s;
@@ -173,7 +263,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
+    width: 22px;
     flex-shrink: 0;
     color: var(--faint);
   }
@@ -184,9 +274,9 @@
     background: none;
     border: none;
     outline: none;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text);
-    padding: 0 10px;
+    padding: 0 12px;
     height: 100%;
   }
 
@@ -194,33 +284,107 @@
     color: var(--faint);
   }
 
-  .clear-btn {
-    display: inline-flex;
+  .hint {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 4px 10px;
-    border-radius: var(--radius-sm);
-    background: var(--line-strong);
-    border: 1px solid transparent;
-    outline: none;
-    box-shadow: none;
-    color: var(--dim);
-    cursor: pointer;
-    flex-shrink: 0;
-    margin-left: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    transition:
-      background 0.15s,
-      color 0.15s;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 14px;
+    font-size: 10.5px;
+    color: var(--faint);
+    letter-spacing: 0.04em;
   }
 
-  .clear-btn:hover,
-  .clear-btn:focus {
+  .key {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: var(--bg-raise);
+    color: var(--dim);
+    font-size: 10px;
+  }
+
+  .hint-sep {
+    width: 1px;
+    height: 11px;
+    background: var(--line-strong);
+    margin: 0 3px;
+  }
+
+  .steps-panel {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--bg-raise);
+    padding: 16px 18px 18px;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    color: var(--faint);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 18px 20px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .step:last-child {
+    border-bottom: none;
+    padding-bottom: 4px;
+  }
+
+  .step-index {
+    font-size: 10px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+  }
+
+  .step-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .step-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .step-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
     color: var(--text);
-    border-color: transparent;
-    box-shadow: none;
+  }
+
+  .step-body {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--dim);
+    text-wrap: pretty;
   }
 
   .input-icon :global(.spin) {
@@ -234,6 +398,27 @@
     }
   }
 
+  @container player (max-width: 860px) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 28px;
+    }
+
+    .hero-main {
+      max-width: none;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0 20px;
+    }
+
+    .step {
+      grid-template-columns: 18px 20px minmax(0, 1fr);
+    }
+  }
+
   @container player (max-width: 620px) {
     .hero {
       padding: 20px 0 6px;
@@ -241,16 +426,32 @@
 
     h1 {
       font-size: 32px;
-      margin-bottom: 16px;
+    }
+
+    .hero-head {
+      padding-bottom: 18px;
     }
 
     .input-wrap {
-      height: 40px;
+      height: 44px;
       padding: 0 10px;
     }
 
     .search-input {
-      font-size: 12px;
+      font-size: 13px;
+    }
+
+    .steps {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .step {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .step:last-child {
+      border-bottom: none;
+      padding-bottom: 4px;
     }
   }
 
@@ -261,11 +462,22 @@
 
     h1 {
       font-size: 26px;
-      margin-bottom: 12px;
+    }
+
+    .hero-head {
+      padding-bottom: 14px;
     }
 
     .input-wrap {
-      height: 38px;
+      height: 40px;
+    }
+
+    .search-input {
+      font-size: 12px;
+    }
+
+    .steps-panel {
+      padding: 14px;
     }
   }
 </style>

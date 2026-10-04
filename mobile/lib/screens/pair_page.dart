@@ -9,10 +9,11 @@ import '../theme.dart';
 import 'qr_scan_page.dart';
 
 class PairingPayload {
-  const PairingPayload({required this.host, required this.pin});
+  const PairingPayload({required this.host, required this.pin, this.alts = const []});
 
   final String host;
   final String pin;
+  final List<String> alts;
 }
 
 PairingPayload? parsePairingPayload(String raw) {
@@ -26,7 +27,21 @@ PairingPayload? parsePairingPayload(String raw) {
 
   final port = uri.queryParameters['p'];
   final portPart = (port == null || port.isEmpty) ? '' : ':$port';
-  return PairingPayload(host: '$host$portPart', pin: pin);
+
+  String withPort(String value) {
+    if (value.isEmpty) return value;
+    if (RegExp(r':\d+$').hasMatch(value)) return value;
+    return '$value$portPart';
+  }
+
+  final alts = (uri.queryParameters['a'] ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .map(withPort)
+      .toList();
+
+  return PairingPayload(host: withPort(host), pin: pin, alts: alts);
 }
 
 class PairPage extends StatefulWidget {
@@ -70,15 +85,17 @@ class _PairPageState extends State<PairPage> {
       final app = context.read<AppState>();
       final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
-      await app.pair(parsed.host, parsed.pin);
+      await app.pair(parsed.host, parsed.pin, alts: parsed.alts);
+      if (!mounted) return;
+      app.setTab(AppState.tabLibrary);
+      navigator.maybePop();
       messenger.showSnackBar(
         const SnackBar(content: Text('Paired — syncing library…')),
       );
-      navigator.maybePop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(content: Text(AppState.describePairFailure(e))),
         );
       }
     } finally {
@@ -89,7 +106,7 @@ class _PairPageState extends State<PairPage> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: kVynlBackground),
+      decoration: kVynlBackground,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -113,12 +130,12 @@ class _PairPageState extends State<PairPage> {
                       decoration: BoxDecoration(
                         borderRadius:
                             BorderRadius.circular(VynlRadius.control),
-                        gradient: const LinearGradient(
+                        gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Color(0x55B9A5E8),
-                            Color(0x1AB9A5E8),
+                            VynlColors.accent.withValues(alpha: 0.33),
+                            VynlColors.accent.withValues(alpha: 0.10),
                           ],
                         ),
                       ),
@@ -159,12 +176,12 @@ class _PairPageState extends State<PairPage> {
                 child: FilledButton.icon(
                   onPressed: _busy ? null : _scan,
                   icon: _busy
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.2,
-                            color: Color(0xFF17131A),
+                            color: VynlColors.accentOn,
                           ),
                         )
                       : const Icon(Icons.qr_code_scanner_rounded),

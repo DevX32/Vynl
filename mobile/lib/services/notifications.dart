@@ -19,7 +19,7 @@ class SyncNotifications {
 
   Future<void> init() async {
     if (kIsWeb || Platform.isWindows) return;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('ic_notification');
     try {
       await _plugin.initialize(
         const InitializationSettings(android: android),

@@ -4,7 +4,7 @@ import { runLyricsProviders } from "@lib/plugins/providers";
 import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
 
 type Word = { time: number; text: string };
-export type LyricLine = { time: number; text: string; words?: Word[] };
+type LyricLine = { time: number; text: string; words?: Word[] };
 
 let _loading = $state(false);
 let _result = $state<LyricsResult | null>(null);
@@ -15,7 +15,7 @@ const _cache = new Map<string, { result: LyricsResult; lines: LyricLine[] }>();
 let _activeId: string | null = null;
 let _loadVersion = 0;
 
-function parseEnhancedWords(body: string): Word[] | null {
+function parseEnhancedWords(body: string, offset = 0): Word[] | null {
   const wordTagRe = /<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>/g;
   const wordTimestamps: number[] = [];
   let wm: RegExpExecArray | null;
@@ -24,7 +24,7 @@ function parseEnhancedWords(body: string): Word[] | null {
     const min = Number(wm[1]);
     const sec = Number(wm[2]);
     const frac = wm[3] ? Number(wm[3].padEnd(3, "0")) / 1000 : 0;
-    wordTimestamps.push(min * 60 + sec + frac);
+    wordTimestamps.push(min * 60 + sec + frac + offset);
   }
   if (wordTimestamps.length === 0) return null;
   const textSegments = body.split(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/);
@@ -39,9 +39,23 @@ function parseEnhancedWords(body: string): Word[] | null {
 const METADATA_TAG_RE =
   /^\[(ar|ti|al|au|by|offset|re|ve|length|created|tool|version|application):/i;
 
+const OFFSET_TAG_RE = /^\[offset:\s*([+-]?\d+)\s*\]/i;
+
+function readOffsetSecs(text: string): number {
+  for (const raw of text.split(/\r?\n/)) {
+    const m = OFFSET_TAG_RE.exec(raw.trim());
+    if (m) {
+      const ms = Number(m[1]);
+      if (Number.isFinite(ms)) return ms / 1000;
+    }
+  }
+  return 0;
+}
+
 function parseLrc(text: string): LyricLine[] {
   const out: LyricLine[] = [];
   const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+  const offset = readOffsetSecs(text);
   for (const raw of text.split(/\r?\n/)) {
     if (METADATA_TAG_RE.test(raw.trim())) continue;
 
@@ -52,7 +66,7 @@ function parseLrc(text: string): LyricLine[] {
       const min = Number(m[1]);
       const sec = Number(m[2]);
       const frac = m[3] ? Number(m[3].padEnd(3, "0")) / 1000 : 0;
-      stamps.push(min * 60 + sec + frac);
+      stamps.push(min * 60 + sec + frac + offset);
     }
     const body = raw.replace(re, "").trim();
 
@@ -62,7 +76,7 @@ function parseLrc(text: string): LyricLine[] {
       continue;
     }
 
-    const words = parseEnhancedWords(body);
+    const words = parseEnhancedWords(body, offset);
     const cleanBody = body
       .replace(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/g, "")
       .trim();
@@ -141,22 +155,20 @@ export function loadLyrics(id: string | null): void {
       return;
     }
 
-    const local = await vynl.lyricsLocal(t.path);
+    let res: LyricsResult | null = null;
+
+    const viaPlugin = await runLyricsProviders({
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      duration: t.duration,
+    });
     if (version !== _loadVersion) return;
-    let res = local;
-    if (!res) {
-      const viaPlugin = await runLyricsProviders({
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        duration: t.duration,
-      });
-      if (version !== _loadVersion) return;
-      if (viaPlugin) {
-        res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
-        tryParseEmbeddedLyrics(res, t);
-      }
+    if (viaPlugin) {
+      res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
+      tryParseEmbeddedLyrics(res, t);
     }
+
     if (!res) {
       res = await vynl.lyricsFetch({
         title: t.title,
@@ -165,6 +177,10 @@ export function loadLyrics(id: string | null): void {
         duration: t.duration,
       });
       if (res) tryParseEmbeddedLyrics(res, t);
+    }
+
+    if (!res) {
+      res = await vynl.lyricsLocal(t.path);
     }
     if (version !== _loadVersion) return;
     if (!res && embeddedLyrics) {

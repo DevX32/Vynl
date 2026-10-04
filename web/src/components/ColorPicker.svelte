@@ -13,13 +13,13 @@
     value,
     presets,
     onchange,
-    label = "Custom color",
+    label,
     disabled = false,
   }: {
     value: string;
     presets: readonly string[];
     onchange: (hex: string) => void;
-    label?: string;
+    label: string;
     disabled?: boolean;
   } = $props();
 

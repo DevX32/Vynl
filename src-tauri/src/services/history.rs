@@ -92,3 +92,44 @@ pub fn collection_done(user_data_dir: &Path, key: &str) -> Vec<String> {
         .map(|e| e.track_ids)
         .unwrap_or_default()
 }
+
+fn file_exists(p: &str) -> bool {
+    !p.trim().is_empty() && Path::new(p.trim()).exists()
+}
+
+pub struct HistoryLookup {
+    entries: Vec<(String, String)>,
+}
+
+impl HistoryLookup {
+    pub fn load(user_data_dir: &Path) -> Self {
+        let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
+        let data = read_history(user_data_dir);
+        let entries = data
+            .entries
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| e.ok && file_exists(&e.file))
+            .map(|e| (e.title, e.artist))
+            .collect();
+        Self { entries }
+    }
+
+    pub fn has_downloaded_same_song(&self, title: &str, artist: &str) -> bool {
+        let title = title.trim();
+        self.entries
+            .iter()
+            .any(|(t, a)| t.trim().eq_ignore_ascii_case(title) && artist_matches(a, artist))
+    }
+}
+
+fn artist_matches(a: &str, b: &str) -> bool {
+    let a = a.trim();
+    let b = b.trim();
+    if a.is_empty() || b.is_empty() {
+        return true;
+    }
+    a.eq_ignore_ascii_case(b)
+        || a.to_lowercase().contains(&b.to_lowercase())
+        || b.to_lowercase().contains(&a.to_lowercase())
+}

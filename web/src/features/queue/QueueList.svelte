@@ -15,7 +15,6 @@
   import { t } from "@lib/i18n";
   import type { LibraryTrack } from "@lib/types";
   import ContextMenu from "../../components/ContextMenu.svelte";
-  import DragGhostLayer from "../../components/DragGhostLayer.svelte";
   import TrackCover from "../../components/TrackCover.svelte";
   import { ChevronLeft, ChevronRight, Trash2 } from "lucide-svelte";
 
@@ -46,7 +45,7 @@
     return section === "context" ? contextUpcoming : userQueue;
   }
 
-  const { drag, start, shouldSkipClick, setupWindowListeners } = useDragList({
+  const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (section, idx) => tracksOf(section)[idx]?.path,
     onReorder: reorderQueueTrack,
   });
@@ -58,11 +57,9 @@
   ): void {
     const track = tracksOf(section)[idx];
     if (track) {
-      start(e, { section, idx, path: track.path, label: track.title });
+      start(e, { section, idx, path: track.path });
     }
   }
-
-  $effect(() => setupWindowListeners());
 
   $effect(() => {
     if (!np?.id || !queueEl) return;
@@ -146,14 +143,14 @@
 
       <div class="queue-body" bind:this={drag.rowsEl}>
         {#if userQueue.length > 0}
-          <span class="section-label mono">QUEUE</span>
+          <span class="section-label mono">{t("player.queue")}</span>
           {#each userQueue as q, i (q.path)}
             {@render qrow(q, "user", i)}
           {/each}
         {/if}
 
         {#if contextUpcoming.length > 0}
-          <span class="section-label mono">NEXT UP</span>
+          <span class="section-label mono">{t("player.nextUp")}</span>
           {#each contextUpcoming as q, i (q.path)}
             {@render qrow(q, "context", i)}
           {/each}
@@ -201,8 +198,6 @@
     </button>
   </div>
 </aside>
-
-<DragGhostLayer ghost={drag.ghost} />
 
 <style>
   .queue {
@@ -379,6 +374,7 @@
     font-size: 9px;
     color: var(--faint);
     letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .queue-body {

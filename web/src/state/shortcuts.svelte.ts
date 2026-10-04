@@ -1,37 +1,39 @@
-import {
-  getCurrentVolume,
-  toggleMute,
-  toggleShuffle,
-  toggleLoop,
-  toggleLyrics,
-} from "@state/player.svelte";
-import {
-  toggle,
-  next,
-  prev,
-  setVolumeAt,
-} from "@lib/player.svelte";
-import { closeEq, toggleEq, getEqOpen } from "@state/equalizer.svelte";
+import { getCurrentVolume, toggleMute } from "@state/player.svelte";
+import { toggle, setVolumeAt } from "@lib/player.svelte";
+import { closeEq, getEqOpen } from "@state/equalizer.svelte";
 
 interface Shortcut {
   key: string;
-  label: string;
-  category: string;
+  labelKey: string;
+  categoryKey: string;
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  { key: "Space", label: "Play / Pause", category: "Playback" },
-  { key: "N", label: "Next track", category: "Playback" },
-  { key: "P", label: "Previous track", category: "Playback" },
-  { key: "M", label: "Mute / Unmute", category: "Volume" },
-  { key: "ArrowUp", label: "Volume up", category: "Volume" },
-  { key: "ArrowDown", label: "Volume down", category: "Volume" },
-  { key: "S", label: "Toggle shuffle", category: "Playback" },
-  { key: "R", label: "Toggle loop", category: "Playback" },
-  { key: "L", label: "Toggle lyrics", category: "Playback" },
-  { key: "F", label: "Fullscreen player", category: "Interface" },
-  { key: "E", label: "Equalizer", category: "Interface" },
-  { key: "?", label: "Show shortcuts", category: "Interface" },
+  {
+    key: "Space",
+    labelKey: "shortcuts.actions.playPause",
+    categoryKey: "shortcuts.categories.playback",
+  },
+  {
+    key: "M",
+    labelKey: "shortcuts.actions.muteUnmute",
+    categoryKey: "shortcuts.categories.volume",
+  },
+  {
+    key: "ArrowUp",
+    labelKey: "shortcuts.actions.volumeUp",
+    categoryKey: "shortcuts.categories.volume",
+  },
+  {
+    key: "ArrowDown",
+    labelKey: "shortcuts.actions.volumeDown",
+    categoryKey: "shortcuts.categories.volume",
+  },
+  {
+    key: "F",
+    labelKey: "shortcuts.actions.fullscreenPlayer",
+    categoryKey: "shortcuts.categories.interface",
+  },
 ];
 
 let _showOverlay = $state(false);
@@ -40,8 +42,8 @@ export function getShowShortcutsOverlay(): boolean {
   return _showOverlay;
 }
 
-function toggleShortcutsOverlay(): void {
-  _showOverlay = !_showOverlay;
+function openShortcutsOverlay(): void {
+  _showOverlay = true;
 }
 
 export function closeShortcutsOverlay(): void {
@@ -52,7 +54,12 @@ export function isInputField(element: EventTarget | null): boolean {
   const el = element as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    el.isContentEditable
+  );
 }
 
 export function handleGlobalKey(e: KeyboardEvent): void {
@@ -61,7 +68,7 @@ export function handleGlobalKey(e: KeyboardEvent): void {
   if (e.repeat || e.defaultPrevented) return;
 
   if (getEqOpen()) {
-    if (e.key === "Escape" || e.key.toLowerCase() === "e") {
+    if (e.key === "Escape") {
       e.preventDefault();
       closeEq();
     }
@@ -80,7 +87,7 @@ export function handleGlobalKey(e: KeyboardEvent): void {
 
   if (key === "?") {
     e.preventDefault();
-    toggleShortcutsOverlay();
+    openShortcutsOverlay();
     return;
   }
 
@@ -93,14 +100,8 @@ export function handleGlobalKey(e: KeyboardEvent): void {
 
 const KEY_HANDLERS: Record<string, () => void> = {
   " ": () => toggle(),
-  n: () => next(),
-  p: () => prev(),
   m: () => toggleMute(),
   arrowup: () => setVolumeAt(getCurrentVolume() + 0.05),
   arrowdown: () => setVolumeAt(getCurrentVolume() - 0.05),
-  s: () => toggleShuffle(),
-  r: () => toggleLoop(),
-  l: () => toggleLyrics(),
   f: () => document.dispatchEvent(new CustomEvent("vynl:toggle-fullscreen")),
-  e: () => toggleEq(),
 };

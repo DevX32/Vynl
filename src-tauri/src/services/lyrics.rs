@@ -48,26 +48,34 @@ pub fn sidecar_path(file: &str, ext: &str) -> PathBuf {
     let p = Path::new(file);
     let parent = p.parent().unwrap_or(Path::new("."));
     let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+    parent.join("lyrics").join(format!("{}.{}", stem, ext))
+}
+
+pub fn legacy_sidecar_path(file: &str, ext: &str) -> PathBuf {
+    let p = Path::new(file);
+    let parent = p.parent().unwrap_or(Path::new("."));
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
     parent.join(format!("{}.{}", stem, ext))
 }
 
 pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
     for kind in &["lrc", "txt"] {
-        let p = sidecar_path(file, kind);
-        match fs::read_to_string(&p) {
-            Ok(text) if !text.trim().is_empty() => {
-                let lyrics_kind = match *kind {
-                    "lrc" => crate::commands::types::LyricsKind::Lrc,
-                    _ => crate::commands::types::LyricsKind::Txt,
-                };
-                return Some(LyricsResult {
-                    kind: lyrics_kind,
-                    text,
-                    source: crate::commands::types::LyricsSource::Local,
-                    file: Some(p.to_string_lossy().to_string()),
-                });
+        for p in [sidecar_path(file, kind), legacy_sidecar_path(file, kind)] {
+            match fs::read_to_string(&p) {
+                Ok(text) if !text.trim().is_empty() => {
+                    let lyrics_kind = match *kind {
+                        "lrc" => crate::commands::types::LyricsKind::Lrc,
+                        _ => crate::commands::types::LyricsKind::Txt,
+                    };
+                    return Some(LyricsResult {
+                        kind: lyrics_kind,
+                        text,
+                        source: crate::commands::types::LyricsSource::Local,
+                        file: Some(p.to_string_lossy().to_string()),
+                    });
+                }
+                _ => continue,
             }
-            _ => continue,
         }
     }
     None
@@ -198,7 +206,7 @@ pub fn embed_lyrics(file: &str, text: &str, ffmpeg_path: Option<&str>) -> Result
 }
 
 fn cache_key(lookup: &LyricsLookup) -> String {
-    serde_json::to_string(lookup).unwrap_or_default()
+    format!("v3:{}", serde_json::to_string(lookup).unwrap_or_default())
 }
 
 fn now_millis() -> u64 {
@@ -219,32 +227,33 @@ fn disk_cache_path(user_data_dir: &Path) -> PathBuf {
     user_data_dir.join(DISK_CACHE_FILE)
 }
 
-fn load_disk_cache(user_data_dir: &Path) -> HashMap<String, Option<LyricsResult>> {
+fn load_disk_cache(user_data_dir: &Path) -> (HashMap<String, DiskCacheEntry>, Option<SystemTime>) {
     let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let path = disk_cache_path(user_data_dir);
-    let data = match fs::read_to_string(&path) {
-        Ok(d) => d,
-        Err(_) => return HashMap::new(),
-    };
-    let entries: Vec<DiskCacheEntry> = serde_json::from_str(&data).unwrap_or_default();
-    entries.into_iter().map(|e| (e.key, e.result)).collect()
+    let mtime = fs::metadata(&path).and_then(|m| m.modified()).ok();
+    let entries: Vec<DiskCacheEntry> = fs::read_to_string(&path)
+        .ok()
+        .and_then(|d| serde_json::from_str(&d).ok())
+        .unwrap_or_default();
+    let map = entries.into_iter().map(|e| (e.key.clone(), e)).collect();
+    (map, mtime)
 }
 
-fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, Option<LyricsResult>>) {
+fn disk_cache_mtime(user_data_dir: &Path) -> Option<SystemTime> {
     let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    let mut entries: Vec<DiskCacheEntry> = cache
-        .iter()
-        .map(|(k, v)| DiskCacheEntry {
-            key: k.clone(),
-            result: v.clone(),
-            accessed_at: now_millis(),
-        })
-        .collect();
+    fs::metadata(disk_cache_path(user_data_dir))
+        .and_then(|m| m.modified())
+        .ok()
+}
+
+fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, DiskCacheEntry>) {
+    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let mut entries: Vec<&DiskCacheEntry> = cache.values().collect();
     entries.sort_by_key(|entry| std::cmp::Reverse(entry.accessed_at));
     entries.truncate(DISK_CACHE_MAX);
 
     let path = disk_cache_path(user_data_dir);
-    if let Ok(json) = serde_json::to_string_pretty(&entries) {
+    if let Ok(json) = serde_json::to_string(&entries) {
         let _ = fs::write(&path, json);
     }
 }
@@ -269,13 +278,12 @@ pub async fn fetch_lyrics_with_cache(
         }
     }
 
-    {
-        let disk = load_disk_cache(user_data_dir);
-        if let Some(cached) = disk.get(&key) {
-            let mut mem_cache = remote_cache().write().await;
-            mem_cache.insert(key.clone(), cached.clone());
-            return cached.clone();
-        }
+    let (mut disk, disk_loaded_mtime) = load_disk_cache(user_data_dir);
+    if let Some(entry) = disk.get(&key) {
+        let hit = entry.result.clone();
+        let mut mem_cache = remote_cache().write().await;
+        mem_cache.insert(key, hit.clone());
+        return hit;
     }
 
     let result = do_fetch(lookup).await;
@@ -303,37 +311,51 @@ pub async fn fetch_lyrics_with_cache(
         }
     }
 
-    {
-        let mut disk = load_disk_cache(user_data_dir);
-        disk.insert(key, result.clone());
-        save_disk_cache(user_data_dir, &disk);
+    if disk_cache_mtime(user_data_dir) != disk_loaded_mtime {
+        disk = load_disk_cache(user_data_dir).0;
     }
+    disk.insert(
+        key.clone(),
+        DiskCacheEntry {
+            key,
+            result: result.clone(),
+            accessed_at: now_millis(),
+        },
+    );
+    save_disk_cache(user_data_dir, &disk);
 
     result
 }
 
 async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    let lrclib = do_fetch_lrclib(lookup).await;
-    if is_synced(&lrclib) {
-        return lrclib;
-    }
-
-    let ovh = do_fetch_lyrics_ovh(lookup).await;
-    if is_synced(&ovh) {
-        return ovh;
-    }
-
-    lrclib.or(ovh)
+    do_fetch_lrclib(lookup).await
 }
 
-fn is_synced(result: &Option<LyricsResult>) -> bool {
-    matches!(
-        result,
-        Some(r) if matches!(r.kind, crate::commands::types::LyricsKind::Lrc)
-    )
+const DURATION_EXACT_SECS: f64 = 2.0;
+const DURATION_TOLERANCE_SECS: f64 = 5.0;
+const DURATION_HARD_REJECT_SECS: f64 = 8.0;
+const SYNCED_BONUS: i32 = 100;
+
+fn item_duration(data: &serde_json::Value) -> Option<f64> {
+    data.get("duration")
+        .and_then(|v| v.as_f64())
+        .filter(|d| d.is_finite() && *d > 0.0)
 }
 
-fn score_lyrics_match(title: &str, artist: &str, lookup: &LyricsLookup) -> i32 {
+fn duration_acceptable(data: &serde_json::Value, lookup: &LyricsLookup) -> bool {
+    if lookup.duration <= 0.0 {
+        return true;
+    }
+    match item_duration(data) {
+        Some(candidate) => (candidate - lookup.duration).abs() <= DURATION_HARD_REJECT_SECS,
+        None => true,
+    }
+}
+
+fn score_lyrics_match(data: &serde_json::Value, lookup: &LyricsLookup) -> i32 {
+    let title = data["trackName"].as_str().unwrap_or("");
+    let artist = data["artistName"].as_str().unwrap_or("");
+
     let title_lower = title.to_lowercase();
     let artist_lower = artist.to_lowercase();
     let lookup_title = lookup.title.to_lowercase();
@@ -355,7 +377,21 @@ fn score_lyrics_match(title: &str, artist: &str, lookup: &LyricsLookup) -> i32 {
         0
     };
 
-    title_match + artist_match
+    let duration_match = match (item_duration(data), lookup.duration > 0.0) {
+        (Some(candidate), true) => {
+            let diff = (candidate - lookup.duration).abs();
+            if diff <= DURATION_EXACT_SECS {
+                10
+            } else if diff <= DURATION_TOLERANCE_SECS {
+                5
+            } else {
+                -20
+            }
+        }
+        _ => 0,
+    };
+
+    title_match + artist_match + duration_match
 }
 
 async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
@@ -380,6 +416,7 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
     match client.get(&url).send().await {
         Ok(resp) if resp.status().as_u16() == 200 => {
             if let Ok(data) = resp.json::<serde_json::Value>().await
+                && duration_acceptable(&data, lookup)
                 && let Some(r) = parse_lrclib_response(Some(&data))
             {
                 return Some(r);
@@ -407,16 +444,21 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
         Ok(resp) if resp.status().as_u16() == 200 => {
             let items: Vec<serde_json::Value> = resp.json().await.unwrap_or_default();
             let mut best: Option<LyricsResult> = None;
-            let mut best_score: i32 = -1;
+            let mut best_score: i32 = i32::MIN;
             for item in &items {
-                let title = item["trackName"].as_str().unwrap_or("");
-                let artist = item["artistName"].as_str().unwrap_or("");
-                let score = score_lyrics_match(title, artist, lookup);
-                if score > best_score
-                    && let Some(r) = parse_lrclib_response(Some(item))
-                {
+                if !duration_acceptable(item, lookup) {
+                    continue;
+                }
+                let Some(result) = parse_lrclib_response(Some(item)) else {
+                    continue;
+                };
+                let mut score = score_lyrics_match(item, lookup);
+                if result.kind == crate::commands::types::LyricsKind::Lrc {
+                    score += SYNCED_BONUS;
+                }
+                if score > best_score {
                     best_score = score;
-                    best = Some(r);
+                    best = Some(result);
                 }
             }
             best
@@ -452,39 +494,6 @@ fn parse_lrclib_response(data: Option<&serde_json::Value>) -> Option<LyricsResul
         source: crate::commands::types::LyricsSource::Remote,
         file: None,
     })
-}
-
-async fn do_fetch_lyrics_ovh(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    let client = http_client();
-    let artist = urlencoding::encode(&lookup.artist);
-    let title = urlencoding::encode(&lookup.title);
-    let url = format!("https://api.lyrics.ovh/v1/{}/{}", artist, title);
-
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => match resp.json::<serde_json::Value>().await {
-            Ok(data) => {
-                if let Some(text) = data["lyrics"].as_str() {
-                    let text = text.trim().to_string();
-                    if !text.is_empty() {
-                        let is_lrc = text.contains("[00:") || text.contains("[01:");
-                        return Some(LyricsResult {
-                            kind: if is_lrc {
-                                crate::commands::types::LyricsKind::Lrc
-                            } else {
-                                crate::commands::types::LyricsKind::Txt
-                            },
-                            text,
-                            source: crate::commands::types::LyricsSource::Remote,
-                            file: None,
-                        });
-                    }
-                }
-                None
-            }
-            Err(_) => None,
-        },
-        _ => None,
-    }
 }
 
 pub async fn search_lyrics(

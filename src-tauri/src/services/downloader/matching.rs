@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use once_cell::sync::Lazy;
+
 use crate::commands::types::{SearchCandidate, TrackMeta};
 
 use super::clean_title;
@@ -24,19 +26,52 @@ fn normalize_phrase_input(s: &str) -> String {
     out
 }
 
-fn contains_phrase(haystack: &str, needle: &str) -> bool {
-    let n = normalize_phrase_input(needle);
-    let n = n.trim();
-    if n.is_empty() {
-        return false;
+struct PhraseMatcher {
+    singles: Vec<String>,
+    phrases: Vec<String>,
+}
+
+impl PhraseMatcher {
+    fn new(src: &[&str]) -> Self {
+        let mut singles = Vec::new();
+        let mut phrases = Vec::new();
+        for s in src {
+            let n = normalize_phrase_input(s);
+            let n = n.trim();
+            if n.is_empty() {
+                continue;
+            }
+            if n.contains(' ') {
+                phrases.push(format!(" {} ", n));
+            } else {
+                singles.push(n.to_string());
+            }
+        }
+        Self { singles, phrases }
     }
 
-    let hay = normalize_phrase_input(haystack);
-    if n.contains(' ') {
-        return hay.contains(&format!(" {} ", n));
+    fn is_match(&self, hay_norm: &str) -> bool {
+        self.count(hay_norm) > 0
     }
-    hay.split(' ').any(|t| t == n)
+
+    fn count(&self, hay_norm: &str) -> usize {
+        self.phrases
+            .iter()
+            .filter(|p| hay_norm.contains(*p))
+            .count()
+            + self
+                .singles
+                .iter()
+                .filter(|s| hay_norm.split(' ').any(|t| t == s.as_str()))
+                .count()
+    }
 }
+
+static REJECT_VARIANTS_MATCHER: Lazy<PhraseMatcher> =
+    Lazy::new(|| PhraseMatcher::new(REJECT_VARIANTS));
+static NON_MUSIC_MATCHER: Lazy<PhraseMatcher> = Lazy::new(|| PhraseMatcher::new(NON_MUSIC_TERMS));
+static VARIANT_PENALTY_MATCHER: Lazy<PhraseMatcher> =
+    Lazy::new(|| PhraseMatcher::new(VARIANT_PENALTY_TOKENS));
 
 const REJECT_VARIANTS: &[&str] = &[
     "remix",
@@ -199,38 +234,8 @@ pub(crate) fn title_tokens(title: &str) -> HashSet<String> {
     tokens
 }
 
-fn is_expected_term(term: &str, expected_title: &str) -> bool {
-    contains_phrase(expected_title, term)
-}
-
-fn has_reject_variant(text: &str, expected_title: &str) -> bool {
-    REJECT_VARIANTS
-        .iter()
-        .any(|v| !is_expected_term(v, expected_title) && contains_phrase(text, v))
-}
-
-fn is_non_music(text: &str, expected_title: &str) -> bool {
-    NON_MUSIC_TERMS
-        .iter()
-        .any(|v| !is_expected_term(v, expected_title) && contains_phrase(text, v))
-}
-
-fn is_rejected(text: &str, expected_title: &str) -> bool {
-    has_reject_variant(text, expected_title) || is_non_music(text, expected_title)
-}
-
-fn is_official_music_channel(channel: &str) -> bool {
-    let tokens = tokenize(channel);
-    tokens.contains("topic") || tokens.contains("vevo")
-}
-
-fn variant_penalty(text: &str, expected_title_tokens: &HashSet<String>) -> f64 {
-    VARIANT_PENALTY_TOKENS
-        .iter()
-        .filter(|v| !expected_title_tokens.contains(**v))
-        .filter(|v| contains_phrase(text, v))
-        .count() as f64
-        * -30.0
+fn is_rejected_norm(norm: &str) -> bool {
+    REJECT_VARIANTS_MATCHER.is_match(norm) || NON_MUSIC_MATCHER.is_match(norm)
 }
 
 fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
@@ -245,23 +250,53 @@ fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
     intersection as f64 / union as f64
 }
 
-pub(crate) fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) -> f64 {
-    let c_title = candidate.title.to_lowercase();
-    let c_channel = candidate.channel.as_deref().unwrap_or("").to_lowercase();
+struct CandidateInfo {
+    title_tokens: HashSet<String>,
+    channel_tokens: HashSet<String>,
+    norm_title: String,
+    norm_channel: String,
+}
 
-    let track_title_tokens = title_tokens(&track.title);
-    let track_artist_tokens = strip_upload_noise(&tokenize(&track.artist));
-    let candidate_title_tokens = strip_upload_noise(&tokenize(&c_title));
-    let candidate_channel_tokens = strip_upload_noise(&tokenize(&c_channel));
+fn analyze_candidate(candidate: &SearchCandidate) -> CandidateInfo {
+    let channel = candidate.channel.as_deref().unwrap_or("");
+    CandidateInfo {
+        title_tokens: strip_upload_noise(&tokenize(&candidate.title)),
+        channel_tokens: strip_upload_noise(&tokenize(channel)),
+        norm_title: normalize_phrase_input(&candidate.title),
+        norm_channel: normalize_phrase_input(channel),
+    }
+}
 
-    let title_sim = jaccard_similarity(&track_title_tokens, &candidate_title_tokens);
-    let artist_sim = jaccard_similarity(&track_artist_tokens, &candidate_title_tokens);
-    let channel_artist_sim = jaccard_similarity(&track_artist_tokens, &candidate_channel_tokens);
+fn score_candidate(
+    candidate: &SearchCandidate,
+    info: &CandidateInfo,
+    track: &TrackMeta,
+    track_title_tokens: &HashSet<String>,
+    track_artist_tokens: &HashSet<String>,
+) -> f64 {
+    let candidate_title_tokens = &info.title_tokens;
+    let candidate_channel_tokens = &info.channel_tokens;
+
+    let title_sim = jaccard_similarity(track_title_tokens, candidate_title_tokens);
+    let artist_sim = jaccard_similarity(track_artist_tokens, candidate_title_tokens);
+    let channel_artist_sim = jaccard_similarity(track_artist_tokens, candidate_channel_tokens);
 
     let mut score = 0.0;
     score += title_sim * 45.0;
     score += artist_sim * 30.0;
     score += channel_artist_sim * 15.0;
+
+    if track_artist_tokens.len() > 1 {
+        let mut c_meta: HashSet<String> = candidate_title_tokens.clone();
+        c_meta.extend(candidate_channel_tokens.iter().cloned());
+        let covered = track_artist_tokens.intersection(&c_meta).count();
+        if covered == 0 {
+            score -= 80.0;
+        } else if covered < track_artist_tokens.len() {
+            score -= 30.0 * (track_artist_tokens.len() - covered) as f64
+                / track_artist_tokens.len() as f64;
+        }
+    }
 
     if let (Some(expected), Some(actual)) = (track.duration, candidate.duration) {
         if expected > 0.0 && actual > 0.0 {
@@ -297,12 +332,12 @@ pub(crate) fn score_candidate(candidate: &SearchCandidate, track: &TrackMeta) ->
         }
     }
 
-    if is_official_music_channel(&c_channel) {
+    if info.channel_tokens.contains("topic") || info.channel_tokens.contains("vevo") {
         score += OFFICIAL_CHANNEL_BONUS;
     }
 
-    score += variant_penalty(&c_title, &track_title_tokens);
-    score += variant_penalty(&c_channel, &track_title_tokens) / 2.0;
+    score += -30.0 * VARIANT_PENALTY_MATCHER.count(&info.norm_title) as f64;
+    score += -30.0 * VARIANT_PENALTY_MATCHER.count(&info.norm_channel) as f64 / 2.0;
 
     score
 }
@@ -319,7 +354,7 @@ pub(crate) fn filter_and_rank_candidates(
             if dur > 0.0 && c_dur > 0.0 {
                 let diff = (c_dur - dur).abs();
                 let ratio = diff / dur;
-                return !(ratio > 0.5 || diff > 120.0);
+                return !(ratio > 0.2 || diff > 30.0);
             }
             true
         } else {
@@ -327,36 +362,31 @@ pub(crate) fn filter_and_rank_candidates(
         }
     };
 
-    let relevant = |c: &SearchCandidate| {
-        let c_title = strip_upload_noise(&tokenize(&c.title));
-        let c_channel = strip_upload_noise(&tokenize(c.channel.as_deref().unwrap_or("")));
-
+    let relevant = |info: &CandidateInfo, c: &SearchCandidate| {
         let artist_hit = !expected_artist.is_empty()
-            && (expected_artist.intersection(&c_title).count() > 0
-                || expected_artist.intersection(&c_channel).count() > 0);
-        let title_hit =
-            !expected_title.is_empty() && expected_title.intersection(&c_title).count() > 0;
+            && (expected_artist.intersection(&info.title_tokens).count() > 0
+                || expected_artist.intersection(&info.channel_tokens).count() > 0);
+        let title_hit = !expected_title.is_empty()
+            && expected_title.intersection(&info.title_tokens).count() > 0;
 
         (artist_hit || title_hit) && duration_ok(c)
     };
 
-    let relevant: Vec<SearchCandidate> =
-        candidates.iter().filter(|c| relevant(c)).cloned().collect();
-
-    let clean: Vec<SearchCandidate> = relevant
-        .iter()
-        .filter(|c| {
-            !is_rejected(&c.title, &track.title)
-                && !has_reject_variant(c.channel.as_deref().unwrap_or(""), &track.title)
-        })
-        .cloned()
+    let relevant: Vec<(CandidateInfo, SearchCandidate)> = candidates
+        .into_iter()
+        .map(|c| (analyze_candidate(&c), c))
+        .filter(|(info, c)| relevant(info, c))
         .collect();
-    let pool = if clean.is_empty() { relevant } else { clean };
+
+    let (clean, rejected): (Vec<_>, Vec<_>) = relevant.into_iter().partition(|(info, _)| {
+        !is_rejected_norm(&info.norm_title) && !REJECT_VARIANTS_MATCHER.is_match(&info.norm_channel)
+    });
+    let pool = if clean.is_empty() { rejected } else { clean };
 
     let mut scored: Vec<(f64, SearchCandidate)> = pool
         .into_iter()
-        .map(|c| {
-            let score = score_candidate(&c, track);
+        .map(|(info, c)| {
+            let score = score_candidate(&c, &info, track, &expected_title, &expected_artist);
             (score, c)
         })
         .collect();

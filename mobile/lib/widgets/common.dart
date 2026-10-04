@@ -157,15 +157,21 @@ class TrackTile extends StatelessWidget {
 }
 
 class SectionHeader extends StatelessWidget {
-  const SectionHeader({super.key, required this.title, this.trailing});
+  const SectionHeader({
+    super.key,
+    required this.title,
+    this.trailing,
+    this.padding = const EdgeInsets.fromLTRB(20, 18, 16, 8),
+  });
 
   final String title;
   final Widget? trailing;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 16, 8),
+      padding: padding,
       child: Row(
         children: [
           Expanded(
@@ -186,7 +192,151 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
+class VynlEmptyState extends StatelessWidget {
+  const VynlEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(VynlRadius.control),
+                      color: VynlColors.surfaceRaised,
+                    ),
+                    child: Icon(icon, size: 34, color: VynlColors.faint),
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: VynlFonts.display,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                      color: VynlColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: VynlColors.dim,
+                      fontSize: 13.5,
+                      height: 1.55,
+                    ),
+                  ),
+                  if (action != null) ...[
+                    const SizedBox(height: 20),
+                    action!,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum VynlControlStyle { accent, raised, plain }
+
+class VynlSwitch extends StatelessWidget {
+  const VynlSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.accent,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final Color? accent;
+
+  static const _trackW = 36.0;
+  static const _trackH = 20.0;
+  static const _knob = 14.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = accent ?? VynlColors.accent;
+    final enabled = onChanged != null;
+    return Semantics(
+      toggled: value,
+      button: true,
+      enabled: enabled,
+      child: GestureDetector(
+        onTap: enabled ? () => onChanged!(!value) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          widthFactor: 1,
+          child: SizedBox(
+            width: 48,
+            height: 44,
+            child: Center(
+              child: AnimatedOpacity(
+                duration: VynlMotion.fast,
+                opacity: enabled ? 1 : 0.4,
+                child: AnimatedContainer(
+                  duration: VynlMotion.fast,
+                  curve: VynlMotion.emphasized,
+                  width: _trackW,
+                  height: _trackH,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: value
+                        ? tint.withValues(alpha: 0.11)
+                        : VynlColors.text.withValues(alpha: 0.20),
+                    borderRadius: BorderRadius.circular(VynlRadius.control),
+                  ),
+                  child: AnimatedAlign(
+                    duration: VynlMotion.fast,
+                    curve: VynlMotion.emphasized,
+                    alignment:
+                        value ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      width: _knob,
+                      height: _knob,
+                      decoration: BoxDecoration(
+                        color: value ? tint : VynlColors.faint,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class VynlControl extends StatefulWidget {
   const VynlControl({
@@ -232,7 +382,7 @@ class _VynlControlState extends State<VynlControl> {
     switch (widget.style) {
       case VynlControlStyle.accent:
         bg = widget.color ?? VynlColors.accent;
-        fg = widget.iconColor ?? const Color(0xFF17131A);
+        fg = widget.iconColor ?? VynlColors.accentOn;
         side = BorderSide.none;
       case VynlControlStyle.raised:
         bg = widget.color ?? VynlColors.surfaceRaised;

@@ -30,21 +30,30 @@
 
   const VINYL_DEG_PER_FRAME = 360 / 8.2 / 60;
   const EASE = 0.045;
+  const SPEED_EPSILON = 0.01;
 
   let vinylDeg = $state(0);
   let vinylSpeed = 0;
   let raf = 0;
 
-  function loop() {
-    const targetVinyl = playing ? VINYL_DEG_PER_FRAME : 0;
-    vinylSpeed += (targetVinyl - vinylSpeed) * EASE;
+  function loop(target: number): void {
+    vinylSpeed += (target - vinylSpeed) * EASE;
     vinylDeg = (vinylDeg + vinylSpeed) % 360;
-    raf = requestAnimationFrame(loop);
+    if (target === 0 && Math.abs(vinylSpeed) < SPEED_EPSILON) {
+      vinylSpeed = 0;
+      raf = 0;
+      return;
+    }
+    raf = requestAnimationFrame(() => loop(target));
   }
 
   $effect(() => {
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    const target = playing ? VINYL_DEG_PER_FRAME : 0;
+    raf = requestAnimationFrame(() => loop(target));
+    return () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
   });
 </script>
 
@@ -186,7 +195,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: #14141c;
+    background: var(--vinyl);
     overflow: hidden;
     will-change: transform;
     box-shadow:
@@ -221,7 +230,7 @@
       radial-gradient(
         circle at 50% 50%,
         var(--accent) 0 9px,
-        color-mix(in srgb, var(--accent) 55%, #14141c) 9px 20px,
+        color-mix(in srgb, var(--accent) 55%, var(--vinyl)) 9px 20px,
         transparent 20px
       ),
       linear-gradient(

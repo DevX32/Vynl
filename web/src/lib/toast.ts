@@ -142,7 +142,7 @@ function createDismissTimer(id: number, duration: number): void {
         l.map((x) => (x.id === id ? { ...x, progress: pct } : x)),
       );
       if (pct <= 0) dismiss(id);
-    }, 30),
+    }, 100),
   );
 }
 

@@ -2,7 +2,7 @@ import type { LibraryTrack, NowPlaying } from "@lib/types";
 import { RPC_THROTTLE } from "@lib/constants";
 import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
-import { getLibrary } from "./library.svelte";
+import { getLibrary, whenLibraryLoaded } from "./library.svelte";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -17,28 +17,47 @@ let _shuffleRedo = $state<string[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const SAVE_DEBOUNCE = 3000;
 
+function writeNowPlaying(): void {
+  if (!_state) {
+    void vynl.clearNowPlaying();
+    return;
+  }
+  void vynl.saveNowPlaying({
+    id: _state.id,
+    path: _state.path,
+    time: _currentTime,
+    queue: _contextQueue,
+    userQueue: _userQueue,
+    contextQueue: _contextQueue,
+    contextIndex: _contextIndex,
+    timestamp: Date.now(),
+  });
+}
+
 function persistNowPlaying(): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (!_state) {
-      void vynl.clearNowPlaying();
-      return;
-    }
-    void vynl.saveNowPlaying({
-      id: _state.id,
-      path: _state.path,
-      time: _currentTime,
-      queue: _contextQueue,
-      userQueue: _userQueue,
-      contextQueue: _contextQueue,
-      contextIndex: _contextIndex,
-      timestamp: Date.now(),
-    });
+    saveTimer = null;
+    writeNowPlaying();
   }, SAVE_DEBOUNCE);
+}
+
+function flushNowPlaying(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  writeNowPlaying();
 }
 
 export function checkpointNowPlaying(): void {
   persistNowPlaying();
+}
+
+if (typeof window !== "undefined") {
+  const flush = () => flushNowPlaying();
+  window.addEventListener("pagehide", flush);
+  window.addEventListener("beforeunload", flush);
 }
 
 const currentId = $derived(_state?.id ?? null);
@@ -58,14 +77,28 @@ export function getCurrentTime(): number {
   return currentTime;
 }
 
+let _pathSource: LibraryTrack[] | null = null;
+let _pathMap = new Map<string, LibraryTrack>();
+
+function libraryByPath(): Map<string, LibraryTrack> {
+  const library = getLibrary();
+  if (_pathSource !== library) {
+    const next = new Map<string, LibraryTrack>();
+    for (const track of library) next.set(track.path, track);
+    _pathSource = library;
+    _pathMap = next;
+  }
+  return _pathMap;
+}
+
 function tracksForPaths(
   paths: readonly string[],
-  library: LibraryTrack[],
+  byPath: Map<string, LibraryTrack>,
   seen: Set<string>,
 ): LibraryTrack[] {
   const result: LibraryTrack[] = [];
   for (const p of paths) {
-    const t = library.find((x) => x.path === p);
+    const t = byPath.get(p);
     if (t && !seen.has(t.id)) {
       seen.add(t.id);
       result.push(t);
@@ -90,11 +123,11 @@ function startShuffleSession(
   startIndex: number,
   currentPath: string | null = contextQueue[startIndex] ?? null,
 ): void {
-  const library = getLibrary();
+  const byPath = libraryByPath();
   const seen = new Set<string>();
   const upcoming = contextQueue.filter((path) => {
     if (path === currentPath || seen.has(path)) return false;
-    if (!library.some((track) => track.path === path)) return false;
+    if (!byPath.has(path)) return false;
     seen.add(path);
     return true;
   });
@@ -105,12 +138,12 @@ function startShuffleSession(
 }
 
 function refillShuffleSession(currentPath: string | null): void {
-  const library = getLibrary();
+  const byPath = libraryByPath();
   const queued = new Set(_userQueue);
   const seen = new Set<string>();
   const candidates = _contextQueue.filter((path) => {
     if (path === currentPath || seen.has(path)) return false;
-    if (!library.some((track) => track.path === path)) return false;
+    if (!byPath.has(path)) return false;
     seen.add(path);
     return true;
   });
@@ -120,7 +153,7 @@ function refillShuffleSession(currentPath: string | null): void {
     _shuffleUpcoming.length === 0 &&
     currentPath &&
     !queued.has(currentPath) &&
-    library.some((track) => track.path === currentPath)
+    byPath.has(currentPath)
   ) {
     _shuffleUpcoming = [currentPath];
   }
@@ -128,9 +161,9 @@ function refillShuffleSession(currentPath: string | null): void {
 
 function takeShufflePath(): string | null {
   const context = new Set(_contextQueue);
-  const library = getLibrary();
+  const byPath = libraryByPath();
   _shuffleUpcoming = _shuffleUpcoming.filter(
-    (path) => context.has(path) && library.some((track) => track.path === path),
+    (path) => context.has(path) && byPath.has(path),
   );
 
   const path = _shuffleUpcoming[0] ?? null;
@@ -158,32 +191,32 @@ export function resetShuffleForMode(): void {
 
 export function getUserQueue(): LibraryTrack[] {
   const seen = new Set<string>();
-  return tracksForPaths(_userQueue, getLibrary(), seen);
+  return tracksForPaths(_userQueue, libraryByPath(), seen);
 }
 
 export function getContextUpcoming(
   shuffle = false,
   loop: LoopMode = "off",
 ): LibraryTrack[] {
-  const library = getLibrary();
+  const byPath = libraryByPath();
   const seen = new Set<string>();
   if (currentId) seen.add(currentId);
   if (shuffle) {
-    tracksForPaths(_userQueue, library, seen);
-    const upcoming = tracksForPaths(_shuffleUpcoming, library, seen);
+    tracksForPaths(_userQueue, byPath, seen);
+    const upcoming = tracksForPaths(_shuffleUpcoming, byPath, seen);
     if (upcoming.length > 0) return upcoming;
     if (loop !== "all" || _contextQueue.length === 0) return [];
-    return tracksForPaths(_contextQueue, library, seen);
+    return tracksForPaths(_contextQueue, byPath, seen);
   }
-  tracksForPaths(_userQueue, library, seen);
+  tracksForPaths(_userQueue, byPath, seen);
   if (loop === "all" && _contextQueue.length > 0) {
     const order = [
       ..._contextQueue.slice(_contextIndex + 1),
       ..._contextQueue.slice(0, _contextIndex),
     ];
-    return tracksForPaths(order, library, seen);
+    return tracksForPaths(order, byPath, seen);
   }
-  return tracksForPaths(_contextQueue.slice(_contextIndex + 1), library, seen);
+  return tracksForPaths(_contextQueue.slice(_contextIndex + 1), byPath, seen);
 }
 
 let seekHandler: ((time: number) => void) | null = null;
@@ -282,7 +315,11 @@ export function updateTime(time: number, forcePersist = false): void {
 export function updatePlaying(playing: boolean): void {
   if (!_state) return;
   _state = { ..._state, playing };
-  if (!playing && typeof navigator !== "undefined" && "mediaSession" in navigator) {
+  if (
+    !playing &&
+    typeof navigator !== "undefined" &&
+    "mediaSession" in navigator
+  ) {
     navigator.mediaSession.playbackState = "paused";
   }
   syncRpc(true);
@@ -290,7 +327,12 @@ export function updatePlaying(playing: boolean): void {
 }
 
 export function patchNowPlaying(
-  patch: Partial<Pick<NowPlaying, "cover" | "lyrics" | "title" | "artist" | "album" | "duration">>,
+  patch: Partial<
+    Pick<
+      NowPlaying,
+      "cover" | "lyrics" | "title" | "artist" | "album" | "duration"
+    >
+  >,
 ): void {
   if (!_state) return;
   _state = { ..._state, ...patch };
@@ -318,12 +360,14 @@ export function requestPlay(id: string, queue?: string[]): void {
 export function addToQueue(path: string): void {
   if (!_userQueue.includes(path)) {
     _userQueue = [..._userQueue, path];
+    flushNowPlaying();
   }
 }
 
 export function addToQueueFront(path: string): void {
   if (!_userQueue.includes(path)) {
     _userQueue = [path, ..._userQueue];
+    flushNowPlaying();
   }
 }
 
@@ -333,7 +377,7 @@ export function removeFromUserQueue(path: string): void {
   const next = [..._userQueue];
   next.splice(idx, 1);
   _userQueue = next;
-  persistNowPlaying();
+  flushNowPlaying();
 }
 
 function findContextSlot(path: string): number {
@@ -354,7 +398,7 @@ export function removeFromContextQueue(path: string): void {
     next.splice(idx, 1);
     _contextQueue = next;
     if (idx < _contextIndex) _contextIndex -= 1;
-    persistNowPlaying();
+    flushNowPlaying();
   }
   if (inUpcoming) {
     _shuffleUpcoming = _shuffleUpcoming.filter((queued) => queued !== path);
@@ -366,7 +410,7 @@ export function reorderUserQueue(fromPath: string, toPath: string): void {
   const to = _userQueue.indexOf(toPath);
   if (from === to || from < 0 || to < 0) return;
   _userQueue = moveItem(_userQueue, from, to);
-  persistNowPlaying();
+  flushNowPlaying();
 }
 
 export function reorderContextQueue(fromPath: string, toPath: string): void {
@@ -390,7 +434,7 @@ export function reorderContextQueue(fromPath: string, toPath: string): void {
       : to < currentIndex
         ? currentIndex + 1
         : currentIndex;
-  persistNowPlaying();
+  flushNowPlaying();
 }
 
 export function pickNextId(
@@ -472,7 +516,10 @@ export function pickPrevId(
 
     _shuffleHistory = _shuffleHistory.slice(0, -1);
     const previousPath = _shuffleHistory[_shuffleHistory.length - 1];
-    _shuffleRedo = [currentPath, ..._shuffleRedo].slice(0, SHUFFLE_HISTORY_LIMIT);
+    _shuffleRedo = [currentPath, ..._shuffleRedo].slice(
+      0,
+      SHUFFLE_HISTORY_LIMIT,
+    );
     return library.find((track) => track.path === previousPath)?.id ?? null;
   }
   if (contextIndex > 0) {
@@ -480,7 +527,9 @@ export function pickPrevId(
     return t?.id ?? null;
   }
   if (loop === "all" && contextQueue.length > 0) {
-    const t = library.find((x) => x.path === contextQueue[contextQueue.length - 1]);
+    const t = library.find(
+      (x) => x.path === contextQueue[contextQueue.length - 1],
+    );
     return t?.id ?? null;
   }
   return null;
@@ -497,19 +546,24 @@ export function advanceContextIndex(newTrackId: string): void {
 }
 
 export function clearUserQueue(): void {
+  if (_userQueue.length === 0) return;
   _userQueue = [];
+  flushNowPlaying();
 }
 
 export async function restoreNowPlaying(): Promise<{
   id: string;
   queue: string[];
 } | null> {
-  const saved = await vynl.loadNowPlaying();
+  const [saved] = await Promise.all([
+    vynl.loadNowPlaying(),
+    whenLibraryLoaded(),
+  ]);
   if (!saved) return null;
   const library = getLibrary();
   const track = library.find((t) => t.id === saved.id);
   if (!track) {
-    void vynl.clearNowPlaying();
+    if (library.length > 0) void vynl.clearNowPlaying();
     return null;
   }
   setSeekDragging(false);

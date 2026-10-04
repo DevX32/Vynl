@@ -1,5 +1,6 @@
 import type { LibraryTrack, Playlist, PlaylistMeta } from "@lib/types";
 import { getLibrary } from "./library.svelte";
+import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
 
 let _meta = $state<PlaylistMeta[]>([]);
@@ -72,6 +73,26 @@ export async function createPlaylist(name: string): Promise<Playlist> {
   return pl;
 }
 
+export async function reorderPlaylists(
+  fromId: string,
+  toId: string,
+): Promise<void> {
+  const from = _meta.findIndex((p) => p.id === fromId);
+  const to = _meta.findIndex((p) => p.id === toId);
+  if (from < 0 || to < 0 || from === to) return;
+
+  const next = moveItem(_meta, from, to);
+  _meta = next;
+  try {
+    await vynl.reorderPlaylists(next.map((p) => p.id));
+  } catch (e) {
+    console.warn("reorderPlaylists failed:", e);
+    try {
+      _meta = await vynl.listPlaylists();
+    } catch {}
+  }
+}
+
 function syncAfterMutation(pl: Playlist): void {
   _all = { ..._all, [pl.id]: pl };
   if (_current?.id === pl.id) _current = pl;
@@ -132,7 +153,7 @@ export async function setPlaylistCover(
 let _pathSource: LibraryTrack[] | null = null;
 let _pathMap = new Map<string, LibraryTrack>();
 
-function tracksOf(pl: Playlist): LibraryTrack[] {
+export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
   if (_pathSource !== library) {
     const next = new Map<string, LibraryTrack>();
@@ -154,7 +175,7 @@ export function markCoverFailed(path: string | null | undefined): void {
 
 export function resolvePlaylistCovers(
   custom: string | null | undefined,
-  tracks: LibraryTrack[],
+  tracks: readonly { cover: string | null }[],
 ): string[] {
   if (custom && !_failedCovers.has(custom)) return [custom];
   const covers = tracks

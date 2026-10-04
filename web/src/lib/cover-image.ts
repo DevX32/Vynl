@@ -1,7 +1,7 @@
 const MAX_SIDE = 640;
 const JPEG_QUALITY = 0.9;
 
-export interface NormalizedCover {
+interface NormalizedCover {
   ext: "jpg" | "png";
   data: number[];
 }

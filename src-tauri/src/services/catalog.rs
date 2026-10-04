@@ -368,11 +368,21 @@ async fn enrich_covers(client: &Client, tracks: &mut [TrackMeta]) {
         }
     }
 
-    for (id, cover) in results {
-        if let Some(c) = cover {
-            for t in tracks.iter_mut() {
-                if t.id == id {
-                    t.cover = Some(c.clone());
+    let with_covers: Vec<(String, String)> = results
+        .into_iter()
+        .filter_map(|(id, cover)| cover.map(|c| (id, c)))
+        .collect();
+
+    if !with_covers.is_empty() {
+        let mut index_by_id: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (i, t) in tracks.iter().enumerate() {
+            index_by_id.entry(t.id.clone()).or_default().push(i);
+        }
+        for (id, cover) in with_covers {
+            if let Some(indices) = index_by_id.get(&id) {
+                for &i in indices {
+                    tracks[i].cover = Some(cover.clone());
                 }
             }
         }
@@ -446,6 +456,17 @@ fn parse_track_entity(
     let entity_artists = artists_of(entity);
     if !entity_artists.is_empty() {
         track.artist = entity_artists;
+    }
+    let entity_album = entity
+        .pointer("/albumOfTrack/name")
+        .and_then(|v| v.as_str())
+        .or_else(|| entity.pointer("/album/name").and_then(|v| v.as_str()))
+        .or_else(|| entity.get("album").and_then(|v| v.as_str()))
+        .or_else(|| entity.get("title").and_then(|v| v.as_str()))
+        .or_else(|| entity.get("name").and_then(|v| v.as_str()))
+        .unwrap_or("");
+    if !entity_album.is_empty() {
+        track.album = entity_album.to_string();
     }
     track.cover = cover.clone();
 

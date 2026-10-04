@@ -1,13 +1,18 @@
 name: vynl_mobile
 description: Vynl offline music player for Android
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.2+2005
+license: GPL-3.0-only
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
 
 dependency_overrides:
   path_provider_android: 2.2.23
+  audio_service:
+    path: third_party/audio_service
+  just_audio_background:
+    path: third_party/just_audio_background
 
 dependencies:
   flutter:
@@ -28,6 +33,10 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   collection: ^1.18.0
   palette_generator: ^0.3.3
+  just_audio_background: ^0.0.1-beta.17
+  package_info_plus: ^9.0.1
+  open_filex: ^4.7.0
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
@@ -36,12 +45,20 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/
   fonts:
     - family: Geist
       fonts:
         - asset: assets/fonts/Geist-Variable.ttf
-          weight: 400
     - family: Geist Mono
       fonts:
         - asset: assets/fonts/GeistMono-Variable.ttf
-          weight: 400
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora-Variable.ttf
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-Variable.ttf
+        - asset: assets/fonts/Fraunces-Italic-Variable.ttf
+          style: italic

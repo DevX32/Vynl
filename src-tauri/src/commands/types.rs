@@ -168,8 +168,6 @@ pub struct SearchCandidate {
     pub view_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel_verified: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub upload_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -436,18 +434,16 @@ pub struct PluginEntry {
     pub source_repo: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifestVynl {
     #[serde(default)]
     pub display_name: Option<String>,
     #[serde(default)]
     pub categories: Option<Vec<String>>,
-    #[serde(default)]
-    pub permissions: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
     pub name: String,
@@ -456,10 +452,6 @@ pub struct PluginManifest {
     pub description: Option<String>,
     #[serde(default)]
     pub author: Option<String>,
-    #[serde(default)]
-    pub main: Option<String>,
-    #[serde(default)]
-    pub license: Option<String>,
     #[serde(default, rename = "vynl")]
     pub vynl: Option<PluginManifestVynl>,
 }

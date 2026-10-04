@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Set true to publish the draft release for the selected tag"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -13,17 +20,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-version:
+  verify:
     name: Tag matches app version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      - name: Check tag against tauri.conf.json and Cargo.toml
+      - id: check
+        name: Check tag against every published version field
         run: |
           tag="${GITHUB_REF_NAME#v}"
           conf="$(jq -r '.version' src-tauri/tauri.conf.json)"
           cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)"
-          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo"
+          root_pkg="$(jq -r '.version' package.json)"
+          pubspec="$(sed -n 's/^version: *\([0-9][^+ ]*\).*/\1/p' mobile/pubspec.yaml | head -n1)"
+          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg pubspec=$pubspec"
           if [ "$tag" != "$conf" ]; then
             echo "::error::Tag v$tag does not match tauri.conf.json version ($conf) — bump it before tagging."
             exit 1
@@ -32,10 +44,20 @@ jobs:
             echo "::error::Tag v$tag does not match Cargo.toml version ($cargo) — bump it before tagging."
             exit 1
           fi
+          if [ "$tag" != "$root_pkg" ]; then
+            echo "::error::Tag v$tag does not match root package.json version ($root_pkg) — the site shows this version."
+            exit 1
+          fi
+          if [ "$tag" != "$pubspec" ]; then
+            echo "::error::Tag v$tag does not match mobile/pubspec.yaml version ($pubspec) — the APK reports this version."
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build · ${{ matrix.platform }}
-    needs: verify-version
+    needs: verify
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -65,22 +87,154 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Vynl ${{ github.ref_name }}
+          releaseName: Vynl ${{ needs.verify.outputs.version }}
           releaseBody: |
-            Vynl ${{ github.ref_name }}
+            ## Desktop
 
-            - **Windows:** NSIS installer (`.exe`)
-            - **Linux:** `.deb`, `.rpm`, or `.AppImage`
+            - **Windows** — grab the `.exe`. It is a 64-bit NSIS installer and needs Windows 10 or newer.
+            - **Linux** — grab the `.AppImage` to run it straight from disk, the `.deb` for Debian/Ubuntu, or the `.rpm` for Fedora/openSUSE.
+
+            There is no macOS build. On Windows, SmartScreen may warn on first run because
+            the installers are not code-signed.
+
+            ## Android
+
+            Grab the APK that matches your phone's CPU architecture. `arm64-v8a` covers
+            essentially every phone from the last decade; older or Intel-based devices
+            want `armeabi-v7a` or `x86_64`.
+
+            Allow your browser to "install unknown apps", then open the APK. These are
+            sideloaded builds and are not distributed through a store.
+
+            ## Pairing with the desktop app
+
+            The mobile app syncs over your local network, so the desktop app has to be
+            running. On the desktop, open **Settings → Mobile Sync** and scan the QR code
+            shown there.
+
+            ## About the `.sig` files
+
+            Those are updater signatures the built-in auto-updater uses to verify what it
+            downloads. The app fetches them itself, so you do not need to grab them.
           releaseDraft: true
           prerelease: false
 
+  mobile:
+    name: Build Android APKs
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.5"
+          channel: stable
+          cache: true
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Write android/local.properties
+        working-directory: mobile
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+          echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
+
+      - name: Decode release keystore
+        working-directory: mobile
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 not set - falling back to debug signing. APKs are NOT distributable via a store."
+            exit 0
+          fi
+          if [ -z "${STORE_PASS:-}" ] || [ -z "${KEY_ALIAS:-}" ] || [ -z "${KEY_PASS:-}" ]; then
+            echo "::error::Set ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD alongside ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/keystore"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/keystore/release.jks"
+
+          store_path="${RUNNER_TEMP}/keystore/release.jks"
+
+          cat > android/key.properties <<EOF
+          storeFile=$store_path
+          storePassword=${STORE_PASS}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASS}
+          EOF
+
+          if [ "$(head -c3 android/key.properties | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
+            echo "::error::key.properties has a UTF-8 BOM - strip it or the first property will be unreadable"
+            exit 1
+          fi
+
+      - name: Build release APKs
+        working-directory: mobile
+        run: flutter build apk --release --split-per-abi
+
+      - name: Attach APKs to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 6 ]; then
+              echo "::error::Release $TAG never became visible - tauri-action may have failed"
+              exit 1
+            fi
+            echo "Release $TAG not ready, retrying in 15s (attempt $attempt/6)"
+            sleep 15
+          done
+          version="${TAG#v}"
+          for apk in app-arm64-v8a-release.apk app-armeabi-v7a-release.apk app-x86_64-release.apk; do
+            path="mobile/build/app/outputs/flutter-apk/$apk"
+            if [ ! -f "$path" ]; then
+              echo "::error::Missing expected APK: $path"
+              exit 1
+            fi
+            abi="${apk#app-}"
+            abi="${abi%-release.apk}"
+            renamed="Vynl-mobile-${version}-${abi}.apk"
+            mv "$path" "mobile/build/app/outputs/flutter-apk/$renamed"
+            echo "Uploading $renamed"
+            gh release upload "$TAG" "mobile/build/app/outputs/flutter-apk/$renamed" --clobber
+          done
+          echo "APKs attached to $TAG"
+
   publish:
     name: Publish release
-    needs: build
+    needs: [build, mobile]
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false
+
+      - name: Rebuild site for the new version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pages.yml --ref main

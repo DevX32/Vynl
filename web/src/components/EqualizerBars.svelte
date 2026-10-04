@@ -1,5 +1,4 @@
 <script lang="ts">
-  /** Animated three-bar "now playing" indicator for track rows. */
 </script>
 
 <span class="eq">

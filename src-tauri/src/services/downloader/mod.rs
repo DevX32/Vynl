@@ -49,7 +49,14 @@ static SHORT_LINK_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(
 });
 
 static LRC_TIME_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-    Regex::new(r"(?m)^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*").unwrap()
+    Regex::new(r"(?m)^\s*(?:\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*)+").unwrap()
+});
+
+static LRC_META_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    Regex::new(
+        r"(?im)^\s*\[(ar|ti|al|au|by|offset|re|ve|length|created|tool|version|application):[^\]]*\]\s*",
+    )
+    .unwrap()
 });
 
 static LAST_ERROR_RE: once_cell::sync::Lazy<Regex> =
@@ -158,23 +165,24 @@ pub fn get_done_track_ids(
 ) -> Vec<String> {
     let key = history::collection_key(&collection.kind, &collection.id);
     let history_ids: Vec<String> = history::collection_done(user_data_dir, &key);
-    let history_set: HashSet<String> = history_ids.iter().cloned().collect();
-    let mut done: HashSet<String> = history_set.clone();
+    let history_set: HashSet<&str> = history_ids.iter().map(String::as_str).collect();
+    let mut done: HashSet<String> = history_ids.iter().cloned().collect();
 
     if let Some(s) = settings
         && !s.output_dir.is_empty()
     {
         let output = Path::new(&s.output_dir);
         if output.exists() {
+            let lookup = history::HistoryLookup::load(user_data_dir);
             for track in &collection.tracks {
                 let path = final_output_path(track, s);
-                if path.exists() {
+                if path.exists() || lookup.has_downloaded_same_song(&track.title, &track.artist) {
                     done.insert(track.id.clone());
                 }
             }
         }
         done.retain(|id| {
-            if history_set.contains(id)
+            if history_set.contains(id.as_str())
                 && let Some(track) = collection.tracks.iter().find(|t| &t.id == id)
             {
                 let path = final_output_path(track, s);
@@ -263,7 +271,6 @@ async fn fetch_cover(url: &str, dest: &str) -> bool {
 fn try_tag_with_lofty(
     audio_path: &str,
     track: &TrackMeta,
-    _format: &AudioFormat,
     cover: Option<&str>,
     lyrics: Option<&str>,
 ) -> Result<(), String> {
@@ -350,17 +357,10 @@ async fn tag(
         } else {
             let out = audio_out.to_string();
             let track_c = track.clone();
-            let fmt_c = format.clone();
             let cover_c = cover.map(|s| s.to_string());
             let lyrics_c = lyrics.map(|s| s.to_string());
             let lofty_res = tokio::task::spawn_blocking(move || {
-                try_tag_with_lofty(
-                    &out,
-                    &track_c,
-                    &fmt_c,
-                    cover_c.as_deref(),
-                    lyrics_c.as_deref(),
-                )
+                try_tag_with_lofty(&out, &track_c, cover_c.as_deref(), lyrics_c.as_deref())
             })
             .await
             .map_err(|e| format!("lofty join failed: {e}"))
@@ -858,6 +858,7 @@ async fn process_track(
     ytdlp: &str,
     app: &tauri::AppHandle,
     prefetched_covers: &CoverMap,
+    history_lookup: &history::HistoryLookup,
     generation: u64,
 ) -> TrackOutcome {
     let track = &collection.tracks[idx];
@@ -882,6 +883,17 @@ async fn process_track(
 
     if final_path.exists() && !settings.overwrite {
         emit_track(app, track, TrackStatus::Skipped, 0.0, None);
+        return TrackOutcome::Skipped;
+    }
+
+    if !settings.overwrite && history_lookup.has_downloaded_same_song(&track.title, &track.artist) {
+        emit_track(
+            app,
+            track,
+            TrackStatus::Skipped,
+            0.0,
+            Some("already downloaded"),
+        );
         return TrackOutcome::Skipped;
     }
 
@@ -947,8 +959,7 @@ async fn process_track(
         }
     };
 
-    let (lyrics_text, lyrics_lrc_text) =
-        process_lyrics_lookup(track, &settings.format, user_data_dir).await;
+    let (lyrics_text, lyrics_lrc_text) = process_lyrics_lookup(track, user_data_dir).await;
 
     let ffmpeg = resolve_tool("ffmpeg", user_data_dir).unwrap_or_default();
     let mut tagged_file = tmp.join(format!(
@@ -1037,6 +1048,7 @@ async fn run_pass(
     retry_out: &Arc<Mutex<Vec<usize>>>,
 ) {
     let semaphore = Arc::new(Semaphore::new(DOWNLOAD_WORKERS));
+    let history_lookup = Arc::new(history::HistoryLookup::load(user_data_dir));
     let mut handles = Vec::new();
 
     for _ in 0..DOWNLOAD_WORKERS {
@@ -1054,6 +1066,7 @@ async fn run_pass(
         let ytdlp = ytdlp.to_string();
         let app = app_handle.clone();
         let prefetched_covers = Arc::clone(prefetched_covers);
+        let history_lookup = Arc::clone(&history_lookup);
 
         handles.push(tokio::spawn(async move {
             let _permit = match semaphore.acquire().await {
@@ -1085,6 +1098,7 @@ async fn run_pass(
                     &ytdlp,
                     &app,
                     &prefetched_covers,
+                    &history_lookup,
                     generation,
                 )
                 .await;
@@ -1175,7 +1189,18 @@ async fn download_collection_inner(
         cancelled: false,
     }));
 
-    let (deduped_tracks, dup_skipped) = deduplicate_tracks(&collection.tracks, app_handle);
+    let (deduped_tracks, dup_skipped) = {
+        let existing: HashMap<String, Vec<f64>> = if settings.overwrite {
+            HashMap::new()
+        } else {
+            let od = settings.output_dir.clone();
+            let ud = user_data_dir.to_path_buf();
+            tokio::task::spawn_blocking(move || existing_songs(Path::new(&od), &ud))
+                .await
+                .unwrap_or_default()
+        };
+        deduplicate_tracks(&collection.tracks, app_handle, &existing)
+    };
     {
         let mut s = summary.lock().await;
         s.skipped += dup_skipped as i64;
@@ -1188,7 +1213,7 @@ async fn download_collection_inner(
 
     let ytdlp = resolve_tool("yt-dlp", user_data_dir)
         .ok_or_else(|| "yt-dlp and ffmpeg are required to download.".to_string())?;
-    let _ffmpeg = resolve_tool("ffmpeg", user_data_dir)
+    resolve_tool("ffmpeg", user_data_dir)
         .ok_or_else(|| "yt-dlp and ffmpeg are required to download.".to_string())?;
 
     let (prefetched_covers, covers_task) = start_cover_prefetch(&collection, &tmp);
@@ -1275,9 +1300,38 @@ fn normalize(s: &str) -> String {
         .to_string()
 }
 
+fn song_key(title: &str, artist: &str) -> String {
+    format!("{}||{}", normalize(title), normalize(artist))
+}
+
+fn existing_songs(output_dir: &Path, user_data_dir: &Path) -> HashMap<String, Vec<f64>> {
+    let mut map: HashMap<String, Vec<f64>> = HashMap::new();
+    for track in crate::services::library::scan_cached_library(output_dir, user_data_dir).0 {
+        if track.title.trim().is_empty() {
+            continue;
+        }
+        map.entry(song_key(&track.title, &track.artist))
+            .or_default()
+            .push(track.duration);
+    }
+    map
+}
+
+fn is_already_on_disk(existing: &HashMap<String, Vec<f64>>, track: &TrackMeta) -> bool {
+    let Some(durations) = existing.get(&song_key(&track.title, &track.artist)) else {
+        return false;
+    };
+    let want = track.duration.unwrap_or(0.0);
+    const DURATION_TOLERANCE: f64 = 5.0;
+    durations
+        .iter()
+        .any(|d| want <= 0.0 || *d <= 0.0 || (want - *d).abs() <= DURATION_TOLERANCE)
+}
+
 fn deduplicate_tracks(
     tracks: &[TrackMeta],
     app_handle: &tauri::AppHandle,
+    existing: &HashMap<String, Vec<f64>>,
 ) -> (Vec<TrackMeta>, usize) {
     let mut seen_keys: HashSet<String> = HashSet::new();
     let mut deduped: Vec<TrackMeta> = Vec::new();
@@ -1289,9 +1343,7 @@ fn deduplicate_tracks(
             normalize(&track.artist),
             track.track_number.map_or("".to_string(), |n| n.to_string())
         );
-        if seen_keys.insert(key) {
-            deduped.push(track.clone());
-        } else {
+        if !seen_keys.insert(key) {
             emit_track(
                 app_handle,
                 track,
@@ -1300,7 +1352,20 @@ fn deduplicate_tracks(
                 Some("duplicate"),
             );
             skipped += 1;
+            continue;
         }
+        if is_already_on_disk(existing, track) {
+            emit_track(
+                app_handle,
+                track,
+                TrackStatus::Skipped,
+                0.0,
+                Some("already in library"),
+            );
+            skipped += 1;
+            continue;
+        }
+        deduped.push(track.clone());
     }
     (deduped, skipped)
 }
@@ -1375,7 +1440,6 @@ fn record_failure(
 
 async fn process_lyrics_lookup(
     track: &TrackMeta,
-    _format: &AudioFormat,
     user_data_dir: &Path,
 ) -> (Option<String>, Option<String>) {
     let lookup = LyricsLookup {
@@ -1390,7 +1454,10 @@ async fn process_lyrics_lookup(
             if lr.kind == crate::commands::types::LyricsKind::Lrc && !lr.text.trim().is_empty() =>
         {
             let lrc_text = lr.text.clone();
-            let plain = LRC_TIME_RE.replace_all(&lr.text, "").trim().to_string();
+            let plain = LRC_META_RE
+                .replace_all(&LRC_TIME_RE.replace_all(&lr.text, ""), "")
+                .trim()
+                .to_string();
             let embed = if plain.is_empty() { None } else { Some(plain) };
             (embed, Some(lrc_text))
         }
@@ -1422,6 +1489,11 @@ async fn move_tagged_to_output(
         && !lrc.trim().is_empty()
     {
         let sidecar = lyrics::sidecar_path(&final_path.to_string_lossy(), "lrc");
+        if let Some(parent) = sidecar.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            eprintln!("lyrics sidecar mkdir failed for {parent:?}: {e}");
+        }
         let _ = std::fs::write(&sidecar, lrc);
     }
 

@@ -8,6 +8,41 @@ import '../theme.dart';
 import 'artwork.dart';
 import 'common.dart';
 
+Route<void> _playerRoute() {
+  return PageRouteBuilder<void>(
+    transitionDuration: VynlMotion.normal,
+    reverseTransitionDuration: VynlMotion.normal,
+    opaque: false,
+    barrierColor: Colors.transparent,
+    pageBuilder: (_, __, ___) => const PlayerPage(),
+    transitionsBuilder: (_, anim, __, child) {
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: VynlMotion.emphasized,
+        reverseCurve: VynlMotion.emphasized,
+      );
+      return FadeTransition(
+        opacity: Tween<double>(begin: 0, end: 1).animate(
+          CurvedAnimation(
+            parent: anim,
+            curve: const Interval(0, 0.7, curve: Curves.easeOut),
+          ),
+        ),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1).animate(curved),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.035),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
 
@@ -30,24 +65,7 @@ class MiniPlayer extends StatelessWidget {
         elevation: 6,
         shadowColor: Colors.black.withValues(alpha: 0.4),
         child: InkWell(
-          onTap: () => Navigator.of(context).push(
-            PageRouteBuilder(
-              transitionDuration: VynlMotion.normal,
-              reverseTransitionDuration: VynlMotion.fast,
-              pageBuilder: (_, __, ___) => const PlayerPage(),
-              transitionsBuilder: (_, anim, __, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 1),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(parent: anim, curve: VynlMotion.emphasized),
-                  ),
-                  child: child,
-                );
-              },
-            ),
-          ),
+          onTap: () => Navigator.of(context).push(_playerRoute()),
           child: SizedBox(
             height: _height,
             child: Stack(
@@ -86,7 +104,7 @@ class MiniPlayer extends StatelessWidget {
                       ArtTile(
                         coverPath: track.localCoverPath,
                         size: 46,
-                        accent: player.accent,
+                        accent: VynlColors.accent,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -138,7 +156,7 @@ class MiniPlayer extends StatelessWidget {
                               VynlControl(
                                 onTap: player.toggle,
                                 style: VynlControlStyle.accent,
-                                color: player.accent,
+                                color: VynlColors.accent,
                                 size: 36,
                                 iconSize: 22,
                                 icon: playing

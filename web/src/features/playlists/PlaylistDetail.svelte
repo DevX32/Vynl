@@ -35,7 +35,6 @@
   import ContextMenu, {
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
-  import DragGhostLayer from "../../components/DragGhostLayer.svelte";
   import {
     addToPlaylist,
     getCurrentPlaylist,
@@ -44,6 +43,7 @@
     removeFromPlaylist,
     resolvePlaylistCovers,
     setPlaylistCover,
+    tracksOf,
   } from "@state/playlists.svelte";
   import { t } from "@lib/i18n";
   import AddTracksOverlay from "./AddTracksOverlay.svelte";
@@ -59,23 +59,20 @@
     q = "";
   });
 
-  const currentTracks = $derived(
-    pl
-      ? pl.paths
-          .map((p) => library.find((t) => t.path === p))
-          .filter((t): t is import("../../lib/types").LibraryTrack => !!t)
-      : [],
-  );
+  const currentTracks = $derived(pl ? tracksOf(pl) : []);
   const covers = $derived(resolvePlaylistCovers(pl?.cover, currentTracks));
   const plHits = $derived(
     q
       ? currentTracks.filter((t) =>
-          matchesQuery(q.toLowerCase(), `${t.title} ${t.artist} ${t.album}`.toLowerCase()),
+          matchesQuery(
+            q.toLowerCase(),
+            `${t.title} ${t.artist} ${t.album}`.toLowerCase(),
+          ),
         )
       : currentTracks,
   );
 
-  const { drag, start, shouldSkipClick, setupWindowListeners } = useDragList({
+  const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (_section, idx) => plHits[idx]?.path,
     onReorder: (fromPath, toPath) => void moveTrack(fromPath, toPath),
   });
@@ -96,7 +93,10 @@
     const first = shuffle
       ? currentTracks[Math.floor(Math.random() * currentTracks.length)]
       : currentTracks[0];
-    requestPlay(first.id, currentTracks.map((track) => track.path));
+    requestPlay(
+      first.id,
+      currentTracks.map((track) => track.path),
+    );
   }
 
   async function addPaths(paths: string[]): Promise<void> {
@@ -146,11 +146,9 @@
     if (!!q) return;
     const track = plHits[idx];
     if (track) {
-      start(e, { idx, path: track.path, label: track.title });
+      start(e, { idx, path: track.path });
     }
   }
-
-  $effect(() => setupWindowListeners());
 
   function pickCover(): void {
     coverInput?.click();
@@ -310,14 +308,23 @@
             class:dragging={drag.dragging && drag.grabIdx === i}
             role="button"
             tabindex="-1"
-            style:cursor={!q ? (drag.dragging ? "grabbing" : "grab") : "pointer"}
+            style:cursor={!q
+              ? drag.dragging
+                ? "grabbing"
+                : "grab"
+              : "pointer"}
             onpointerdown={(e) => onRowPointerDown(e, i)}
             oncontextmenu={(e) => showTrackCtx(e, i)}
             onclick={() => {
               if (shouldSkipClick()) return;
               requestPlay(trk.id, pl.paths);
             }}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); requestPlay(trk.id, pl.paths); } }}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                requestPlay(trk.id, pl.paths);
+              }
+            }}
           >
             <span class="c-num mono">
               {#if trk.id === getCurrentTrack()?.id}
@@ -369,8 +376,6 @@
   {/if}
 </div>
 
-<DragGhostLayer ghost={drag.ghost} />
-
 <style>
   .pl-detail {
     position: relative;
@@ -396,7 +401,7 @@
     --hero-cover: 128px;
     width: var(--hero-cover);
     height: var(--hero-cover);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg-raise);
     box-shadow:
@@ -576,7 +581,6 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     padding-right: 2px;
@@ -584,7 +588,12 @@
   }
 
   .tracks::-webkit-scrollbar {
-    display: none;
+    width: 6px;
+  }
+
+  .tracks::-webkit-scrollbar-thumb {
+    background: rgba(240, 240, 236, 0.12);
+    border-radius: 3px;
   }
 
   .tbl-head {

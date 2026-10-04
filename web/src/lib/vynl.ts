@@ -114,8 +114,6 @@ export const vynl = {
 
   installTool: (name: ToolName): Promise<void> => cmd("install_tool", { name }),
 
-  updateTool: (name: ToolName): Promise<void> => cmd("install_tool", { name }),
-
   getLibrary: (): Promise<LibraryTrack[]> => cmd("get_library"),
 
   deleteLibraryTrack: (path: string, id?: string): Promise<void> =>
@@ -128,6 +126,9 @@ export const vynl = {
 
   createPlaylist: (name: string): Promise<Playlist> =>
     cmd("create_playlist", { name }),
+
+  reorderPlaylists: (ids: string[]): Promise<void> =>
+    cmd("reorder_playlists", { ids }),
 
   renamePlaylist: (id: string, name: string): Promise<Playlist> =>
     cmd("rename_playlist", { id, name }),
@@ -174,11 +175,6 @@ export const vynl = {
     artistName?: string;
   }): Promise<import("../lib/types").LrcSearchResult[]> =>
     cmd("lyrics_search", opts),
-
-  lyricsExport: (opts: {
-    content: string;
-    defaultName: string;
-  }): Promise<string | null> => cmd("lyrics_export", opts),
 
   rpcUpdate: (state: RpcPresence | null): Promise<void> =>
     cmd("rpc_update", { state }),

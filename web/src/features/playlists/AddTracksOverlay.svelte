@@ -1,10 +1,13 @@
 <script lang="ts">
   import { Plus, X, Check, FolderOpen } from "lucide-svelte";
+  import { untrack } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import SearchInput from "../../components/SearchInput.svelte";
   import { t } from "@lib/i18n";
   import type { LibraryTrack } from "../../lib/types";
+
+  const titleCollator = new Intl.Collator();
 
   let {
     library,
@@ -24,15 +27,29 @@
 
   let searchInput: SearchInput | undefined = $state();
 
+  let debouncedQuery = $state(untrack(() => addQuery));
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    const q = addQuery;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debouncedQuery = q;
+      debounceTimer = undefined;
+    }, 200);
+    return () => clearTimeout(debounceTimer);
+  });
+
   const tracks = $derived(
-    [...(addQuery
-      ? library.filter((t) =>
-          `${t.title} ${t.artist} ${t.album}`
-            .toLowerCase()
-            .includes(addQuery.toLowerCase()),
-        )
-      : library
-    )].sort((a, b) => a.title.localeCompare(b.title)),
+    [
+      ...(debouncedQuery
+        ? library.filter((t) =>
+            `${t.title} ${t.artist} ${t.album}`
+              .toLowerCase()
+              .includes(debouncedQuery.toLowerCase()),
+          )
+        : library),
+    ].sort((a, b) => titleCollator.compare(a.title, b.title)),
   );
 
   $effect(() => {
@@ -58,15 +75,16 @@
     in:fly={{ x: 28, duration: 220, easing: cubicOut }}
     out:fly={{ x: 28, duration: 160, easing: cubicIn }}
   >
-<div class="add-head">
-        <span class="display add-title">{t("playlist.addTracks")}</span>
-        <button
+    <div class="add-head">
+      <span class="display add-title">{t("playlist.addTracks")}</span>
+      <button
         class="icon-btn"
         onclick={onClose}
-        aria-label={t("titleBar.close")}>
+        aria-label={t("titleBar.close")}
+      >
         <X size={16} stroke-width={1.5} />
       </button>
-      </div>
+    </div>
     <div class="add-search">
       <SearchInput
         bind:this={searchInput}
@@ -78,12 +96,14 @@
 
     <div class="add-body">
       {#if tracks.length === 0}
-<div class="add-empty mono">
-            <FolderOpen size={16} stroke-width={1.5} style="flex-shrink:0" />
-            <span>{addQuery
-              ? `no matches for "${addQuery}"`
-              : t("playlist.emptyRip")}</span>
-          </div>
+        <div class="add-empty mono">
+          <FolderOpen size={16} stroke-width={1.5} style="flex-shrink:0" />
+          <span
+            >{debouncedQuery
+              ? `no matches for "${debouncedQuery}"`
+              : t("playlist.emptyRip")}</span
+          >
+        </div>
       {:else}
         {#each tracks as track (track.id)}
           <div class="add-row">

@@ -375,6 +375,6 @@
   }
 
   .err {
-    color: var(--red, #e74c3c);
+    color: var(--red);
   }
 </style>

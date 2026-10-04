@@ -15,6 +15,32 @@ fn playlist_file(output_dir: &Path, id: &str) -> std::path::PathBuf {
     playlists_dir(output_dir).join(format!("{}.json", id))
 }
 
+const ORDER_FILE: &str = "order.json";
+
+fn order_file(output_dir: &Path) -> std::path::PathBuf {
+    playlists_dir(output_dir).join(ORDER_FILE)
+}
+
+fn read_order(output_dir: &Path) -> Vec<String> {
+    util::read_json::<Vec<String>>(&order_file(output_dir)).unwrap_or_default()
+}
+
+fn write_order(output_dir: &Path, ids: &[String]) -> Result<(), String> {
+    util::write_json(&order_file(output_dir), &ids)
+}
+
+fn prune_order(output_dir: &Path, id: &str) {
+    let order = read_order(output_dir);
+    if !order.iter().any(|existing| existing == id) {
+        return;
+    }
+    let kept: Vec<String> = order
+        .into_iter()
+        .filter(|existing| existing != id)
+        .collect();
+    let _ = write_order(output_dir, &kept);
+}
+
 pub fn covers_dir(user_data_dir: &Path) -> std::path::PathBuf {
     user_data_dir.join("covers")
 }
@@ -51,7 +77,9 @@ fn read_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
     if pl.name.trim().is_empty() {
         pl.name = "Untitled".into();
     }
-    pl.paths.retain(|p| !p.is_empty());
+    let mut seen_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+    pl.paths
+        .retain(|p| !p.is_empty() && seen_paths.insert(p.clone()));
     let now = util::now_ms();
     if pl.created_at == 0 {
         pl.created_at = now;
@@ -81,6 +109,7 @@ pub fn list_playlists(output_dir: &Path) -> Vec<PlaylistMeta> {
         for entry in entries.flatten() {
             if let Some(name) = entry.file_name().to_str()
                 && name.ends_with(".json")
+                && name != ORDER_FILE
             {
                 names.push(name.to_string());
             }
@@ -99,8 +128,33 @@ pub fn list_playlists(output_dir: &Path) -> Vec<PlaylistMeta> {
             });
         }
     }
-    out.sort_by(|a, b| a.name.cmp(&b.name));
+    let order = read_order(output_dir);
+    let rank: std::collections::HashMap<&str, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (id.as_str(), i))
+        .collect();
+    out.sort_by(|a, b| {
+        let ra = rank.get(a.id.as_str()).copied().unwrap_or(usize::MAX);
+        let rb = rank.get(b.id.as_str()).copied().unwrap_or(usize::MAX);
+        ra.cmp(&rb).then_with(|| a.name.cmp(&b.name))
+    });
     out
+}
+
+pub fn reorder_playlists(output_dir: &Path, ids: &[String]) -> Result<(), String> {
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let mut seen = std::collections::HashSet::new();
+    let mut clean: Vec<String> = Vec::with_capacity(ids.len());
+    for id in ids {
+        if !validate_id(id) {
+            return Err("invalid playlist id".into());
+        }
+        if seen.insert(id.clone()) {
+            clean.push(id.clone());
+        }
+    }
+    write_order(output_dir, &clean)
 }
 
 pub fn get_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
@@ -187,6 +241,7 @@ pub fn delete_playlist(output_dir: &Path, user_data_dir: &Path, id: &str) {
     let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let path = playlist_file(output_dir, id);
     let _ = fs::remove_file(&path);
+    prune_order(output_dir, id);
     remove_playlist_covers(user_data_dir, id);
 }
 
@@ -225,9 +280,9 @@ pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<
     }
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
-    let existing: std::collections::HashSet<String> = pl.paths.iter().cloned().collect();
+    let mut existing: std::collections::HashSet<String> = pl.paths.iter().cloned().collect();
     for p in paths {
-        if !existing.contains(p) {
+        if existing.insert(p.clone()) {
             pl.paths.push(p.clone());
         }
     }

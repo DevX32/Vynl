@@ -7,14 +7,16 @@ const release = await getLatestRelease()
 
 <section class="section" id="download">
   <div class="container">
-    <div class="section-head section-head--center reveal">
-      <span class="eyebrow">Download</span>
+    <div class="reveal">
+      <span class="section-index">04 — Download</span>
+      <h2 class="section-title">Get <span class="grad">Vynl</span>.</h2>
+      <p class="section-sub">Free, open source, GPL-3.0. No account, no cloud, no tracking.</p>
     </div>
 
     <div class="platforms">
       <article class="card platform reveal">
         <header>
-          <span class="platform-icon"><Icon name="windows" size={20} /></span>
+          <span class="platform-icon"><Icon name="windows" size={19} /></span>
           <div>
             <h3>Windows</h3>
             <p>64-bit · NSIS installer</p>
@@ -23,13 +25,13 @@ const release = await getLatestRelease()
 
         {release?.windows ? (
           <a class="btn btn--primary download-btn" href={release.windows.url}>
-            <Icon name="download" size={17} />
-            {release.windows.file}
+            <Icon name="download" size={16} />
+            <span class="file">{release.windows.file}</span>
             <span class="size">{release.windows.size}</span>
           </a>
         ) : (
           <a class="btn btn--primary download-btn" href={FALLBACK_DOWNLOAD_URL} target="_blank" rel="noopener">
-            <Icon name="download" size={17} />
+            <Icon name="download" size={16} />
             Download the installer
           </a>
         )}
@@ -39,7 +41,7 @@ const release = await getLatestRelease()
 
       <article class="card platform reveal" style="transition-delay:80ms">
         <header>
-          <span class="platform-icon"><Icon name="terminal" size={20} /></span>
+          <span class="platform-icon"><Icon name="terminal" size={19} /></span>
           <div>
             <h3>Linux</h3>
             <p>x86_64 · three package formats</p>
@@ -64,6 +66,39 @@ const release = await getLatestRelease()
 
         <p class="platform-hint">AppImage just runs. The .deb and .rpm register a system package.</p>
       </article>
+
+      <article class="card platform reveal" style="transition-delay:160ms">
+        <header>
+          <span class="platform-icon"><Icon name="android" size={19} /></span>
+          <div>
+            <h3>Android</h3>
+            <p>Companion app · pairs with your desktop</p>
+          </div>
+        </header>
+
+        <div class="linux-links">
+          {release?.android.length ? (
+            release.android.map((asset) => (
+              <a class="pkg" href={asset.url}>
+                <span class="pkg-format">
+                  {asset.recommended && <span class="pkg-tag">Recommended</span>}
+                  {asset.abi}
+                </span>
+                <span class="pkg-size">{asset.size}</span>
+              </a>
+            ))
+          ) : (
+            <a class="pkg" href={FALLBACK_DOWNLOAD_URL} target="_blank" rel="noopener">
+              <span class="pkg-format">arm64-v8a</span>
+              <span class="pkg-size">.apk</span>
+            </a>
+          )}
+        </div>
+
+        <p class="platform-hint">
+          Sideload the APK, then pair over your local network with <strong>Settings → Mobile Sync</strong>.
+        </p>
+      </article>
     </div>
   </div>
 </section>
@@ -72,7 +107,8 @@ const release = await getLatestRelease()
   .platforms {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 18px;
+    gap: 16px;
+    margin-top: 48px;
   }
 
   .platform {
@@ -80,10 +116,6 @@ const release = await getLatestRelease()
     display: flex;
     flex-direction: column;
     gap: 20px;
-  }
-
-  .platform:hover {
-    border-color: rgba(168, 148, 232, 0.32);
   }
 
   .platform header {
@@ -98,31 +130,41 @@ const release = await getLatestRelease()
     width: 42px;
     height: 42px;
     flex-shrink: 0;
-    border-radius: var(--radius-sm);
-    background: var(--accent-soft);
-    border: 1px solid rgba(168, 148, 232, 0.2);
-    color: var(--accent);
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
   }
 
   .platform h3 {
-    font-size: 17px;
+    font-size: 21px;
+    font-weight: 500;
   }
 
   .platform header p {
     color: var(--faint);
-    font-size: 13.5px;
-    margin-top: 2px;
+    font-size: 13px;
+    margin-top: 3px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
   }
 
   .download-btn {
     justify-content: flex-start;
+    padding-inline: 16px;
+  }
+
+  .file {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .size {
     margin-left: auto;
+    flex: none;
     font-family: var(--font-mono);
     font-size: 12px;
-    opacity: 0.75;
+    opacity: 0.7;
   }
 
   .linux-links {
@@ -135,35 +177,48 @@ const release = await getLatestRelease()
     align-items: center;
     justify-content: space-between;
     padding: 11px 15px;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+    background: rgba(240, 240, 236, 0.04);
     font-size: 14px;
-    transition:
-      border-color 0.15s ease,
-      background-color 0.15s ease,
-      transform 0.15s ease;
+    transition: border-color 0.15s ease;
   }
 
-  .pkg:hover {
-    border-color: rgba(168, 148, 232, 0.5);
-    background: var(--accent-soft);
-    transform: translateY(-1px);
+  @media (hover: hover) and (pointer: fine) {
+    .pkg:hover {
+      border-color: var(--line-strong);
+      background: rgba(240, 240, 236, 0.05);
+    }
   }
 
   .pkg-format {
     font-family: var(--font-mono);
     font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .pkg-tag {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    color: var(--paper);
+    background: var(--signal);
   }
 
   .pkg-size {
     color: var(--faint);
-    font-size: 13px;
+    font-size: 12.5px;
+    font-family: var(--font-mono);
   }
 
   .platform-hint {
     color: var(--faint);
     font-size: 13px;
     margin-top: auto;
+    line-height: 1.55;
   }
 </style>

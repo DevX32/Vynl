@@ -10,6 +10,16 @@ const { name, size = 20, strokeWidth = 1.7, class: className } = Astro.props
 
 const ICONS: Record<string, { paths: string[]; viewBox?: string; filled?: boolean }> = {
   download: { paths: ['M12 3.5v11.5', 'm7.2 10.8 4.8 4.8 4.8-4.8', 'M4.5 20.5h15'] },
+  android: {
+    paths: [
+      'M6 10.5h12a1 1 0 0 1 1 1v6.2a1.3 1.3 0 0 1-1.3 1.3h-1.2v1.5a1.3 1.3 0 0 1-1.3 1.3H6.8a1.3 1.3 0 0 1-1.3-1.3V19H4.3A1.3 1.3 0 0 1 3 17.7v-6.2a1 1 0 0 1 1-1Z',
+      'M7.6 8.4a4.4 4.4 0 0 1 8.8 0',
+      'M9.4 4.4 8.1 2.1',
+      'm14.6 4.4 1.3-2.3',
+      'M3.6 12.4h2.2',
+      'M18.2 12.4h2.2'
+    ]
+  },
   terminal: { paths: ['m5.5 7.5 4.5 4.5-4.5 4.5', 'M12.5 16.5h6'] },
   box: { paths: ['m12 3 8.5 4.6v8.8L12 21l-8.5-4.6V7.6L12 3Z', 'm3.5 7.6 8.5 4.6 8.5-4.6', 'M12 12.2V21'] },
   check: { paths: ['m4.5 12.5 5 5 10-11'] },

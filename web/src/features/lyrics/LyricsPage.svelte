@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Copy, Settings2, X, Download } from "lucide-svelte";
+  import { ClipboardPaste, Copy, Keyboard, Search, Settings2, X } from "lucide-svelte";
   import { fly, fade } from "svelte/transition";
   import { cubicOut, cubicIn } from "svelte/easing";
   import { t } from "@lib/i18n";
@@ -188,20 +188,6 @@
   function openPaste(): void {
     openOverlay("paste");
   }
-
-  async function exportLyrics(): Promise<void> {
-    const result = getLyricsResult();
-    const track = getCurrentTrack();
-    if (!result || !track) return;
-    const ext = getLyricsSynced() ? "lrc" : "txt";
-    const savedPath = await vynl.lyricsExport({
-      content: result.text,
-      defaultName: `${track.artist} - ${track.title}.${ext}`,
-    });
-    if (savedPath) {
-      showToast(t("lyrics.savedTo", { file: savedPath.split(/[/\\]/).pop() ?? savedPath }));
-    }
-  }
 </script>
 
 {#snippet modalShell(title: string, close: () => void, body: import("svelte").Snippet)}
@@ -229,31 +215,43 @@
             <div class="lyr-cover placeholder">{np.title.charAt(0).toUpperCase()}</div>
           {/if}
           <div class="lyr-track-text">
-            <div class="lyr-title">{np.title}</div>
-            <div class="lyr-artist">{np.artist || t("lyrics.unknownArtist")}</div>
-            {#if np.album}<div class="lyr-album">{np.album}</div>{/if}
+            <div class="lyr-title display" title={np.title}>{np.title}</div>
+            <div class="lyr-meta mono">
+              <span class="lyr-artist">{np.artist || t("lyrics.unknownArtist")}</span>
+              {#if np.album}
+                <span class="lyr-sep">·</span>
+                <span class="lyr-album" title={np.album}>{np.album}</span>
+              {/if}
+            </div>
           </div>
         </div>
 
         <div class="lyr-controls">
-          {#if getLyricsResult()}
-            <button class="lyr-icon" onclick={exportLyrics} aria-label={t("lyrics.exportLyrics")}>
-              <Download size={15} stroke-width={1.5} />
-            </button>
-          {/if}
-          <button class="lyr-icon" onclick={copyAllLyrics} aria-label={t("lyrics.copyAllLyrics")}>
-            <Copy size={15} stroke-width={1.5} />
+          <button
+            class="lyr-icon"
+            onclick={copyAllLyrics}
+            aria-label={t("lyrics.copyAllLyrics")}
+            title={t("lyrics.copyAllLyrics")}
+          >
+            <Copy size={14} stroke-width={1.5} />
           </button>
           <button
             class="lyr-icon"
             class:active={settingsOpen}
             onclick={() => (settingsOpen = !settingsOpen)}
             aria-label={t("lyrics.settings")}
+            title={t("lyrics.settings")}
           >
-            <Settings2 size={15} stroke-width={1.5} />
+            <Settings2 size={14} stroke-width={1.5} />
           </button>
-          <button class="lyr-icon" onclick={onclose} aria-label={t("lyrics.closeLyrics")}>
-            <X size={15} stroke-width={1.5} />
+          <span class="lyr-divider" aria-hidden="true"></span>
+          <button
+            class="lyr-icon"
+            onclick={onclose}
+            aria-label={t("lyrics.closeLyrics")}
+            title={t("lyrics.closeLyrics")}
+          >
+            <X size={14} stroke-width={1.5} />
           </button>
         </div>
 
@@ -269,13 +267,20 @@
               ><span></span></button>
             </div>
             <div class="settings-row">
-              <button class="btn-ghost settings-action mono" onclick={openSearch}>{t("lyrics.search")}</button>
+              <button class="btn-ghost settings-action mono" onclick={openSearch}>
+                <Search size={13} stroke-width={1.5} />
+                {t("lyrics.search")}
+              </button>
             </div>
             <div class="settings-row">
-              <button class="btn-ghost settings-action mono" onclick={openPaste}>{t("lyrics.paste")}</button>
+              <button class="btn-ghost settings-action mono" onclick={openPaste}>
+                <ClipboardPaste size={13} stroke-width={1.5} />
+                {t("lyrics.paste")}
+              </button>
             </div>
             <div class="settings-row">
               <button class="btn-ghost settings-action mono" onclick={() => openOverlay("help")}>
+                <Keyboard size={13} stroke-width={1.5} />
                 {t("lyrics.shortcuts")}
               </button>
             </div>
@@ -399,69 +404,97 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+  }
+  .lyr-head::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      var(--line-strong) 0%,
+      var(--line) 40%,
+      transparent 100%
+    );
   }
   .lyr-track {
     display: flex;
-    gap: 14px;
+    gap: 12px;
     min-width: 0;
     align-items: center;
   }
   .lyr-cover {
-    width: 58px;
-    height: 58px;
+    width: 46px;
+    height: 46px;
     border-radius: var(--radius-sm);
     object-fit: cover;
     flex-shrink: 0;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 1px var(--line), 0 4px 16px rgba(0, 0, 0, 0.35);
   }
   .lyr-cover.placeholder {
     background: var(--placeholder-gradient);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 18px;
+    color: var(--faint);
   }
   .lyr-track-text {
     min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 3px;
+    gap: 4px;
   }
   .lyr-title {
-    font-size: 20px;
+    font-size: 17px;
     font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--text);
   }
-  .lyr-artist {
-    font-size: 14px;
-    font-weight: 500;
-    letter-spacing: 0.04em;
+  .lyr-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
     color: var(--dim);
+  }
+  .lyr-artist {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-shrink: 1;
+  }
+  .lyr-sep {
+    color: var(--faint);
+    flex-shrink: 0;
   }
   .lyr-album {
-    font-size: 11px;
     color: var(--faint);
-    letter-spacing: 0.03em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top: 1px;
+    min-width: 0;
   }
   .lyr-controls {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-shrink: 0;
+  }
+  .lyr-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--line);
+    margin: 0 2px;
   }
 
   .lyr-icon {
@@ -470,8 +503,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(16, 16, 20, 0.45);
-    border: 1px solid var(--line);
+    background: none;
+    border: 1px solid transparent;
     color: var(--faint);
     padding: 0;
     border-radius: 6px;
@@ -483,22 +516,22 @@
     transform: rotate(-45deg);
   }
   .lyr-icon:hover {
-    color: var(--dim);
-    background: var(--bg-raise);
-    border-color: var(--line-strong);
+    color: var(--text);
+    background: var(--hover-surface);
+    border-color: var(--hover-border);
   }
   .lyr-icon.active {
     color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
   }
 
   .lyr-settings {
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 10px);
     right: 0;
     z-index: 30;
-    min-width: 180px;
+    min-width: 190px;
     background: var(--surface);
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
@@ -506,28 +539,25 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    box-shadow: var(--shadow-md);
   }
   .settings-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 6px 8px;
-    border-radius: 5px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
     transition: background 0.12s;
   }
   .settings-row:hover {
-    background: var(--bg);
+    background: var(--hover-surface);
   }
   .settings-label {
     font-size: 10.5px;
     letter-spacing: 0.05em;
     color: var(--dim);
   }
-  .settings-action {
-    padding: 2px 0;
-  }
-
   .mini-switch {
     width: 28px;
     height: 15px;
@@ -569,6 +599,22 @@
   .btn-ghost:hover {
     color: var(--accent);
   }
+  .settings-action {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-align: left;
+  }
+  .settings-action :global(svg) {
+    color: var(--faint);
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  .btn-ghost.settings-action:hover :global(svg) {
+    color: var(--accent);
+  }
+
   .lyrics-scroll {
     flex: 1;
     min-height: 0;
@@ -603,6 +649,7 @@
   }
 
   .lyr-line {
+    font-family: var(--font-lyrics);
     font-size: 18px;
     line-height: 1.65;
     color: var(--faint);
@@ -656,6 +703,7 @@
   .lyr-text.karaoke > span.karaoke-active {
     color: var(--accent);
     transform: scale(1.03);
+    font-weight: 700;
   }
 
   .lyr-dots {
@@ -749,7 +797,7 @@
     position: relative;
     background: var(--surface);
     border: 1px solid var(--line-strong);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-sm);
     padding: 24px 28px;
     min-width: 360px;
     max-width: 460px;

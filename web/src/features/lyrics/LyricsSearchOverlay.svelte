@@ -22,20 +22,21 @@
 
   $effect(() => {
     const track = getCurrentTrack();
-    searchQuery = track ? `${track.title} ${track.artist}` : "";
+    const next = track ? `${track.title} ${track.artist}` : "";
+    searchQuery = next;
     searchResults = [];
-    if (searchQuery.trim()) void runSearch();
+    if (next.trim()) void runSearch(next);
   });
 
-  async function runSearch(): Promise<void> {
-    const query = searchQuery.trim();
-    if (!query) return;
+  async function runSearch(query = searchQuery): Promise<void> {
+    const trimmed = query.trim();
+    if (!trimmed) return;
     searchLoading = true;
     const ver = ++searchVersion;
     try {
       const track = getCurrentTrack();
       const results = await vynl.lyricsSearch({
-        query,
+        query: trimmed,
         trackName: track?.title,
         artistName: track?.artist,
       });
@@ -52,7 +53,11 @@
     if (!text) return;
 
     const synced = !!item.syncedLyrics;
-    const result: LyricsResult = { kind: synced ? "lrc" : "txt", text, source: "remote" };
+    const result: LyricsResult = {
+      kind: synced ? "lrc" : "txt",
+      text,
+      source: "remote",
+    };
     setLyricsManual(result, synced ? parseLrcText(text) : toLyricLines(result));
     onClose();
 
@@ -61,7 +66,8 @@
     const plain = synced
       ? text.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/gm, "").trim()
       : text;
-    if (plain) void vynl.lyricsEmbed({ file: track.path, text: plain }).catch(() => {});
+    if (plain)
+      void vynl.lyricsEmbed({ file: track.path, text: plain }).catch(() => {});
   }
 </script>
 
@@ -73,7 +79,11 @@
     placeholder={t("lyrics.searchPlaceholder")}
     onkeydown={(e) => e.key === "Enter" && runSearch()}
   />
-  <button class="btn-primary" onclick={runSearch} disabled={searchLoading}>
+  <button
+    class="btn-primary"
+    onclick={() => runSearch()}
+    disabled={searchLoading}
+  >
     {searchLoading ? "…" : t("lyrics.search")}
   </button>
 </div>
@@ -83,9 +93,13 @@
     {#each searchResults as item (item.id)}
       <button class="search-item" onclick={() => applySearchResult(item)}>
         <div class="search-item-track display">{item.trackName}</div>
-        <div class="search-item-artist mono">{item.artistName} · {item.albumName}</div>
+        <div class="search-item-artist mono">
+          {item.artistName} · {item.albumName}
+        </div>
         <div class="search-item-meta mono">
-          {item.syncedLyrics ? t("lyrics.synced") : t("lyrics.plain")}{#if item.duration}
+          {item.syncedLyrics
+            ? t("lyrics.synced")
+            : t("lyrics.plain")}{#if item.duration}
             · {Math.round(item.duration)}s{/if}
         </div>
       </button>
@@ -165,7 +179,9 @@
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
+    transition:
+      opacity 0.15s,
+      transform 0.1s;
   }
   .btn-primary:hover:not(:disabled) {
     opacity: 0.9;

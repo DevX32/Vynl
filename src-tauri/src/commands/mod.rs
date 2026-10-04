@@ -7,7 +7,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_dialog::DialogExt;
 
 use types::*;
 
@@ -119,6 +118,8 @@ pub async fn downloaded_paths(
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
     let settings = load_settings(&app)?;
+    let ext = crate::services::downloader::audio_format_ext(&settings.format);
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     Ok(collection
         .tracks
         .iter()
@@ -126,16 +127,13 @@ pub async fn downloaded_paths(
             let base = crate::services::downloader::sanitize(
                 &crate::services::downloader::render_pattern(&settings.filename_pattern, t),
             );
-            let path = std::path::PathBuf::from(&settings.output_dir).join(format!(
-                "{}.{}",
-                base,
-                crate::services::downloader::audio_format_ext(&settings.format)
-            ));
-            if path.is_file() {
-                Some(path.to_string_lossy().to_string())
-            } else {
-                None
+            let path =
+                std::path::PathBuf::from(&settings.output_dir).join(format!("{}.{}", base, ext));
+            if !path.is_file() {
+                return None;
             }
+            let path = path.to_string_lossy().to_string();
+            seen.insert(path.clone()).then_some(path)
         })
         .collect())
 }
@@ -305,6 +303,8 @@ pub async fn delete_library_track(
     for sidecar_ext in &["lrc", "txt"] {
         let sidecar = crate::services::lyrics::sidecar_path(&canonical_str, sidecar_ext);
         let _ = fs::remove_file(sidecar);
+        let legacy = crate::services::lyrics::legacy_sidecar_path(&canonical_str, sidecar_ext);
+        let _ = fs::remove_file(legacy);
     }
 
     let mut stale = vec![path];
@@ -323,13 +323,12 @@ pub async fn get_library(app: AppHandle) -> Result<Vec<LibraryTrack>, String> {
 
     if let Some(cached) = crate::services::library::load_cache(&user_data) {
         let app_clone = app.clone();
-        let baseline = cached.clone();
         tokio::task::spawn_blocking(move || {
             let ud = user_data_dir(&app_clone).ok();
             let od = output_dir_from_settings(&app_clone).ok();
             if let (Some(ud), Some(od)) = (ud, od) {
-                let result = crate::services::library::scan_cached_library(&od, &ud);
-                if result != baseline {
+                let (result, changed) = crate::services::library::scan_cached_library(&od, &ud);
+                if changed {
                     let _ = app_clone.emit("library-updated", &result);
                 }
             }
@@ -358,6 +357,12 @@ pub async fn get_playlist(id: String, app: AppHandle) -> Result<Option<Playlist>
 pub async fn create_playlist(name: String, app: AppHandle) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
     crate::services::playlists::create_playlist(&output, &name)
+}
+
+#[tauri::command]
+pub async fn reorder_playlists(ids: Vec<String>, app: AppHandle) -> Result<(), String> {
+    let output = output_dir_from_settings(&app)?;
+    crate::services::playlists::reorder_playlists(&output, &ids)
 }
 
 #[tauri::command]
@@ -530,36 +535,6 @@ pub async fn lyrics_search(
 }
 
 #[tauri::command]
-pub async fn lyrics_export(
-    content: String,
-    default_name: String,
-    app: AppHandle,
-) -> Result<Option<String>, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title("Save Lyrics")
-        .set_file_name(&default_name)
-        .save_file(move |path| {
-            let _ = tx.send(path);
-        });
-
-    let path = rx.await.map_err(|e| e.to_string())?;
-
-    match path {
-        Some(fp) => {
-            let p = fp.into_path().map_err(|e| e.to_string())?;
-            let path_str = p.to_string_lossy().to_string();
-            tokio::fs::write(&p, &content)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(Some(path_str))
-        }
-        None => Ok(None),
-    }
-}
-
-#[tauri::command]
 pub async fn rpc_update(state: Option<RpcPresence>, app: AppHandle) -> Result<(), String> {
     let enabled = {
         let s = app.state::<AppState>();
@@ -674,8 +649,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 let mut guard = state.pending.lock().map_err(|e| e.to_string())?;
                 *guard = Some(update);
             }
-            update_svc::emit_status(&app, &status).await;
-            spawn_silent_update_install(app);
+            update_svc::emit_status(&app, &status);
             Ok(status)
         }
         Ok(None) => {
@@ -690,7 +664,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
                 error: None,
                 silent: None,
             };
-            update_svc::emit_status(&app, &status).await;
+            update_svc::emit_status(&app, &status);
             Ok(status)
         }
         Err(error) => {
@@ -727,12 +701,12 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
             Ok(None) => {
                 let error = "No update available";
                 let status = update_error_status(None, error);
-                update_svc::emit_status(&app, &status).await;
+                update_svc::emit_status(&app, &status);
                 return Err(error.to_string());
             }
             Err(error) => {
                 let status = update_error_status(None, &error);
-                update_svc::emit_status(&app, &status).await;
+                update_svc::emit_status(&app, &status);
                 return Err(error);
             }
         },
@@ -750,7 +724,7 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
         error: None,
         silent: Some(false),
     };
-    update_svc::emit_status(&app, &downloading_status).await;
+    update_svc::emit_status(&app, &downloading_status);
 
     if let Err(e) = update_svc::download_and_install(&app, update, false).await {
         let error_status = UpdateStatus {
@@ -763,7 +737,7 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
             error: Some(e.clone()),
             silent: Some(false),
         };
-        update_svc::emit_status(&app, &error_status).await;
+        update_svc::emit_status(&app, &error_status);
         return Err(e);
     }
 
@@ -818,11 +792,6 @@ pub async fn player_get_position(generation: u64) -> Result<f64, String> {
 #[tauri::command]
 pub async fn player_is_playing(generation: u64) -> Result<bool, String> {
     crate::services::player::is_playing(generation)
-}
-
-#[tauri::command]
-pub async fn player_check_finished(generation: u64) -> Result<bool, String> {
-    crate::services::player::check_finished(generation)
 }
 
 #[tauri::command]

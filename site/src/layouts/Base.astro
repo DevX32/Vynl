@@ -22,7 +22,7 @@ const ogImage = new URL(`${base}${image.replace(/^\//, '')}`, Astro.site).href
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical.href} />
@@ -51,14 +51,12 @@ const ogImage = new URL(`${base}${image.replace(/^\//, '')}`, Astro.site).href
       operatingSystem: 'Windows, Linux',
       url: canonical.origin,
       codeRepository: REPO_URL,
-      license: 'https://opensource.org/licenses/AGPL-3.0',
+      license: 'https://opensource.org/licenses/GPL-3.0',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }
     })} />
   </head>
 
   <body>
-    <div class="aura" aria-hidden="true"></div>
-
     <div class="page">
       <Nav />
       <main>

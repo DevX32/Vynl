@@ -26,7 +26,7 @@
   aria-label={t("player.shuffle")}
   aria-pressed={getCurrentShuffle()}
 >
-  <Shuffle size={12} stroke-width={1.5} />
+  <Shuffle size={15} stroke-width={1.5} />
 </button>
 <button
   class="icon-btn"
@@ -69,15 +69,13 @@
   aria-pressed={getCurrentLoop() !== "off"}
 >
   {#if getCurrentLoop() === "one"}
-    <Repeat1 size={12} stroke-width={1.5} />
+    <Repeat1 size={15} stroke-width={1.5} />
   {:else}
-    <Repeat size={12} stroke-width={1.5} />
+    <Repeat size={15} stroke-width={1.5} />
   {/if}
 </button>
 
 <style>
-  /* Visual knobs supplied by the host bar (PlayerBar / FullscreenPlayer):
-     --tc-icon-color, --tc-idle-opacity, --tc-disabled-opacity. */
   .icon-btn {
     width: 32px;
     height: 32px;

@@ -22,7 +22,7 @@ pub async fn check_for_update(app: &AppHandle) -> Result<Option<Update>, String>
     Ok(check)
 }
 
-pub async fn emit_status(app: &AppHandle, status: &UpdateStatus) {
+pub fn emit_status(app: &AppHandle, status: &UpdateStatus) {
     let _ = app.emit("vynl:update:status", status);
 }
 

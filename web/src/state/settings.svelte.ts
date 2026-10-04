@@ -145,11 +145,3 @@ export async function installTool(name: ToolName): Promise<void> {
     markToolError(name, e);
   }
 }
-
-export async function updateTool(name: ToolName): Promise<void> {
-  try {
-    await vynl.updateTool(name);
-  } catch (e) {
-    markToolError(name, e);
-  }
-}

@@ -16,17 +16,17 @@ export const EQ_FLAT: number[] = EQ_BANDS.map(() => 0);
 
 export interface EqPreset {
   id: string;
-  label: string;
+  labelKey: string;
   gains: number[];
 }
 
 export const EQ_PRESETS: readonly EqPreset[] = [
-  { id: "flat", label: "Flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  { id: "bass", label: "Bass Boost", gains: [8, 7, 5, 3, 1, 0, 0, 0, 0, 0] },
-  { id: "treble", label: "Treble Boost", gains: [0, 0, 0, 0, 0, 1, 2, 4, 6, 8] },
-  { id: "vocal", label: "Vocal", gains: [-3, -3, -1, 2, 4, 4, 3, 1, 0, -1] },
-  { id: "rock", label: "Rock", gains: [5, 4, 3, 1, -1, -1, 1, 3, 4, 5] },
-  { id: "podcast", label: "Podcast", gains: [-5, -4, -1, 3, 5, 5, 3, 0, -2, -4] },
+  { id: "flat", labelKey: "eq.presets.flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { id: "bass", labelKey: "eq.presets.bass", gains: [8, 7, 5, 3, 1, 0, 0, 0, 0, 0] },
+  { id: "treble", labelKey: "eq.presets.treble", gains: [0, 0, 0, 0, 0, 1, 2, 4, 6, 8] },
+  { id: "vocal", labelKey: "eq.presets.vocal", gains: [-3, -3, -1, 2, 4, 4, 3, 1, 0, -1] },
+  { id: "rock", labelKey: "eq.presets.rock", gains: [5, 4, 3, 1, -1, -1, 1, 3, 4, 5] },
+  { id: "podcast", labelKey: "eq.presets.podcast", gains: [-5, -4, -1, 3, 5, 5, 3, 0, -2, -4] },
 ];
 
 export const DURATION_TOLERANCE = 0.05;
