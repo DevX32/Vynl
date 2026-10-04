@@ -215,6 +215,8 @@ export const en = {
     mobileSyncTurnedOff: "Mobile sync turned off.",
     mobileSyncPinRotated:
       "New pairing code generated. Scan the QR again on any paired phone.",
+    mobileSyncToggleFailed: "Couldn't update mobile sync: {error}",
+    mobileSyncPinFailed: "Couldn't generate a new pairing code: {error}",
     mobileSyncInsecureNotice:
       "Traffic is unencrypted over HTTP. Only enable this on a Wi‑Fi network you trust.",
     mobileSyncNotRunning:
@@ -423,6 +425,7 @@ export const en = {
     installed: "Installed {name}",
     updated: "Updated {name}",
     installFailed: "Couldn't install {name}: {error}",
+    noDownloadUrl: "no download URL",
     pickFailed: "Couldn't open the dialog: {error}",
     removed: "Removed {name}",
     removeFailed: "Couldn't remove {name}: {error}",

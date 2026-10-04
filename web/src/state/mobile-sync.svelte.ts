@@ -52,7 +52,7 @@ export async function setMobileSyncEnabled(enabled: boolean): Promise<void> {
       t(enabled ? "settings.mobileSyncTurnedOn" : "settings.mobileSyncTurnedOff"),
     );
   } catch (e) {
-    toasts.error(errText(e));
+    toasts.error(t("settings.mobileSyncToggleFailed", { error: errText(e) }));
   } finally {
     _busy = false;
   }
@@ -65,7 +65,7 @@ export async function rotateMobileSyncPin(): Promise<void> {
     _status = await vynl.rotateMobileSyncPin();
     toasts.success(t("settings.mobileSyncPinRotated"));
   } catch (e) {
-    toasts.error(errText(e));
+    toasts.error(t("settings.mobileSyncPinFailed", { error: errText(e) }));
   } finally {
     _busy = false;
   }

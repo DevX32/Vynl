@@ -347,7 +347,10 @@ async function finishInstall(entry: PluginEntry): Promise<void> {
 export async function installFromStore(sp: StorePlugin): Promise<void> {
   if (!sp.downloadUrl) {
     toasts.error(
-      t("plugins.installFailed", { name: sp.name, error: "no download URL" }),
+      t("plugins.installFailed", {
+        name: sp.name,
+        error: t("plugins.noDownloadUrl"),
+      }),
     );
     return;
   }
