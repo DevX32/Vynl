@@ -1,4 +1,5 @@
 pub mod artwork;
+pub mod audio;
 pub mod audio_cache;
 pub mod catalog;
 pub mod downloader;

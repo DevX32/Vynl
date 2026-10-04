@@ -4,9 +4,6 @@
   "description": "A minimal music player",
   "author": "DevX32",
   "license": "GPL-3.0-only",
-  "engines": {
-    "node": ">=18"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -507,14 +507,8 @@ pub async fn lyrics_fetch(
 #[tauri::command]
 pub async fn lyrics_embed(file: String, text: String, app: AppHandle) -> Result<(), String> {
     let validated = require_path_in_output(&file, &app)?;
-    let user_data = user_data_dir(&app)?;
-    let ffmpeg = crate::services::tools::get_tool_path("ffmpeg", &user_data);
     tokio::task::spawn_blocking(move || {
-        crate::services::lyrics::embed_lyrics(
-            &validated.to_string_lossy(),
-            &text,
-            ffmpeg.as_deref(),
-        )
+        crate::services::lyrics::embed_lyrics(&validated.to_string_lossy(), &text)
     })
     .await
     .map_err(|e| e.to_string())?

@@ -11,7 +11,7 @@ use tokio::process::Command;
 use tokio::sync::{Mutex, Semaphore};
 
 use crate::commands::types::*;
-use crate::services::{catalog, history, lyrics, process as sysproc, tools, util};
+use crate::services::{audio, catalog, history, lyrics, process as sysproc, util};
 
 mod matching;
 mod paths;
@@ -197,44 +197,12 @@ pub fn get_done_track_ids(
     out
 }
 
-async fn probe_duration(ffprobe: &str, file: &str) -> Option<f64> {
-    {
-        use lofty::prelude::*;
-        use lofty::probe::Probe;
-        if let Ok(tf) = Probe::open(file).and_then(|p| p.read()) {
-            let dur = tf.properties().duration();
-            let secs = dur.as_secs_f64();
-            if secs > 0.0 && secs.is_finite() {
-                return Some(secs.round());
-            }
-        }
-    }
-    let args: Vec<String> = vec![
-        "-v".into(),
-        "error".into(),
-        "-show_entries".into(),
-        "format=duration".into(),
-        "-of".into(),
-        "default=noprint_wrappers=1:nokey=1".into(),
-        file.into(),
-    ];
-
-    let mut command = sysproc::hidden_tokio(Command::new(ffprobe));
-    command
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-
-    let output = command.output().await.ok()?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let trimmed = stdout.trim();
-    trimmed
-        .parse::<f64>()
+async fn probe_duration(file: &Path) -> Option<f64> {
+    let path = file.to_path_buf();
+    tokio::task::spawn_blocking(move || audio::duration_secs(&path))
+        .await
         .ok()
-        .filter(|v| v.is_finite())
-        .map(|v| v.round())
+        .flatten()
 }
 
 async fn fetch_cover(url: &str, dest: &str) -> bool {
@@ -274,7 +242,7 @@ fn try_tag_with_lofty(
     cover: Option<&str>,
     lyrics: Option<&str>,
 ) -> Result<(), String> {
-    use lofty::picture::{MimeType, Picture, PictureType};
+    use lofty::picture::{Picture, PictureType};
     use lofty::prelude::*;
     use lofty::probe::Probe;
     use lofty::tag::{ItemKey, TagType};
@@ -323,11 +291,7 @@ fn try_tag_with_lofty(
         && let Ok(bytes) = fs::read(cover_path)
         && !bytes.is_empty()
     {
-        let mime = if cover_path.to_lowercase().ends_with(".png") {
-            MimeType::Png
-        } else {
-            MimeType::Jpeg
-        };
+        let mime = image_mime(&bytes);
         let pic = Picture::unchecked(bytes)
             .mime_type(mime)
             .pic_type(PictureType::CoverFront)
@@ -337,122 +301,61 @@ fn try_tag_with_lofty(
     }
 
     tagged_file
-        .save_to_path(path, Default::default())
+        .save_to_path(path, lofty::config::WriteOptions::new().use_id3v23(true))
         .map_err(|e| format!("lofty save failed: {e}"))?;
     Ok(())
 }
 
+fn image_mime(bytes: &[u8]) -> lofty::picture::MimeType {
+    use lofty::picture::MimeType;
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        MimeType::Png
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        MimeType::Jpeg
+    } else if bytes.starts_with(b"GIF8") {
+        MimeType::Gif
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        MimeType::Unknown(String::from("image/webp"))
+    } else if bytes.starts_with(b"BM") {
+        MimeType::Bmp
+    } else {
+        MimeType::Jpeg
+    }
+}
+
 async fn tag(
-    ffmpeg: &str,
     audio_in: &str,
     audio_out: &str,
     track: &TrackMeta,
-    format: &AudioFormat,
     cover: Option<&str>,
     lyrics: Option<&str>,
 ) -> Result<(), String> {
-    if audio_in != audio_out {
-        if let Err(e) = tokio::fs::copy(audio_in, audio_out).await {
-            eprintln!("lofty copy failed: {e}, falling back to ffmpeg");
-        } else {
-            let out = audio_out.to_string();
-            let track_c = track.clone();
-            let cover_c = cover.map(|s| s.to_string());
-            let lyrics_c = lyrics.map(|s| s.to_string());
-            let lofty_res = tokio::task::spawn_blocking(move || {
-                try_tag_with_lofty(&out, &track_c, cover_c.as_deref(), lyrics_c.as_deref())
-            })
-            .await
-            .map_err(|e| format!("lofty join failed: {e}"))
-            .and_then(|r| r);
+    if audio_in == audio_out {
+        return Err("source and destination are the same file".into());
+    }
 
-            match lofty_res {
-                Ok(()) => return Ok(()),
-                Err(e) => {
-                    eprintln!("lofty tagging failed: {e}, falling back to ffmpeg");
-                    let _ = tokio::fs::remove_file(audio_out).await;
-                }
-            }
+    if let Err(e) = tokio::fs::copy(audio_in, audio_out).await {
+        return Err(format!("Failed to copy audio: {e}"));
+    }
+
+    let out = audio_out.to_string();
+    let track_c = track.clone();
+    let cover_c = cover.map(|s| s.to_string());
+    let lyrics_c = lyrics.map(|s| s.to_string());
+
+    let result = tokio::task::spawn_blocking(move || {
+        try_tag_with_lofty(&out, &track_c, cover_c.as_deref(), lyrics_c.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Tagging task failed: {e}"))?;
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = tokio::fs::remove_file(audio_out).await;
+            Err(e)
         }
     }
-
-    let use_cover = cover.is_some();
-    let mut args: Vec<String> = vec!["-y".into(), "-i".into(), audio_in.into()];
-
-    if let Some(c) = cover
-        && use_cover
-    {
-        args.push("-i".into());
-        args.push(c.into());
-    }
-
-    args.push("-map".into());
-    args.push("0:a:0".into());
-
-    if use_cover {
-        args.push("-map".into());
-        args.push("1:v:0".into());
-        args.push("-c:v:0".into());
-        args.push("mjpeg".into());
-        args.push("-disposition:v:0".into());
-        args.push("attached_pic".into());
-    }
-
-    args.push("-c:a".into());
-    args.push("copy".into());
-
-    if *format == AudioFormat::Mp3 {
-        args.push("-id3v2_version".into());
-        args.push("3".into());
-    }
-
-    let year_str = track.year.map(|y| y.to_string()).unwrap_or_default();
-    let track_str = track
-        .track_number
-        .map(|n| n.to_string())
-        .unwrap_or_default();
-
-    let mut metadata: Vec<(&str, &str)> = vec![
-        ("title", track.title.as_str()),
-        ("artist", track.artist.as_str()),
-        ("album", track.album.as_str()),
-        ("album_artist", track.artist.as_str()),
-        ("date", &year_str),
-    ];
-    if !track_str.is_empty() {
-        metadata.push(("track", &track_str));
-    }
-    if let Some(l) = lyrics {
-        metadata.push(("lyrics", l));
-    }
-
-    for (k, v) in &metadata {
-        if !v.is_empty() {
-            args.push("-metadata".into());
-            args.push(format!("{}={}", k, v));
-        }
-    }
-
-    args.push(audio_out.into());
-
-    let mut command = sysproc::hidden_tokio(Command::new(ffmpeg));
-    command
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let output = command
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run ffmpeg: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("ffmpeg tagging failed: {}", last_error(&stderr)));
-    }
-
-    Ok(())
 }
 
 struct ProcessResult {
@@ -462,21 +365,11 @@ struct ProcessResult {
     used_url: Option<String>,
 }
 
-fn base_args(ffmpeg_dir: &str, format: &AudioFormat, bitrate: Option<i64>) -> Vec<String> {
-    let ext = audio_format_ext(format);
-    let quality = bitrate
-        .map(|b| format!("{}K", b))
-        .unwrap_or_else(|| "0".into());
-
+fn base_args() -> Vec<String> {
     let mut args = vec![
         "--no-playlist".into(),
         "--format".into(),
-        "bestaudio/best".into(),
-        "--extract-audio".into(),
-        "--audio-format".into(),
-        ext.into(),
-        "--audio-quality".into(),
-        quality,
+        "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best".into(),
         "--newline".into(),
     ];
 
@@ -490,14 +383,39 @@ fn base_args(ffmpeg_dir: &str, format: &AudioFormat, bitrate: Option<i64>) -> Ve
     args.push("4".into());
     args.push("--user-agent".into());
     args.push(UA.into());
-    args.push("--ffmpeg-location".into());
-    args.push(ffmpeg_dir.into());
 
     if cfg!(target_os = "windows") {
         args.push("--windows-filenames".into());
     }
 
     args
+}
+
+const STREAM_EXTS: &[&str] = &[
+    "webm", "m4a", "mp4", "opus", "ogg", "oga", "aac", "mpga", "weba", "m4b",
+];
+
+fn find_downloaded_stream(tmp: &Path, track_id: &str) -> Option<PathBuf> {
+    let prefix = format!("{track_id}.");
+    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
+    for entry in std::fs::read_dir(tmp).ok()?.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Some(ext) = name.strip_prefix(&prefix) else {
+            continue;
+        };
+        if !STREAM_EXTS.contains(&ext.to_ascii_lowercase().as_str()) {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() || meta.len() == 0 {
+            continue;
+        }
+        let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+        if best.as_ref().is_none_or(|(t, _)| modified >= *t) {
+            best = Some((modified, entry.path()));
+        }
+    }
+    best.map(|(_, path)| path)
 }
 
 async fn download_track(
@@ -520,23 +438,6 @@ async fn download_track(
             };
         }
     };
-    let ffmpeg = match resolve_tool("ffmpeg", user_data_dir) {
-        Some(p) => p,
-        None => {
-            return ProcessResult {
-                ok: false,
-                message: "ffmpeg is required to download.".into(),
-                raw_path: None,
-                used_url: None,
-            };
-        }
-    };
-
-    let ffmpeg_dir = Path::new(&ffmpeg)
-        .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-
     let tmp = tmp_dir(user_data_dir);
     let ext = audio_format_ext(&settings.format);
     let raw_path = tmp.join(format!("{}.{}", track.id, ext));
@@ -573,7 +474,7 @@ async fn download_track(
         };
         track_event(track, TrackStatus::Searching, 0.0, Some(&msg));
 
-        let mut args = base_args(&ffmpeg_dir, &settings.format, settings.bitrate);
+        let mut args = base_args();
         args.push("-o".into());
         args.push(
             tmp.join(format!("{}.%(ext)s", track.id))
@@ -658,10 +559,6 @@ async fn download_track(
                     if let Ok(mut activity) = last_activity.lock() {
                         *activity = std::time::Instant::now();
                     }
-                    if line.contains("[ExtractAudio]") {
-                        event_for_stdout(&track_for_stdout, TrackStatus::Processing, 100.0, None);
-                        continue;
-                    }
                     if let Some(pct) = progress_from_line(&line) {
                         let now = std::time::Instant::now();
                         if now.duration_since(last_emit).as_millis() > 150 && pct != last_pct {
@@ -687,14 +584,17 @@ async fn download_track(
             children.retain(|&(c, _)| c != id);
         }
 
-        let succeeded = raw_path.exists() && code == Some(0);
-        if stalled.load(Ordering::Relaxed) && !succeeded {
+        let exited_cleanly = code == Some(0);
+        if stalled.load(Ordering::Relaxed) && !exited_cleanly {
             for f in [
                 &raw_path,
                 &tagged_path,
                 &tmp.join(format!("{}.part", track.id)),
             ] {
                 let _ = std::fs::remove_file(f);
+            }
+            if let Some(stream) = find_downloaded_stream(&tmp, &track.id) {
+                let _ = std::fs::remove_file(stream);
             }
             let msg = format!(
                 "stalled: no progress for {} seconds",
@@ -707,34 +607,65 @@ async fn download_track(
 
         let stderr_text = stderr_task.await.unwrap_or_default();
 
-        if raw_path.exists() && code == Some(0) {
-            if let Some(ffprobe) = tools::get_ffprobe_path(user_data_dir) {
-                track_event(
-                    track,
-                    TrackStatus::Processing,
-                    100.0,
-                    Some("verifying length…"),
-                );
-                if let Some(err_msg) = verify_track_duration(&ffprobe, &raw_path, track).await {
-                    for f in [
-                        &raw_path,
-                        &tagged_path,
-                        &tmp.join(format!("{}.part", track.id)),
-                    ] {
-                        let _ = std::fs::remove_file(f);
+        let stream_path = find_downloaded_stream(&tmp, &track.id);
+
+        if let Some(stream) = stream_path.clone()
+            && code == Some(0)
+        {
+            let _ = std::fs::remove_file(&raw_path);
+            track_event(
+                track,
+                TrackStatus::Processing,
+                100.0,
+                Some("encoding audio…"),
+            );
+
+            let src = stream.clone();
+            let dest = raw_path.clone();
+            let bitrate = settings.bitrate.filter(|b| *b > 0).map(|b| b as u32);
+            let encoded = tokio::task::spawn_blocking(move || {
+                audio::transcode_to_mp3(&src, &dest, bitrate, Some(&CANCELLED_DOWNLOAD))
+            })
+            .await
+            .map_err(|e| format!("Encoding task failed: {e}"))
+            .and_then(|r| r);
+
+            let _ = std::fs::remove_file(&stream);
+
+            match encoded {
+                Ok(()) => {
+                    track_event(
+                        track,
+                        TrackStatus::Processing,
+                        100.0,
+                        Some("verifying length…"),
+                    );
+                    if let Some(err_msg) = verify_track_duration(&raw_path, track).await {
+                        let _ = std::fs::remove_file(&raw_path);
+                        failures.push(err_msg);
+                        continue;
                     }
-                    failures.push(err_msg);
+                    return ProcessResult {
+                        ok: true,
+                        message: String::new(),
+                        raw_path: Some(raw_path.to_string_lossy().to_string()),
+                        used_url: Some(cand.url.clone()),
+                    };
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_file(&raw_path);
+                    if CANCELLED_DOWNLOAD.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    failures.push(e);
                     continue;
                 }
             }
-            return ProcessResult {
-                ok: true,
-                message: String::new(),
-                raw_path: Some(raw_path.to_string_lossy().to_string()),
-                used_url: Some(cand.url.clone()),
-            };
         }
 
+        if let Some(stream) = stream_path {
+            let _ = std::fs::remove_file(&stream);
+        }
         for f in [
             &raw_path,
             &tagged_path,
@@ -961,7 +892,6 @@ async fn process_track(
 
     let (lyrics_text, lyrics_lrc_text) = process_lyrics_lookup(track, user_data_dir).await;
 
-    let ffmpeg = resolve_tool("ffmpeg", user_data_dir).unwrap_or_default();
     let mut tagged_file = tmp.join(format!(
         "{}.tagged.{}",
         track.id,
@@ -972,11 +902,9 @@ async fn process_track(
         let cover_str = cover_path.as_ref().map(|p| p.to_string_lossy().to_string());
         let cover_arg = cover_str.as_deref();
         match tag(
-            &ffmpeg,
             &raw_path.to_string_lossy(),
             &tagged_file.to_string_lossy(),
             track,
-            &settings.format,
             cover_arg,
             lyrics_text.as_deref(),
         )
@@ -1212,9 +1140,7 @@ async fn download_collection_inner(
     };
 
     let ytdlp = resolve_tool("yt-dlp", user_data_dir)
-        .ok_or_else(|| "yt-dlp and ffmpeg are required to download.".to_string())?;
-    resolve_tool("ffmpeg", user_data_dir)
-        .ok_or_else(|| "yt-dlp and ffmpeg are required to download.".to_string())?;
+        .ok_or_else(|| "yt-dlp is required to download.".to_string())?;
 
     let (prefetched_covers, covers_task) = start_cover_prefetch(&collection, &tmp);
 
@@ -1395,16 +1321,12 @@ async fn emit_final_summary(app_handle: &tauri::AppHandle, summary: &Arc<Mutex<D
     }
 }
 
-async fn verify_track_duration(
-    ffprobe: &str,
-    raw_path: &Path,
-    track: &TrackMeta,
-) -> Option<String> {
+async fn verify_track_duration(raw_path: &Path, track: &TrackMeta) -> Option<String> {
     let expected = track.duration?;
     if expected <= 0.0 {
         return None;
     }
-    let real = probe_duration(ffprobe, &raw_path.to_string_lossy()).await?;
+    let real = probe_duration(raw_path).await?;
     if (real - expected).abs() / expected > VERIFY_TOLERANCE {
         Some(format!(
             "wrong length: got {}, expected {}",

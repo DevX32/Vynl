@@ -140,10 +140,6 @@ fn parse_version(tool: ToolNameEnum, raw: &str) -> Option<String> {
     }
 
     let candidate = match tool {
-        ToolNameEnum::Ffmpeg => {
-            let rest = line.strip_prefix("ffmpeg version ")?;
-            rest.split_whitespace().next()?
-        }
         ToolNameEnum::YtDlp => line,
     };
 
@@ -234,13 +230,6 @@ fn has_update(installed: &str, latest_tag: &str) -> Option<bool> {
 fn update_repo(tool: ToolNameEnum) -> &'static str {
     match tool {
         ToolNameEnum::YtDlp => "yt-dlp/yt-dlp",
-        ToolNameEnum::Ffmpeg => {
-            if cfg!(target_os = "windows") {
-                "GyanD/codexffmpeg"
-            } else {
-                "BtbN/FFmpeg-Builds"
-            }
-        }
     }
 }
 
@@ -430,36 +419,19 @@ pub fn get_tool_path(name: &str, user_data_dir: &Path) -> Option<String> {
     store_tool_path(name, user_data_dir, resolve_binary(name, user_data_dir))
 }
 
-pub fn get_ffprobe_path(user_data_dir: &Path) -> Option<String> {
-    if let Some(cached) = cached_tool_path("ffprobe", user_data_dir) {
-        return cached;
-    }
-    store_tool_path("ffprobe", user_data_dir, resolve_ffprobe(user_data_dir))
-}
-
-fn resolve_ffprobe(user_data_dir: &Path) -> Option<String> {
-    let ffprobe_exe = exe_name("ffprobe");
+pub fn remove_unused_binaries(user_data_dir: &Path) {
+    const UNUSED: &[&str] = &["ffmpeg", "ffprobe"];
 
     for dir in user_data_search_roots(user_data_dir) {
-        let local = bin_dir(&dir).join(&ffprobe_exe);
-        if local.exists() {
-            return Some(local.to_string_lossy().to_string());
+        for name in UNUSED {
+            let path = bin_dir(&dir).join(exe_name(name));
+            if path.is_file() {
+                let _ = fs::remove_file(&path);
+            }
         }
     }
 
-    if let Some(ffmpeg_path) = resolve_binary("ffmpeg", user_data_dir) {
-        let ffmpeg_dir = Path::new(&ffmpeg_path).parent()?;
-        let side = ffmpeg_dir.join(&ffprobe_exe);
-        if side.exists() {
-            return Some(side.to_string_lossy().to_string());
-        }
-    }
-
-    if let Some(system_path) = which("ffprobe") {
-        return Some(system_path);
-    }
-
-    None
+    invalidate_tool_path_cache(None);
 }
 
 struct ScratchDir(PathBuf);
@@ -554,197 +526,6 @@ async fn latest_release(client: &reqwest::Client, repo: &str) -> Result<serde_js
     serde_json::from_str(&body).map_err(|e| format!("Invalid release JSON: {e}"))
 }
 
-fn pick_asset(release: &serde_json::Value, matches: impl Fn(&str) -> bool) -> Option<String> {
-    release["assets"]
-        .as_array()?
-        .iter()
-        .find(|a| matches(a["name"].as_str().unwrap_or("")))?
-        .get("browser_download_url")?
-        .as_str()
-        .map(str::to_string)
-}
-
-fn windows_ffmpeg_asset(name: &str) -> bool {
-    name.ends_with("-essentials_build.zip") && !name.contains("-x64_shared-")
-}
-
-fn linux_ffmpeg_asset(name: &str) -> bool {
-    name.contains("linux64-gpl")
-        && name.ends_with(".tar.xz")
-        && !name.contains("shared")
-        && !name.contains("arm64")
-}
-
-async fn install_ffmpeg_windows(
-    client: &reqwest::Client,
-    bd: &Path,
-    td: &Path,
-    app_handle: &AppHandle,
-) -> Result<(), String> {
-    let release = latest_release(client, "GyanD/codexffmpeg").await?;
-    let download_url =
-        pick_asset(&release, windows_ffmpeg_asset).ok_or("No ffmpeg essentials build found")?;
-
-    let scratch = ScratchDir::create(td)?;
-    let zip_path = scratch.path().join("ffmpeg.zip");
-    download_file(
-        client,
-        &download_url,
-        &zip_path,
-        app_handle,
-        ToolNameEnum::Ffmpeg,
-    )
-    .await?;
-
-    let ffmpeg = scratch.path().join(exe_name("ffmpeg"));
-    let ffprobe = scratch.path().join(exe_name("ffprobe"));
-    extract_ffmpeg_from_zip(&ffmpeg, &ffprobe, &zip_path)?;
-
-    promote(&ffmpeg, &bd.join(exe_name("ffmpeg"))).await?;
-    promote(&ffprobe, &bd.join(exe_name("ffprobe"))).await
-}
-
-fn extract_ffmpeg_from_zip(ffmpeg: &Path, ffprobe: &Path, zip_path: &Path) -> Result<(), String> {
-    let zip_file = fs::File::open(zip_path).map_err(|e| format!("Failed to open zip: {e}"))?;
-    let mut archive =
-        zip::ZipArchive::new(zip_file).map_err(|e| format!("Failed to read zip: {e}"))?;
-
-    let mut found_ffmpeg = false;
-    let mut found_ffprobe = false;
-
-    for i in 0..archive.len() {
-        let mut entry = archive
-            .by_index(i)
-            .map_err(|e| format!("Failed to read zip entry: {e}"))?;
-        let entry_name = entry.name().to_string();
-
-        let is_ffmpeg = entry_name.to_lowercase().ends_with("/bin/ffmpeg.exe");
-        let is_ffprobe = entry_name.to_lowercase().ends_with("/bin/ffprobe.exe");
-
-        if is_ffmpeg || is_ffprobe {
-            let out_path = if is_ffmpeg {
-                found_ffmpeg = true;
-                ffmpeg
-            } else {
-                found_ffprobe = true;
-                ffprobe
-            };
-
-            let mut out_file = fs::File::create(out_path)
-                .map_err(|e| format!("Failed to create {}: {e}", out_path.display()))?;
-            std::io::copy(&mut entry, &mut out_file)
-                .map_err(|e| format!("Failed to extract {}: {e}", out_path.display()))?;
-        }
-    }
-
-    if !found_ffmpeg {
-        return Err("ffmpeg not found in archive".into());
-    }
-    if !found_ffprobe {
-        return Err("ffprobe not found in archive".into());
-    }
-    Ok(())
-}
-
-async fn install_ffmpeg_linux(
-    client: &reqwest::Client,
-    bd: &Path,
-    td: &Path,
-    app_handle: &AppHandle,
-) -> Result<(), String> {
-    let release = latest_release(client, "BtbN/FFmpeg-Builds").await?;
-    let download_url =
-        pick_asset(&release, linux_ffmpeg_asset).ok_or("No ffmpeg linux build found")?;
-
-    let scratch = ScratchDir::create(td)?;
-    let tar_path = scratch.path().join("ffmpeg.tar.xz");
-    download_file(
-        client,
-        &download_url,
-        &tar_path,
-        app_handle,
-        ToolNameEnum::Ffmpeg,
-    )
-    .await?;
-
-    let ffmpeg = scratch.path().join(exe_name("ffmpeg"));
-    let ffprobe = scratch.path().join(exe_name("ffprobe"));
-    extract_ffmpeg_from_tar(&ffmpeg, &ffprobe, &tar_path).await?;
-
-    promote(&ffmpeg, &bd.join(exe_name("ffmpeg"))).await?;
-    promote(&ffprobe, &bd.join(exe_name("ffprobe"))).await
-}
-
-async fn extract_ffmpeg_from_tar(
-    ffmpeg: &Path,
-    ffprobe: &Path,
-    tar_path: &Path,
-) -> Result<(), String> {
-    let ffmpeg = ffmpeg.to_path_buf();
-    let ffprobe = ffprobe.to_path_buf();
-    let tar_path = tar_path.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        let extract_dir = tar_path.with_extension("extracted");
-        fs::create_dir_all(&extract_dir)
-            .map_err(|e| format!("Failed to create extraction dir: {e}"))?;
-
-        let output = process::hidden_std(Command::new("tar"))
-            .args([
-                "xf",
-                tar_path.to_string_lossy().as_ref(),
-                "-C",
-                extract_dir.to_string_lossy().as_ref(),
-            ])
-            .output()
-            .map_err(|e| format!("Failed to run 'tar' (is it installed?): {e}"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            if stderr.contains("xz") || stderr.contains("unrecognized option") {
-                return Err("Failed to extract ffmpeg archive: xz support not found. Install xz-utils (e.g. sudo apt install xz-utils)".into());
-            }
-            return Err(format!("Failed to extract ffmpeg archive: {stderr}"));
-        }
-
-        let mut found_ffmpeg = false;
-        let mut found_ffprobe = false;
-
-        if let Ok(entries) = fs::read_dir(&extract_dir) {
-            for entry in entries.flatten() {
-                let bin_dir = entry.path().join("bin");
-                if !bin_dir.is_dir() {
-                    continue;
-                }
-                let ffmpeg_bin = bin_dir.join("ffmpeg");
-                let ffprobe_bin = bin_dir.join("ffprobe");
-                if ffmpeg_bin.exists() {
-                    fs::copy(&ffmpeg_bin, &ffmpeg)
-                        .map_err(|e| format!("Failed to copy ffmpeg: {e}"))?;
-                    found_ffmpeg = true;
-                }
-                if ffprobe_bin.exists() {
-                    fs::copy(&ffprobe_bin, &ffprobe)
-                        .map_err(|e| format!("Failed to copy ffprobe: {e}"))?;
-                    found_ffprobe = true;
-                }
-                if found_ffmpeg && found_ffprobe {
-                    break;
-                }
-            }
-        }
-
-        if !found_ffmpeg {
-            return Err("ffmpeg not found in archive".into());
-        }
-        if !found_ffprobe {
-            return Err("ffprobe not found in archive".into());
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))?
-}
-
 fn install_lock() -> &'static tokio::sync::Mutex<()> {
     static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -769,13 +550,6 @@ pub async fn install_tool(
     match tool {
         ToolNameEnum::YtDlp => {
             install_ytdlp(&client, &bd, &td, &app_handle).await?;
-        }
-        ToolNameEnum::Ffmpeg => {
-            if cfg!(target_os = "windows") {
-                install_ffmpeg_windows(&client, &bd, &td, &app_handle).await?;
-            } else {
-                install_ffmpeg_linux(&client, &bd, &td, &app_handle).await?;
-            }
         }
     }
 

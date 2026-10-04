@@ -4,10 +4,29 @@ Thank you for your interest in contributing to Vynl! This guide will help you ge
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs/) (latest stable)
-- [Bun](https://bun.sh/) (JavaScript runtime & package manager)
-- [Tauri CLI](https://tauri.app/v2/guide/installation/) (`bun add -d @tauri-apps/cli`)
+- [Rust](https://rustup.rs/) 1.85 or newer — the backend uses edition 2024
+- [Bun](https://bun.sh/) — JavaScript runtime and package manager
 - [Git](https://git-scm.com/)
+- A C compiler and CMake — see below
+
+The [Tauri CLI](https://tauri.app/v2/guide/installation/) is already a dev
+dependency, so `bun install` in the next step is all that is needed to get it.
+Do not install it separately; doing so edits `package.json`.
+
+### C toolchain
+
+The audio pipeline compiles C libraries from source, so a C compiler and CMake
+are required. `mp3lame-sys` builds LAME with `cc`, and `opusic-sys` builds libopus
+with CMake.
+
+| Platform | Install |
+| --- | --- |
+| Windows | Visual Studio 2022 with the "Desktop development with C++" workload (CMake ships with it) |
+| Debian/Ubuntu | `sudo apt install build-essential cmake` |
+| macOS | `xcode-select --install` plus `brew install cmake` |
+
+On Windows, verify with `cmake --version`; the Visual Studio copy is not always on
+`PATH`. Without these, `cargo build` fails while compiling the audio dependencies.
 
 ## Getting Started
 
@@ -61,7 +80,6 @@ bun run dev
    git commit -m "fix: resolve issue"
    git commit -m "docs: update documentation"
    git commit -m "refactor: improve code structure"
-   git commit -m "test: add tests"
    ```
 
 ### Code Style
@@ -70,22 +88,22 @@ bun run dev
 - **Rust**: Follow standard Rust conventions, run `cargo clippy` and `cargo fmt`
 - **Commit messages**: Use [Conventional Commits](https://www.conventionalcommits.org/)
 
-### Running Tests
+### Checks
+
+There is currently no automated test suite, so these checks are what CI runs:
 
 ```bash
-# Frontend unit tests
-bun run test
-
 # Frontend type checking
 bun run typecheck
 
-# Rust tests
-cargo test --manifest-path src-tauri/Cargo.toml
-
-# Rust linting
+# Rust linting and formatting
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
+
+Changes to the audio pipeline (`src-tauri/src/services/audio.rs`) should be
+verified by hand as well: download a track and confirm the output sample rate,
+duration, and tags.
 
 ### Building for Production
 
@@ -113,9 +131,6 @@ Vynl/
 │   │   ├── lib/        # Shared utilities
 │   │   └── state/      # Svelte stores/state
 │   └── vite.config.ts  # Vite configuration
-├── tests/              # Test files
-│   ├── web/            # Frontend unit/integration tests
-│   └── e2e/            # End-to-end tests
 ├── .github/workflows/  # CI/CD workflows
 └── CONTRIBUTING.md     # This file
 ```
@@ -132,7 +147,10 @@ Vynl/
 - Tauri 2 provides the desktop app shell
 - Commands are exposed to the frontend via `invoke`
 - Services handle: audio playback, library scanning, downloading, lyrics, etc.
-- Uses `rodio` for audio playback, `lofty` for metadata, `yt-dlp` for fetching
+- Uses `rodio` for audio playback, `lofty` for metadata, and `yt-dlp` for fetching
+- Decodes and encodes audio entirely in-process: `symphonia` handles container
+  parsing and AAC, `symphonia-adapter-libopus` supplies libopus for Opus streams,
+  and `mp3lame-encoder` (LAME) produces the mp3 output
 
 ### Real-time Sync (Listen Along plugin)
 

@@ -154,6 +154,8 @@ pub fn run() {
             let user_data = app.path().app_data_dir().unwrap_or_default();
             let settings = crate::services::settings::get_settings(&user_data);
 
+            crate::services::tools::remove_unused_binaries(&user_data);
+
             sync_launch_at_startup(settings.launch_at_startup);
             crate::services::player::set_app_handle(app.handle());
             crate::services::player::set_eq(settings.eq_enabled, &settings.eq_bands);

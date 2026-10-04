@@ -1,9 +1,7 @@
 use crate::commands::types::{LyricsLookup, LyricsResult};
-use crate::services::process;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -81,128 +79,8 @@ pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
     None
 }
 
-fn try_embed_lyrics_lofty(file: &str, text: &str) -> Result<(), String> {
-    use lofty::prelude::*;
-    use lofty::probe::Probe;
-    use lofty::tag::ItemKey;
-
-    let ext = Path::new(file)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    if ext == "wav" {
-        return Err("wav cannot store lyrics".into());
-    }
-
-    let mut tagged_file = Probe::open(file)
-        .map_err(|e| format!("probe failed: {e}"))?
-        .read()
-        .map_err(|e| format!("read failed: {e}"))?;
-    let tag_type = match ext.as_str() {
-        "mp3" => lofty::tag::TagType::Id3v2,
-        "m4a" | "mp4" | "aac" => lofty::tag::TagType::Mp4Ilst,
-        "flac" => lofty::tag::TagType::VorbisComments,
-        "opus" | "ogg" => lofty::tag::TagType::VorbisComments,
-        _ => tagged_file
-            .primary_tag()
-            .map(|t| t.tag_type())
-            .unwrap_or(lofty::tag::TagType::Id3v2),
-    };
-
-    let tag = if let Some(primary_type) = tagged_file.primary_tag().map(|t| t.tag_type()) {
-        if primary_type != tag_type {
-            if tagged_file.tag(tag_type).is_none() {
-                tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
-            }
-            tagged_file.tag_mut(tag_type).unwrap()
-        } else {
-            tagged_file.primary_tag_mut().unwrap()
-        }
-    } else {
-        let new_tag = lofty::tag::Tag::new(tag_type);
-        tagged_file.insert_tag(new_tag);
-        tagged_file.primary_tag_mut().unwrap()
-    };
-
-    tag.insert_text(ItemKey::Lyrics, text.to_string());
-    tag.insert_text(ItemKey::UnsyncLyrics, text.to_string());
-    tagged_file
-        .save_to_path(file, Default::default())
-        .map_err(|e| format!("lofty save failed: {e}"))?;
-    Ok(())
-}
-
-pub fn embed_lyrics(file: &str, text: &str, ffmpeg_path: Option<&str>) -> Result<(), String> {
-    let ext = Path::new(file)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-    if ext.eq_ignore_ascii_case("wav") {
-        return Err("wav cannot store lyrics tags.".into());
-    }
-    if try_embed_lyrics_lofty(file, text).is_ok() {
-        return Ok(());
-    }
-
-    let ffmpeg = ffmpeg_path.ok_or("ffmpeg is required to embed lyrics.")?;
-
-    let tmp = {
-        let ext = Path::new(file)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
-        let rand_suffix: String = {
-            use std::collections::hash_map::RandomState;
-            use std::hash::{BuildHasher, Hasher};
-            let hash = RandomState::new().build_hasher();
-            let mut h = hash;
-            h.write_u64(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_nanos() as u64,
-            );
-            format!("{:08x}", (h.finish() >> 16) as u32)
-        };
-        format!("{}.{}.lyr.tmp{}", file, rand_suffix, ext)
-    };
-    let metadata_val = text.replace('\\', "\\\\").replace('"', "\\\"");
-    let mut command = process::hidden_std(Command::new(ffmpeg));
-    command
-        .args([
-            "-hide_banner",
-            "-y",
-            "-v",
-            "error",
-            "-i",
-            file,
-            "-c",
-            "copy",
-        ])
-        .args(["-metadata", &format!("lyrics={}", metadata_val)])
-        .arg(&tmp)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-
-    let result = command.output();
-
-    match result {
-        Ok(output) if output.status.success() => {
-            fs::rename(&tmp, file).map_err(|e| format!("Failed to rename temp file: {e}"))?;
-            Ok(())
-        }
-        Ok(output) => {
-            fs::remove_file(&tmp).ok();
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("ffmpeg failed: {}", stderr.trim()))
-        }
-        Err(e) => {
-            fs::remove_file(&tmp).ok();
-            Err(format!("Failed to run ffmpeg: {e}"))
-        }
-    }
+pub fn embed_lyrics(file: &str, text: &str) -> Result<(), String> {
+    super::audio::embed_lyrics(Path::new(file), text)
 }
 
 fn cache_key(lookup: &LyricsLookup) -> String {

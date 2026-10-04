@@ -1,29 +1,11 @@
 use crate::commands::types::LibraryTrack;
-use crate::services::process;
-use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 
 const AUDIO_EXTS: &[&str] = &["mp3", "m4a", "opus", "flac", "wav", "ogg", "aac"];
-
-static DURATION_RE: once_cell::sync::Lazy<Regex> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)").unwrap());
-
-static KV_RE: once_cell::sync::Lazy<Regex> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"^\s*([A-Za-z_][\w]*)\s*:\s*(.+?)\s*$").unwrap());
-
-static CONT_RE: once_cell::sync::Lazy<Regex> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"^\s*:\s*(.+?)\s*$").unwrap());
-
-static METADATA_BLOCK_PICTURE_RE: once_cell::sync::Lazy<Regex> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"METADATA_BLOCK_PICTURE").unwrap());
-
-static PIC_CODEC_RE: once_cell::sync::Lazy<Regex> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"Video:\s*([a-z0-9]+)").unwrap());
 
 static SCAN_LOCK: once_cell::sync::Lazy<Mutex<()>> = once_cell::sync::Lazy::new(|| Mutex::new(()));
 
@@ -163,235 +145,8 @@ fn probe_via_lofty(file: &Path) -> ProbeResult {
     result
 }
 
-fn extract_cover_via_lofty(file: &Path, dest: &Path) -> bool {
-    use lofty::prelude::*;
-    use lofty::probe::Probe;
-    let tagged_file = match Probe::open(file).and_then(|p| p.read()) {
-        Ok(tf) => tf,
-        Err(_) => return false,
-    };
-    let tag = match tagged_file
-        .primary_tag()
-        .or_else(|| tagged_file.first_tag())
-    {
-        Some(t) => t,
-        None => return false,
-    };
-    let pic = match tag.pictures().first() {
-        Some(p) => p,
-        None => return false,
-    };
-    std::fs::write(dest, pic.data()).is_ok()
-        && dest.metadata().map(|m| m.len() > 0).unwrap_or(false)
-}
-
-fn probe(ffprobe: &str, file: &Path) -> ProbeResult {
-    let mut command = process::hidden_std(Command::new(ffprobe));
-    command
-        .args([
-            "-v",
-            "quiet",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-        ])
-        .arg(file)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
-
-    let output = match command.output() {
-        Ok(o) => o,
-        Err(_) => return ProbeResult::default(),
-    };
-    if !output.status.success() {
-        return ProbeResult::default();
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let j: serde_json::Value = match serde_json::from_str(&stdout) {
-        Ok(v) => v,
-        Err(_) => return ProbeResult::default(),
-    };
-
-    let tags = j["format"]["tags"].as_object().cloned().unwrap_or_default();
-
-    let mut pic_codec = None;
-    if let Some(streams) = j["streams"].as_array() {
-        for s in streams {
-            if s["disposition"]["attached_pic"].as_i64() == Some(1) {
-                pic_codec = s["codec_name"].as_str().map(|s| s.to_string());
-                break;
-            }
-        }
-    }
-
-    let lyrics_val = tags
-        .get("lyrics")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-    let lyrics = lyrics_val.filter(|s| !s.trim().is_empty());
-
-    ProbeResult {
-        title: tags
-            .get("title")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        artist: tags
-            .get("artist")
-            .or_else(|| tags.get("album_artist"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        album: tags
-            .get("album")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        date: tags
-            .get("date")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        track: tags
-            .get("track")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        duration: j["format"]["duration"].as_str().map(|s| s.to_string()),
-        pic_codec,
-        lyrics,
-    }
-}
-
-fn apply_metadata_field(result: &mut ProbeResult, key: &str, val: &str) {
-    match key {
-        "lyrics" => {
-            result.lyrics = Some(match &result.lyrics {
-                Some(existing) => format!("{}\n{}", existing, val),
-                None => val.to_string(),
-            });
-        }
-        "artist" | "album_artist" => {
-            if result.artist.is_none() {
-                result.artist = Some(val.to_string());
-            }
-        }
-        "title" => {
-            if result.title.is_none() {
-                result.title = Some(val.to_string());
-            }
-        }
-        "album" => {
-            if result.album.is_none() {
-                result.album = Some(val.to_string());
-            }
-        }
-        "date" => {
-            if result.date.is_none() {
-                result.date = Some(val.to_string());
-            }
-        }
-        "track" if result.track.is_none() => {
-            result.track = Some(val.to_string());
-        }
-        _ => {}
-    }
-}
-
-fn extract_attached_pic_codec(text: &str) -> Option<String> {
-    let pic_line = text
-        .lines()
-        .find(|l| l.contains("(attached pic)") || METADATA_BLOCK_PICTURE_RE.is_match(l))?;
-    Some(
-        PIC_CODEC_RE
-            .captures(pic_line)
-            .and_then(|c| c.get(1).map(|m| m.as_str().to_string()))
-            .unwrap_or_else(|| "jpeg".to_string()),
-    )
-}
-
-fn parse_ffmpeg_metadata_block(text: &str, result: &mut ProbeResult) {
-    let mut in_metadata = false;
-
-    for line in text.lines() {
-        if line.contains("Metadata:") {
-            in_metadata = true;
-            continue;
-        }
-        if in_metadata {
-            if let Some(caps) = CONT_RE.captures(line) {
-                if let Some(ref lyrics) = result.lyrics {
-                    result.lyrics = Some(format!("{}\n{}", lyrics, &caps[1]));
-                }
-                continue;
-            }
-            if let Some(caps) = KV_RE.captures(line) {
-                let key = caps[1].to_lowercase();
-                let val = caps[2].to_string();
-                apply_metadata_field(result, &key, &val);
-            }
-        }
-    }
-}
-
-fn probe_via_ffmpeg(ffmpeg: &str, file: &Path) -> ProbeResult {
-    let mut command = process::hidden_std(Command::new(ffmpeg));
-    command
-        .args(["-hide_banner", "-loglevel", "info", "-i"])
-        .arg(file)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped());
-
-    let output = match command.output() {
-        Ok(o) => o,
-        Err(_) => return ProbeResult::default(),
-    };
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let text = stderr.as_ref();
-    if text.is_empty() {
-        return ProbeResult::default();
-    }
-
-    let mut result = ProbeResult::default();
-
-    if let Some(caps) = DURATION_RE.captures(text) {
-        let h: f64 = caps[1].parse().unwrap_or(0.0);
-        let m: f64 = caps[2].parse().unwrap_or(0.0);
-        let s: f64 = caps[3].parse().unwrap_or(0.0);
-        let total = h * 3600.0 + m * 60.0 + s;
-        if total > 0.0 {
-            result.duration = Some(format!("{total}"));
-        }
-    }
-
-    parse_ffmpeg_metadata_block(text, &mut result);
-
-    if let Some(ref lyrics) = result.lyrics
-        && lyrics.trim().is_empty()
-    {
-        result.lyrics = None;
-    }
-
-    result.pic_codec = extract_attached_pic_codec(text);
-
-    result
-}
-
-fn extract_cover(ffmpeg: &str, file: &Path, dest: &Path) -> bool {
-    let mut command = process::hidden_std(Command::new(ffmpeg));
-    command
-        .args(["-hide_banner", "-v", "error", "-i"])
-        .arg(file)
-        .args(["-an", "-c:v", "copy", "-y"])
-        .arg(dest)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-
-    command
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+fn extract_cover_to_cache(file: &Path, dest: &Path) -> bool {
+    super::audio::extract_cover(file, dest)
 }
 
 fn covers_search_dirs(user_data_dir: &Path) -> Vec<PathBuf> {
@@ -402,7 +157,6 @@ fn covers_search_dirs(user_data_dir: &Path) -> Vec<PathBuf> {
 }
 
 fn extract_or_cache_cover(
-    ffmpeg: &str,
     file: &Path,
     hash: &str,
     pic_codec: Option<&str>,
@@ -424,14 +178,7 @@ fn extract_or_cache_cover(
     pic_codec?;
 
     let dest = covers_dir.join(&filename);
-    if extract_cover_via_lofty(file, &dest) {
-        let has_data = dest.metadata().map(|m| m.len() > 0).unwrap_or(false);
-        if has_data {
-            return Some(dest.to_string_lossy().to_string());
-        }
-        let _ = fs::remove_file(&dest);
-    }
-    if extract_cover(ffmpeg, file, &dest) {
+    if extract_cover_to_cache(file, &dest) {
         let has_data = dest.metadata().map(|m| m.len() > 0).unwrap_or(false);
         if has_data {
             return Some(dest.to_string_lossy().to_string());
@@ -497,13 +244,7 @@ fn resolve_added_at(hint: Option<u64>, created_ms: u64, mtime_ms: u64) -> u64 {
         .unwrap_or(mtime_ms)
 }
 
-fn probe_file(
-    file: &Path,
-    ffprobe_path: Option<&str>,
-    ffmpeg_path: Option<&str>,
-    user_data_dir: &Path,
-    added_at_hint: Option<u64>,
-) -> LibraryTrack {
+fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> LibraryTrack {
     let (mtime_ms, created_ms) = file_times(file);
     let added_at_ms = resolve_added_at(added_at_hint, created_ms, mtime_ms);
 
@@ -537,66 +278,13 @@ fn probe_file(
         added_at: Some(added_at_ms),
     };
 
-    let p_lofty = probe_via_lofty(file);
-    let p = if p_lofty.title.is_some()
-        || p_lofty.artist.is_some()
-        || p_lofty.duration.is_some()
-        || p_lofty.album.is_some()
-    {
-        p_lofty.clone()
-    } else if let Some(ffprobe) = ffprobe_path {
-        let p2 = probe(ffprobe, file);
-        if p2.title.is_none() && p2.duration.is_none() && p2.artist.is_none() {
-            p_lofty.clone()
-        } else {
-            p2
-        }
-    } else if let Some(ffmpeg) = ffmpeg_path {
-        let p2 = probe_via_ffmpeg(ffmpeg, file);
-        if p2.title.is_none() && p2.duration.is_none() && p2.artist.is_none() {
-            p_lofty.clone()
-        } else {
-            p2
-        }
-    } else {
-        p_lofty.clone()
-    };
+    let p = probe_via_lofty(file);
 
     if p.duration.is_none() && p.title.is_none() && p.artist.is_none() {
         return fallback;
     }
 
-    let mut cover: Option<String> = None;
-    if p.pic_codec.is_some() || p_lofty.pic_codec.is_some() {
-        let pic_codec = p.pic_codec.as_deref().or(p_lofty.pic_codec.as_deref());
-        if let Some(ffmpeg) = ffmpeg_path {
-            cover = extract_or_cache_cover(ffmpeg, file, &hash, pic_codec, user_data_dir);
-        } else {
-            let covers_dir = user_data_dir.join("covers");
-            let cover_ext = pic_codec.map(codec_ext).unwrap_or("jpg");
-            let filename = format!("{}.{}", hash, cover_ext);
-            let cached = covers_search_dirs(user_data_dir)
-                .into_iter()
-                .map(|dir| dir.join(&filename))
-                .find(|dest| {
-                    dest.exists() && dest.metadata().map(|m| m.len() > 0).unwrap_or(false)
-                });
-            if let Some(path) = cached {
-                cover = Some(path.to_string_lossy().to_string());
-            } else {
-                let dest = covers_dir.join(&filename);
-                if extract_cover_via_lofty(file, &dest) {
-                    if dest.metadata().map(|m| m.len() > 0).unwrap_or(false) {
-                        cover = Some(dest.to_string_lossy().to_string());
-                    } else {
-                        let _ = fs::remove_file(&dest);
-                    }
-                }
-            }
-        }
-    } else if let Some(ffmpeg) = ffmpeg_path {
-        cover = extract_or_cache_cover(ffmpeg, file, &hash, p.pic_codec.as_deref(), user_data_dir);
-    }
+    let cover = extract_or_cache_cover(file, &hash, p.pic_codec.as_deref(), user_data_dir);
 
     let duration = p
         .duration
@@ -672,9 +360,6 @@ fn scan_library_incremental_unlocked(
     user_data_dir: &Path,
     existing: Option<&[LibraryTrack]>,
 ) -> (Vec<LibraryTrack>, bool) {
-    let ffmpeg_path = super::tools::get_tool_path("ffmpeg", user_data_dir);
-    let ffprobe_path = super::tools::get_ffprobe_path(user_data_dir);
-
     let covers_dir = user_data_dir.join("covers");
     fs::create_dir_all(&covers_dir).ok();
 
@@ -727,13 +412,10 @@ fn scan_library_incremental_unlocked(
         std::thread::scope(|s| {
             let mut handles = Vec::with_capacity(chunk.len());
             for (file, added_at_hint) in chunk {
-                let fp = ffprobe_path.clone();
-                let ff = ffmpeg_path.clone();
                 let ud = user_data_dir.to_path_buf();
                 let f = file.clone();
                 let hint = *added_at_hint;
-                handles
-                    .push(s.spawn(move || probe_file(&f, fp.as_deref(), ff.as_deref(), &ud, hint)));
+                handles.push(s.spawn(move || probe_file(&f, &ud, hint)));
             }
             for handle in handles {
                 if let Ok(track) = handle.join() {

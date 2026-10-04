@@ -83,7 +83,7 @@ export interface RpcPresence {
   cover: string | null;
 }
 
-export type ToolName = "yt-dlp" | "ffmpeg";
+export type ToolName = "yt-dlp";
 
 export interface LibraryTrack {
   id: string;

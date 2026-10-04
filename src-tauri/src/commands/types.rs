@@ -32,23 +32,20 @@ pub enum CollectionKind {
 pub enum ToolNameEnum {
     #[serde(rename = "yt-dlp")]
     YtDlp,
-    Ffmpeg,
 }
 
-pub const ALL_TOOLS: [ToolNameEnum; 2] = [ToolNameEnum::YtDlp, ToolNameEnum::Ffmpeg];
+pub const ALL_TOOLS: [ToolNameEnum; 1] = [ToolNameEnum::YtDlp];
 
 impl ToolNameEnum {
     pub fn as_str(self) -> &'static str {
         match self {
             ToolNameEnum::YtDlp => "yt-dlp",
-            ToolNameEnum::Ffmpeg => "ffmpeg",
         }
     }
 
     pub fn version_args(self) -> &'static [&'static str] {
         match self {
             ToolNameEnum::YtDlp => &["--version"],
-            ToolNameEnum::Ffmpeg => &["-version"],
         }
     }
 }
@@ -59,7 +56,6 @@ impl std::str::FromStr for ToolNameEnum {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "yt-dlp" => Ok(ToolNameEnum::YtDlp),
-            "ffmpeg" => Ok(ToolNameEnum::Ffmpeg),
             other => Err(format!("Unknown tool: {other}")),
         }
     }
