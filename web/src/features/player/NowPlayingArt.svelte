@@ -28,31 +28,43 @@
     dur: 8 + ((i * 5) % 9),
   }));
 
-  const VINYL_DEG_PER_FRAME = 360 / 8.2 / 60;
-  const EASE = 0.045;
-  const SPEED_EPSILON = 0.01;
+  const VINYL_RPM = 33 + 1 / 3;
+  const VINYL_DEG_PER_SEC = (360 / 60) * VINYL_RPM;
+  const EASE = 0.03;
+  const SPEED_EPSILON = 0.5;
 
   let vinylDeg = $state(0);
   let vinylSpeed = 0;
   let raf = 0;
+  let lastTs = 0;
 
-  function loop(target: number): void {
-    vinylSpeed += (target - vinylSpeed) * EASE;
-    vinylDeg = (vinylDeg + vinylSpeed) % 360;
+  function loop(target: number, ts: number): void {
+    const dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.25) : 0;
+    lastTs = ts;
+
+    if (dt > 0) {
+      const blend = 1 - Math.pow(1 - EASE, dt * 60);
+      vinylSpeed += (target - vinylSpeed) * blend;
+      vinylDeg = (vinylDeg + vinylSpeed * dt) % 360;
+    }
+
     if (target === 0 && Math.abs(vinylSpeed) < SPEED_EPSILON) {
       vinylSpeed = 0;
+      lastTs = 0;
       raf = 0;
       return;
     }
-    raf = requestAnimationFrame(() => loop(target));
+    raf = requestAnimationFrame((next) => loop(target, next));
   }
 
   $effect(() => {
-    const target = playing ? VINYL_DEG_PER_FRAME : 0;
-    raf = requestAnimationFrame(() => loop(target));
+    const target = playing ? VINYL_DEG_PER_SEC : 0;
+    lastTs = 0;
+    raf = requestAnimationFrame((ts) => loop(target, ts));
     return () => {
       cancelAnimationFrame(raf);
       raf = 0;
+      lastTs = 0;
     };
   });
 </script>

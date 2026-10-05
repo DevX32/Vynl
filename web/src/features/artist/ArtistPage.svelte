@@ -1,10 +1,17 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
-  import { X, Music, MapPin, Calendar, User, Tag } from "lucide-svelte";
+  import {
+    X,
+    Music,
+    MapPin,
+    Calendar,
+    User,
+    Tag,
+    ChevronDown,
+  } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { loadArtistInfo, peekArtistInfo } from "@lib/artist-cache";
   import type { ArtistInfo } from "@lib/types";
-  import Button from "@components/Button.svelte";
 
   let {
     artist,
@@ -90,12 +97,86 @@
 
   const hasBio = $derived(info?.bio && info.bio.trim().length > 0);
   const bioText = $derived(info?.bio?.trim() ?? "");
-  const showBioTruncated = $derived(!bioExpanded && bioText.length > 300);
-  const displayBio = $derived(showBioTruncated ? `${bioText.slice(0, 300).trimEnd()}…` : bioText);
+  const displayBio = $derived(bioText);
+
+  let viewEl: HTMLElement | undefined = $state();
+  let bioEl: HTMLElement | undefined = $state();
+  let bioMaxHeight = $state<number | null>(null);
+  let bioCollapsedHeight = $state<number | null>(null);
+  let bioOverflows = $state(false);
+
+  const BIO_LINES = 5;
+  const BIO_DURATION_MS = 320;
+
+  function measureBio(): void {
+    const el = bioEl;
+    if (!el) return;
+
+    const natural = el.scrollHeight;
+    const lineHeight = parseFloat(getComputedStyle(el.querySelector(".bio")!).lineHeight);
+    const line = Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : 23.8;
+    const collapsed = Math.min(line * BIO_LINES, natural);
+
+    bioOverflows = natural > collapsed + 1;
+    bioCollapsedHeight = collapsed;
+
+    if (!bioExpanded) {
+      bioMaxHeight = collapsed;
+    }
+  }
+
+  function toggleBio(): void {
+    const el = bioEl;
+    const next = !bioExpanded;
+
+    if (el && !next) {
+      const viewRect = viewEl?.getBoundingClientRect();
+      const bioRect = el.getBoundingClientRect();
+      if (viewRect && bioRect.top < viewRect.top + 24) {
+        viewEl?.scrollTo({
+          top: (viewEl?.scrollTop ?? 0) + (bioRect.top - viewRect.top) - 24,
+          behavior: "smooth",
+        });
+      }
+    }
+
+    bioExpanded = next;
+
+    const target = next ? el?.scrollHeight : bioCollapsedHeight;
+    if (target != null) {
+      bioMaxHeight = target;
+    }
+
+    if (next && el) {
+      const natural = el.scrollHeight;
+      window.setTimeout(() => {
+        if (bioExpanded && bioEl) bioMaxHeight = natural;
+      }, BIO_DURATION_MS + 40);
+    }
+  }
+
+  $effect(() => {
+    const el = bioEl;
+    const text = bioText;
+    if (!el || !text) return;
+
+    measureBio();
+    const frame = requestAnimationFrame(measureBio);
+
+    const observer = new ResizeObserver(() => {
+      if (!bioExpanded) measureBio();
+    });
+    observer.observe(el);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  });
 </script>
 
 <section class="artist-page">
-  <div class="view" in:fade={{ duration: 150 }} out:fade={{ duration: 100 }}>
+  <div class="view" bind:this={viewEl} in:fade={{ duration: 150 }} out:fade={{ duration: 100 }}>
     <button class="close" onclick={onBack} aria-label={t("common.close")}>
       <X size={16} stroke-width={1.5} />
     </button>
@@ -147,11 +228,25 @@
       {#if hasBio}
         <div class="section">
           <h2 class="heading">{t("artist.bio")}</h2>
-          <p class="bio">{displayBio}</p>
-          {#if showBioTruncated}
-            <Button variant="ghost" size="sm" onclick={() => (bioExpanded = true)}>
-              {t("artist.readMore")}
-            </Button>
+          <div
+            class="bio-clip"
+            bind:this={bioEl}
+            style:max-height={bioMaxHeight == null ? undefined : `${bioMaxHeight}px`}
+          >
+            <p class="bio">{displayBio}</p>
+          </div>
+          {#if bioOverflows}
+            <button class="more" onclick={toggleBio} aria-expanded={bioExpanded}>
+              <span class="more-label">
+                {bioExpanded ? t("artist.showLess") : t("artist.readMore")}
+              </span>
+              <ChevronDown
+                size={12}
+                stroke-width={1.5}
+                class="more-icon"
+                aria-hidden="true"
+              />
+            </button>
           {/if}
         </div>
       {/if}
@@ -305,12 +400,51 @@
     color: var(--faint);
   }
 
+  .bio-clip {
+    overflow: hidden;
+    transition: max-height 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .bio {
     font-size: 14px;
     line-height: 1.7;
     color: var(--dim);
     margin: 0;
     white-space: pre-wrap;
+  }
+
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 10px;
+    padding: 3px 9px 3px 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .more:hover {
+    color: color-mix(in srgb, var(--accent) 75%, white);
+  }
+
+  .more:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
+  }
+
+  .more :global(.more-icon) {
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .more[aria-expanded="true"] :global(.more-icon) {
+    transform: rotate(180deg);
   }
 
   .list {

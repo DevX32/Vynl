@@ -399,6 +399,7 @@ export const en = {
     loadError: "Could not load artist info",
     bio: "Biography",
     readMore: "Read more",
+    showLess: "Show less",
     noInfo: "No additional information available.",
   },
   common: {

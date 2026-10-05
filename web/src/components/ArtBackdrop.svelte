@@ -36,18 +36,6 @@
     height: 100%;
     object-fit: cover;
     filter: blur(60px) saturate(1.6) brightness(0.35) contrast(1.1);
-    transform: scale(1.5);
-    animation: art-drift 20s ease-in-out infinite alternate;
-    will-change: transform;
-  }
-
-  @keyframes art-drift {
-    0% {
-      transform: scale(1.5) translate(0, 0);
-    }
-    100% {
-      transform: scale(1.5) translate(-8px, -5px);
-    }
   }
 
   .art-backdrop-glow {
@@ -88,25 +76,5 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-repeat: repeat;
     background-size: 180px;
-    mix-blend-mode: overlay;
-    animation: grain-shift 0.8s steps(4) infinite;
-  }
-
-  @keyframes grain-shift {
-    0% {
-      transform: translate(0, 0);
-    }
-    25% {
-      transform: translate(-2px, 1px);
-    }
-    50% {
-      transform: translate(1px, -1px);
-    }
-    75% {
-      transform: translate(-1px, 2px);
-    }
-    100% {
-      transform: translate(0, 0);
-    }
   }
 </style>
