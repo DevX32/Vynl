@@ -22,6 +22,7 @@ import type {
   ToolStatus,
   MobileSyncStatus,
   UpdateStatus,
+  EqDesign,
 } from "../lib/types";
 import type {
   PluginHttpInit,
@@ -95,6 +96,8 @@ export const vynl = {
     cmd("sync_done", { collection }),
 
   getSettings: (): Promise<Settings> => cmd("get_settings"),
+
+  getEqDesign: (): Promise<EqDesign> => cmd("get_eq_design"),
 
   setSettings: (patch: Partial<Settings>): Promise<Settings> =>
     cmd("set_settings", { patch }),

@@ -1,34 +1,37 @@
 import type { Settings, ToolName, ToolStatus } from "@lib/types";
-import { BITRATES, EQ_FLAT } from "@lib/constants";
+import { BITRATES } from "@lib/constants";
+import { eqFlat, loadEqDesign } from "@lib/eq.svelte";
 import { vynl } from "@lib/vynl";
 import { DEFAULT_ACCENT_COLOR, applyAccentColor } from "@lib/color";
 import { extractVibrantColor } from "@lib/art-color";
 import { getCurrentTrack } from "./now-playing.svelte";
 
-const DEFAULT_SETTINGS: Settings = {
-  outputDir: "",
-  format: "mp3",
-  bitrate: null,
-  filenamePattern: "{track} - {title}",
-  overwrite: false,
-  discordRpc: true,
-  confirmMatches: false,
-  minimizeToTray: false,
-  accentColor: DEFAULT_ACCENT_COLOR,
-  dynamicAccent: false,
-  hardwareAcceleration: true,
-  launchAtStartup: false,
-  displayName: "",
-  eqEnabled: false,
-  eqBands: EQ_FLAT,
-  pluginsAutoUpdate: true,
-};
+function defaultSettings(): Settings {
+  return {
+    outputDir: "",
+    format: "mp3",
+    bitrate: null,
+    filenamePattern: "{track} - {title}",
+    overwrite: false,
+    discordRpc: true,
+    confirmMatches: false,
+    minimizeToTray: false,
+    accentColor: DEFAULT_ACCENT_COLOR,
+    dynamicAccent: false,
+    hardwareAcceleration: true,
+    launchAtStartup: false,
+    displayName: "",
+    eqEnabled: false,
+    eqBands: eqFlat(),
+    pluginsAutoUpdate: true,
+  };
+}
 
 let _settings = $state<Settings | null>(null);
 let _tools = $state<ToolStatus[]>([]);
 let _toolsUnlisten: (() => void) | null = null;
 
-const currentSettings = $derived(_settings ?? DEFAULT_SETTINGS);
+const currentSettings = $derived(_settings ?? defaultSettings());
 const currentTools = $derived(_tools);
 
 function normalizeBitrate(s: Settings): Settings {
@@ -51,6 +54,7 @@ export function getCurrentTools(): ToolStatus[] {
 }
 
 export async function initSettings(): Promise<void> {
+  await loadEqDesign();
   const loaded = await vynl.getSettings();
   _settings = normalizeBitrate(loaded);
   applyAccentColor(_settings.accentColor, false);

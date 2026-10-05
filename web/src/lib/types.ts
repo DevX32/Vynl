@@ -50,6 +50,18 @@ export interface Settings {
   pluginsAutoUpdate: boolean;
 }
 
+export interface EqDesign {
+  freqs: number[];
+  qs: number[];
+  lowShelf: number;
+  highShelf: number;
+  shape: number;
+  flatDb: number;
+  preampTrim: number;
+  minDb: number;
+  maxDb: number;
+}
+
 export type MatchSource = "youtube" | "youtubeMusic";
 
 export interface SearchCandidate {

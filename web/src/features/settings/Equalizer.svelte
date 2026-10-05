@@ -1,29 +1,54 @@
 <script lang="ts">
+  import { RotateCcw } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { clamp01 } from "@lib/pointer";
+  import { EQ_PRESETS, type EqPreset } from "@lib/constants";
   import {
-    EQ_BANDS,
-    EQ_FLAT,
-    EQ_MAX_DB,
-    EQ_MIN_DB,
-    EQ_PRESETS,
-    type EqPreset,
-  } from "@lib/constants";
+    eqBands,
+    eqFlat,
+    eqMaxDb,
+    eqMinDb,
+    eqResidualBoostDb,
+  } from "@lib/eq.svelte";
+  import EqCurve from "./EqCurve.svelte";
 
   const settings = $derived(getCurrentSettings());
 
   const TRACK_H = 128;
   const THUMB = 9;
-  const RANGE = EQ_MAX_DB - EQ_MIN_DB;
+  const RANGE = (): number => eqMaxDb() - eqMinDb();
 
-  let bands = $state<number[]>([...EQ_FLAT]);
+  const GROUP_RANGES: { key: string; from: number; to: number }[] = [
+    { key: "eq.groups.sub", from: 31, to: 62 },
+    { key: "eq.groups.low", from: 125, to: 250 },
+    { key: "eq.groups.mid", from: 500, to: 2000 },
+    { key: "eq.groups.high", from: 4000, to: 8000 },
+    { key: "eq.groups.air", from: 16000, to: 16000 },
+  ];
+
+  const GROUP_LABEL: (string | undefined)[] = $derived.by(() => {
+    const labels: (string | undefined)[] = [];
+    let seen = "";
+    for (const freq of eqBands()) {
+      const g = GROUP_RANGES.find((r) => freq >= r.from && freq <= r.to);
+      if (!g || g.key === seen) {
+        labels.push(undefined);
+        continue;
+      }
+      seen = g.key;
+      labels.push(g.key);
+    }
+    return labels;
+  });
+
+  let bands = $state<number[]>(eqFlat());
   let touched = $state(false);
 
   $effect(() => {
     if (touched) return;
     const stored = settings.eqBands ?? [];
-    const next = EQ_BANDS.map((_, i) =>
+    const next = eqBands().map((_, i) =>
       Number.isFinite(stored[i]) ? stored[i] : 0,
     );
     if (next.some((v, i) => v !== bands[i])) bands = next;
@@ -44,21 +69,39 @@
 
   function applyPreset(preset: EqPreset): void {
     touched = true;
-    bands = [...preset.gains];
+    const count = eqBands().length;
+    const gains = preset.gains.slice(0, count);
+    while (gains.length < count) gains.push(0);
+    bands = gains;
+    scheduleBands();
+  }
+
+  function resetAll(): void {
+    touched = true;
+    bands = eqFlat();
     scheduleBands();
   }
 
   const activePreset = $derived(
-    EQ_PRESETS.find((p) => p.gains.every((g, i) => g === bands[i]))?.id ?? null,
+    EQ_PRESETS.find(
+      (p) =>
+        p.gains.length === bands.length &&
+        p.gains.every((g, i) => g === bands[i]),
+    )?.id ?? null,
   );
 
+  const designReady = $derived(eqBands().length > 0);
+  const isModified = $derived(bands.some((g) => g !== 0));
+  const isFlatCurve = $derived(bands.every((g) => Math.abs(g) < 0.05));
+  const clipRisk = $derived(eqResidualBoostDb(bands) > 6);
+
   function ratio(i: number): number {
-    return (bands[i] - EQ_MIN_DB) / RANGE;
+    return (bands[i] - eqMinDb()) / RANGE();
   }
 
   function fill(i: number): number {
-    const t = ratio(i);
-    return ((THUMB / 2 + t * (TRACK_H - THUMB)) / TRACK_H) * 100;
+    const r = ratio(i);
+    return ((THUMB / 2 + r * (TRACK_H - THUMB)) / TRACK_H) * 100;
   }
 
   function freqLabel(freq: number): string {
@@ -70,7 +113,7 @@
   }
 
   function setBand(i: number, db: number): void {
-    db = Math.max(EQ_MIN_DB, Math.min(EQ_MAX_DB, Math.round(db)));
+    db = Math.max(eqMinDb(), Math.min(eqMaxDb(), Math.round(db)));
     if (db === bands[i]) return;
     touched = true;
     bands[i] = db;
@@ -79,8 +122,8 @@
 
   function bandFromPointer(e: PointerEvent, i: number): void {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const t = 1 - clamp01((e.clientY - rect.top) / rect.height);
-    setBand(i, EQ_MIN_DB + t * RANGE);
+    const r = 1 - clamp01((e.clientY - rect.top) / rect.height);
+    setBand(i, eqMinDb() + r * RANGE());
   }
 
   function bandDown(e: PointerEvent, i: number): void {
@@ -113,6 +156,8 @@
         db -= 3;
         break;
       case "Home":
+      case "Delete":
+      case "Backspace":
         db = 0;
         break;
       default:
@@ -132,19 +177,34 @@
           : t("settings.equalizerHintOff")}
       </div>
     </div>
-    <button
-      class="switch"
-      class:on={settings.eqEnabled}
-      onclick={() => setEnabled(!settings.eqEnabled)}
-      role="switch"
-      aria-checked={settings.eqEnabled}
-      aria-label={t("settings.equalizerToggle")}
-    >
-      <span class="knob"></span>
-    </button>
+    <div class="head-actions">
+      <button
+        class="reset"
+        class:ready={isModified}
+        onclick={resetAll}
+        disabled={!settings.eqEnabled || !isModified}
+        aria-label={t("eq.reset")}
+        title={t("eq.reset")}
+      >
+        <RotateCcw size={13} stroke-width={1.6} />
+      </button>
+      <button
+        class="switch"
+        class:on={settings.eqEnabled}
+        onclick={() => setEnabled(!settings.eqEnabled)}
+        role="switch"
+        aria-checked={settings.eqEnabled}
+        aria-label={t("settings.equalizerToggle")}
+      >
+        <span class="knob"></span>
+      </button>
+    </div>
   </div>
 
-  <div class="eq" class:off={!settings.eqEnabled}>
+  {#if !designReady}
+    <div class="unavailable mono">{t("eq.unavailable")}</div>
+  {:else}
+    <div class="eq" class:off={!settings.eqEnabled}>
     <div class="chips">
       {#each EQ_PRESETS as preset (preset.id)}
         <button
@@ -158,8 +218,18 @@
       {/each}
     </div>
 
+    <div class="curve-wrap">
+      <EqCurve {bands} disabled={!settings.eqEnabled} />
+      {#if isFlatCurve}
+        <div class="curve-note mono">{t("eq.curveFlat")}</div>
+      {/if}
+      {#if clipRisk}
+        <div class="curve-warn mono">{t("eq.clipRisk")}</div>
+      {/if}
+    </div>
+
     <div class="bands">
-      {#each EQ_BANDS as freq, i (freq)}
+      {#each eqBands() as freq, i (freq)}
         <div class="band">
           <div class="db mono" class:boost={bands[i] > 0} class:cut={bands[i] < 0}>
             {dbLabel(bands[i])}
@@ -170,13 +240,14 @@
             role="slider"
             tabindex={settings.eqEnabled ? 0 : -1}
             aria-label={`${freqLabel(freq)} ${t("settings.equalizerBand")}`}
-            aria-valuemin={EQ_MIN_DB}
-            aria-valuemax={EQ_MAX_DB}
+            aria-valuemin={eqMinDb()}
+            aria-valuemax={eqMaxDb()}
             aria-valuenow={bands[i]}
             aria-valuetext={`${dbLabel(bands[i])} dB`}
             aria-disabled={!settings.eqEnabled}
             onpointerdown={(e) => bandDown(e, i)}
             onpointermove={(e) => bandMove(e, i)}
+            ondblclick={() => setBand(i, 0)}
             onkeydown={(e) => bandKey(e, i)}
           >
             <span
@@ -185,13 +256,25 @@
             ></span>
           </div>
           <div class="freq mono">{freqLabel(freq)}</div>
+          <div class="group mono">
+            {#if GROUP_LABEL[i]}{t(GROUP_LABEL[i]!)}{:else}&nbsp;{/if}
+          </div>
         </div>
       {/each}
+      </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
+  .unavailable {
+    font-size: 11px;
+    color: var(--faint);
+    padding: 24px 0;
+    text-align: center;
+    line-height: 1.5;
+  }
+
   .section {
     display: flex;
     flex-direction: column;
@@ -212,10 +295,46 @@
     min-width: 0;
   }
 
+  .head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
   .hint {
     font-size: 11px;
     color: var(--faint);
     line-height: 1.5;
+  }
+
+  .reset {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    color: var(--faint);
+    opacity: 0;
+    transition:
+      opacity 0.15s,
+      color 0.15s,
+      background 0.15s;
+  }
+
+  .reset.ready {
+    opacity: 1;
+  }
+
+  .reset:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+
+  .reset:disabled {
+    cursor: default;
   }
 
   .eq {
@@ -259,6 +378,39 @@
 
   .chip:disabled {
     cursor: not-allowed;
+  }
+
+  .curve-wrap {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    padding: 2px 0;
+  }
+
+  .curve-note,
+  .curve-warn {
+    position: absolute;
+    left: 0;
+    right: 0;
+    text-align: center;
+    pointer-events: none;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .curve-note {
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--faint);
+    opacity: 0.7;
+  }
+
+  .curve-warn {
+    bottom: 3px;
+    color: var(--amber);
+    opacity: 0.85;
   }
 
   .bands {
@@ -356,5 +508,14 @@
     font-size: 10px;
     color: var(--faint);
     letter-spacing: 0.02em;
+  }
+
+  .group {
+    font-size: 8.5px;
+    color: var(--faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-top: -4px;
   }
 </style>
