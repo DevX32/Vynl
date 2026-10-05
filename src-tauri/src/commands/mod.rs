@@ -243,6 +243,25 @@ pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, S
 }
 
 #[tauri::command]
+pub async fn get_eq_design() -> Result<crate::services::player::EqDesign, String> {
+    Ok(crate::services::player::eq_design())
+}
+
+#[tauri::command]
+pub async fn get_eq_response_db(
+    gains: Vec<f32>,
+    freq: f32,
+    sample_rate: Option<f32>,
+) -> Result<f32, String> {
+    let rate = sample_rate.unwrap_or(48000.0);
+    Ok(crate::services::player::eq_response_db(
+        &crate::services::player::normalize_eq_bands(&gains),
+        freq,
+        rate,
+    ))
+}
+
+#[tauri::command]
 pub async fn get_mobile_sync_status(
     app: AppHandle,
 ) -> Result<crate::services::mobile_sync::MobileSyncStatus, String> {
