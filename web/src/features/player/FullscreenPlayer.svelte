@@ -166,7 +166,7 @@
   }
 
   .fs-art :global(.now-art) {
-    width: min(320px, 42vh) !important;
+    width: min(260px, 34vh) !important;
     aspect-ratio: 1 / 1 !important;
   }
 
@@ -212,7 +212,7 @@
   .fs-vol {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 5px;
     --vol-width: 120px;
   }
 

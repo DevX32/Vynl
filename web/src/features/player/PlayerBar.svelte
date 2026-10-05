@@ -370,7 +370,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 7px;
+    gap: 5px;
     color: var(--faint);
     --vol-width: 76px;
   }
