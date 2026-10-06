@@ -291,6 +291,7 @@ pub fn run() {
             commands::install_app_update,
             commands::restart_app,
             commands::player_play,
+            commands::player_crossfade,
             commands::player_stop,
             commands::player_pause,
             commands::player_resume,

@@ -240,6 +240,13 @@ export const vynl = {
   playerResume: (generation?: number): Promise<boolean> =>
     cmd("player_resume", { generation: generation ?? 0 }),
 
+  playerCrossfade: (
+    path: string,
+    generation: number,
+    fadeSecs: number,
+  ): Promise<void> =>
+    cmd("player_crossfade", { path, generation, fadeSecs }),
+
   playerSeek: (time: number, generation?: number): Promise<void> =>
     cmd("player_seek", { time, generation: generation ?? 0 }),
 

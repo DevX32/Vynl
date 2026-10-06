@@ -37,6 +37,10 @@ export const en = {
     repeatOff: "Repeat off",
     repeatAll: "Repeat all",
     repeatOne: "Repeat one",
+    crossfade: "Crossfade",
+    crossfadeHint:
+      "Blend the end of one track into the start of the next.",
+    crossfadeOff: "Off",
     seek: "Seek",
     unmute: "Unmute",
     mute: "Mute",

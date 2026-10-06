@@ -4,6 +4,7 @@
   import { t } from "@lib/i18n";
   import { closeEq } from "@state/equalizer.svelte";
   import Equalizer from "./Equalizer.svelte";
+  import CrossfadeControl from "./CrossfadeControl.svelte";
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -25,6 +26,7 @@
     </div>
     <div class="body">
       <Equalizer />
+      <CrossfadeControl />
     </div>
   </div>
 </div>

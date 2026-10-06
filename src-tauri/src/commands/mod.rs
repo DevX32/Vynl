@@ -738,6 +738,11 @@ pub async fn player_play(
 }
 
 #[tauri::command]
+pub async fn player_crossfade(path: String, generation: u64, fade_secs: f64) -> Result<(), String> {
+    crate::services::player::crossfade(&path, generation, fade_secs)
+}
+
+#[tauri::command]
 pub async fn player_stop(generation: u64) -> Result<(), String> {
     crate::services::player::stop(generation)
 }

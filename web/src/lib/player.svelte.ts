@@ -27,6 +27,7 @@ import {
   setDragTime,
 } from "@state/now-playing.svelte";
 import {
+  getCrossfade,
   getCurrentVolume,
   getCurrentMuted,
   getCurrentLoop,
@@ -38,7 +39,7 @@ import {
 import { vynl } from "@lib/vynl";
 import { clamp01 } from "@lib/pointer";
 import { t } from "@lib/i18n";
-import type { PlaybackTick } from "@lib/types";
+import type { LibraryTrack, PlaybackTick } from "@lib/types";
 import type { PluginSharedState } from "@lib/plugins/types";
 
 export function isSharedPlayback(): boolean {
@@ -86,6 +87,13 @@ function finishPlayReconcile(generation: number): void {
   }
 }
 
+const CROSSFADE_TAIL = 0.75;
+let crossfadeTried = false;
+
+function resetCrossfade(): void {
+  crossfadeTried = false;
+}
+
 function handleTick(tick: PlaybackTick): void {
   if (tick.generation !== playGeneration) return;
   const np = getCurrentTrack();
@@ -96,6 +104,10 @@ function handleTick(tick: PlaybackTick): void {
       updatePlaying(false);
       if (!isSharedPlayback()) nextAutomatic();
     }
+    return;
+  }
+
+  if (tick.playing && maybeStartCrossfade(tick.position)) {
     return;
   }
 
@@ -302,6 +314,7 @@ export function playTrack(
   }
 
   setPlayError(null);
+  resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying(nowPlayingFromTrack(track, seekTo ?? 0));
@@ -323,6 +336,7 @@ function playSharedFile(opts: {
   setPlayError(null);
   const duration = normalizeDuration(opts.duration);
   const initialTime = normalizeDuration(opts.seekTo);
+  resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying({
@@ -535,37 +549,82 @@ export function toggle(): void {
 }
 
 function advanceNext(automatic: boolean): void {
+  const nextTrack = resolveNextTrack(automatic);
+  if (!nextTrack) return;
+  startTrack(nextTrack);
+}
+
+function resolveNextTrack(automatic: boolean): LibraryTrack | null {
   const np = getCurrentTrack();
   const selectedLoop = getCurrentLoop();
   const loop = automatic || selectedLoop !== "one" ? selectedLoop : "off";
-  const shuffle = getCurrentShuffle();
   const nextId = pickNextId(
     getUserQueuePaths(),
     getContextQueuePaths(),
     getContextIndex(),
     np?.id ?? null,
-    shuffle,
+    getCurrentShuffle(),
     loop,
   );
-  if (!nextId) return;
+  if (!nextId) return null;
+  return getLibrary().find((t) => t.id === nextId) ?? null;
+}
 
-  const nextTrack = getLibrary().find((t) => t.id === nextId);
-  if (!nextTrack) return;
-
+function consumeNextTrack(nextTrack: LibraryTrack): void {
   invalidateSharedPlayback();
-
-  const uq = getUserQueuePaths();
-  const uqIdx = uq.indexOf(nextTrack.path);
-  if (uqIdx >= 0) {
+  if (getUserQueuePaths().includes(nextTrack.path)) {
     removeFromUserQueue(nextTrack.path);
   }
-  advanceContextIndex(nextId);
-  if (shuffle) recordShuffleTrack(nextTrack.path);
+  advanceContextIndex(nextTrack.id);
+  if (getCurrentShuffle()) recordShuffleTrack(nextTrack.path);
+}
 
+function startTrack(nextTrack: LibraryTrack): void {
+  consumeNextTrack(nextTrack);
+  resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying(nowPlayingFromTrack(nextTrack));
   loadAndPlayNative(nextTrack.path, gen);
+}
+
+function maybeStartCrossfade(position: number): boolean {
+  const fade = getCrossfade();
+  if (fade <= 0 || crossfadeTried) return false;
+
+  const np = getCurrentTrack();
+  if (!np?.playing || !np.path || np.duration <= 0) return false;
+  if (isSeekDragging() || seekPending) return false;
+  if (isSharedPlayback() || getCurrentLoop() === "one") return false;
+
+  const remaining = np.duration - position;
+  if (remaining <= 0 || remaining > fade + CROSSFADE_TAIL) return false;
+
+  const nextTrack = resolveNextTrack(true);
+  if (!nextTrack || nextTrack.path === np.path) return false;
+  if (nextTrack.duration > 0 && nextTrack.duration < fade) return false;
+
+  crossfadeTried = true;
+
+  const generation = playGeneration + 1;
+  void vynl
+    .playerCrossfade(nextTrack.path, generation, fade)
+    .then(() => {
+      if (generation !== playGeneration + 1) return;
+      playGeneration = generation;
+      consumeNextTrack(nextTrack);
+      setNowPlaying({
+        ...nowPlayingFromTrack(nextTrack),
+        playing: true,
+      });
+      updateMediaSession();
+      resetCrossfade();
+    })
+    .catch((error) => {
+      console.warn("[vynl] crossfade failed:", error);
+    });
+
+  return true;
 }
 
 export function next(): void {
@@ -600,6 +659,7 @@ export function prev(): void {
   invalidateSharedPlayback();
   advanceContextIndex(prevId);
 
+  resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying(nowPlayingFromTrack(prevTrack));

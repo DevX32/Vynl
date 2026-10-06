@@ -18,12 +18,37 @@ function loadVolume(): number {
   return v >= 0 && v <= 1 ? v : 0.3;
 }
 
+export const CROSSFADE_STEPS: readonly number[] = [0, 3, 5, 8, 12];
+
+const MAX_CROSSFADE_SECS = 12;
+
+function loadCrossfade(): number {
+  const raw = localStorage.getItem("vynl.crossfade");
+  if (raw === null) return 0;
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 0 && v <= MAX_CROSSFADE_SECS ? v : 0;
+}
+
+let _crossfade = $state(loadCrossfade());
 let _volume = $state(loadVolume());
 let _muted = $state(localStorage.getItem("vynl.muted") === "1");
 let _shuffle = $state(localStorage.getItem("vynl.shuffle") === "1");
 let _loop = $state<LoopMode>(loadLoop());
 let _showLyrics = $state(false);
 let _playError = $state<string | null>(null);
+
+export function getCrossfade(): number {
+  return _crossfade;
+}
+
+export function setCrossfade(secs: number): void {
+  const next = Number.isFinite(secs)
+    ? Math.min(MAX_CROSSFADE_SECS, Math.max(0, Math.round(secs)))
+    : 0;
+  if (next === _crossfade) return;
+  _crossfade = next;
+  localStorage.setItem("vynl.crossfade", String(next));
+}
 
 export function getCurrentVolume(): number {
   return _volume;

@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, OnceLock, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::time::{Duration, Instant};
 
 use rodio::source::SeekError;
@@ -521,6 +521,209 @@ fn valid_seek_time(time: f64) -> bool {
     time.is_finite() && time >= 0.0 && time <= Duration::MAX.as_secs_f64()
 }
 
+#[derive(Clone)]
+struct FadeControl(Arc<FadeOrder>);
+struct FadeOrder {
+    to: AtomicU32,
+    ramp: AtomicU32,
+    serial: AtomicU32,
+    live: AtomicU32,
+}
+
+impl FadeControl {
+    fn settled(gain: f32) -> Self {
+        let gain = gain.clamp(0.0, 1.0);
+        Self(Arc::new(FadeOrder {
+            to: AtomicU32::new(gain.to_bits()),
+            ramp: AtomicU32::new(0),
+            serial: AtomicU32::new(0),
+            live: AtomicU32::new(gain.to_bits()),
+        }))
+    }
+
+    fn ramp_to(&self, to: f32, secs: f64, sample_rate: u32) {
+        let samples = if secs.is_finite() && secs > 0.0 && sample_rate > 0 {
+            (secs * sample_rate as f64).round().min(u32::MAX as f64) as u32
+        } else {
+            0
+        };
+        self.0
+            .to
+            .store(to.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+        self.0.ramp.store(samples, Ordering::Relaxed);
+        self.0.serial.fetch_add(1, Ordering::Release);
+    }
+
+    fn take_order(&self, since: Option<u32>) -> Option<(u32, f32, u32)> {
+        let serial = self.0.serial.load(Ordering::Acquire);
+        if serial != self.0.serial.load(Ordering::Acquire) || Some(serial) == since {
+            return None;
+        }
+        Some((
+            serial,
+            f32::from_bits(self.0.to.load(Ordering::Relaxed)),
+            self.0.ramp.load(Ordering::Relaxed),
+        ))
+    }
+
+    fn current(&self) -> f32 {
+        f32::from_bits(self.0.live.load(Ordering::Relaxed))
+    }
+
+    fn publish(&self, gain: f32) {
+        self.0
+            .live
+            .store(gain.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+}
+
+struct FadeSource<S> {
+    inner: S,
+    control: FadeControl,
+    gain: f32,
+    to: f32,
+    step: f32,
+    left: u32,
+    serial: Option<u32>,
+}
+
+impl<S> FadeSource<S>
+where
+    S: Source<Item = f32>,
+{
+    fn new(inner: S, control: FadeControl) -> Self {
+        let gain = control.current();
+        Self {
+            inner,
+            control,
+            serial: None,
+            gain,
+            to: gain,
+            step: 0.0,
+            left: 0,
+        }
+    }
+
+    fn retarget(&mut self) {
+        let Some((serial, to, ramp)) = self.control.take_order(self.serial) else {
+            return;
+        };
+        self.serial = Some(serial);
+        self.to = to;
+        self.left = ramp;
+        self.step = if ramp > 0 {
+            (to - self.gain) / ramp as f32
+        } else {
+            0.0
+        };
+    }
+
+    #[inline]
+    fn glide(&mut self, sample: f32) -> f32 {
+        if self.left > 0 {
+            self.gain += self.step;
+            self.left -= 1;
+            if self.left == 0 {
+                self.gain = self.to;
+                self.control.publish(self.gain);
+            }
+        } else if self.gain != self.to {
+            self.gain = self.to;
+            self.control.publish(self.gain);
+        }
+        sample * self.gain
+    }
+}
+
+impl<S> Iterator for FadeSource<S>
+where
+    S: Source<Item = f32>,
+{
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        self.retarget();
+        let sample = self.inner.next()?;
+        Some(self.glide(sample))
+    }
+}
+
+impl<S> Source for FadeSource<S>
+where
+    S: Source<Item = f32>,
+{
+    fn current_frame_len(&self) -> Option<usize> {
+        self.inner.current_frame_len()
+    }
+
+    fn channels(&self) -> u16 {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+
+    fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+        self.inner.try_seek(pos)
+    }
+}
+
+struct TrackSink {
+    sink: Sink,
+    fade: FadeControl,
+    sample_rate: u32,
+}
+
+impl TrackSink {
+    fn open(
+        handle: &OutputStreamHandle,
+        path: &str,
+        fade_secs: f64,
+    ) -> Result<(Self, Option<f64>), String> {
+        let file = File::open(path).map_err(|e| format!("open: {e}"))?;
+        let decoder = Decoder::new(BufReader::new(file)).map_err(|e| format!("decode: {e}"))?;
+        let total = decoder.total_duration().map(|d| d.as_secs_f64());
+        let samples = decoder.convert_samples::<f32>();
+        let sample_rate = samples.sample_rate().max(1);
+        let fade_secs = if fade_secs.is_finite() {
+            fade_secs
+        } else {
+            0.0
+        };
+        let control = FadeControl::settled(if fade_secs > 0.0 { 0.0 } else { 1.0 });
+        if fade_secs > 0.0 {
+            control.ramp_to(1.0, fade_secs, sample_rate);
+        }
+        let sink = Sink::try_new(handle).map_err(|e| format!("sink: {e}"))?;
+        sink.append(FadeSource::new(
+            EqualizerSource::new(samples),
+            control.clone(),
+        ));
+        Ok((
+            Self {
+                sink,
+                fade: control,
+                sample_rate,
+            },
+            total,
+        ))
+    }
+}
+
+fn open_track(
+    handle: Option<&OutputStreamHandle>,
+    path: &str,
+    fade_secs: f64,
+) -> Result<(TrackSink, Option<f64>), String> {
+    let handle = handle.ok_or_else(|| "No audio output device".to_string())?;
+    TrackSink::open(handle, path, fade_secs)
+}
+
 fn seek_sink(sink: &Sink, time: f64) -> Result<(), String> {
     if !valid_seek_time(time) {
         return Err("invalid seek time".into());
@@ -531,6 +734,7 @@ fn seek_sink(sink: &Sink, time: f64) -> Result<(), String> {
 
 enum PlayerCmd {
     Play(String, Option<f64>, u64),
+    Crossfade(String, u64, f64),
     Stop(u64),
     Pause(u64),
     Resume(u64),
@@ -598,19 +802,76 @@ fn default_output_device_name() -> Option<String> {
     device.name().ok()
 }
 
+pub const MAX_CROSSFADE_SECS: f64 = 20.0;
+
+struct FadingOut {
+    track: TrackSink,
+    until: Duration,
+}
+
+fn stop_fading_out(fading: &mut Option<FadingOut>) {
+    if let Some(out) = fading.take() {
+        out.track.sink.stop();
+    }
+}
+
+fn begin_crossfade(
+    handle: &Option<OutputStreamHandle>,
+    sink: &mut Option<TrackSink>,
+    fading: &mut Option<FadingOut>,
+    path: &str,
+    generation: u64,
+    fade_secs: f64,
+) -> Result<Option<f64>, String> {
+    let handle = handle
+        .as_ref()
+        .ok_or_else(|| "No audio output device".to_string())?;
+    if generation == 0 {
+        return Err("no active generation".into());
+    }
+    if !fade_secs.is_finite() || fade_secs <= 0.0 {
+        return Err("invalid fade length".into());
+    }
+    if PAUSED.load(Ordering::Relaxed) {
+        return Err("player is paused".into());
+    }
+    let start = match sink.as_ref().map(|t| &t.sink) {
+        Some(s) if !s.empty() => s.get_pos(),
+        _ => return Err("nothing playing".into()),
+    };
+
+    let fade_secs = fade_secs.min(MAX_CROSSFADE_SECS);
+    let (incoming, total) = TrackSink::open(handle, path, fade_secs)?;
+    let volume = scale_volume(VOLUME.load(Ordering::Relaxed));
+    incoming.sink.set_volume(volume);
+    let outgoing = sink.replace(incoming).ok_or("nothing playing")?;
+    outgoing.sink.set_volume(volume);
+    outgoing.fade.ramp_to(0.0, fade_secs, outgoing.sample_rate);
+    stop_fading_out(fading);
+    *fading = Some(FadingOut {
+        track: outgoing,
+        until: start + Duration::from_secs_f64(fade_secs),
+    });
+
+    Ok(total)
+}
+
 fn reopen_output(
     output: &mut Option<OutputStream>,
     handle: &mut Option<OutputStreamHandle>,
-    sink: &mut Option<Sink>,
+    sink: &mut Option<TrackSink>,
+    fading: &mut Option<FadingOut>,
     current_path: &Option<String>,
 ) {
     let resume_pos = sink
         .as_ref()
+        .map(|t| &t.sink)
         .filter(|s| !s.empty() && !PAUSED.load(Ordering::Relaxed))
         .map(|s| s.get_pos().as_secs_f64());
-    if let Some(s) = sink.take() {
-        s.stop();
+    if let Some(t) = sink.take() {
+        t.sink.stop();
     }
+    stop_fading_out(fading);
     drop(handle.take());
     drop(output.take());
 
@@ -627,20 +888,19 @@ fn reopen_output(
     let (Some(path), Some(pos)) = (current_path.clone(), resume_pos) else {
         return;
     };
-    let opened = File::open(&path)
-        .map_err(|e| e.to_string())
-        .and_then(|f| Decoder::new(BufReader::new(f)).map_err(|e| e.to_string()));
-    let Ok(decoder) = opened else {
-        eprintln!("device change: could not reopen {}", path);
-        return;
-    };
-    let Ok(new_sink) = Sink::try_new(handle.as_ref().expect("stream present")) else {
-        return;
-    };
-    new_sink.append(EqualizerSource::new(decoder.convert_samples::<f32>()));
-    new_sink.set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
-    let _ = seek_sink(&new_sink, pos);
-    *sink = Some(new_sink);
+
+    match open_track(handle.as_ref(), &path, 0.0) {
+        Ok((track, _)) => {
+            track
+                .sink
+                .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
+            if let Err(e) = seek_sink(&track.sink, pos) {
+                eprintln!("device change: could not resume {path}: {e}");
+            }
+            *sink = Some(track);
+        }
+        Err(e) => eprintln!("device change: could not reopen {path}: {e}"),
+    }
 }
 
 fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
@@ -656,9 +916,11 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
             return;
         }
     };
+
     let mut output = Some(out);
     let mut handle = Some(h);
-    let mut sink: Option<Sink> = None;
+    let mut sink: Option<TrackSink> = None;
+    let mut fading: Option<FadingOut> = None;
     let mut current_path: Option<String> = None;
     let mut output_device_name = default_output_device_name();
     let mut playback_generation = 0u64;
@@ -698,48 +960,61 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                 .filter(|(_, queued_generation)| *queued_generation == generation)
                                 .map(|(time, _)| time);
                             let requested_seek = seek_to.or(queued_seek);
-                            if let Some(s) = sink.take() {
-                                s.stop();
+                            stop_fading_out(&mut fading);
+                            if let Some(t) = sink.take() {
+                                t.sink.stop();
                             }
                             current_path = Some(path.clone());
                             active_generation = 0;
                             PAUSED.store(false, Ordering::Relaxed);
-                            match File::open(&path) {
-                                Ok(file) => match Decoder::new(BufReader::new(file)) {
-                                    Ok(decoder) => {
-                                        let total =
-                                            decoder.total_duration().map(|d| d.as_secs_f64());
-                                        match Sink::try_new(
-                                            handle.as_ref().expect("stream present"),
-                                        ) {
-                                            Ok(new_sink) => {
-                                                new_sink.append(EqualizerSource::new(
-                                                    decoder.convert_samples::<f32>(),
-                                                ));
-                                                new_sink.set_volume(scale_volume(
-                                                    VOLUME.load(Ordering::Relaxed),
-                                                ));
-                                                let seek_result = requested_seek
-                                                    .map(|seek| seek_sink(&new_sink, seek))
-                                                    .transpose();
-                                                match seek_result {
-                                                    Ok(Some(())) | Ok(None) => {
-                                                        sink = Some(new_sink);
-                                                        duration_secs = total;
-                                                        active_generation = generation;
-                                                        PAUSED.store(false, Ordering::Relaxed);
-                                                        PlayerResp::Ok
-                                                    }
-                                                    Err(e) => PlayerResp::Err(e),
-                                                }
-                                            }
-                                            Err(e) => PlayerResp::Err(format!("sink: {e}")),
-                                        }
+                            match open_track(handle.as_ref(), &path, 0.0).and_then(
+                                |(track, total)| {
+                                    track
+                                        .sink
+                                        .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
+                                    let seek_result = requested_seek
+                                        .map(|seek| seek_sink(&track.sink, seek))
+                                        .transpose();
+                                    match seek_result {
+                                        Ok(Some(())) | Ok(None) => Ok((track, total)),
+                                        Err(e) => Err(e),
                                     }
-                                    Err(e) => PlayerResp::Err(format!("decode: {e}")),
                                 },
-                                Err(e) => PlayerResp::Err(format!("open: {e}")),
+                            ) {
+                                Ok((track, total)) => {
+                                    sink = Some(track);
+                                    duration_secs = total;
+                                    active_generation = generation;
+                                    PAUSED.store(false, Ordering::Relaxed);
+                                    PlayerResp::Ok
+                                }
+                                Err(e) => PlayerResp::Err(e),
                             }
+                        }
+                    }
+                    PlayerCmd::Crossfade(path, generation, fade_secs) => {
+                        if generation <= playback_generation {
+                            let _ = reply_tx.send(PlayerResp::Err("stale generation".to_string()));
+                            continue;
+                        }
+                        match begin_crossfade(
+                            &handle,
+                            &mut sink,
+                            &mut fading,
+                            &path,
+                            generation,
+                            fade_secs,
+                        ) {
+                            Ok(total) => {
+                                playback_generation = generation;
+                                active_generation = generation;
+                                pending_seek = None;
+                                current_path = Some(path);
+                                duration_secs = total;
+                                PAUSED.store(false, Ordering::Relaxed);
+                                PlayerResp::Ok
+                            }
+                            Err(e) => PlayerResp::Err(e),
                         }
                     }
                     PlayerCmd::Stop(generation) => {
@@ -751,8 +1026,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             pending_seek = None;
                             duration_secs = None;
                             current_path = None;
-                            if let Some(s) = sink.take() {
-                                s.stop();
+                            stop_fading_out(&mut fading);
+                            if let Some(t) = sink.take() {
+                                t.sink.stop();
                             }
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Ok
@@ -762,18 +1038,24 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                         if generation < playback_generation || generation != active_generation {
                             PlayerResp::Ok
                         } else {
-                            if let Some(s) = &sink {
-                                s.pause();
-                                PAUSED.store(true, Ordering::Relaxed);
+                            if let Some(t) = &sink {
+                                t.sink.pause();
                             }
+                            if let Some(out) = &fading {
+                                out.track.sink.pause();
+                            }
+                            PAUSED.store(true, Ordering::Relaxed);
                             PlayerResp::Ok
                         }
                     }
                     PlayerCmd::Resume(generation) => {
                         if generation < playback_generation || generation != active_generation {
                             PlayerResp::Bool(false)
-                        } else if let Some(s) = sink.as_ref().filter(|sink| !sink.empty()) {
-                            s.play();
+                        } else if let Some(t) = sink.as_ref().filter(|t| !t.sink.empty()) {
+                            t.sink.play();
+                            if let Some(out) = &fading {
+                                out.track.sink.play();
+                            }
                             PAUSED.store(false, Ordering::Relaxed);
                             PlayerResp::Bool(true)
                         } else {
@@ -789,8 +1071,8 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                         } else {
                             playback_generation = generation;
                             match sink.as_ref() {
-                                Some(sink) if generation == active_generation => {
-                                    match seek_sink(sink, time) {
+                                Some(track) if generation == active_generation => {
+                                    match seek_sink(&track.sink, time) {
                                         Ok(()) => PlayerResp::Ok,
                                         Err(e) => PlayerResp::Err(e),
                                     }
@@ -804,16 +1086,20 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                     }
                     PlayerCmd::Volume(vol) => {
                         let clamped = vol.min(100);
+                        let scaled = scale_volume(clamped);
                         VOLUME.store(clamped, Ordering::Relaxed);
-                        if let Some(s) = &sink {
-                            s.set_volume(scale_volume(clamped));
+                        if let Some(t) = &sink {
+                            t.sink.set_volume(scaled);
+                        }
+                        if let Some(out) = &fading {
+                            out.track.sink.set_volume(scaled);
                         }
                         PlayerResp::Ok
                     }
                     PlayerCmd::GetPosition(generation) => {
                         let pos = if generation == active_generation {
                             sink.as_ref()
-                                .map(|s| s.get_pos().as_secs_f64())
+                                .map(|t| t.sink.get_pos().as_secs_f64())
                                 .unwrap_or(0.0)
                         } else {
                             0.0
@@ -822,7 +1108,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                     }
                     PlayerCmd::IsPlaying(generation) => PlayerResp::Bool(
                         generation == active_generation
-                            && sink.as_ref().is_some_and(|sink| !sink.empty())
+                            && sink.as_ref().is_some_and(|t| !t.sink.empty())
                             && !PAUSED.load(Ordering::Relaxed),
                     ),
                 };
@@ -835,16 +1121,27 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                     let now = default_output_device_name();
                     if now != output_device_name {
                         output_device_name = now;
-                        reopen_output(&mut output, &mut handle, &mut sink, &current_path);
+                        reopen_output(
+                            &mut output,
+                            &mut handle,
+                            &mut sink,
+                            &mut fading,
+                            &current_path,
+                        );
                     }
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
-
+        if fading
+            .as_ref()
+            .is_some_and(|out| out.track.sink.get_pos() >= out.until)
+        {
+            stop_fading_out(&mut fading);
+        }
         emit_playback_tick(
             active_generation,
-            sink.as_ref(),
+            sink.as_ref().map(|t| &t.sink),
             duration_secs,
             &mut last_tick_key,
         );
@@ -856,6 +1153,14 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
 
 pub fn play(path: &str, seek_to: Option<f64>, generation: u64) -> Result<(), String> {
     to_result(send(PlayerCmd::Play(path.to_string(), seek_to, generation)))
+}
+
+pub fn crossfade(path: &str, generation: u64, fade_secs: f64) -> Result<(), String> {
+    to_result(send(PlayerCmd::Crossfade(
+        path.to_string(),
+        generation,
+        fade_secs,
+    )))
 }
 
 pub fn stop(generation: u64) -> Result<(), String> {
@@ -898,5 +1203,135 @@ pub fn is_playing(generation: u64) -> Result<bool, String> {
         Ok(PlayerResp::Err(e)) => Err(e),
         Ok(_) => Err("unexpected".into()),
         Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rodio::source::Zero;
+
+    const RATE: usize = 44_100;
+
+    fn ramp(control: &FadeControl, count: usize) -> Vec<f32> {
+        FadeSource::new(
+            Zero::<f32>::new_samples(1, RATE as u32, count),
+            control.clone(),
+        )
+        .take(count)
+        .collect()
+    }
+
+    #[test]
+    fn settled_control_passes_audio_untouched() {
+        let control = FadeControl::settled(1.0);
+        let samples = ramp(&control, 16);
+        assert!(samples.iter().all(|s| *s == 0.0));
+        assert_eq!(control.current(), 1.0);
+    }
+
+    #[test]
+    fn fade_in_ramps_from_silence_and_lands_on_target() {
+        let control = FadeControl::settled(0.0);
+        control.ramp_to(1.0, 1.0, RATE as u32);
+        let mut source = FadeSource::new(
+            Zero::<f32>::new_samples(1, RATE as u32, RATE),
+            control.clone(),
+        );
+        let gains: Vec<f32> = (0..RATE)
+            .map(|_| {
+                source.next().unwrap();
+                source.gain
+            })
+            .collect();
+        assert_eq!(gains.len(), RATE);
+        assert!((gains[0] - 1.0 / RATE as f32).abs() < 1e-6);
+        assert!((gains[RATE / 2] - 0.5).abs() < 1e-3);
+        assert_eq!(gains[RATE - 1], 1.0);
+        assert!(gains.windows(2).all(|w| w[1] >= w[0]));
+    }
+
+    #[test]
+    fn fade_out_reaches_silence_at_the_end_of_the_ramp() {
+        let control = FadeControl::settled(1.0);
+        control.ramp_to(0.0, 1.0, RATE as u32);
+        let mut source = FadeSource::new(
+            Zero::<f32>::new_samples(1, RATE as u32, RATE),
+            control.clone(),
+        );
+        let gains: Vec<f32> = (0..RATE)
+            .map(|_| {
+                source.next().unwrap();
+                source.gain
+            })
+            .collect();
+        assert!((gains[0] - 1.0).abs() < 1e-3);
+        assert!((gains[RATE / 2] - 0.5).abs() < 1e-3);
+        assert_eq!(gains[RATE - 1], 0.0);
+        assert!(gains.windows(2).all(|w| w[1] <= w[0]));
+    }
+
+    #[test]
+    fn gain_settles_early_and_holds_the_target() {
+        let control = FadeControl::settled(1.0);
+        control.ramp_to(0.0, 0.25, RATE as u32);
+        let mut source = FadeSource::new(
+            Zero::<f32>::new_samples(1, RATE as u32, RATE),
+            control.clone(),
+        );
+        let gains: Vec<f32> = (0..RATE)
+            .map(|_| {
+                source.next().unwrap();
+                source.gain
+            })
+            .collect();
+        assert!(gains.iter().all(|g| (0.0..=1.0).contains(g)));
+        assert!(gains[RATE / 4..].iter().all(|g| *g == 0.0));
+    }
+
+    #[test]
+    fn a_new_order_mid_ramp_restarts_from_the_live_gain() {
+        let control = FadeControl::settled(1.0);
+        control.ramp_to(0.0, 1.0, RATE as u32);
+        let mut source = FadeSource::new(
+            Zero::<f32>::new_samples(1, RATE as u32, RATE),
+            control.clone(),
+        );
+        for _ in 0..RATE / 10 {
+            source.next();
+        }
+        let halfway = source.gain;
+        assert!(halfway < 1.0 && halfway > 0.0);
+        control.ramp_to(0.0, 1.0, RATE as u32);
+        source.next();
+        assert!(source.gain < halfway);
+    }
+
+    #[test]
+    fn zero_length_ramp_snaps_immediately() {
+        let control = FadeControl::settled(1.0);
+        control.ramp_to(0.0, 0.0, RATE as u32);
+        let mut source =
+            FadeSource::new(Zero::<f32>::new_samples(1, RATE as u32, 4), control.clone());
+        source.next();
+        assert_eq!(source.gain, 0.0);
+    }
+
+    #[test]
+    fn non_finite_and_negative_fades_are_treated_as_snap() {
+        let control = FadeControl::settled(1.0);
+        control.ramp_to(0.0, f64::NAN, RATE as u32);
+        assert_eq!(control.take_order(None).unwrap().2, 0);
+        let control = FadeControl::settled(0.0);
+        control.ramp_to(1.0, -3.0, RATE as u32);
+        assert_eq!(control.take_order(None).unwrap().2, 0);
+    }
+
+    #[test]
+    fn an_absurd_fade_length_yields_a_finite_ramp() {
+        assert!(MAX_CROSSFADE_SECS.is_finite());
+        let control = FadeControl::settled(1.0);
+        control.ramp_to(0.0, f64::MAX, RATE as u32);
+        assert!(control.take_order(None).unwrap().2 > 0);
     }
 }
