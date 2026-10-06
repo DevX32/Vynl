@@ -134,7 +134,9 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 14px;
+    min-width: 0;
   }
 
   .save-btn {
@@ -190,8 +192,11 @@
 
   .controls {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
     align-items: center;
+    min-width: 0;
   }
 
   .progress-pill {
@@ -249,6 +254,7 @@
     border: 1px solid var(--line);
     font-size: 11px;
     letter-spacing: 0.04em;
+    min-width: 0;
   }
 
   .pill-num {

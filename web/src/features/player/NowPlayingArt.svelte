@@ -157,7 +157,7 @@
 
   .now-art {
     position: relative;
-    width: min(272px, 32vh);
+    width: var(--vinyl-disc);
     aspect-ratio: 1 / 1;
     height: auto;
     flex-shrink: 1;
@@ -198,17 +198,20 @@
   .vinyl-slot {
     position: absolute;
     inset: 0;
-    transform: translateX(14px);
-    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translateX(5.2%);
+    transition:
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      filter 0.5s ease;
     will-change: transform;
   }
 
   .now-art.playing .vinyl-slot {
-    transform: translateX(40px);
+    transform: translateX(14.7%);
   }
 
   .now-art.empty .vinyl-slot {
-    transform: translateX(4px);
+    transform: translateX(1.5%);
+    filter: saturate(0.5) brightness(0.8);
   }
 
   .vinyl {
@@ -221,7 +224,6 @@
     box-shadow:
       inset 0 0 0 3px rgba(0, 0, 0, 0.45),
       inset 0 0 14px 2px rgba(0, 0, 0, 0.55);
-    transition: filter 0.5s ease;
   }
 
   .vinyl::before {
@@ -231,40 +233,34 @@
     border-radius: 50%;
     background: repeating-radial-gradient(
       circle at 50% 50%,
-      rgba(255, 255, 255, 0.05) 0 1px,
-      transparent 1px 6px
+      rgba(255, 255, 255, 0.05) 0 0.52%,
+      transparent 0.52% 3.12%
     );
     mask-image: radial-gradient(
       circle at 50% 50%,
-      transparent 0 21px,
-      black 24px
+      transparent 0 10.9%,
+      black 12.5%
+    );
+    -webkit-mask-image: radial-gradient(
+      circle at 50% 50%,
+      transparent 0 10.9%,
+      black 12.5%
     );
   }
 
-  .vinyl::after {
+  .vinyl-slot::after {
     content: "";
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background:
-      radial-gradient(
-        circle at 50% 50%,
-        var(--accent) 0 9px,
-        color-mix(in srgb, var(--accent) 55%, var(--vinyl)) 9px 20px,
-        transparent 20px
-      ),
-      linear-gradient(
-        150deg,
-        rgba(255, 255, 255, 0.14) 0%,
-        transparent 30%,
-        transparent 60%,
-        rgba(255, 255, 255, 0.05) 100%
-      );
+    background: linear-gradient(
+      150deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      transparent 30%,
+      transparent 60%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
     pointer-events: none;
-  }
-
-  .now-art.empty .vinyl {
-    filter: saturate(0.5) brightness(0.8);
   }
 
   .now-cover {
@@ -272,7 +268,7 @@
     z-index: 1;
     left: 50%;
     top: 50%;
-    transform: translate(calc(-50% - 26px), -50%);
+    transform: translate(calc(-50% - var(--vinyl-cover-offset)), -50%);
     width: 71%;
     height: 71%;
     border-radius: var(--radius-sm);
@@ -361,12 +357,13 @@
   }
 
   .lyr-btn {
-    margin: 14px auto 0;
+    margin: 21px auto 7px;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 34px;
     height: 34px;
+    flex-shrink: 0;
     color: var(--dim);
     background: var(--bg-raise);
     border: 1px solid var(--line);

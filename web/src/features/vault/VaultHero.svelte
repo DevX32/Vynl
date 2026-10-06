@@ -194,6 +194,7 @@
     align-items: start;
     gap: 56px;
     padding: 32px 0 8px;
+    flex-shrink: 0;
   }
 
   .hero.compact {
@@ -404,7 +405,7 @@
     }
   }
 
-  @container player (max-width: 860px) {
+  @container vault (max-width: 740px) {
     .hero {
       grid-template-columns: minmax(0, 1fr);
       gap: 28px;
@@ -416,16 +417,18 @@
 
     .steps {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 0 20px;
     }
 
-    .step {
-      grid-template-columns: 18px 20px minmax(0, 1fr);
+    .step,
+    .step:last-child {
+      padding: 13px 0;
+      border-bottom: none;
     }
   }
 
-  @container player (max-width: 620px) {
+  @container vault (max-width: 560px) {
     .hero {
       padding: 20px 0 6px;
     }
@@ -446,22 +449,9 @@
     .search-input {
       font-size: 13px;
     }
-
-    .steps {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .step {
-      border-bottom: 1px solid var(--line);
-    }
-
-    .step:last-child {
-      border-bottom: none;
-      padding-bottom: 4px;
-    }
   }
 
-  @container player (max-width: 420px) {
+  @container vault (max-width: 420px) {
     .hero {
       padding: 14px 0 4px;
     }
@@ -484,6 +474,19 @@
 
     .steps-panel {
       padding: 14px;
+    }
+
+    .steps {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .step {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .step:last-child {
+      border-bottom: none;
+      padding-bottom: 4px;
     }
   }
 </style>

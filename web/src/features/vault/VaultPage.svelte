@@ -577,176 +577,178 @@
   });
 </script>
 
-<div class="page">
-  <VaultHero
-    bind:value={url}
-    compact={!!collection && !showSearchResults}
-    onResolve={resolve}
-    onSearch={openSearch}
-    onClear={dismissSearch}
-    resolving={resolving}
-    searching={searching}
-  >
-    {#if showSearchResults}
-      <InlineSearchResults
-        query={url}
-        results={searchResults}
-        loading={searching}
-        error={searchError}
-        addedIds={addedTrackIds}
-        onSelect={addTrack}
-      />
-    {/if}
-  </VaultHero>
-
-  {#if error}
-    <div class="page-error" role="alert">
-      <AlertCircle size={16} stroke-width={1.5} />
-      <span class="page-error-text">{error}</span>
-      <button
-        type="button"
-        class="page-error-retry mono"
-        onclick={() => resolve()}
-      >
-        {t("common.retry")}
-      </button>
-    </div>
-  {/if}
-
-  {#if collection && !showSearchResults}
-    <div class="coll-header">
-      <div class="coll-cover">
-        {#if coverTiles.length >= 2}
-          <div class="coll-cover-grid">
-            {#each coverTiles as c (c)}
-              <img
-                class="coll-cover-tile"
-                use:blobSrc={c}
-                alt=""
-                loading="lazy"
-                draggable="false"
-                onerror={() => markCoverFailed(c)}
-              />
-            {/each}
-            {#each Array(4 - coverTiles.length) as _}
-              <div class="coll-cover-tile coll-cover-tile-empty"></div>
-            {/each}
-          </div>
-        {:else if coverTiles.length === 1}
-          <img
-            class="coll-cover-tile"
-            use:blobSrc={coverTiles[0]}
-            alt=""
-            loading="lazy"
-            draggable="false"
-            onerror={() => markCoverFailed(coverTiles[0])}
-          />
-        {:else}
-          <div class="coll-cover-tile placeholder">
-            <Disc3 size={16} stroke-width={1} />
-          </div>
-        {/if}
-      </div>
-
-      <div class="coll-meta">
-        <div class="coll-title display">{collection.title}</div>
-        <div class="coll-sub mono">
-          {collection.tracks.length}
-          {collection.tracks.length === 1 ? t("vault.track") : t("vault.tracks")}
-          {#if totalDur() > 0} · {fmtDuration(totalDur())}{/if}
-        </div>
-      </div>
-      <TrackFilterBar
-        total={collection.tracks.length}
-        {trackFilter}
-        {counts}
-        onFilterChange={handleFilterChange}
-      />
-      <button
-        type="button"
-        class="coll-clear mono"
-        disabled={running}
-        onclick={clearAll}
-      >
-        {t("vault.clear")}
-      </button>
-    </div>
-
-    {#if reviewing && !running}
-      <div class="review-note">
-        <span class="sync-text mono">{t("vault.reviewNote")}</span>
-        {#if counts.failed > 0}
-          <Button variant="ghost" size="sm" onclick={retryFailed}>
-            {t("vault.retryFailed", { n: counts.failed })}
-          </Button>
-        {/if}
-      </div>
-    {/if}
-
-    <div class="tbl-head">
-      <span class="h-num mono">#</span>
-      <span class="h-cover"></span>
-      <span class="h-title mono">{t("library.titleHeader")}</span>
-      <span class="h-source mono">{t("library.sourceHeader")}</span>
-      <span class="h-status mono">{t("library.statusHeader")}</span>
-    </div>
-
-    <div class="list" bind:this={listEl}>
-      {#each pagedTracks as track (track.id)}
-        <TrackRow
-          {track}
-          progress={progress[track.id]}
-          candidates={matches[track.id]}
-          picked={picks[track.id]}
-          allowPick={reviewing && !running}
-          onpick={(id, i) => (picks[id] = i)}
+<div class="vault">
+  <div class="page">
+    <VaultHero
+      bind:value={url}
+      compact={!!collection && !showSearchResults}
+      onResolve={resolve}
+      onSearch={openSearch}
+      onClear={dismissSearch}
+      resolving={resolving}
+      searching={searching}
+    >
+      {#if showSearchResults}
+        <InlineSearchResults
+          query={url}
+          results={searchResults}
+          loading={searching}
+          error={searchError}
+          addedIds={addedTrackIds}
+          onSelect={addTrack}
         />
-      {/each}
-    </div>
+      {/if}
+    </VaultHero>
 
-    {#if totalPages > 1}
-      <div class="pagination">
+    {#if error}
+      <div class="page-error" role="alert">
+        <AlertCircle size={16} stroke-width={1.5} />
+        <span class="page-error-text">{error}</span>
         <button
-          class="page-arrow"
-          aria-label={t("common.previousPage")}
-          disabled={page === 0}
-          onclick={() => (page = Math.max(0, page - 1))}
+          type="button"
+          class="page-error-retry mono"
+          onclick={() => resolve()}
         >
-          <ChevronLeft size={14} />
-        </button>
-        <div class="page-pill mono">
-          <span class="page-cur">{page + 1}</span>
-          <span class="page-sep">/</span>
-          <span class="page-total">{totalPages}</span>
-        </div>
-        <button
-          class="page-arrow"
-          aria-label={t("common.nextPage")}
-          disabled={page >= totalPages - 1}
-          onclick={() => (page = Math.min(totalPages - 1, page + 1))}
-        >
-          <ChevronRight size={14} />
+          {t("common.retry")}
         </button>
       </div>
     {/if}
-  {/if}
 
-  <DownloadFooter
-    {collection}
-    {running}
-    {reviewing}
-    {summary}
-    {counts}
-    totalDuration={totalDur()}
-    {savingPlaylist}
-    {saveHint}
-    onBeginDownload={beginDownload}
-    onConfirmDownload={confirmDownload}
-    onRetryFailed={retryFailed}
-    onCancel={cancel}
-    onSaveToPlaylist={saveToPlaylist}
-    onDone={clearAll}
-  />
+    {#if collection && !showSearchResults}
+      <div class="coll-header">
+        <div class="coll-cover">
+          {#if coverTiles.length >= 2}
+            <div class="coll-cover-grid">
+              {#each coverTiles as c (c)}
+                <img
+                  class="coll-cover-tile"
+                  use:blobSrc={c}
+                  alt=""
+                  loading="lazy"
+                  draggable="false"
+                  onerror={() => markCoverFailed(c)}
+                />
+              {/each}
+              {#each Array(4 - coverTiles.length) as _}
+                <div class="coll-cover-tile coll-cover-tile-empty"></div>
+              {/each}
+            </div>
+          {:else if coverTiles.length === 1}
+            <img
+              class="coll-cover-tile"
+              use:blobSrc={coverTiles[0]}
+              alt=""
+              loading="lazy"
+              draggable="false"
+              onerror={() => markCoverFailed(coverTiles[0])}
+            />
+          {:else}
+            <div class="coll-cover-tile placeholder">
+              <Disc3 size={16} stroke-width={1} />
+            </div>
+          {/if}
+        </div>
+
+        <div class="coll-meta">
+          <div class="coll-title display">{collection.title}</div>
+          <div class="coll-sub mono">
+            {collection.tracks.length}
+            {collection.tracks.length === 1 ? t("vault.track") : t("vault.tracks")}
+            {#if totalDur() > 0} · {fmtDuration(totalDur())}{/if}
+          </div>
+        </div>
+        <TrackFilterBar
+          total={collection.tracks.length}
+          {trackFilter}
+          {counts}
+          onFilterChange={handleFilterChange}
+        />
+        <button
+          type="button"
+          class="coll-clear mono"
+          disabled={running}
+          onclick={clearAll}
+        >
+          {t("vault.clear")}
+        </button>
+      </div>
+
+      {#if reviewing && !running}
+        <div class="review-note">
+          <span class="sync-text mono">{t("vault.reviewNote")}</span>
+          {#if counts.failed > 0}
+            <Button variant="ghost" size="sm" onclick={retryFailed}>
+              {t("vault.retryFailed", { n: counts.failed })}
+            </Button>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="tbl-head">
+        <span class="h-num mono">#</span>
+        <span class="h-cover"></span>
+        <span class="h-title mono">{t("library.titleHeader")}</span>
+        <span class="h-source mono">{t("library.sourceHeader")}</span>
+        <span class="h-status mono">{t("library.statusHeader")}</span>
+      </div>
+
+      <div class="list" bind:this={listEl}>
+        {#each pagedTracks as track (track.id)}
+          <TrackRow
+            {track}
+            progress={progress[track.id]}
+            candidates={matches[track.id]}
+            picked={picks[track.id]}
+            allowPick={reviewing && !running}
+            onpick={(id, i) => (picks[id] = i)}
+          />
+        {/each}
+      </div>
+
+      {#if totalPages > 1}
+        <div class="pagination">
+          <button
+            class="page-arrow"
+            aria-label={t("common.previousPage")}
+            disabled={page === 0}
+            onclick={() => (page = Math.max(0, page - 1))}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div class="page-pill mono">
+            <span class="page-cur">{page + 1}</span>
+            <span class="page-sep">/</span>
+            <span class="page-total">{totalPages}</span>
+          </div>
+          <button
+            class="page-arrow"
+            aria-label={t("common.nextPage")}
+            disabled={page >= totalPages - 1}
+            onclick={() => (page = Math.min(totalPages - 1, page + 1))}
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      {/if}
+    {/if}
+
+    <DownloadFooter
+      {collection}
+      {running}
+      {reviewing}
+      {summary}
+      {counts}
+      totalDuration={totalDur()}
+      {savingPlaylist}
+      {saveHint}
+      onBeginDownload={beginDownload}
+      onConfirmDownload={confirmDownload}
+      onRetryFailed={retryFailed}
+      onCancel={cancel}
+      onSaveToPlaylist={saveToPlaylist}
+      onDone={clearAll}
+    />
+  </div>
 </div>
 
 {#if showPlaylistPicker}
@@ -762,6 +764,16 @@
 {/if}
 
 <style>
+  .vault {
+    container-type: inline-size;
+    container-name: vault;
+
+    height: 100%;
+    min-width: 0;
+    margin: 0 -32px;
+    padding: 0 48px 0 120px;
+  }
+
   .page {
     --num-w: 32px;
     --cover-size: 36px;
@@ -770,13 +782,13 @@
     --row-px: 10px;
     --row-py: 8px;
     --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr)
-      minmax(140px, 1fr) var(--status-w);
+      minmax(0, 1fr) var(--status-w);
 
     height: 100%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    margin: 0 -32px;
-    padding: 0 48px 0 120px;
+    overflow-y: auto;
   }
 
   .page-error {
@@ -1041,9 +1053,21 @@
   }
 
   @container player (max-width: 620px) {
-    .page {
+    .vault {
       margin: 0 -16px;
       padding: 0 16px;
+    }
+  }
+
+  @container player (max-width: 420px) {
+    .vault {
+      margin: 0 -10px;
+      padding: 0 10px;
+    }
+  }
+
+  @container vault (max-width: 470px) {
+    .page {
       --num-w: 28px;
       --cover-size: 32px;
       --col-gap: 6px;
@@ -1060,10 +1084,8 @@
     }
   }
 
-  @container player (max-width: 420px) {
+  @container vault (max-width: 330px) {
     .page {
-      margin: 0 -10px;
-      padding: 0 10px;
       --cover-size: 28px;
       --status-w: 64px;
       --col-gap: 4px;

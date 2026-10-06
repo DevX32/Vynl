@@ -255,14 +255,6 @@
     display: none;
   }
 
-  .sidebar.collapsed .rail {
-    scrollbar-width: none;
-  }
-
-  .sidebar.collapsed .rail::-webkit-scrollbar {
-    display: none;
-  }
-
   .collapse-btn {
     color: var(--faint);
   }
@@ -383,20 +375,15 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(240, 240, 236, 0.12) transparent;
+    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
 
   .rail::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .rail::-webkit-scrollbar-thumb {
-    background: rgba(240, 240, 236, 0.12);
-    border-radius: 3px;
+    width: 0;
+    height: 0;
   }
 
   .rail-item {

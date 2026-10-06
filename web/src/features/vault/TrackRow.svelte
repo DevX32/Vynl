@@ -125,7 +125,7 @@
 <style>
   .row {
     display: grid;
-    grid-template-columns: var(--track-cols, 32px 36px minmax(0, 1fr) minmax(140px, 1fr) 70px);
+    grid-template-columns: var(--track-cols, 32px 36px minmax(0, 1fr) minmax(0, 1fr) 70px);
     align-items: center;
     gap: var(--col-gap, 8px);
     padding: var(--row-py, 8px) var(--row-px, 0px);
@@ -211,6 +211,9 @@
     font-size: 10.5px;
     letter-spacing: 0.06em;
     white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .status-label.done { color: var(--green); }
@@ -257,13 +260,13 @@
     font-variant-numeric: tabular-nums;
   }
 
-  @container player (max-width: 620px) {
+  @container vault (max-width: 470px) {
     .c-source {
       display: none;
     }
   }
 
-  @container player (max-width: 420px) {
+  @container vault (max-width: 330px) {
     .c-num {
       display: none;
     }
