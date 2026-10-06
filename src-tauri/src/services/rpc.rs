@@ -74,32 +74,23 @@ fn spawn_retry_thread() {
     std::thread::spawn(|| {
         for _ in 0..20 {
             std::thread::sleep(Duration::from_millis(250));
-            let pending = {
-                match PENDING.lock() {
-                    Ok(p) => p.clone(),
-                    Err(_) => return,
-                }
+            let pending = match PENDING.lock() {
+                Ok(p) => p.clone(),
+                Err(_) => return,
             };
             let mut guard = match CLIENT.lock() {
                 Ok(g) => g,
                 Err(_) => return,
             };
-            let client = match guard.as_mut() {
-                Some(c) => c,
-                None => return,
+            let Some(client) = guard.as_mut() else {
+                continue;
             };
-            match &pending {
-                Some(p) => {
-                    let activity = build_activity(p);
-                    if client.set_activity(activity).is_ok() {
-                        return;
-                    }
-                }
-                None => {
-                    if client.clear_activity().is_ok() {
-                        return;
-                    }
-                }
+            let applied = match &pending {
+                Some(p) => client.set_activity(build_activity(p)).is_ok(),
+                None => client.clear_activity().is_ok(),
+            };
+            if applied {
+                return;
             }
         }
     });
@@ -144,23 +135,53 @@ fn ensure_client() -> Option<std::sync::MutexGuard<'static, Option<DiscordIpcCli
     Some(guard)
 }
 
+enum Applied {
+    Done,
+    Stale,
+    NoClient,
+}
+
+fn apply_presence(presence: Option<&RpcPresence>) -> Applied {
+    let Some(mut guard) = ensure_client() else {
+        return Applied::NoClient;
+    };
+    let Some(client) = guard.as_mut() else {
+        return Applied::NoClient;
+    };
+    let ok = match presence {
+        Some(p) => client.set_activity(build_activity(p)).is_ok(),
+        None => client.clear_activity().is_ok(),
+    };
+    if ok { Applied::Done } else { Applied::Stale }
+}
+
 pub fn update_presence(presence: Option<&RpcPresence>) {
     if let Ok(mut pending) = PENDING.lock() {
         *pending = presence.cloned();
     }
 
-    let apply = |presence: Option<&RpcPresence>| -> Option<bool> {
-        let mut guard = ensure_client()?;
-        let client = guard.as_mut()?;
-        let ok = match presence {
-            Some(p) => client.set_activity(build_activity(p)).is_ok(),
-            None => client.clear_activity().is_ok(),
-        };
-        Some(ok)
-    };
+    match apply_presence(presence) {
+        Applied::Done => {}
+        Applied::Stale => {
+            reset_client();
+            apply_presence(presence);
+        }
+        Applied::NoClient => {}
+    }
+}
 
-    if apply(presence) != Some(true) {
-        reset_client();
-        apply(presence);
+pub fn patch_cover(artist: &str, title: &str, cover: String) {
+    let next = PENDING.lock().ok().and_then(|p| {
+        let current = p.as_ref()?;
+        if current.artist != artist || current.title != title {
+            return None;
+        }
+        Some(RpcPresence {
+            cover: Some(cover.clone()),
+            ..current.clone()
+        })
+    });
+    if let Some(next) = next {
+        update_presence(Some(&next));
     }
 }
