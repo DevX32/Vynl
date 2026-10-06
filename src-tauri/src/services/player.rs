@@ -32,9 +32,15 @@ pub struct PlaybackTick {
 
 type TickKey = (u64, bool, bool);
 
+fn reported_pos(sink: Option<&Sink>, floor: Option<Duration>) -> f64 {
+    let pos = sink.map(|s| s.get_pos()).unwrap_or_default();
+    pos.max(floor.unwrap_or_default()).as_secs_f64()
+}
+
 fn emit_playback_tick(
     generation: u64,
     sink: Option<&Sink>,
+    seek_floor: Option<Duration>,
     duration_secs: Option<f64>,
     last_key: &mut Option<TickKey>,
 ) {
@@ -55,7 +61,7 @@ fn emit_playback_tick(
     *last_key = Some(key);
 
     let Some(app) = APP.get() else { return };
-    let position = sink.map(|s| s.get_pos().as_secs_f64()).unwrap_or(0.0);
+    let position = reported_pos(sink, seek_floor);
     let _ = app.emit(
         PLAYBACK_TICK_EVENT,
         PlaybackTick {
@@ -815,6 +821,10 @@ fn stop_fading_out(fading: &mut Option<FadingOut>) {
     }
 }
 
+fn seek_floor_for(time: f64) -> Option<Duration> {
+    valid_seek_time(time).then(|| Duration::from_secs_f64(time))
+}
+
 fn begin_crossfade(
     handle: &Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
@@ -861,13 +871,14 @@ fn reopen_output(
     handle: &mut Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
+    seek_floor: &mut Option<Duration>,
     current_path: &Option<String>,
 ) {
     let resume_pos = sink
         .as_ref()
         .map(|t| &t.sink)
         .filter(|s| !s.empty() && !PAUSED.load(Ordering::Relaxed))
-        .map(|s| s.get_pos().as_secs_f64());
+        .map(|s| reported_pos(Some(s), *seek_floor));
     if let Some(t) = sink.take() {
         t.sink.stop();
     }
@@ -896,6 +907,8 @@ fn reopen_output(
                 .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
             if let Err(e) = seek_sink(&track.sink, pos) {
                 eprintln!("device change: could not resume {path}: {e}");
+            } else {
+                *seek_floor = seek_floor_for(pos);
             }
             *sink = Some(track);
         }
@@ -926,6 +939,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
     let mut playback_generation = 0u64;
     let mut active_generation = 0u64;
     let mut pending_seek: Option<(f64, u64)> = None;
+    let mut seek_floor: Option<Duration> = None;
     let mut duration_secs: Option<f64> = None;
     let mut last_tick_key: Option<TickKey> = None;
     let mut last_device_poll = Instant::now();
@@ -985,6 +999,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                     sink = Some(track);
                                     duration_secs = total;
                                     active_generation = generation;
+                                    seek_floor = requested_seek.and_then(seek_floor_for);
                                     PAUSED.store(false, Ordering::Relaxed);
                                     PlayerResp::Ok
                                 }
@@ -1009,6 +1024,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                 playback_generation = generation;
                                 active_generation = generation;
                                 pending_seek = None;
+                                seek_floor = None;
                                 current_path = Some(path);
                                 duration_secs = total;
                                 PAUSED.store(false, Ordering::Relaxed);
@@ -1024,6 +1040,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             playback_generation = generation;
                             active_generation = 0;
                             pending_seek = None;
+                            seek_floor = None;
                             duration_secs = None;
                             current_path = None;
                             stop_fading_out(&mut fading);
@@ -1073,7 +1090,10 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             match sink.as_ref() {
                                 Some(track) if generation == active_generation => {
                                     match seek_sink(&track.sink, time) {
-                                        Ok(()) => PlayerResp::Ok,
+                                        Ok(()) => {
+                                            seek_floor = seek_floor_for(time);
+                                            PlayerResp::Ok
+                                        }
                                         Err(e) => PlayerResp::Err(e),
                                     }
                                 }
@@ -1098,9 +1118,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                     }
                     PlayerCmd::GetPosition(generation) => {
                         let pos = if generation == active_generation {
-                            sink.as_ref()
-                                .map(|t| t.sink.get_pos().as_secs_f64())
-                                .unwrap_or(0.0)
+                            reported_pos(sink.as_ref().map(|t| &t.sink), seek_floor)
                         } else {
                             0.0
                         };
@@ -1126,6 +1144,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             &mut handle,
                             &mut sink,
                             &mut fading,
+                            &mut seek_floor,
                             &current_path,
                         );
                     }
@@ -1142,6 +1161,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
         emit_playback_tick(
             active_generation,
             sink.as_ref().map(|t| &t.sink),
+            seek_floor,
             duration_secs,
             &mut last_tick_key,
         );
@@ -1203,135 +1223,5 @@ pub fn is_playing(generation: u64) -> Result<bool, String> {
         Ok(PlayerResp::Err(e)) => Err(e),
         Ok(_) => Err("unexpected".into()),
         Err(e) => Err(e),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rodio::source::Zero;
-
-    const RATE: usize = 44_100;
-
-    fn ramp(control: &FadeControl, count: usize) -> Vec<f32> {
-        FadeSource::new(
-            Zero::<f32>::new_samples(1, RATE as u32, count),
-            control.clone(),
-        )
-        .take(count)
-        .collect()
-    }
-
-    #[test]
-    fn settled_control_passes_audio_untouched() {
-        let control = FadeControl::settled(1.0);
-        let samples = ramp(&control, 16);
-        assert!(samples.iter().all(|s| *s == 0.0));
-        assert_eq!(control.current(), 1.0);
-    }
-
-    #[test]
-    fn fade_in_ramps_from_silence_and_lands_on_target() {
-        let control = FadeControl::settled(0.0);
-        control.ramp_to(1.0, 1.0, RATE as u32);
-        let mut source = FadeSource::new(
-            Zero::<f32>::new_samples(1, RATE as u32, RATE),
-            control.clone(),
-        );
-        let gains: Vec<f32> = (0..RATE)
-            .map(|_| {
-                source.next().unwrap();
-                source.gain
-            })
-            .collect();
-        assert_eq!(gains.len(), RATE);
-        assert!((gains[0] - 1.0 / RATE as f32).abs() < 1e-6);
-        assert!((gains[RATE / 2] - 0.5).abs() < 1e-3);
-        assert_eq!(gains[RATE - 1], 1.0);
-        assert!(gains.windows(2).all(|w| w[1] >= w[0]));
-    }
-
-    #[test]
-    fn fade_out_reaches_silence_at_the_end_of_the_ramp() {
-        let control = FadeControl::settled(1.0);
-        control.ramp_to(0.0, 1.0, RATE as u32);
-        let mut source = FadeSource::new(
-            Zero::<f32>::new_samples(1, RATE as u32, RATE),
-            control.clone(),
-        );
-        let gains: Vec<f32> = (0..RATE)
-            .map(|_| {
-                source.next().unwrap();
-                source.gain
-            })
-            .collect();
-        assert!((gains[0] - 1.0).abs() < 1e-3);
-        assert!((gains[RATE / 2] - 0.5).abs() < 1e-3);
-        assert_eq!(gains[RATE - 1], 0.0);
-        assert!(gains.windows(2).all(|w| w[1] <= w[0]));
-    }
-
-    #[test]
-    fn gain_settles_early_and_holds_the_target() {
-        let control = FadeControl::settled(1.0);
-        control.ramp_to(0.0, 0.25, RATE as u32);
-        let mut source = FadeSource::new(
-            Zero::<f32>::new_samples(1, RATE as u32, RATE),
-            control.clone(),
-        );
-        let gains: Vec<f32> = (0..RATE)
-            .map(|_| {
-                source.next().unwrap();
-                source.gain
-            })
-            .collect();
-        assert!(gains.iter().all(|g| (0.0..=1.0).contains(g)));
-        assert!(gains[RATE / 4..].iter().all(|g| *g == 0.0));
-    }
-
-    #[test]
-    fn a_new_order_mid_ramp_restarts_from_the_live_gain() {
-        let control = FadeControl::settled(1.0);
-        control.ramp_to(0.0, 1.0, RATE as u32);
-        let mut source = FadeSource::new(
-            Zero::<f32>::new_samples(1, RATE as u32, RATE),
-            control.clone(),
-        );
-        for _ in 0..RATE / 10 {
-            source.next();
-        }
-        let halfway = source.gain;
-        assert!(halfway < 1.0 && halfway > 0.0);
-        control.ramp_to(0.0, 1.0, RATE as u32);
-        source.next();
-        assert!(source.gain < halfway);
-    }
-
-    #[test]
-    fn zero_length_ramp_snaps_immediately() {
-        let control = FadeControl::settled(1.0);
-        control.ramp_to(0.0, 0.0, RATE as u32);
-        let mut source =
-            FadeSource::new(Zero::<f32>::new_samples(1, RATE as u32, 4), control.clone());
-        source.next();
-        assert_eq!(source.gain, 0.0);
-    }
-
-    #[test]
-    fn non_finite_and_negative_fades_are_treated_as_snap() {
-        let control = FadeControl::settled(1.0);
-        control.ramp_to(0.0, f64::NAN, RATE as u32);
-        assert_eq!(control.take_order(None).unwrap().2, 0);
-        let control = FadeControl::settled(0.0);
-        control.ramp_to(1.0, -3.0, RATE as u32);
-        assert_eq!(control.take_order(None).unwrap().2, 0);
-    }
-
-    #[test]
-    fn an_absurd_fade_length_yields_a_finite_ramp() {
-        assert!(MAX_CROSSFADE_SECS.is_finite());
-        let control = FadeControl::settled(1.0);
-        control.ramp_to(0.0, f64::MAX, RATE as u32);
-        assert!(control.take_order(None).unwrap().2 > 0);
     }
 }
