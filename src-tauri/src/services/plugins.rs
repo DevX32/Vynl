@@ -21,6 +21,70 @@ const MAX_ARCHIVE_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES: u64 = 200 * 1024 * 1024;
 const MAX_HTTP_BODY_BYTES: usize = 10 * 1024 * 1024;
 
+const BLOCKED_REQUEST_HEADERS: [&str; 9] = [
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "cookie",
+    "cookie2",
+    "set-cookie",
+    "referer",
+    "sec-fetch-mode",
+    "sec-fetch-site",
+];
+
+fn is_blocked_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || (v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]))
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+fn is_blocked_hostname(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    host == "localhost"
+        || host.ends_with(".localhost")
+        || host.ends_with(".local")
+        || host.ends_with(".internal")
+        || !host.contains('.')
+}
+
+fn guard_plugin_url(url: &reqwest::Url) -> Result<(), String> {
+    if url.scheme() != "https" && url.scheme() != "http" {
+        return Err("Only http(s) URLs are allowed".into());
+    }
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL is missing a host".to_string())?
+        .trim_start_matches('[')
+        .trim_end_matches(']');
+
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if is_blocked_ip(&ip) {
+            return Err(format!("Host '{host}' is not reachable from plugins"));
+        }
+        return Ok(());
+    }
+    if is_blocked_hostname(host) {
+        return Err(format!("Host '{host}' is not reachable from plugins"));
+    }
+    Ok(())
+}
+
 pub const KNOWN_CATEGORIES: [&str; 8] = [
     "metadata",
     "lyrics",
@@ -538,9 +602,7 @@ pub async fn http_fetch(
     opts: Option<PluginHttpOptions>,
 ) -> Result<PluginHttpResponse, String> {
     let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid URL".to_string())?;
-    if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err("Only http(s) URLs are allowed".into());
-    }
+    guard_plugin_url(&parsed)?;
 
     let opts = opts.unwrap_or(PluginHttpOptions {
         method: None,
@@ -563,6 +625,9 @@ pub async fn http_fetch(
     );
     if let Some(headers) = opts.headers {
         for (k, v) in headers {
+            if BLOCKED_REQUEST_HEADERS.contains(&k.to_ascii_lowercase().as_str()) {
+                return Err(format!("Header '{k}' cannot be set by plugins"));
+            }
             req = req.header(k, v);
         }
     }

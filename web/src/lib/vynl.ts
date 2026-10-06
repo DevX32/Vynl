@@ -182,11 +182,7 @@ export const vynl = {
   rpcUpdate: (state: RpcPresence | null): Promise<void> =>
     cmd("rpc_update", { state }),
 
-  copyText: (text: string): void => {
-    writeText(text).catch((e) => {
-      console.warn("clipboard write failed:", e);
-    });
-  },
+  copyText: (text: string): Promise<void> => writeText(text),
 
   openExternal: (url: string): Promise<void> => openShell(url),
 

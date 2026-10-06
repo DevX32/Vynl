@@ -18,6 +18,7 @@
   let searchQuery = $state("");
   let searchResults = $state<LrcSearchResult[]>([]);
   let searchLoading = $state(false);
+  let searchError = $state<string | null>(null);
   let searchVersion = 0;
 
   $effect(() => {
@@ -25,6 +26,7 @@
     const next = track ? `${track.title} ${track.artist}` : "";
     searchQuery = next;
     searchResults = [];
+    searchError = null;
     if (next.trim()) void runSearch(next);
   });
 
@@ -32,6 +34,7 @@
     const trimmed = query.trim();
     if (!trimmed) return;
     searchLoading = true;
+    searchError = null;
     const ver = ++searchVersion;
     try {
       const track = getCurrentTrack();
@@ -41,8 +44,11 @@
         artistName: track?.artist,
       });
       if (ver === searchVersion) searchResults = results;
-    } catch {
-      if (ver === searchVersion) searchResults = [];
+    } catch (e) {
+      if (ver === searchVersion) {
+        searchResults = [];
+        searchError = e instanceof Error && e.message ? e.message : t("lyrics.searchFailed");
+      }
     } finally {
       if (ver === searchVersion) searchLoading = false;
     }
@@ -106,7 +112,9 @@
     {/each}
   </div>
 {:else if !searchLoading && searchQuery}
-  <div class="search-empty mono">{t("lyrics.noResults")}</div>
+  <div class="search-empty mono" class:bad={!!searchError}>
+    {searchError ?? t("lyrics.noResults")}
+  </div>
 {/if}
 
 <style>
@@ -168,6 +176,10 @@
     color: var(--faint);
     font-size: 11px;
     padding: 20px 0;
+    overflow-wrap: anywhere;
+  }
+  .search-empty.bad {
+    color: var(--red);
   }
 
   .btn-primary {

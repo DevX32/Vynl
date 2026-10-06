@@ -63,8 +63,13 @@
   }
 
   function copyText(text: string): void {
-    vynl.copyText(text);
-    showToast(t("lyrics.copied"));
+    vynl
+      .copyText(text)
+      .then(() => showToast(t("lyrics.copied")))
+      .catch((e) => {
+        console.warn("clipboard write failed:", e);
+        showToast(t("lyrics.copyFailed"));
+      });
   }
 
   function closeOverlay(): void {

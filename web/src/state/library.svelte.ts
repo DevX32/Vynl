@@ -3,6 +3,7 @@ import { vynl } from "@lib/vynl";
 import { emitAppEvent } from "@lib/plugins/events";
 
 let _library = $state<LibraryTrack[]>([]);
+let _libraryError = $state<string | null>(null);
 let _listenerReady: Promise<void> | null = null;
 let _libraryRevision = 0;
 let _refreshPromise: Promise<void> | null = null;
@@ -77,11 +78,15 @@ export function refreshLibrary(): Promise<void> {
     try {
       await listenerReady;
       const tracks = await vynl.getLibrary();
-      if (_libraryRevision === requestRevision && libraryChanged(tracks)) {
-        _library = tracks;
+      if (_libraryRevision === requestRevision) {
+        _libraryError = null;
+        if (libraryChanged(tracks)) _library = tracks;
       }
     } catch (e) {
       console.warn("refreshLibrary failed:", e);
+      if (_libraryRevision === requestRevision) {
+        _libraryError = e instanceof Error ? e.message : String(e);
+      }
     } finally {
       _refreshPromise = null;
       markLibraryLoaded();
@@ -93,4 +98,8 @@ export function refreshLibrary(): Promise<void> {
 
 export function getLibrary(): LibraryTrack[] {
   return _library;
+}
+
+export function getLibraryError(): string | null {
+  return _libraryError;
 }

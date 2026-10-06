@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { Search, Loader, Link2, ListChecks, FolderDown } from "lucide-svelte";
+  import {
+  Search,
+  LoaderCircle,
+  Link2,
+  ListChecks,
+  FolderDown,
+} from "lucide-svelte";
   import type { Snippet } from "svelte";
   import { t } from "@lib/i18n";
 
@@ -129,7 +135,7 @@
     <div class="input-wrap" class:focused={!!value}>
       <div class="input-icon">
         {#if resolving || searching}
-          <Loader size={16} stroke-width={2} class="spin" />
+          <LoaderCircle size={16} stroke-width={2} class="spin" />
         {:else}
           <Search size={16} stroke-width={1.5} />
         {/if}
@@ -388,7 +394,7 @@
   }
 
   .input-icon :global(.spin) {
-    animation: spin 0.7s linear infinite;
+    animation: spin 0.85s linear infinite;
     color: var(--accent);
   }
 

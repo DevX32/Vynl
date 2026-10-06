@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, X, ListPlus, Loader } from "lucide-svelte";
+  import { Download, X, ListPlus, LoaderCircle } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { fmtDuration } from "../../lib/format";
   import type { DownloadSummary } from "../../lib/types";
@@ -83,7 +83,7 @@
             onclick={onSaveToPlaylist}
           >
             {#if savingPlaylist}
-              <Loader size={14} stroke-width={2} class="spin" />
+              <LoaderCircle size={14} stroke-width={2} class="spin" />
             {:else}
               <ListPlus size={14} stroke-width={1.75} />
             {/if}
@@ -171,7 +171,7 @@
   }
 
   .save-btn :global(.spin) {
-    animation: spin 0.7s linear infinite;
+    animation: spin 0.85s linear infinite;
   }
 
   @keyframes spin {

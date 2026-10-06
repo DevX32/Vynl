@@ -9,6 +9,7 @@
     ListPlus,
     Image,
     Clock,
+    Loader,
   } from "lucide-svelte";
   import {
     getCurrentTrack,
@@ -39,6 +40,7 @@
   import {
     addToPlaylist,
     getCurrentPlaylist,
+    isPlaylistLoading,
     markCoverFailed,
     moveInPlaylist,
     removeFromPlaylist,
@@ -56,6 +58,7 @@
 
   const pl = $derived(getCurrentPlaylist());
   const library = $derived(getLibrary());
+  const loading = $derived(isPlaylistLoading());
 
   $effect(() => {
     void pl?.id;
@@ -196,7 +199,12 @@
 </script>
 
 <div class="pl-detail">
-  {#if pl}
+  {#if loading && !pl}
+    <div class="pl-loading" role="status">
+      <Loader size={18} stroke-width={1.5} class="spin" />
+      <span class="mono">{t("common.loading")}</span>
+    </div>
+  {:else if pl}
     <div class="hero">
       <div class="hero-cover-wrap">
         {#if covers.length >= 2}
@@ -329,7 +337,8 @@
               drag.grabIdx !== i}
             class:dragging={drag.dragging && drag.grabIdx === i}
             role="button"
-            tabindex="-1"
+            tabindex="0"
+            aria-label={`${trk.title} — ${trk.artist}`}
             style:cursor={!q
               ? drag.dragging
                 ? "grabbing"
@@ -420,6 +429,17 @@
     flex-direction: column;
     gap: 12px;
     min-height: 0;
+  }
+
+  .pl-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+    color: var(--faint);
+    font-size: 11.5px;
   }
 
   .hero {

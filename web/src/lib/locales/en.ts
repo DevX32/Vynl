@@ -163,6 +163,8 @@ export const en = {
     synced: "Synced",
     plain: "Plain",
     noResults: "No results found",
+    searchFailed: "Lyrics search failed. Check your connection and try again.",
+    copyFailed: "Could not copy to clipboard",
     pasteLyrics: "Paste Lyrics",
     pastePlaceholder: "Paste LRC or plain text lyrics here...",
     cancel: "Cancel",
@@ -424,6 +426,11 @@ export const en = {
   common: {
     close: "Close",
     select: "Select…",
+    previousPage: "Previous page",
+    nextPage: "Next page",
+    retry: "Retry",
+    dismiss: "Dismiss",
+    loading: "Loading…",
   },
   plugins: {
     title: "Plugins",

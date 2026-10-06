@@ -649,16 +649,14 @@ async fn serve_file_with_range(path: PathBuf, headers: HeaderMap, content_type: 
         HeaderValue::from_str(content_type)
             .unwrap_or(HeaderValue::from_static("application/octet-stream")),
     );
-    res_headers.insert(
-        header::CONTENT_LENGTH,
-        HeaderValue::from_str(&content_len.to_string()).unwrap(),
-    );
+    if let Ok(value) = HeaderValue::from_str(&content_len.to_string()) {
+        res_headers.insert(header::CONTENT_LENGTH, value);
+    }
     if let Some(start) = start {
         let end = start + content_len - 1;
-        res_headers.insert(
-            header::CONTENT_RANGE,
-            HeaderValue::from_str(&format!("bytes {start}-{end}/{len}")).unwrap(),
-        );
+        if let Ok(value) = HeaderValue::from_str(&format!("bytes {start}-{end}/{len}")) {
+            res_headers.insert(header::CONTENT_RANGE, value);
+        }
     }
     res_headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
     res

@@ -80,7 +80,8 @@
           drag.grabIdx !== i}
         class:dragging={drag.dragging && drag.grabIdx === i}
         role="button"
-        tabindex="-1"
+        tabindex="0"
+        aria-label={`${q.title} — ${"artist" in q && q.artist ? q.artist : ""}`}
         style:cursor={drag.dragging ? "grabbing" : "grab"}
         onpointerdown={(e) => onRowPointerDown(e, section, i)}
         onclick={() => {

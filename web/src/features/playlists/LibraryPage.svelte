@@ -9,9 +9,10 @@
     ListPlus,
     Trash2,
     Clock,
+    AlertCircle,
   } from "lucide-svelte";
   import { vynl } from "../../lib/vynl";
-  import { refreshLibrary, getLibrary } from "@state/library.svelte";
+  import { refreshLibrary, getLibrary, getLibraryError } from "@state/library.svelte";
   import {
     getCurrentTrack,
     getIsTrackPlaying,
@@ -70,6 +71,7 @@
   let pickerBusy = $state(false);
 
   const library = $derived(getLibrary());
+  const libraryError = $derived(getLibraryError());
   const nowPlaying = $derived(getCurrentTrack());
   const playing = $derived(getIsTrackPlaying());
   const playlists = $derived(getCurrentPlaylists());
@@ -283,6 +285,19 @@
           {#if scanning}
             · {t("player.scanning")}{/if}
         </div>
+        {#if libraryError}
+          <div class="lib-error" role="alert">
+            <AlertCircle size={13} stroke-width={1.5} />
+            <span>{libraryError}</span>
+            <button
+              type="button"
+              class="lib-error-retry mono"
+              onclick={() => void refresh()}
+            >
+              {t("common.retry")}
+            </button>
+          </div>
+        {/if}
       </div>
       <div class="hdr-actions">
         <SearchInput
@@ -439,6 +454,43 @@
     font-size: 11px;
     color: var(--dim);
     margin-top: 8px;
+  }
+
+  .lib-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--danger-border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--red) 6%, transparent);
+    color: var(--red);
+    font-size: 11px;
+    max-width: 640px;
+  }
+
+  .lib-error span {
+    flex: 1;
+    min-width: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .lib-error-retry {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--danger-border-hover);
+    background: transparent;
+    color: var(--dim);
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+
+  .lib-error-retry:hover {
+    color: var(--text);
+    background: var(--bg-raise);
   }
 
   .hdr-actions {

@@ -7,12 +7,15 @@ let _meta = $state<PlaylistMeta[]>([]);
 let _all = $state<Record<string, Playlist>>({});
 let _current = $state<Playlist | null>(null);
 let _selected = $state<string | null>(null);
+let _selecting = $state(false);
+let _selectGeneration = 0;
 let _fetchAllGeneration = 0;
 let _refreshPromise: Promise<void> | null = null;
 
 const currentPlaylists = $derived(_meta);
 const currentPlaylist = $derived(_current);
 const selectedId = $derived(_selected);
+const isSelecting = $derived(_selecting);
 
 export function getCurrentPlaylists(): PlaylistMeta[] {
   return currentPlaylists;
@@ -22,6 +25,9 @@ export function getCurrentPlaylist(): Playlist | null {
 }
 export function getSelectedId(): string | null {
   return selectedId;
+}
+export function isPlaylistLoading(): boolean {
+  return isSelecting;
 }
 
 async function fetchAll(): Promise<void> {
@@ -56,12 +62,22 @@ export function refreshPlaylists(): Promise<void> {
 }
 
 export async function selectPlaylist(id: string | null): Promise<void> {
+  const gen = ++_selectGeneration;
   _selected = id;
+  if (!id) {
+    _current = null;
+    _selecting = false;
+    return;
+  }
+  _selecting = true;
   try {
-    _current = id ? await vynl.getPlaylist(id) : null;
+    const p = await vynl.getPlaylist(id);
+    if (gen === _selectGeneration) _current = p;
   } catch (e) {
     console.warn("selectPlaylist failed:", e);
-    _current = null;
+    if (gen === _selectGeneration) _current = null;
+  } finally {
+    if (gen === _selectGeneration) _selecting = false;
   }
 }
 

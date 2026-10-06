@@ -8,7 +8,7 @@
     SearchResult,
     TrackProgress,
   } from "../../lib/types";
-  import { ChevronLeft, ChevronRight } from "lucide-svelte";
+  import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-svelte";
   import { vynl } from "../../lib/vynl";
   import { resolveCollectionWithPlugins } from "@lib/plugins/providers";
   import { getCurrentSettings } from "@state/settings.svelte";
@@ -599,6 +599,20 @@
     {/if}
   </VaultHero>
 
+  {#if error}
+    <div class="page-error" role="alert">
+      <AlertCircle size={16} stroke-width={1.5} />
+      <span class="page-error-text">{error}</span>
+      <button
+        type="button"
+        class="page-error-retry mono"
+        onclick={() => resolve()}
+      >
+        {t("common.retry")}
+      </button>
+    </div>
+  {/if}
+
   {#if collection && !showSearchResults}
     <div class="coll-header">
       <div class="coll-cover">
@@ -694,6 +708,7 @@
       <div class="pagination">
         <button
           class="page-arrow"
+          aria-label={t("common.previousPage")}
           disabled={page === 0}
           onclick={() => (page = Math.max(0, page - 1))}
         >
@@ -706,6 +721,7 @@
         </div>
         <button
           class="page-arrow"
+          aria-label={t("common.nextPage")}
           disabled={page >= totalPages - 1}
           onclick={() => (page = Math.min(totalPages - 1, page + 1))}
         >
@@ -761,6 +777,45 @@
     flex-direction: column;
     margin: 0 -32px;
     padding: 0 48px 0 120px;
+  }
+
+  .page-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--danger-border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--red) 6%, transparent);
+    color: var(--red);
+    font-size: 11.5px;
+  }
+
+  .page-error-text {
+    flex: 1;
+    min-width: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .page-error-retry {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--danger-border-hover);
+    background: transparent;
+    color: var(--dim);
+    font-size: 11px;
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background 0.15s;
+  }
+
+  .page-error-retry:hover {
+    color: var(--text);
+    background: var(--bg-raise);
   }
 
   .coll-header {
