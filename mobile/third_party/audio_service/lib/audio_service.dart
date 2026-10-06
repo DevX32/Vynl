@@ -15,45 +15,21 @@ import 'package:rxdart/rxdart.dart';
 
 AudioServicePlatform _platform = AudioServicePlatform.instance;
 
-/// The buttons on a headset.
 enum MediaButton {
-  /// The "media" button on Android, or the play/pause button on iOS.
   media,
-
-  /// The "skip to next" button.
   next,
-
-  /// The "skip to previous" button.
   previous,
 }
 
-/// The actions associated with playing audio.
 enum MediaAction {
-  /// Stop playing audio.
   stop,
-
-  /// Pause audio.
   pause,
-
-  /// Play or resume audio.
   play,
-
-  /// Rewind.
   rewind,
-
-  /// Skip to the previous media item.
   skipToPrevious,
-
-  /// Skip to the next media item.
   skipToNext,
-
-  /// Fast forward.
   fastForward,
-
-  /// Set a rating for the current media item.
   setRating,
-
-  /// Seek within the current media item.
   seek,
 
   /// Toggle between playing and paused.
@@ -109,7 +85,6 @@ enum MediaAction {
   custom,
 }
 
-/// The states of audio processing.
 enum AudioProcessingState {
   /// There hasn't been any resource loaded yet.
   idle,

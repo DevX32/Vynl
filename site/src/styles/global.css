@@ -68,7 +68,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Subtle paper grain */
 body::before {
   content: '';
   position: fixed;

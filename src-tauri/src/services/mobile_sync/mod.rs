@@ -114,14 +114,12 @@ pub fn list_lan_addresses() -> Vec<String> {
 fn local_addrs() -> Result<Vec<IpAddr>, String> {
     use std::net::UdpSocket;
     let mut addrs = Vec::new();
-    // Best-effort: connect UDP to a public IP (no packets sent) to discover the LAN iface.
     if let Ok(socket) = UdpSocket::bind("0.0.0.0:0")
         && socket.connect("8.8.8.8:80").is_ok()
         && let Ok(local) = socket.local_addr()
     {
         addrs.push(local.ip());
     }
-    // Also try hostname resolution for extra candidates.
     if let Ok(host) = hostname()
         && let Ok(iter) = dns_lookup(&host)
     {
@@ -325,7 +323,6 @@ pub async fn rotate_pin(user_data_dir: &Path) -> Result<MobileSyncStatus, String
     cfg.pairing_pin = generate_pin();
     cfg.api_token = generate_token();
     save_config(user_data_dir, &cfg)?;
-    // Restart so in-memory auth matches disk.
     if cfg.enabled {
         stop().await;
         start(user_data_dir).await?;

@@ -115,10 +115,6 @@ async fn track_snapshot(state: &SharedState) -> Arc<TrackSnapshot> {
     snap
 }
 
-/// The manifest is derived from the track snapshot, so it is cached against
-/// that snapshot's generation. A fresh library load produces a new generation
-/// and the manifest is rebuilt with it, which keeps a desktop rescan visible
-/// without re-stat'ing every file on every request.
 async fn cached_manifest(state: &SharedState) -> Arc<Vec<MobileSyncManifestEntry>> {
     let snap = track_snapshot(state).await;
 

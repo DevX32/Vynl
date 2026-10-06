@@ -22,17 +22,8 @@ class SyncProgress {
 
   double get fraction => total <= 0 ? 0 : done / total;
 }
-
-/// How many tracks download at once. LAN transfers are latency-bound, so a
-/// small pool of parallel requests far beats the old one-at-a-time loop while
-/// still leaving the phone's radio and disk headroom.
 const int _downloadConcurrency = 6;
-
-/// Minimum gap between system notification updates. Without this, six workers
-/// finishing together would post a burst of notifications per track.
 const Duration _notifyInterval = Duration(milliseconds: 400);
-
-/// Minimum gap between in-app progress updates driven by download chunks.
 const Duration _uiInterval = Duration(milliseconds: 120);
 
 class SyncService {
@@ -65,8 +56,6 @@ class SyncService {
     final mtimeById = {for (final m in manifest) m.id: m.mtime ?? 0};
     final catalogById = {for (final t in catalog) t.id: t};
 
-    // One query for mtimes and local paths, replacing the per-track `getTrack`
-    // lookup that previously ran once for every track in the catalog.
     final local = await db.localSyncState();
 
     final needDownload = <CatalogTrack>[];
@@ -103,8 +92,6 @@ class SyncService {
     if (total > 0) {
       onProgress(SyncProgress(phase: 'Downloading', done: 0, total: total));
 
-      // Shared cursor drained by a fixed pool of workers. Dart runs this on one
-      // isolate, so plain reads/writes here need no extra synchronisation.
       var next = 0;
       var lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
       var lastUi = DateTime.fromMillisecondsSinceEpoch(0);
