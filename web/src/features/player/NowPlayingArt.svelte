@@ -145,6 +145,14 @@
     text-align: center;
     padding: 26px 0 6px;
     gap: 4px;
+    transform: translateX(calc(var(--sidebar-w, 0px) / -2));
+    transition: transform 0.22s ease;
+  }
+
+  @container player (max-width: 900px) {
+    .now {
+      transform: none;
+    }
   }
 
   .now-art {

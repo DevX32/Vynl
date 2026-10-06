@@ -65,9 +65,31 @@
     const p = playlists[idx];
     if (p) start(e, { idx, path: p.id });
   }
+
+  let navEl: HTMLElement | undefined = $state();
+
+  $effect(() => {
+    const el = navEl;
+    const shell = el?.closest(".shell") as HTMLElement | null;
+    if (!el || !shell) return;
+    const publish = (): void =>
+      shell.style.setProperty("--sidebar-w", `${el.offsetWidth}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      shell.style.removeProperty("--sidebar-w");
+    };
+  });
 </script>
 
-<nav class="sidebar" class:collapsed={!sidebarOpen} aria-label={t("nav.mainNavigation")}>
+<nav
+  class="sidebar"
+  class:collapsed={!sidebarOpen}
+  bind:this={navEl}
+  aria-label={t("nav.mainNavigation")}
+>
   <div class="nav-group">
     <button class="nav-link" class:active={page === "home"} onclick={onHome}>
       <span class="nav-icon"><Home size={15} stroke-width={1.5} /></span>
@@ -99,9 +121,7 @@
 
   <div class="rail-section">
     <div class="rail-head">
-      {#if sidebarOpen}
-        <span class="rail-title mono">{t("playlists.title")}</span>
-      {/if}
+      <span class="rail-title mono">{t("playlists.title")}</span>
       <button
         class="icon-btn small"
         onclick={onNewPlaylist}
@@ -311,24 +331,52 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    transition: gap 0.22s ease;
+  }
+
+  .sidebar.collapsed .rail-section {
+    gap: 0;
   }
 
   .rail-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
+    height: 26px;
     padding: 0 6px 2px;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition:
+      height 0.22s ease,
+      padding 0.22s ease;
   }
 
   .sidebar.collapsed .rail-head {
-    display: none;
+    height: 0;
+    padding: 0;
+  }
+
+  .rail-head :global(.icon-btn) {
+    flex-shrink: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .sidebar.collapsed .rail-head :global(.icon-btn),
+  .sidebar.collapsed .rail-title {
+    opacity: 0;
   }
 
   .rail-title {
+    min-width: 0;
     font-size: 9.5px;
     letter-spacing: 0.18em;
     color: var(--faint);
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 1;
+    transition: opacity 0.12s ease;
   }
 
   .rail {
