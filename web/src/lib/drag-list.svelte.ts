@@ -15,6 +15,12 @@ interface DragListOptions {
   rowSelector?: (section: string | null) => string;
 }
 
+interface RowBox {
+  index: number;
+  center: number;
+  height: number;
+}
+
 function defaultRowSelector(section: string | null): string {
   return section ? `.row.${section}-row` : ".row";
 }
@@ -38,43 +44,94 @@ export function useDragList(options: DragListOptions) {
   let teardown: (() => void) | null = null;
 
   let centers: number[] | null = null;
+  let boxes: RowBox[] | null = null;
   let bandTop = Number.NEGATIVE_INFINITY;
   let bandBottom = Number.POSITIVE_INFINITY;
 
-  function rowCenters(): number[] {
+  function rowBoxes(): RowBox[] {
     if (!drag.rowsEl) return [];
     const rows = drag.rowsEl.querySelectorAll<HTMLElement>(
       rowSelector(drag.section),
     );
     return Array.from(rows, (row) => {
       const rect = row.getBoundingClientRect();
-      return rect.top + rect.height / 2;
+      const source = row.dataset.index
+        ? row
+        : (row.closest<HTMLElement>("[data-index]") ?? row);
+      const attr = Number(source.dataset.index);
+      return {
+        index: Number.isFinite(attr) ? attr : -1,
+        center: rect.top + rect.height / 2,
+        height: rect.height,
+      };
     });
   }
 
+  function nearestBox(candidates: RowBox[], y: number): number {
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < candidates.length; i += 1) {
+      const dist = Math.abs(y - candidates[i].center);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   function measureCenters(y: number): number | null {
-    const measured = rowCenters();
-    centers = measured;
-    const idx = nearestIndex(measured, y);
-    if (idx === null) {
+    const measured = rowBoxes();
+    centers = measured.map((b) => b.center);
+    boxes = measured;
+    if (measured.length === 0) {
       bandTop = Number.NEGATIVE_INFINITY;
       bandBottom = Number.POSITIVE_INFINITY;
-    } else {
-      bandTop =
-        idx > 0
-          ? (measured[idx - 1] + measured[idx]) / 2
-          : Number.NEGATIVE_INFINITY;
-      bandBottom =
-        idx < measured.length - 1
-          ? (measured[idx] + measured[idx + 1]) / 2
-          : Number.POSITIVE_INFINITY;
+      return null;
     }
-    return idx;
+
+    const pos = nearestBox(measured, y);
+    const boxed = measured[pos];
+    const base = boxed.index >= 0 ? boxed.index : pos;
+
+    const first = boxes[0];
+    const last = boxes[boxes.length - 1];
+    const height = boxed.height || 0;
+    let index = base;
+
+    if (height > 0 && y < first.center - first.height / 2) {
+      const steps = Math.ceil((first.center - first.height / 2 - y) / height);
+      index = base - steps;
+    } else if (height > 0 && y > last.center + last.height / 2) {
+      const steps = Math.floor((y - (last.center + last.height / 2)) / height);
+      index = base + steps;
+    }
+
+    if (index !== base) {
+      bandTop = Number.NEGATIVE_INFINITY;
+      bandBottom = Number.POSITIVE_INFINITY;
+      return index;
+    }
+
+    bandTop =
+      pos > 0
+        ? (measured[pos - 1].center + measured[pos].center) / 2
+        : Number.NEGATIVE_INFINITY;
+    bandBottom =
+      pos < measured.length - 1
+        ? (measured[pos].center + measured[pos + 1].center) / 2
+        : Number.POSITIVE_INFINITY;
+    return index;
   }
 
   function overIndex(y: number): number | null {
-    if (!centers || y <= bandTop || y > bandBottom) return measureCenters(y);
-    return nearestIndex(centers, y);
+    if (!centers || !boxes || y <= bandTop || y > bandBottom) {
+      return measureCenters(y);
+    }
+    const pos = nearestIndex(centers, y);
+    if (pos === null) return null;
+    const boxed = boxes[pos];
+    return boxed.index >= 0 ? boxed.index : pos;
   }
 
   function invalidateCenters(): void {

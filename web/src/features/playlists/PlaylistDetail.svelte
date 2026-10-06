@@ -37,6 +37,7 @@
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
   import Dialog from "../../components/Dialog.svelte";
+  import VirtualList from "../../components/VirtualList.svelte";
   import {
     addToPlaylist,
     getCurrentPlaylist,
@@ -67,16 +68,19 @@
 
   const currentTracks = $derived(pl ? tracksOf(pl) : []);
   const covers = $derived(resolvePlaylistCovers(pl?.cover, currentTracks));
+  const needle = $derived(q.toLowerCase());
   const plHits = $derived(
-    q
+    needle
       ? currentTracks.filter((t) =>
           matchesQuery(
-            q.toLowerCase(),
+            needle,
             `${t.title} ${t.artist} ${t.album}`.toLowerCase(),
           ),
         )
       : currentTracks,
   );
+
+  const currentTrackId = $derived(getCurrentTrack()?.id);
 
   const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (_section, idx) => plHits[idx]?.path,
@@ -88,10 +92,9 @@
   const addedPaths = $derived(new Set(pl?.paths ?? []));
   let coverInput: HTMLInputElement | undefined = $state();
   let coverBusy = $state(false);
+  let tracksEl: HTMLDivElement | undefined = $state();
 
-  function totalDur(): number {
-    return totalSeconds(currentTracks);
-  }
+  const totalDur = $derived(totalSeconds(currentTracks));
 
   function playAll(shuffle = false): void {
     if (currentTracks.length === 0 || !pl) return;
@@ -265,7 +268,7 @@
             {currentTracks.length === 1
               ? t("library.song")
               : t("library.songsPlural")} · {t("playlist.about")}
-            {fmtTotalDuration(totalDur())}
+            {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
           {/if}
@@ -304,7 +307,7 @@
       </div>
     </div>
 
-    <div class="tracks" bind:this={drag.rowsEl}>
+    <div class="tracks" bind:this={drag.rowsEl} bind:this={tracksEl}>
       <div class="tbl-head">
         <span class="h-num mono">#</span>
         <span class="h-cover"></span>
@@ -328,10 +331,10 @@
           >
         </div>
       {:else}
-        {#each plHits as trk, i (trk.id)}
+        {#snippet row(trk: (typeof plHits)[number], i: number)}
           <div
             class="row"
-            class:playing={trk.id === getCurrentTrack()?.id}
+            class:playing={trk.id === currentTrackId}
             class:drag-over={drag.dragging &&
               drag.overIdx === i &&
               drag.grabIdx !== i}
@@ -358,7 +361,7 @@
             }}
           >
             <span class="c-num mono">
-              {#if trk.id === getCurrentTrack()?.id}
+              {#if trk.id === currentTrackId}
                 <EqualizerBars />
               {:else}
                 {String(i + 1).padStart(2, "0")}
@@ -368,10 +371,7 @@
               <TrackCover src={trk.cover} shadow="var(--shadow-sm)" />
             </div>
             <div class="c-title-col">
-              <span
-                class="c-title"
-                class:accent={trk.id === getCurrentTrack()?.id}
-              >
+              <span class="c-title" class:accent={trk.id === currentTrackId}>
                 {trk.title}
               </span>
               {#if trk.album}
@@ -381,7 +381,15 @@
             <span class="c-artist">{trk.artist}</span>
             <span class="c-dur mono">{fmtTime(trk.duration, "--:--")}</span>
           </div>
-        {/each}
+        {/snippet}
+
+        <VirtualList
+          items={plHits}
+          {row}
+          scrollEl={tracksEl ?? null}
+          rowKey={(trk) => trk.id}
+          estimateRowHeight={54}
+        />
       {/if}
     </div>
 

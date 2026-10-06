@@ -39,6 +39,7 @@
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
   import PlaylistPicker from "../vault/PlaylistPicker.svelte";
+  import VirtualList from "../../components/VirtualList.svelte";
   import {
     addToPlaylist,
     createPlaylist,
@@ -58,6 +59,7 @@
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let justAdded = $state(new Set<string>());
   let searchInput: SearchInput | undefined = $state();
+  let tracksEl: HTMLDivElement | undefined = $state();
 
   let ctx = $state<{
     x: number;
@@ -163,9 +165,7 @@
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  function totalDur(): number {
-    return totalSeconds(hits);
-  }
+  const totalDur = $derived(totalSeconds(hits));
 
   function playAll(shuffle = false): void {
     if (hits.length === 0) return;
@@ -278,7 +278,7 @@
           {#if hits.length > 0}
             {hits.length}
             {hits.length === 1 ? t("library.song") : t("library.songsPlural")} ·
-            {fmtTotalDuration(totalDur())}
+            {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
           {/if}
@@ -325,7 +325,7 @@
       </div>
     </div>
 
-    <div class="tracks">
+    <div class="tracks" bind:this={tracksEl}>
       <div class="tbl-head">
         <span class="h-num mono">#</span>
         <span class="h-cover"></span>
@@ -350,7 +350,7 @@
           >
         </div>
       {:else}
-        {#each hits as trk, i (trk.id)}
+        {#snippet row(trk: (typeof hits)[number], i: number)}
           <button
             type="button"
             class="row"
@@ -380,7 +380,15 @@
             <span class="c-dur mono">{fmtTime(trk.duration, "--:--")}</span>
             <span class="c-actions"></span>
           </button>
-        {/each}
+        {/snippet}
+
+        <VirtualList
+          items={hits}
+          {row}
+          scrollEl={tracksEl ?? null}
+          rowKey={(trk) => trk.id}
+          estimateRowHeight={54}
+        />
       {/if}
     </div>
   </div>

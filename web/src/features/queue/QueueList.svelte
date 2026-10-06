@@ -15,6 +15,7 @@
   import { t } from "@lib/i18n";
   import type { LibraryTrack } from "@lib/types";
   import ContextMenu from "../../components/ContextMenu.svelte";
+  import VirtualList from "../../components/VirtualList.svelte";
   import TrackCover from "../../components/TrackCover.svelte";
   import { ChevronLeft, ChevronRight, Trash2 } from "lucide-svelte";
 
@@ -33,6 +34,7 @@
   }
 
   let queueEl: HTMLElement | undefined = $state();
+  let queueBodyEl: HTMLDivElement | undefined = $state();
   let ctx = $state<{ x: number; y: number; path: string } | null>(null);
 
   const np = $derived(getCurrentTrack());
@@ -142,19 +144,35 @@
           <span class="q-dur mono">{fmtTime(np.duration, "--:--")}</span>
         </div>
 
-      <div class="queue-body" bind:this={drag.rowsEl}>
+      <div class="queue-body" bind:this={drag.rowsEl} bind:this={queueBodyEl}>
         {#if userQueue.length > 0}
           <span class="section-label mono">{t("player.queue")}</span>
-          {#each userQueue as q, i (q.path)}
+          {#snippet userRow(q: LibraryTrack, i: number)}
             {@render qrow(q, "user", i)}
-          {/each}
+          {/snippet}
+          <VirtualList
+            items={userQueue}
+            row={userRow}
+            scrollEl={queueBodyEl ?? null}
+            rowKey={(q) => q.path}
+            estimateRowHeight={48}
+            rowGap={1}
+          />
         {/if}
 
         {#if contextUpcoming.length > 0}
           <span class="section-label mono">{t("player.nextUp")}</span>
-          {#each contextUpcoming as q, i (q.path)}
+          {#snippet contextRow(q: LibraryTrack, i: number)}
             {@render qrow(q, "context", i)}
-          {/each}
+          {/snippet}
+          <VirtualList
+            items={contextUpcoming}
+            row={contextRow}
+            scrollEl={queueBodyEl ?? null}
+            rowKey={(q) => q.path}
+            estimateRowHeight={48}
+            rowGap={1}
+          />
         {/if}
 
         {#if userQueue.length === 0 && contextUpcoming.length === 0}
