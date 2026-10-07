@@ -789,6 +789,11 @@
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .page::-webkit-scrollbar {
+    display: none;
   }
 
   .page-error {
