@@ -62,7 +62,7 @@
   }
 
   .sm {
-    padding: 5px 12px;
+    padding: 7px 14px;
     font-size: 11px;
   }
 
@@ -91,19 +91,20 @@
   }
 
   .ghost {
-    background: transparent;
-    border-color: var(--line-strong);
+    gap: 7px;
+    background: var(--bg-raise);
+    border-color: var(--line);
     color: var(--dim);
   }
 
   .ghost:not(:disabled):hover {
-    border-color: var(--faint);
+    background: var(--surface);
+    border-color: var(--line-strong);
     color: var(--text);
-    background: var(--bg-raise);
   }
 
   .ghost:not(:disabled):active {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-raise);
   }
 
   .danger {
