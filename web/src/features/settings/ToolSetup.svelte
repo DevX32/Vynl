@@ -56,13 +56,13 @@
   <div class="setup" class:banner={showBanner}>
     {#if showBanner}
       <div class="head">
-        <span class="title mono"
-          >{hasMissing
+        <span class="title mono">
+          {hasMissing
             ? t("tools.missingTitle")
             : isInstalling
               ? t("tools.installingTitle")
-              : t("tools.updatesTitle")}</span
-        >
+              : t("tools.updatesTitle")}
+        </span>
         <span class="hint mono">
           {hasMissing
             ? t("tools.missingHint")
@@ -86,32 +86,35 @@
               >{label(tool)}</span
             >
           </div>
-          {#if tool.state === "downloading"}
-            <div class="bar" class:indeterminate={tool.progress == null}>
-              <div class="fill" style:width={`${tool.progress ?? 0}%`}></div>
-            </div>
-          {:else if tool.state === "error"}
-            <Button
-              variant="ghost"
-              size="sm"
-              onclick={() => void installTool(tool.name)}
-              >{t("tools.retry")}</Button
-            >
-          {:else if !tool.installed}
-            <Button
-              variant="primary"
-              size="sm"
-              onclick={() => void installTool(tool.name)}
-              >{t("tools.install")}</Button
-            >
-          {:else if tool.updateAvailable}
-            <Button
-              variant="ghost"
-              size="sm"
-              onclick={() => void installTool(tool.name)}
-              >{t("tools.update")}</Button
-            >
-          {/if}
+          <div class="tool-action">
+            {#if tool.state === "downloading"}
+              <div class="bar" class:indeterminate={tool.progress == null}>
+                <div class="fill" style:width={`${tool.progress ?? 0}%`}></div>
+              </div>
+            {:else if tool.state === "error"}
+              <Button
+                size="sm"
+                onclick={() => void installTool(tool.name)}
+              >
+                {t("tools.retry")}
+              </Button>
+            {:else if !tool.installed}
+              <Button
+                variant="primary"
+                size="sm"
+                onclick={() => void installTool(tool.name)}
+              >
+                {t("tools.install")}
+              </Button>
+            {:else if tool.updateAvailable}
+              <Button
+                size="sm"
+                onclick={() => void installTool(tool.name)}
+              >
+                {t("tools.update")}
+              </Button>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -190,8 +193,14 @@
     color: var(--amber);
   }
 
+  .tool-action {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
   .bar {
-    flex: 0 0 100px;
+    width: 100px;
     height: 3px;
     background: var(--line-strong);
     border-radius: var(--radius-sm);

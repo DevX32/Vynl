@@ -2,6 +2,8 @@
   import { fade } from "svelte/transition";
   import { X, RefreshCw, ShieldAlert, WifiOff } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import Button from "@components/Button.svelte";
+  import Switch from "@components/Switch.svelte";
   import {
     closeMobileSyncUi,
     getMobileSyncBusy,
@@ -62,17 +64,12 @@
             <div class="label mono">{t("settings.mobileSync")}</div>
             <div class="hint mono">{t("settings.mobileSyncHint")}</div>
           </div>
-          <button
-            class="switch"
-            class:on={status.enabled}
-            onclick={() => void setMobileSyncEnabled(!status!.enabled)}
+          <Switch
+            on={status.enabled}
             disabled={busy}
-            role="switch"
-            aria-checked={status.enabled}
-            aria-label={t("settings.mobileSyncToggle")}
-          >
-            <span class="knob"></span>
-          </button>
+            label={t("settings.mobileSyncToggle")}
+            onclick={() => void setMobileSyncEnabled(!status!.enabled)}
+          />
         </div>
 
         {#if status.enabled}
@@ -97,14 +94,14 @@
             {/if}
 
             <div class="qr-actions">
-              <button
-                class="chip mono"
+              <Button
+                size="sm"
                 onclick={() => void rotateMobileSyncPin()}
                 disabled={busy}
               >
-                <RefreshCw size={11} stroke-width={1.5} />
+                <RefreshCw size={13} stroke-width={1.5} />
                 {t("settings.mobileSyncNewQr")}
-              </button>
+              </Button>
             </div>
             <div class="qr-note mono">{t("settings.mobileSyncScanOnly")}</div>
           </div>
@@ -325,32 +322,6 @@
     text-align: center;
     line-height: 1.5;
     max-width: 260px;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    color: var(--dim);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    padding: 5px 10px;
-    cursor: pointer;
-    transition:
-      color 0.15s,
-      background 0.15s;
-  }
-
-  .chip:hover:not(:disabled) {
-    color: var(--text);
-    background: var(--surface);
-  }
-
-  .chip:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 
   .foot {

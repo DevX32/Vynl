@@ -6,6 +6,9 @@
     setPluginConfigValue,
   } from "@state/plugins.svelte";
   import type { PluginSettingField } from "@lib/plugins/types";
+  import Button from "@components/Button.svelte";
+  import Switch from "@components/Switch.svelte";
+  import SettingRow from "./SettingRow.svelte";
 
   const sections = $derived(getPluginSettingsSections());
 
@@ -48,46 +51,41 @@
 </script>
 
 {#if sections.length > 0}
-  <div class="panel">
-    {#each sections as section (`${section.pluginId}:${section.id}`)}
-      <div class="section">
-        <div class="section-head">
-          <span class="label mono">{section.title}</span>
-          {#if section.pluginName}
-            <span class="byline mono">
-              {t("plugins.providedBy", { name: section.pluginName })}
-            </span>
-          {/if}
-        </div>
+  {#each sections as section (`${section.pluginId}:${section.id}`)}
+    <div class="panel">
+      <div class="panel-head">
+        <span class="label mono">{section.title}</span>
+        {#if section.pluginName}
+          <span class="byline mono">
+            {t("plugins.providedBy", { name: section.pluginName })}
+          </span>
+        {/if}
+      </div>
 
-        {#each section.fields as field (field.key)}
-          {@const pluginId = section.pluginId ?? ""}
-          {#if field.kind === "boolean"}
-            <div class="field row-field">
-              <div>
-                <div class="field-label mono">{field.title}</div>
-                {#if field.description}
-                  <div class="hint mono">{field.description}</div>
-                {/if}
-              </div>
-              <button
-                class="switch"
-                class:on={valueOf(pluginId, field) === true}
-                role="switch"
-                aria-checked={valueOf(pluginId, field) === true}
-                aria-label={field.title}
+      {#each section.fields as field (field.key)}
+        {@const pluginId = section.pluginId ?? ""}
+        {#if field.kind === "boolean"}
+          <SettingRow label={field.title} hint={field.description}>
+            {#snippet control()}
+              <Switch
+                on={valueOf(pluginId, field) === true}
+                label={field.title}
                 onclick={() =>
-                  setNow(pluginId, field.key, !(valueOf(pluginId, field) === true))}
-              >
-                <span class="knob"></span>
-              </button>
-            </div>
-          {:else if field.kind === "text"}
-            <div class="field">
-              <div class="field-label mono">{field.title}</div>
-              {#if field.description}
-                <div class="hint mono">{field.description}</div>
-              {/if}
+                  setNow(
+                    pluginId,
+                    field.key,
+                    !(valueOf(pluginId, field) === true),
+                  )}
+              />
+            {/snippet}
+          </SettingRow>
+        {:else if field.kind === "text"}
+            <SettingRow
+            label={field.title}
+            hint={field.description}
+            stacked
+          >
+            {#snippet control()}
               <input
                 class="text"
                 value={String(valueOf(pluginId, field))}
@@ -95,13 +93,15 @@
                   setDebounced(pluginId, field.key, e.currentTarget.value)}
                 spellcheck={false}
               />
-            </div>
-          {:else if field.kind === "number"}
-            <div class="field">
-              <div class="field-label mono">{field.title}</div>
-              {#if field.description}
-                <div class="hint mono">{field.description}</div>
-              {/if}
+            {/snippet}
+          </SettingRow>
+        {:else if field.kind === "number"}
+          <SettingRow
+            label={field.title}
+            hint={field.description}
+            stacked
+          >
+            {#snippet control()}
               <input
                 class="text"
                 type="number"
@@ -115,52 +115,52 @@
                   setDebounced(pluginId, field.key, Number(raw));
                 }}
               />
-            </div>
-          {:else if field.kind === "select"}
-            <div class="field">
-              <div class="field-label mono">{field.title}</div>
-              {#if field.description}
-                <div class="hint mono">{field.description}</div>
-              {/if}
-              <div class="chips">
-                {#each field.options ?? [] as opt (opt.value)}
-                  <button
-                    class="chip mono"
-                    class:selected={valueOf(pluginId, field) === opt.value}
-                    onclick={() => setNow(pluginId, field.key, opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        {/each}
-      </div>
-    {/each}
-  </div>
+            {/snippet}
+          </SettingRow>
+        {:else if field.kind === "select"}
+          <SettingRow
+            label={field.title}
+            hint={field.description}
+            stacked
+          >
+            {#snippet control()}
+              {#each field.options ?? [] as opt (opt.value)}
+                <Button
+                  size="sm"
+                  selected={valueOf(pluginId, field) === opt.value}
+                  onclick={() => setNow(pluginId, field.key, opt.value)}
+                >
+                  {opt.label}
+                </Button>
+              {/each}
+            {/snippet}
+          </SettingRow>
+        {/if}
+      {/each}
+    </div>
+  {/each}
 {/if}
 
 <style>
   .panel {
     display: flex;
     flex-direction: column;
+    margin-bottom: 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
   }
 
-  .section {
-    padding: 16px;
-    border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .section-head {
+  .panel-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
   }
 
   .label {
@@ -173,31 +173,6 @@
   .byline {
     font-size: 10.5px;
     color: var(--faint);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-  }
-
-  .row-field {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  .field-label {
-    font-size: 11px;
-    color: var(--dim);
-    letter-spacing: 0.08em;
-  }
-
-  .hint {
-    font-size: 11px;
-    color: var(--faint);
-    line-height: 1.5;
   }
 
   .text {
@@ -213,32 +188,5 @@
 
   .text:focus {
     border-color: var(--accent);
-  }
-
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .chip {
-    font-size: 11px;
-    color: var(--dim);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: 4px 10px;
-    transition:
-      color 0.15s,
-      background 0.15s;
-  }
-
-  .chip:hover {
-    color: var(--text);
-    background: var(--bg-raise);
-  }
-
-  .chip.selected {
-    color: var(--accent);
-    background: var(--accent-soft);
   }
 </style>

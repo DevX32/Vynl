@@ -11,6 +11,7 @@
   import { handleGlobalKey, getShowShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
+  import { initAppUpdate } from "@state/app-update.svelte";
   import { toasts } from "./lib/toast";
   import { toPascalCase } from "./lib/format";
   import {
@@ -153,9 +154,7 @@
         toasts.error(t("update.failedTitle"));
       }
     });
-    void vynl.checkAppUpdate().catch(() => {
-      toasts.error(t("update.failedTitle"));
-    });
+    void initAppUpdate();
     return () => { off(); offUpdate(); };
   }
 

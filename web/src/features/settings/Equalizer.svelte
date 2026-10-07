@@ -12,6 +12,8 @@
     eqResidualBoostDb,
   } from "@lib/eq.svelte";
   import EqCurve from "./EqCurve.svelte";
+  import Button from "@components/Button.svelte";
+  import Switch from "@components/Switch.svelte";
 
   const settings = $derived(getCurrentSettings());
 
@@ -188,16 +190,11 @@
       >
         <RotateCcw size={13} stroke-width={1.6} />
       </button>
-      <button
-        class="switch"
-        class:on={settings.eqEnabled}
+      <Switch
+        on={settings.eqEnabled}
+        label={t("settings.equalizerToggle")}
         onclick={() => setEnabled(!settings.eqEnabled)}
-        role="switch"
-        aria-checked={settings.eqEnabled}
-        aria-label={t("settings.equalizerToggle")}
-      >
-        <span class="knob"></span>
-      </button>
+      />
     </div>
   </div>
 
@@ -207,14 +204,14 @@
     <div class="eq" class:off={!settings.eqEnabled}>
     <div class="chips">
       {#each EQ_PRESETS as preset (preset.id)}
-        <button
-          class="chip mono"
-          class:selected={activePreset === preset.id}
+        <Button
+          size="sm"
+          selected={activePreset === preset.id}
           disabled={!settings.eqEnabled}
           onclick={() => applyPreset(preset)}
         >
           {t(preset.labelKey)}
-        </button>
+        </Button>
       {/each}
     </div>
 
@@ -353,31 +350,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-  }
-
-  .chip {
-    font-size: 11px;
-    color: var(--dim);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: 4px 10px;
-    transition:
-      color 0.15s,
-      background 0.15s;
-  }
-
-  .chip:hover:not(:disabled) {
-    color: var(--text);
-    background: var(--bg-raise);
-  }
-
-  .chip.selected {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
-
-  .chip:disabled {
-    cursor: not-allowed;
   }
 
   .curve-wrap {

@@ -5,6 +5,7 @@
     variant = "ghost",
     size = "md",
     disabled = false,
+    selected = false,
     title,
     onclick,
     children,
@@ -12,6 +13,7 @@
     variant?: "primary" | "ghost" | "danger";
     size?: "sm" | "md";
     disabled?: boolean;
+    selected?: boolean;
     title?: string;
     onclick?: () => void;
     children: Snippet;
@@ -20,8 +22,10 @@
 
 <button
   class="btn {variant} {size}"
+  class:selected
   {disabled}
   {title}
+  aria-pressed={selected ? true : undefined}
   onclick={() => onclick?.()}
 >
   {@render children()}
@@ -120,5 +124,21 @@
 
   .danger:not(:disabled):active {
     box-shadow: none;
+  }
+
+  .selected {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+
+  .selected:not(:disabled):hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  .selected:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
   }
 </style>

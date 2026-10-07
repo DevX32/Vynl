@@ -3,8 +3,7 @@
   import SettingsPanel from "./SettingsPanel.svelte";
   import PluginSettings from "./PluginSettings.svelte";
   import ToolSetup from "./ToolSetup.svelte";
-  import UpdateBanner from "./UpdateBanner.svelte";
-  import SupportBanner from "./SupportBanner.svelte";
+  import AboutPanel from "./AboutPanel.svelte";
 </script>
 
 <section class="settings-page">
@@ -14,11 +13,10 @@
   </div>
 
   <div class="body">
-    <UpdateBanner />
     <ToolSetup />
     <SettingsPanel />
     <PluginSettings />
-    <SupportBanner />
+    <AboutPanel />
   </div>
 </section>
 

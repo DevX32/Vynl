@@ -1,10 +1,13 @@
 <script lang="ts">
   import { t } from "@lib/i18n";
   import ColorPicker from "@components/ColorPicker.svelte";
+  import Button from "@components/Button.svelte";
+  import Switch from "@components/Switch.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
   import { openPluginsUi } from "@state/plugins.svelte";
   import MobileSyncSettings from "./MobileSyncSettings.svelte";
+  import SettingRow from "./SettingRow.svelte";
 
   const settings = $derived(getCurrentSettings());
 
@@ -28,24 +31,23 @@
       spellcheck={false}
       placeholder={t("settings.displayNamePlaceholder")}
     />
-    <div class="hint mono">
-      {t("settings.displayNameHint")}
-    </div>
+    <div class="hint mono">{t("settings.displayNameHint")}</div>
   </div>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("plugins.title")}</div>
-      <div class="hint mono">{t("plugins.openHint")}</div>
-    </div>
-    <div class="eq-actions">
-      <button class="chip mono" onclick={openPluginsUi}>
-        {t("plugins.open")}
-      </button>
-    </div>
-  </div>
+  <div class="group">
+    <SettingRow
+      label={t("plugins.title")}
+      hint={t("plugins.openHint")}
+    >
+      {#snippet control()}
+        <Button size="sm" onclick={openPluginsUi}>
+          {t("plugins.open")}
+        </Button>
+      {/snippet}
+    </SettingRow>
 
-  <MobileSyncSettings />
+    <MobileSyncSettings />
+  </div>
 
   <div class="section">
     <div class="label mono">{t("settings.accentColor")}</div>
@@ -56,171 +58,133 @@
       disabled={settings.dynamicAccent}
       onchange={(hex) => void patchSettings({ accentColor: hex })}
     />
-    <div class="hint mono">
-      {t("settings.accentColorHint")}
-    </div>
+    <div class="hint mono">{t("settings.accentColorHint")}</div>
   </div>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.dynamicAccent")}</div>
-      <div class="hint mono">
-        {t("settings.dynamicAccentHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.dynamicAccent}
-      onclick={() =>
-        void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
-      role="switch"
-      aria-checked={settings.dynamicAccent}
-      aria-label={t("settings.dynamicAccentToggle")}
+  <div class="group">
+    <SettingRow
+      label={t("settings.dynamicAccent")}
+      hint={t("settings.dynamicAccentHint")}
     >
-      <span class="knob"></span>
-    </button>
-  </div>
+      {#snippet control()}
+        <Switch
+          on={settings.dynamicAccent}
+          label={t("settings.dynamicAccentToggle")}
+          onclick={() =>
+            void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
+        />
+      {/snippet}
+    </SettingRow>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.overwrite")}</div>
-      <div class="hint mono">
-        {t("settings.overwriteHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.overwrite}
-      onclick={() => void patchSettings({ overwrite: !settings.overwrite })}
-      role="switch"
-      aria-checked={settings.overwrite}
-      aria-label={t("settings.overwriteToggle")}
+    <SettingRow
+      label={t("settings.overwrite")}
+      hint={t("settings.overwriteHint")}
     >
-      <span class="knob"></span>
-    </button>
-  </div>
+      {#snippet control()}
+        <Switch
+          on={settings.overwrite}
+          label={t("settings.overwriteToggle")}
+          onclick={() =>
+            void patchSettings({ overwrite: !settings.overwrite })}
+        />
+      {/snippet}
+    </SettingRow>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.discord")}</div>
-      <div class="hint mono">
-        {t("settings.discordHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.discordRpc}
-      onclick={() => void patchSettings({ discordRpc: !settings.discordRpc })}
-      role="switch"
-      aria-checked={settings.discordRpc}
-      aria-label={t("settings.discordToggle")}
+    <SettingRow
+      label={t("settings.discord")}
+      hint={t("settings.discordHint")}
     >
-      <span class="knob"></span>
-    </button>
-  </div>
+      {#snippet control()}
+        <Switch
+          on={settings.discordRpc}
+          label={t("settings.discordToggle")}
+          onclick={() =>
+            void patchSettings({ discordRpc: !settings.discordRpc })}
+        />
+      {/snippet}
+    </SettingRow>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.confirmMatches")}</div>
-      <div class="hint mono">
-        {t("settings.confirmMatchesHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.confirmMatches}
-      onclick={() =>
-        void patchSettings({ confirmMatches: !settings.confirmMatches })}
-      role="switch"
-      aria-checked={settings.confirmMatches}
-      aria-label={t("settings.confirmMatchesToggle")}
+    <SettingRow
+      label={t("settings.confirmMatches")}
+      hint={t("settings.confirmMatchesHint")}
     >
-      <span class="knob"></span>
-    </button>
-  </div>
+      {#snippet control()}
+        <Switch
+          on={settings.confirmMatches}
+          label={t("settings.confirmMatchesToggle")}
+          onclick={() =>
+            void patchSettings({ confirmMatches: !settings.confirmMatches })}
+        />
+      {/snippet}
+    </SettingRow>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.minimizeToTray")}</div>
-      <div class="hint mono">
-        {t("settings.minimizeToTrayHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.minimizeToTray}
-      onclick={() =>
-        void patchSettings({ minimizeToTray: !settings.minimizeToTray })}
-      role="switch"
-      aria-checked={settings.minimizeToTray}
-      aria-label={t("settings.minimizeToTrayToggle")}
+    <SettingRow
+      label={t("settings.minimizeToTray")}
+      hint={t("settings.minimizeToTrayHint")}
     >
-      <span class="knob"></span>
-    </button>
-  </div>
+      {#snippet control()}
+        <Switch
+          on={settings.minimizeToTray}
+          label={t("settings.minimizeToTrayToggle")}
+          onclick={() =>
+            void patchSettings({ minimizeToTray: !settings.minimizeToTray })}
+        />
+      {/snippet}
+    </SettingRow>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.hardwareAcceleration")}</div>
-      <div class="hint mono">
-        {t("settings.hardwareAccelerationHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.hardwareAcceleration}
-      onclick={() =>
-        void patchSettings({
-          hardwareAcceleration: !settings.hardwareAcceleration,
-        })}
-      role="switch"
-      aria-checked={settings.hardwareAcceleration}
-      aria-label={t("settings.hardwareAccelerationToggle")}
+    <SettingRow
+      label={t("settings.hardwareAcceleration")}
+      hint={t("settings.hardwareAccelerationHint")}
     >
-      <span class="knob"></span>
-    </button>
-  </div>
+      {#snippet control()}
+        <Switch
+          on={settings.hardwareAcceleration}
+          label={t("settings.hardwareAccelerationToggle")}
+          onclick={() =>
+            void patchSettings({
+              hardwareAcceleration: !settings.hardwareAcceleration,
+            })}
+        />
+      {/snippet}
+    </SettingRow>
 
-  <div class="section row-section">
-    <div>
-      <div class="label mono">{t("settings.launchAtStartup")}</div>
-      <div class="hint mono">
-        {t("settings.launchAtStartupHint")}
-      </div>
-    </div>
-    <button
-      class="switch"
-      class:on={settings.launchAtStartup}
-      onclick={() =>
-        void patchSettings({ launchAtStartup: !settings.launchAtStartup })}
-      role="switch"
-      aria-checked={settings.launchAtStartup}
-      aria-label={t("settings.launchAtStartupToggle")}
+    <SettingRow
+      label={t("settings.launchAtStartup")}
+      hint={t("settings.launchAtStartupHint")}
     >
-      <span class="knob"></span>
-    </button>
+      {#snippet control()}
+        <Switch
+          on={settings.launchAtStartup}
+          label={t("settings.launchAtStartupToggle")}
+          onclick={() =>
+            void patchSettings({ launchAtStartup: !settings.launchAtStartup })}
+        />
+      {/snippet}
+    </SettingRow>
   </div>
-
 </div>
 
 <style>
   .panel {
     display: flex;
     flex-direction: column;
+    margin-bottom: 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
   }
 
   .section {
     padding: 16px;
-    border-top: 1px solid var(--line);
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  .row-section {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+  .group {
+    border-top: 1px solid var(--line);
   }
 
   .label {
@@ -246,27 +210,7 @@
     transition: border-color 0.15s;
   }
 
-  .chip {
-    font-size: 11px;
-    color: var(--dim);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: 4px 10px;
-    transition:
-      color 0.15s,
-      background 0.15s;
-  }
-
-  .chip:hover {
-    color: var(--text);
-    border-color: var(--line-strong);
-    background: var(--bg-raise);
-  }
-
-  .eq-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
+  .text:focus {
+    border-color: var(--accent);
   }
 </style>
