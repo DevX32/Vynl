@@ -176,10 +176,9 @@ function load(): string {
   return generated;
 }
 
-let _nickname = $state<string | null>(null);
+let _nickname = $state(load());
 
 export function getNickname(): string {
-  if (_nickname === null) _nickname = load();
   return _nickname;
 }
 
