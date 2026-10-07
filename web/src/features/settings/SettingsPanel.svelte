@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import { getNickname, rollNickname } from "@lib/nickname.svelte";
   import ColorPicker from "@components/ColorPicker.svelte";
   import Button from "@components/Button.svelte";
   import Switch from "@components/Switch.svelte";
@@ -29,9 +31,15 @@
       value={settings.displayName}
       oninput={(e) => debouncedDisplayNamePatch(e.currentTarget.value)}
       spellcheck={false}
-      placeholder={t("settings.displayNamePlaceholder")}
+      placeholder={getNickname()}
     />
-    <div class="hint mono">{t("settings.displayNameHint")}</div>
+    <div class="hint-row">
+      <div class="hint mono">{t("settings.displayNameHint")}</div>
+      <Button size="sm" onclick={() => rollNickname()}>
+        <RefreshCw size={13} stroke-width={1.5} />
+        {t("settings.displayNameRoll")}
+      </Button>
+    </div>
   </div>
 
   <div class="group">
@@ -199,6 +207,13 @@
     line-height: 1.5;
   }
 
+  .hint-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+  }
+
   .text {
     background: var(--bg-raise);
     border: 1px solid var(--line-strong);
@@ -210,7 +225,5 @@
     transition: border-color 0.15s;
   }
 
-  .text:focus {
-    border-color: var(--accent);
-  }
+
 </style>

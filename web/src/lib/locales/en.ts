@@ -209,7 +209,7 @@ export const en = {
     displayName: "Display Name",
     displayNameHint:
       "Your name across Vynl. Leave blank for a random nickname.",
-    displayNamePlaceholder: "e.g. Cosmic Panda",
+    displayNameRoll: "Roll nickname",
     mobileSync: "Mobile Sync",
     mobileSyncHint:
       "Share your library with the Vynl Android app over your local Wi‑Fi.",

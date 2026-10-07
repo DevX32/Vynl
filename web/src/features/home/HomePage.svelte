@@ -7,6 +7,7 @@
   import { vynl } from "@lib/vynl";
   import { blobSrc } from "../../lib/format";
   import { QUOTES } from "@lib/constants";
+  import { resolveDisplayName } from "@lib/nickname.svelte";
   import { t } from "@lib/i18n";
   import { getCurrentSettings } from "@state/settings.svelte";
 
@@ -31,8 +32,8 @@
     else if (h < 18) base = t("home.greeting.afternoon");
     else base = t("home.greeting.evening");
 
-    const name = getCurrentSettings().displayName?.trim();
-    return { base, name: name ?? "" };
+    const name = resolveDisplayName(getCurrentSettings().displayName);
+    return { base, name };
   });
 
   const quote = $derived.by(() => {

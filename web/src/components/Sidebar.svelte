@@ -16,6 +16,7 @@
   import { getPlaylistCovers, markCoverFailed } from "@state/playlists.svelte";
   import { getPluginPages } from "@state/plugins.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
+  import { resolveDisplayName } from "@lib/nickname.svelte";
   import { useDragList } from "@lib/drag-list.svelte";
   import type { Page, PlaylistMeta } from "@lib/types";
 
@@ -189,9 +190,7 @@
             <span class="rail-meta">
               <span class="rail-name display">{toPascalCase(p.name)}</span>
               <span class="rail-desc mono">
-                {getCurrentSettings().displayName
-                  ? `${t("playlists.playlist")} · ${getCurrentSettings().displayName}`
-                  : t("playlists.playlist")}
+                {`${t("playlists.playlist")} · ${resolveDisplayName(getCurrentSettings().displayName)}`}
               </span>
             </span>
           {/if}
