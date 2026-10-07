@@ -10,6 +10,7 @@ import '../services/library_db.dart';
 import '../services/notifications.dart';
 import '../services/sync_service.dart';
 import '../theme.dart';
+import 'nickname.dart';
 
 class AppState extends ChangeNotifier {
   AppState({
@@ -23,6 +24,7 @@ class AppState extends ChangeNotifier {
   static const tabPlaylists = 2;
 
   static const _displayNameKey = 'vynl.display_name';
+  static const _nicknameKey = 'vynl.nickname';
   static const _maxDisplayName = 32;
 
   final AuthStore authStore;
@@ -41,6 +43,7 @@ class AppState extends ChangeNotifier {
   int cacheBytes = 0;
   int tabIndex = tabHome;
   String displayName = '';
+  String nickname = randomNickname();
 
   void setTab(int index) {
     if (tabIndex == index) return;
@@ -68,8 +71,32 @@ class AppState extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       displayName = prefs.getString(_displayNameKey) ?? '';
+      nickname = prefs.getString(_nicknameKey) ?? '';
+      if (nickname.isEmpty) {
+        nickname = randomNickname();
+        await prefs.setString(_nicknameKey, nickname);
+      }
     } catch (e) {
       debugPrint('display name load failed: $e');
+      if (nickname.isEmpty) nickname = randomNickname();
+    }
+  }
+
+  String get greetingName =>
+      displayName.trim().isEmpty ? nickname : displayName.trim();
+
+  void rollNickname() {
+    nickname = randomNickname();
+    notifyListeners();
+    _saveNickname();
+  }
+
+  Future<void> _saveNickname() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_nicknameKey, nickname);
+    } catch (e) {
+      debugPrint('nickname save failed: $e');
     }
   }
 

@@ -408,17 +408,33 @@ class _DisplayNameFieldState extends State<_DisplayNameField> {
             textInputAction: TextInputAction.done,
             maxLength: 32,
             style: const TextStyle(fontSize: 14, color: VynlColors.text),
-            decoration: const InputDecoration(
-              hintText: 'e.g. Cosmic Panda',
+            decoration: InputDecoration(
+              hintText: app.nickname,
               counterText: '',
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            app.displayName.isEmpty
-                ? 'Leave blank for a plain greeting'
-                : 'Shown in your home greeting',
-            style: const TextStyle(color: VynlColors.faint, fontSize: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Your name across Vynl. Leave blank for a random nickname.',
+                  style: const TextStyle(
+                    color: VynlColors.faint,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _Chip(
+                label: 'Roll',
+                onTap: () {
+                  final state = context.read<AppState>();
+                  state.rollNickname();
+                  _ctrl.clear();
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -470,11 +486,17 @@ class _Kicker extends StatelessWidget {
 }
 
 class _Chip extends StatefulWidget {
-  const _Chip({required this.label, this.accent = false, this.danger = false});
+  const _Chip({
+    required this.label,
+    this.accent = false,
+    this.danger = false,
+    this.onTap,
+  });
 
   final String label;
   final bool accent;
   final bool danger;
+  final VoidCallback? onTap;
 
   @override
   State<_Chip> createState() => _ChipState();
@@ -512,27 +534,38 @@ class _ChipState extends State<_Chip> {
       border = VynlColors.line;
     }
 
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(VynlRadius.control),
+      ),
+      child: Text(
+        widget.label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+
     return MouseRegion(
       opaque: false,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border),
-          borderRadius: BorderRadius.circular(VynlRadius.control),
-        ),
-        child: Text(
-          widget.label,
-          style: TextStyle(
-            color: fg,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-          ),
-        ),
-      ),
+      cursor: widget.onTap == null
+          ? MouseCursor.defer
+          : SystemMouseCursors.click,
+      child: widget.onTap == null
+          ? chip
+          : GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onTap,
+              child: chip,
+            ),
     );
   }
 }

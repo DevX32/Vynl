@@ -114,7 +114,7 @@ class _HomePageState extends State<HomePage> {
     final header = _Header(
       greeting: _greetingFor(now),
       quote: _quotes[(now.day - 1) % _quotes.length],
-      name: app.displayName,
+      name: app.greetingName,
     );
 
     return RefreshIndicator(
