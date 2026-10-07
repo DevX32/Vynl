@@ -266,6 +266,7 @@ export const en = {
     checkFailed: "Update check failed: {error}",
     checkUpdates: "Check for updates",
     check: "Check",
+    upToDate: "You're on the latest version",
     updateTo: "Update to {version}",
     updateAvailableHint: "A newer version is ready to install",
     updateAvailableTo: "Update available: {version}",
@@ -388,6 +389,7 @@ export const en = {
       interface: "Interface",
     },
     actions: {
+      showShortcuts: "Show shortcuts",
       playPause: "Play / Pause",
       muteUnmute: "Mute / Unmute",
       volumeUp: "Volume up",

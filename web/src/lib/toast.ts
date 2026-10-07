@@ -1,4 +1,4 @@
-import { get, writable } from "svelte/store";
+import { writable } from "svelte/store";
 
 type ToastKind = "info" | "success" | "error" | "warning";
 
@@ -7,11 +7,10 @@ interface ToastItem {
   message: string;
   kind: ToastKind;
   progress: number;
-  paused: boolean;
 }
 
 let nextId = 0;
-const timers = new Map<number, ReturnType<typeof setInterval>>();
+const timers = new Map<number, () => void>();
 const items = writable<ToastItem[]>([]);
 
 let audioCtx: AudioContext | null = null;
@@ -117,33 +116,35 @@ function playNotifySound(): void {
 }
 
 function dismiss(id: number) {
-  clearInterval(timers.get(id));
+  const stop = timers.get(id);
+  if (stop) stop();
   timers.delete(id);
   items.update((l) => l.filter((t) => t.id !== id));
 }
 
 function createDismissTimer(id: number, duration: number): void {
-  let remaining = duration;
-  let last = Date.now();
+  const started = Date.now();
+  let frame = 0;
 
-  timers.set(
-    id,
-    setInterval(() => {
-      const now = Date.now();
-      const paused = get(items).find((toast) => toast.id === id)?.paused;
-      if (paused) {
-        last = now;
-        return;
-      }
-      remaining -= now - last;
-      last = now;
-      const pct = Math.max(0, (remaining / duration) * 100);
-      items.update((l) =>
-        l.map((x) => (x.id === id ? { ...x, progress: pct } : x)),
-      );
-      if (pct <= 0) dismiss(id);
-    }, 100),
-  );
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    timers.delete(id);
+  };
+
+  const tick = () => {
+    const pct = Math.max(0, 100 - ((Date.now() - started) / duration) * 100);
+    items.update((l) =>
+      l.map((x) => (x.id === id ? { ...x, progress: pct } : x)),
+    );
+    if (pct <= 0) {
+      dismiss(id);
+      return;
+    }
+    frame = requestAnimationFrame(tick);
+  };
+
+  timers.set(id, stop);
+  frame = requestAnimationFrame(tick);
 }
 
 function push(message: string, kind: ToastKind = "info", duration = 3000) {
@@ -157,7 +158,7 @@ function push(message: string, kind: ToastKind = "info", duration = 3000) {
     id = nextId++;
     return [
       ...l,
-      { id, message, kind, progress: 100, paused: false },
+      { id, message, kind, progress: 100 },
     ];
   });
 
@@ -173,12 +174,4 @@ export const toasts = {
   error: (m: string, d?: number) => push(m, "error", d),
   warning: (m: string, d?: number) => push(m, "warning", d),
   dismiss,
-  pause: (id: number) =>
-    items.update((l) =>
-      l.map((t) => (t.id === id ? { ...t, paused: true } : t)),
-    ),
-  resume: (id: number) =>
-    items.update((l) =>
-      l.map((t) => (t.id === id ? { ...t, paused: false } : t)),
-    ),
 };

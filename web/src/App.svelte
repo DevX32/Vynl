@@ -378,7 +378,7 @@
           </div>
         {:else if page === "player"}
           <div class="page-inner">
-            <PlayerPage active={true} />
+            <PlayerPage active={true} fullscreen={showFullscreen} />
           </div>
         {:else if page === "settings"}
           <div class="page-inner">

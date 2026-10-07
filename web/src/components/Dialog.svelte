@@ -27,6 +27,13 @@
     oncancel();
   }
 
+  let panelEl = $state<HTMLDivElement>();
+
+  $effect(() => {
+    if (!panelEl) return;
+    if (!panelEl.contains(document.activeElement)) panelEl.focus();
+  });
+
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.stopPropagation();
@@ -48,6 +55,7 @@
       aria-labelledby="dlg-title"
       aria-describedby={description ? "dlg-desc" : undefined}
       tabindex="-1"
+      bind:this={panelEl}
       onclick={(e) => e.stopPropagation()}
       onkeydown={onKey}
     >

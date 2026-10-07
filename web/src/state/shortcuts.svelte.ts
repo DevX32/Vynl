@@ -10,6 +10,11 @@ interface Shortcut {
 
 export const SHORTCUTS: Shortcut[] = [
   {
+    key: "?",
+    labelKey: "shortcuts.actions.showShortcuts",
+    categoryKey: "shortcuts.categories.interface",
+  },
+  {
     key: "Space",
     labelKey: "shortcuts.actions.playPause",
     categoryKey: "shortcuts.categories.playback",
@@ -42,9 +47,7 @@ export function getShowShortcutsOverlay(): boolean {
   return _showOverlay;
 }
 
-function openShortcutsOverlay(): void {
-  _showOverlay = true;
-}
+
 
 export function closeShortcutsOverlay(): void {
   _showOverlay = false;
@@ -62,10 +65,29 @@ export function isInputField(element: EventTarget | null): boolean {
   );
 }
 
-export function handleGlobalKey(e: KeyboardEvent): void {
-  if (isInputField(e.target)) return;
+export function isInteractiveTarget(element: EventTarget | null): boolean {
+  const el = element as HTMLElement | null;
+  if (!el || typeof el.closest !== "function") return false;
+  return (
+    isInputField(el) ||
+    el.closest(
+      'button, [role="menuitem"], [role="menuitemcheckbox"], [role="option"], [role="slider"], [role="switch"], [role="tab"], a[href], summary',
+    ) !== null
+  );
+}
 
+export function handleGlobalKey(e: KeyboardEvent): void {
   if (e.repeat || e.defaultPrevented) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (isInteractiveTarget(e.target)) return;
+
+  const key = e.key.toLowerCase();
+
+  if (key === "?") {
+    e.preventDefault();
+    _showOverlay = !_showOverlay;
+    return;
+  }
 
   if (getEqOpen()) {
     if (e.key === "Escape") {
@@ -80,14 +102,6 @@ export function handleGlobalKey(e: KeyboardEvent): void {
       e.preventDefault();
       closeShortcutsOverlay();
     }
-    return;
-  }
-
-  const key = e.key.toLowerCase();
-
-  if (key === "?") {
-    e.preventDefault();
-    openShortcutsOverlay();
     return;
   }
 

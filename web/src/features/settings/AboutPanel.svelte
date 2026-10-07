@@ -7,6 +7,7 @@
   import {
     getCurrentVersion,
     getUpdateAvailable,
+    getUpdateCheckedAt,
     getUpdateChecking,
     getUpdateInstalling,
     getUpdateStatus,
@@ -25,6 +26,9 @@
   const downloading = $derived(!!status?.downloading);
   const failed = $derived(!!status?.error);
   const busy = $derived(checking || installing);
+const upToDate = $derived(
+  !checking && !failed && getUpdateCheckedAt() !== null && !available && !ready,
+);
 
   onMount(() => {
     void initAppUpdate();
@@ -44,6 +48,7 @@
     if (downloading) return t("update.downloadingTitle");
     if (available) return t("update.updateAvailableHint");
     if (checking) return t("update.checking");
+    if (upToDate) return t("update.upToDate");
     return "";
   }
 
@@ -96,7 +101,7 @@
       {:else}
         <Button
           size="sm"
-          onclick={() => void checkForAppUpdate(true)}
+          onclick={() => void checkForAppUpdate(true, true)}
           disabled={busy}
         >
           {chipLabel()}

@@ -652,15 +652,17 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
         Err(error) => {
             eprintln!("update check failed: {error}");
             let _ = clear_pending_update(&app);
-            Ok(UpdateStatus {
+            let status = UpdateStatus {
                 available: false,
                 version: None,
                 current_version: env!("CARGO_PKG_VERSION").to_string(),
                 downloading: None,
                 progress: None,
                 ready: None,
-                error: None,
-            })
+                error: Some(error),
+            };
+            update_svc::emit_status(&app, &status);
+            Ok(status)
         }
     }
 }

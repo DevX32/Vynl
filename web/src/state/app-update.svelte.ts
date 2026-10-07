@@ -9,6 +9,11 @@ let _installing = $state(false);
 let _currentVersion = $state<string | null>(null);
 let _unlisten: (() => void) | null = null;
 let _checkedOnce = false;
+let _checkedAt: number | null = null;
+
+export function getUpdateCheckedAt(): number | null {
+  return _checkedAt;
+}
 
 export function getUpdateStatus(): UpdateStatus | null {
   return _status;
@@ -53,7 +58,7 @@ export async function initAppUpdate(): Promise<void> {
   await checkForAppUpdate();
 }
 
-export async function checkForAppUpdate(force = true): Promise<void> {
+export async function checkForAppUpdate(force = true, notify = false): Promise<void> {
   if (_checking) return;
   _checking = true;
   try {
@@ -63,11 +68,14 @@ export async function checkForAppUpdate(force = true): Promise<void> {
       toasts.error(t("update.checkFailed", { error: next.error }));
     } else if (next.available && !next.downloading && !next.ready) {
       toasts.info(t("update.availableSub", { version: next.version ?? "" }));
+    } else if (notify) {
+      toasts.success(t("update.upToDate"));
     }
   } catch (e) {
     toasts.error(t("update.checkFailed", { error: errText(e) }));
   } finally {
     _checking = false;
+    _checkedAt = Date.now();
   }
 }
 

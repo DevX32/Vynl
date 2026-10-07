@@ -20,8 +20,10 @@
 
   let {
     active,
+    fullscreen = false,
   }: {
     active: boolean;
+    fullscreen?: boolean;
   } = $props();
 
   let scanning = $state(false);
@@ -49,6 +51,7 @@
       if (!active || e.repeat || e.defaultPrevented) return;
       if (isInputField(e.target)) return;
       if (e.key === "Escape" && getLyricsOpen()) {
+        if (fullscreen) return;
         closeLyrics();
       } else if (e.key === "ArrowRight") {
         e.preventDefault();

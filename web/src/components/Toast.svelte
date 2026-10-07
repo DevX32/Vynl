@@ -31,9 +31,6 @@
     {@const Icon = icons[toast.kind] ?? Info}
     <div
       class="toast"
-      class:paused={toast.paused}
-      onpointerenter={() => toasts.pause(toast.id)}
-      onpointerleave={() => toasts.resume(toast.id)}
       style:--tone={tone[toast.kind] ?? tone.info}
       role={toast.kind === "error" ? "alert" : undefined}
       animate:flip={{ duration: calm ? 0 : 160 }}
@@ -66,7 +63,7 @@
     left: 0;
     right: 0;
     margin-inline: auto;
-    width: min(280px, calc(100vw - 32px));
+    width: min(360px, calc(100vw - 32px));
     z-index: 9999;
     display: flex;
     flex-direction: column;
@@ -148,15 +145,9 @@
     background: var(--tone);
     opacity: 0.6;
     transform-origin: left;
-    transition: transform 30ms linear;
-  }
-
-  .paused .timer {
-    opacity: 0.25;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .timer,
     button {
       transition: none;
     }
