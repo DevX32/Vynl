@@ -72,8 +72,8 @@ class SettingsPage extends StatelessWidget {
       .showSnackBar(SnackBar(content: Text(message)));
 }
 
-Future<void> _openRepo(BuildContext context) async {
-    final uri = Uri.parse('https://github.com/DevX32/Vynl');
+Future<void> _openSupport(BuildContext context) async {
+    final uri = Uri.parse('https://ko-fi.com/devx32');
     try {
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('could not open $uri');
@@ -263,14 +263,10 @@ Future<void> _openRepo(BuildContext context) async {
                     ),
             ),
             _Row(
-              label: 'Source code',
-              hint: 'github.com/DevX32/Vynl',
-              onTap: () => _openRepo(context),
-              trailing: const Icon(
-                Icons.open_in_new_rounded,
-                size: 17,
-                color: VynlColors.faint,
-              ),
+              label: 'Support Vynl',
+              hint: 'If you like the app, a coffee helps keep it going.',
+              onTap: () => _openSupport(context),
+              trailing: const _Chip(label: 'Ko-fi', danger: true),
             ),
           ],
         ),
