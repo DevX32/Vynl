@@ -92,6 +92,8 @@
 <style>
   .player-page {
     height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     min-width: 0;
     min-height: 0;
     overflow: clip;
@@ -101,25 +103,14 @@
   }
 
   .stage {
-    height: 100%;
+    grid-column: 1;
+    grid-row: 1;
     min-height: 0;
     min-width: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     position: relative;
     z-index: 2;
-  }
-
-  @container player (max-width: 700px) {
-    .player-page {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-
-    .stage {
-      grid-column: 1;
-      grid-row: 1;
-    }
   }
 
   .main-col {

@@ -220,25 +220,21 @@
 
 <style>
   .queue {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    grid-column: 2;
+    grid-row: 1;
     width: 320px;
     min-height: 0;
     min-width: 0;
     padding: 18px 14px;
-    z-index: 3;
+    position: relative;
+    z-index: 2;
     background: var(--bg);
-    border-left: 1px solid var(--line);
-    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.28);
     overflow: hidden;
     display: flex;
     flex-direction: column;
     transition:
       width 0.28s ease-in-out,
-      padding 0.28s ease-in-out,
-      transform 0.28s ease-in-out;
+      padding 0.28s ease-in-out;
   }
 
   .expanded-content {
@@ -261,18 +257,6 @@
     width: 28px;
     padding: 0;
     overflow: hidden;
-    border-left-color: transparent;
-    box-shadow: none;
-  }
-
-  @container player (max-width: 700px) {
-    .queue {
-      position: relative;
-      grid-column: 2;
-      grid-row: 1;
-      border-left: none;
-      box-shadow: none;
-    }
   }
 
   .collapsed-view {
