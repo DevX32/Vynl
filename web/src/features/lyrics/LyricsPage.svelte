@@ -56,6 +56,12 @@
     }
   }
 
+  function scrollTarget(c: HTMLElement, el: HTMLElement): number {
+    const half = c.clientHeight / 2;
+    const max = c.scrollHeight - c.clientHeight;
+    return Math.min(el.offsetTop - half + el.clientHeight / 2, max - half * 0.35);
+  }
+
   function animateScroll(c: HTMLElement, to: number): void {
     cancelScrollAnim();
     const from = c.scrollTop;
@@ -151,7 +157,7 @@
     const el = lineEls[activeIndex];
     const c = container;
     if (!el || !c) return;
-    const target = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2;
+    const target = scrollTarget(c, el);
     if (Math.abs(c.scrollTop - target) <= 2) return;
     if (didInitialScroll) {
       animateScroll(c, target);
@@ -718,7 +724,7 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-    padding: 4vh 0 40vh;
+    padding: 4vh 0 12vh;
     mask-image: linear-gradient(
       to bottom,
       transparent 0,
@@ -787,8 +793,8 @@
     font-weight: 600;
     transform: scale(1.26);
     text-shadow:
-      0 0 22px var(--accent-glow),
-      0 0 60px rgba(185, 167, 255, 0.12);
+      0 0 18px rgba(240, 240, 236, 0.22),
+      0 0 52px rgba(240, 240, 236, 0.08);
   }
   .lyr-line.before {
     color: color-mix(in srgb, var(--dim) 62%, var(--bg));
