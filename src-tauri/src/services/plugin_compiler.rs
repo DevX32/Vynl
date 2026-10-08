@@ -10,7 +10,8 @@ use tauri::AppHandle;
 
 use crate::services::{plugins, process, tools, util};
 
-const ESBUILD_LATEST_URL: &str = "https://api.github.com/repos/evanw/esbuild/releases/latest";
+const ESBUILD_NPM_LATEST: &str = "https://registry.npmjs.org/esbuild/latest";
+const ESBUILD_NPM_PLATFORM_BASE: &str = "https://registry.npmjs.org/@esbuild";
 const SDK_MODULE: &str = "@vynl/plugin-sdk";
 
 const MAX_SOURCE_BYTES: u64 = 8 * 1024 * 1024;
@@ -50,13 +51,13 @@ fn exe_name() -> &'static str {
     }
 }
 
-fn esbuild_target() -> Option<(&'static str, &'static str)> {
+fn esbuild_target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") => Some(("windows-64", "zip")),
-        ("linux", "x86_64") => Some(("linux-64", "tar.gz")),
-        ("linux", "aarch64") => Some(("linux-arm64", "tar.gz")),
-        ("macos", "aarch64") => Some(("darwin-arm64", "tar.gz")),
-        ("macos", "x86_64") => Some(("darwin-64", "tar.gz")),
+        ("windows", "x86_64") => Some("win32-x64"),
+        ("linux", "x86_64") => Some("linux-x64"),
+        ("linux", "aarch64") => Some("linux-arm64"),
+        ("macos", "aarch64") => Some("darwin-arm64"),
+        ("macos", "x86_64") => Some("darwin-x64"),
         _ => None,
     }
 }
@@ -99,7 +100,7 @@ pub async fn ensure_esbuild(app: &AppHandle) -> Result<String, String> {
 }
 
 async fn download_esbuild(app: &AppHandle, user_data: &Path) -> Result<String, String> {
-    let Some((token, ext)) = esbuild_target() else {
+    let Some(platform) = esbuild_target() else {
         return Err(format!(
             "esbuild is not available for {}-{}",
             std::env::consts::OS,
@@ -108,38 +109,27 @@ async fn download_esbuild(app: &AppHandle, user_data: &Path) -> Result<String, S
     };
 
     let client = http_client()?;
-    let release = client
-        .get(ESBUILD_LATEST_URL)
+    let meta = client
+        .get(ESBUILD_NPM_LATEST)
         .send()
         .await
-        .map_err(|e| format!("Failed to reach GitHub: {e}"))?
+        .map_err(|e| format!("Failed to reach the npm registry: {e}"))?
         .text()
         .await
-        .map_err(|e| format!("Failed to read release info: {e}"))?;
-    let release: serde_json::Value =
-        serde_json::from_str(&release).map_err(|e| format!("Invalid release JSON: {e}"))?;
+        .map_err(|e| format!("Failed to read esbuild package info: {e}"))?;
+    let meta: serde_json::Value =
+        serde_json::from_str(&meta).map_err(|e| format!("Invalid package JSON: {e}"))?;
 
-    let assets = release["assets"]
-        .as_array()
-        .ok_or("esbuild release has no assets")?;
+    let version = meta["version"]
+        .as_str()
+        .filter(|v| !v.is_empty())
+        .ok_or("The esbuild package info has no version")?
+        .to_string();
 
-    let url = assets
-        .iter()
-        .filter_map(|a| {
-            let name = a["name"].as_str()?;
-            let starts = name.starts_with(&format!("esbuild-{token}"));
-            let ends = name.ends_with(&format!(".{ext}"));
-            if starts && ends {
-                a["browser_download_url"].as_str()
-            } else {
-                None
-            }
-        })
-        .next()
-        .ok_or_else(|| format!("No esbuild build for {token}"))?;
+    let url = format!("{ESBUILD_NPM_PLATFORM_BASE}/{platform}/-/{platform}-{version}.tgz");
 
     let bytes = client
-        .get(url)
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Failed to download esbuild: {e}"))?
@@ -148,18 +138,14 @@ async fn download_esbuild(app: &AppHandle, user_data: &Path) -> Result<String, S
         .map_err(|e| format!("Failed to read esbuild download: {e}"))?;
 
     let scratch = build_dir(app)?;
-    let archive = scratch.join(format!("esbuild-archive.{ext}"));
+    let archive = scratch.join("esbuild-archive.tgz");
     fs::write(&archive, &bytes).map_err(|e| format!("Failed to write esbuild archive: {e}"))?;
 
     let extract_dir = scratch.join("esbuild-extract");
     let _ = fs::remove_dir_all(&extract_dir);
     fs::create_dir_all(&extract_dir).map_err(|e| format!("Failed to create extract dir: {e}"))?;
 
-    let extracted = if ext == "zip" {
-        extract_esbuild_zip(&archive, &extract_dir)?
-    } else {
-        extract_esbuild_tar(&archive, &extract_dir).await?
-    };
+    let extracted = extract_esbuild_tar(&archive, &extract_dir).await?;
 
     let bin_dir = user_data.join("bin");
     fs::create_dir_all(&bin_dir).map_err(|e| format!("Failed to create bin dir: {e}"))?;
@@ -180,28 +166,6 @@ async fn download_esbuild(app: &AppHandle, user_data: &Path) -> Result<String, S
     }
     tools::invalidate_tool_path_cache(Some("esbuild"));
     Ok(dest.to_string_lossy().into_owned())
-}
-
-fn extract_esbuild_zip(archive: &Path, dest: &Path) -> Result<PathBuf, String> {
-    let file = fs::File::open(archive).map_err(|e| format!("Failed to open zip: {e}"))?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {e}"))?;
-
-    for i in 0..zip.len() {
-        let mut entry = zip
-            .by_index(i)
-            .map_err(|e| format!("Failed to read zip entry: {e}"))?;
-        let name = entry.name().to_lowercase();
-        if name != "esbuild.exe" && !name.ends_with("/esbuild.exe") {
-            continue;
-        }
-        let out = dest.join("esbuild.exe");
-        let mut out_file =
-            fs::File::create(&out).map_err(|e| format!("Failed to create esbuild: {e}"))?;
-        std::io::copy(&mut entry, &mut out_file)
-            .map_err(|e| format!("Failed to extract esbuild: {e}"))?;
-        return Ok(out);
-    }
-    Err("esbuild.exe not found in archive".into())
 }
 
 async fn extract_esbuild_tar(archive: &Path, dest: &Path) -> Result<PathBuf, String> {
@@ -234,12 +198,15 @@ async fn extract_esbuild_tar(archive: &Path, dest: &Path) -> Result<PathBuf, Str
                 let path = entry.path();
                 if path.is_dir() {
                     stack.push(path);
-                } else if path.file_name().is_some_and(|n| n == "esbuild") {
+                } else if path
+                    .file_name()
+                    .is_some_and(|n| n == "esbuild" || n == "esbuild.exe")
+                {
                     found = Some(path);
                 }
             }
         }
-        found.ok_or("esbuild not found in archive".to_string())
+        found.ok_or("esbuild binary not found in archive".to_string())
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
