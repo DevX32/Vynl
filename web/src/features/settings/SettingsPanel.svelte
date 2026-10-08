@@ -14,12 +14,24 @@
   const settings = $derived(getCurrentSettings());
 
   let _displayNameTimer: ReturnType<typeof setTimeout> | null = null;
+  let _displayNameInput: HTMLInputElement | undefined = $state();
+
   function debouncedDisplayNamePatch(value: string): void {
     if (_displayNameTimer) clearTimeout(_displayNameTimer);
     _displayNameTimer = setTimeout(() => {
       void patchSettings({ displayName: value });
       _displayNameTimer = null;
     }, 300);
+  }
+
+  function rollDisplayName(): void {
+    if (_displayNameTimer) {
+      clearTimeout(_displayNameTimer);
+      _displayNameTimer = null;
+    }
+    const next = rollNickname();
+    if (_displayNameInput) _displayNameInput.value = next;
+    void patchSettings({ displayName: next });
   }
 </script>
 
@@ -28,6 +40,7 @@
     <div class="label mono">{t("settings.displayName")}</div>
     <input
       class="text"
+      bind:this={_displayNameInput}
       value={settings.displayName}
       oninput={(e) => debouncedDisplayNamePatch(e.currentTarget.value)}
       spellcheck={false}
@@ -35,7 +48,7 @@
     />
     <div class="hint-row">
       <div class="hint mono">{t("settings.displayNameHint")}</div>
-      <Button size="sm" onclick={() => rollNickname()}>
+      <Button size="sm" onclick={rollDisplayName}>
         <RefreshCw size={13} stroke-width={1.5} />
         {t("settings.displayNameRoll")}
       </Button>
