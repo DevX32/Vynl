@@ -10,7 +10,6 @@ const release = await getLatestRelease()
     <div class="reveal">
       <span class="section-index">04 — Download</span>
       <h2 class="section-title">Get <span class="grad">Vynl</span>.</h2>
-      <p class="section-sub">Free, open source, GPL-3.0. No account, no cloud, no tracking.</p>
     </div>
 
     <div class="platforms">
@@ -131,6 +130,7 @@ const release = await getLatestRelease()
     height: 42px;
     flex-shrink: 0;
     border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
     color: var(--ink);
   }
 
@@ -178,7 +178,7 @@ const release = await getLatestRelease()
     justify-content: space-between;
     padding: 11px 15px;
     border: 1px solid var(--line);
-    background: rgba(240, 240, 236, 0.04);
+    background: var(--paper-deep);
     font-size: 14px;
     transition: border-color 0.15s ease;
   }
@@ -186,7 +186,7 @@ const release = await getLatestRelease()
   @media (hover: hover) and (pointer: fine) {
     .pkg:hover {
       border-color: var(--line-strong);
-      background: rgba(240, 240, 236, 0.05);
+      background: var(--surface);
     }
   }
 

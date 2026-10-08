@@ -25,10 +25,11 @@
   --ink: #f0f0ec;
   --ink-soft: #a3a39b;
   --faint: #7a7a74;
-  --line: rgba(240, 240, 236, 0.09);
-  --line-strong: rgba(240, 240, 236, 0.2);
+  --line: rgba(240, 240, 236, 0.03);
+  --line-strong: rgba(240, 240, 236, 0.07);
+  --surface: #131317;
   --signal: #a894e8;
-  --signal-soft: rgba(185, 167, 255, 0.12);
+  --signal-soft: rgba(185, 167, 255, 0.11);
   --accent-text: #161128;
 
   --radius-sm: 2px;
@@ -260,14 +261,21 @@ button,
 }
 
 .btn--ghost {
-  border-color: var(--line-strong);
+  background: var(--paper-deep);
+  border-color: var(--line);
+  color: var(--ink-soft);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .btn--ghost:hover {
-    border-color: var(--signal);
-    background: var(--signal-soft);
+    background: var(--surface);
+    border-color: var(--line-strong);
+    color: var(--ink);
   }
+}
+
+.btn--ghost:active {
+  background: var(--paper-deep);
 }
 
 .btn--lg {
@@ -287,7 +295,7 @@ button,
 }
 
 .card {
-  background: rgba(240, 240, 236, 0.04);
+  background: var(--paper-deep);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   transition: border-color 0.18s ease;

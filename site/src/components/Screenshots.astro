@@ -168,17 +168,20 @@ const shots = [
   .arrow {
     width: 40px;
     height: 40px;
-    border: 1px solid var(--line-strong);
+    border: 1px solid var(--line);
     border-radius: var(--radius);
-    background: transparent;
+    background: var(--paper-deep);
     color: var(--ink);
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    transition:
+      background-color 0.3s ease,
+      border-color 0.3s ease;
   }
 
   @media (hover: hover) and (pointer: fine) {
     .arrow:hover {
-      background: rgba(240, 240, 236, 0.05);
+      background: var(--surface);
+      border-color: var(--line-strong);
     }
   }
 
@@ -211,9 +214,9 @@ const shots = [
     padding: 32px;
     padding-top: calc(32px + env(safe-area-inset-top, 0px));
     padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
-    background: rgba(6, 6, 8, 0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     overscroll-behavior: contain;
     opacity: 0;
     pointer-events: none;
@@ -270,11 +273,13 @@ const shots = [
     height: 40px;
     border-radius: var(--radius);
     transform: rotate(45deg);
-    background: rgba(245, 242, 234, 0.08);
-    border: 1px solid rgba(245, 242, 234, 0.25);
-    color: #f0f0ec;
+    background: var(--paper-deep);
+    border: 1px solid var(--line);
+    color: var(--ink);
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    transition:
+      background-color 0.3s ease,
+      border-color 0.3s ease;
   }
 
   .lightbox-close svg {
@@ -283,7 +288,8 @@ const shots = [
 
   @media (hover: hover) and (pointer: fine) {
     .lightbox-close:hover {
-      background: rgba(185, 167, 255, 0.18);
+      background: var(--signal-soft);
+      border-color: var(--line-strong);
     }
   }
 </style>
