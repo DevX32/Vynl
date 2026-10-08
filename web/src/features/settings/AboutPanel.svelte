@@ -59,7 +59,7 @@ const upToDate = $derived(
   }
 </script>
 
-<div class="panel" class:available={available || ready} class:error={failed}>
+<div class="panel">
   <div class="head">
     <div class="mark">
       <img src="/icon.png" alt="" draggable="false" />
@@ -126,14 +126,6 @@ const upToDate = $derived(
     transition:
       border-color 0.2s,
       background 0.2s;
-  }
-
-  .panel.available {
-    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  }
-
-  .panel.error {
-    border-color: var(--danger-border);
   }
 
   .head {

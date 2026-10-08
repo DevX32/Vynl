@@ -66,8 +66,6 @@ export async function checkForAppUpdate(force = true, notify = false): Promise<v
     applyStatus(next);
     if (next.error) {
       toasts.error(t("update.checkFailed", { error: next.error }));
-    } else if (next.available && !next.downloading && !next.ready) {
-      toasts.info(t("update.availableSub", { version: next.version ?? "" }));
     } else if (notify) {
       toasts.success(t("update.upToDate"));
     }
