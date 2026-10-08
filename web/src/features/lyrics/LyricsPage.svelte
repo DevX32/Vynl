@@ -394,32 +394,42 @@
           {@const synced = getLyricsSynced()}
           {@const activeWordIndex = getLyricsActiveWordIndex()}
           {@const instrumental = synced && isInstrumental(line.text)}
+          {@const active = i === activeIndex}
           <button
             type="button"
             class="lyr-line"
-            class:active={i === activeIndex}
+            class:active={active}
             class:before={synced && activeIndex >= 0 && i < activeIndex}
             class:selected={selected.includes(i)}
             class:seekable={synced && line.time >= 0}
-            class:hidden-line={instrumental && i !== activeIndex}
+            class:hidden-line={instrumental && !active}
+            class:bg={!!line.bg}
+            class:duet-left={line.agent === "v1"}
+            class:duet-right={line.agent === "v2"}
             bind:this={lineEls[i]}
             onclick={(e) => onLineClick(e, i)}
             oncontextmenu={(e) => onLineContextMenu(e, i)}
           >
             {#if instrumental}
-              {#if i === activeIndex}
+              {#if active}
                 <span class="lyr-dots">
                   <span></span><span></span><span></span>
                 </span>
               {/if}
-            {:else if i === activeIndex && line.words?.length}
+            {:else if active && line.words?.length}
               <span class="lyr-text karaoke">
                 {#each line.words as word, wordIndex (wordIndex)}
-                  <span class:karaoke-active={wordIndex <= activeWordIndex}>{word.text}{" "}</span>
+                  <span
+                    class:karaoke-active={wordIndex <= activeWordIndex}
+                    class:karaoke-bg={word.bg}
+                  >{word.text}{" "}</span>
                 {/each}
               </span>
             {:else}
               <span class="lyr-text">{line.text || "\u00A0"}</span>
+            {/if}
+            {#if active && line.roman}
+              <span class="lyr-roman">{line.roman}</span>
             {/if}
           </button>
         {/each}
@@ -802,6 +812,46 @@
   .lyr-text.karaoke > span.karaoke-active {
     color: var(--accent);
     transform: scale(1.04);
+  }
+  .lyr-text.karaoke > span.karaoke-bg {
+    color: var(--dim);
+    font-style: italic;
+  }
+  .lyr-text.karaoke > span.karaoke-active.karaoke-bg {
+    color: var(--text);
+  }
+
+  .lyr-line.bg {
+    font-size: 20px;
+  }
+  .lyr-line.bg.active {
+    font-size: 25px;
+    transform: scale(1);
+    color: var(--dim);
+    text-shadow: none;
+  }
+  .lyr-line.duet-left,
+  .lyr-line.duet-right {
+    max-width: 46%;
+    text-align: left;
+  }
+  .lyr-line.duet-right {
+    margin-left: auto;
+    margin-right: 0;
+  }
+  .lyr-line.duet-left {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .lyr-roman {
+    display: block;
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0;
+    color: color-mix(in srgb, var(--dim) 70%, var(--bg));
   }
 
   .lyr-dots {

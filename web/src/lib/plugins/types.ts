@@ -111,7 +111,7 @@ export interface PluginLyricsLookup {
 }
 
 export interface PluginLyricsResult {
-  kind: "lrc" | "txt";
+  kind: "lrc" | "txt" | "ttml";
   text: string;
 }
 
@@ -159,7 +159,7 @@ export interface PluginPlayerState {
   playing: boolean;
   position: number;
   shared: boolean;
-  lyrics: { text: string; kind: "lrc" | "txt" } | null;
+  lyrics: { text: string; kind: "lrc" | "txt" | "ttml" } | null;
   track: {
     id: string;
     title: string;

@@ -75,6 +75,7 @@ pub enum ToolState {
 pub enum LyricsKind {
     Lrc,
     Txt,
+    Ttml,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

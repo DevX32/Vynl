@@ -57,12 +57,13 @@ pub fn legacy_sidecar_path(file: &str, ext: &str) -> PathBuf {
 }
 
 pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
-    for kind in &["lrc", "txt"] {
+    for kind in &["lrc", "ttml", "txt"] {
         for p in [sidecar_path(file, kind), legacy_sidecar_path(file, kind)] {
             match fs::read_to_string(&p) {
                 Ok(text) if !text.trim().is_empty() => {
                     let lyrics_kind = match *kind {
                         "lrc" => crate::commands::types::LyricsKind::Lrc,
+                        "ttml" => crate::commands::types::LyricsKind::Ttml,
                         _ => crate::commands::types::LyricsKind::Txt,
                     };
                     return Some(LyricsResult {

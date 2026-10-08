@@ -180,7 +180,7 @@ export interface DownloadSummary {
   cancelled: boolean;
 }
 
-type LyricsKind = "lrc" | "txt";
+type LyricsKind = "lrc" | "txt" | "ttml";
 type LyricsSource = "local" | "remote";
 
 export interface LyricsResult {

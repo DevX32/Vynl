@@ -86,7 +86,7 @@ export async function runLyricsProviders(
         res &&
         typeof res.text === "string" &&
         res.text.trim().length > 0 &&
-        (res.kind === "lrc" || res.kind === "txt")
+        (res.kind === "lrc" || res.kind === "txt" || res.kind === "ttml")
       ) {
         return { kind: res.kind, text: res.text };
       }

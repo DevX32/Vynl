@@ -3,8 +3,16 @@ import { vynl } from "@lib/vynl";
 import { runLyricsProviders } from "@lib/plugins/providers";
 import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
 
-type Word = { time: number; text: string };
-type LyricLine = { time: number; text: string; words?: Word[] };
+type Word = { time: number; text: string; end?: number; bg?: boolean };
+type LyricLine = {
+  time: number;
+  text: string;
+  words?: Word[];
+  end?: number;
+  bg?: boolean;
+  agent?: string;
+  roman?: string;
+};
 
 let _loading = $state(false);
 let _result = $state<LyricsResult | null>(null);
@@ -90,10 +98,144 @@ function parseLrc(text: string): LyricLine[] {
   return out.sort((a, b) => a.time - b.time);
 }
 
+function parseClock(value: string): number {
+  const m = /^(\d+):(\d{1,2})(?:[.:](\d{1,3}))?$/.exec(value.trim());
+  if (m) {
+    const frac = m[3] ? Number(m[3].padEnd(3, "0")) / 1000 : 0;
+    return Number(m[1]) * 60 + Number(m[2]) + frac;
+  }
+  const secs = Number(value.trim().replace(/s$/i, ""));
+  return Number.isFinite(secs) ? secs : 0;
+}
+
+function parseOffsetAttr(attr: string): number {
+  const clock = /offset\s*=\s*"([^"]+)"/i.exec(attr);
+  if (clock) {
+    const raw = clock[1].trim();
+    const sign = raw.startsWith("-") ? -1 : 1;
+    return sign * parseClock(raw.replace(/^[+-]/, ""));
+  }
+  const secs = /=\s*"?([\d.]+)"?\s*s"?$/i.exec(attr);
+  if (secs) return Number(secs[1]);
+  return 0;
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/g, "&");
+}
+
+function parseTtml(text: string): LyricLine[] {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror")) return [];
+
+  const body = doc.querySelector("body");
+  if (!body) return [];
+
+  let offset = 0;
+  const ittp = doc.querySelector("head > ittp, head > metadata > ittp");
+  if (ittp) {
+    const frameRate = Number(ittp.getAttribute("ttp:frameRate"));
+    const tickRate = Number(ittp.getAttribute("ttp:tickRate"));
+    if (Number.isFinite(tickRate) && tickRate > 0 && Number.isFinite(frameRate) && frameRate > 0) {
+      offset -= frameRate / tickRate;
+    }
+  }
+
+  const timing = body.getAttribute("itunes:timing");
+  if (timing) offset += parseOffsetAttr(`offset="${timing}"`);
+
+  const out: LyricLine[] = [];
+  const romans: Array<{ time: number; text: string }> = [];
+
+  const attr = (el: Element, name: string): string | null =>
+    el.getAttribute(name) ?? el.getAttributeNS("*", name.split(":")[1]);
+
+  const roleOf = (el: Element): string => (attr(el, "ttm:role") ?? "").toLowerCase();
+
+  const collect = (p: Element): void => {
+    const beginRaw = attr(p, "begin");
+    if (beginRaw === null) return;
+    const start = parseClock(beginRaw) + offset;
+    const endRaw = attr(p, "end");
+    const endRawNum = endRaw !== null ? parseClock(endRaw) + offset : null;
+    const end = endRawNum !== null && endRawNum > start ? endRawNum : null;
+
+    const role = roleOf(p);
+    const romanRole = /translation|romanization|romaji|translit/.test(role);
+    const bgRole = /(^|[-_])bg$|background/.test(role);
+
+    const spans = Array.from(p.querySelectorAll("span")).filter(
+      (s) => attr(s, "begin") !== null,
+    );
+    const words: Word[] = [];
+    let full = "";
+
+    for (const span of spans) {
+      const sb = attr(span, "begin")!;
+      const se = attr(span, "end");
+      const wStart = parseClock(sb) + offset;
+      const wEndRaw = se !== null ? parseClock(se) + offset : null;
+      const wEnd = wEndRaw !== null && wEndRaw > wStart ? wEndRaw : null;
+      const wText = decodeEntities(span.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!wText) continue;
+      full += (full ? " " : "") + wText;
+      words.push({
+        time: wStart,
+        text: wText,
+        ...(wEnd !== null ? { end: wEnd } : {}),
+        ...(/bg|background/.test(roleOf(span)) ? { bg: true } : {}),
+      });
+    }
+
+    const lineText = full || decodeEntities(p.textContent ?? "").replace(/\s+/g, " ").trim();
+    if (!lineText) return;
+
+    if (romanRole) {
+      romans.push({ time: start, text: lineText });
+      return;
+    }
+
+    out.push({
+      time: start,
+      text: lineText,
+      words: words.length > 0 ? words : undefined,
+      ...(end !== null ? { end } : {}),
+      ...(bgRole ? { bg: true } : {}),
+      ...(attr(p, "ttm:agent") ? { agent: attr(p, "ttm:agent")! } : {}),
+    });
+  };
+
+  body.querySelectorAll("p").forEach(collect);
+
+  if (romans.length > 0 && out.length > 0) {
+    for (const r of romans) {
+      let best: LyricLine | null = null;
+      let bestDist = Infinity;
+      for (const line of out) {
+        const d = Math.abs(line.time - r.time);
+        if (d < bestDist) {
+          bestDist = d;
+          best = line;
+        }
+      }
+      if (best && bestDist < 5) best.roman = r.text;
+    }
+  }
+
+  return out.sort((a, b) => a.time - b.time);
+}
+
 function toLines(res: LyricsResult): LyricLine[] {
-  return res.kind === "lrc"
-    ? parseLrc(res.text)
-    : res.text.split(/\r?\n/).map((x) => ({ time: -1, text: x }));
+  if (res.kind === "ttml") return parseTtml(res.text);
+  if (res.kind === "lrc") return parseLrc(res.text);
+  return res.text.split(/\r?\n/).map((x) => ({ time: -1, text: x }));
 }
 
 function clearLyricsState(): void {
@@ -123,6 +265,7 @@ const _embedded = new Set<string>();
 
 function tryParseEmbeddedLyrics(res: LyricsResult, t: { path: string }): void {
   if (res.source !== "remote") return;
+  if (res.kind === "ttml") return;
   if (_embedded.has(t.path)) return;
   const embedText =
     res.kind === "lrc"
@@ -220,7 +363,7 @@ function findActiveWordIndex(words: Word[], t: number): number {
   return wIdx;
 }
 
-const _synced = $derived(_result?.kind === "lrc");
+const _synced = $derived(_result?.kind === "lrc" || _result?.kind === "ttml");
 
 const _activeIndex = $derived(
   _synced
@@ -274,6 +417,14 @@ export function setLyricsManual(
 
 export function parseLrcText(text: string): LyricLine[] {
   return parseLrc(text);
+}
+
+export function parseTtmlText(text: string): LyricLine[] {
+  return parseTtml(text);
+}
+
+export function isTtmlText(text: string): boolean {
+  return /<tt[\s>]/i.test(text) || /<ttml/i.test(text);
 }
 
 export function toLyricLines(res: LyricsResult): LyricLine[] {
