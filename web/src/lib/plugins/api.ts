@@ -21,6 +21,8 @@ import type {
   PluginSharedState,
 } from "./types";
 import { vynl } from "@lib/vynl";
+import { resolveDisplayName } from "@lib/nickname.svelte";
+import { getCurrentSettings } from "@state/settings.svelte";
 import {
   addPluginEventListener,
   emitScopedEvent,
@@ -119,6 +121,12 @@ export async function createRuntime(
     pluginId: host.id,
     permissions: Object.freeze([...permissions]),
     apiVersion: PLUGIN_API_VERSION,
+
+    App: {
+      getDisplayName() {
+        return resolveDisplayName(getCurrentSettings().displayName);
+      },
+    },
 
     Settings: {
       register(section) {

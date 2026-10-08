@@ -1,6 +1,6 @@
 import type { ArtistInfo, Collection } from "@lib/types";
 
-export const PLUGIN_API_VERSION = 1;
+export const PLUGIN_API_VERSION = 2;
 
 type PluginPermission = "network" | "shell" | "player";
 
@@ -201,6 +201,15 @@ export interface VynlPluginAPI {
   readonly pluginId: string;
   readonly permissions: readonly string[];
   readonly apiVersion: number;
+
+  App: {
+    /**
+     * The user's name as configured in Settings, falling back to their random
+     * nickname when it is left blank. Returns "" on hosts that predate
+     * `api.App` (apiVersion 1), so feature-detect rather than assume.
+     */
+    getDisplayName(): string;
+  };
 
   Settings: {
     register(section: PluginSettingsSection): void;
