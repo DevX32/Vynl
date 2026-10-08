@@ -1,7 +1,6 @@
 import { vynl } from "@lib/vynl";
 import { t } from "@lib/i18n";
 import { toasts } from "@lib/toast";
-import fallbackCatalog from "@lib/plugins/fallback-catalog.json";
 import { emitAppEvent, emitScopedEvent } from "@lib/plugins/events";
 import {
   createRuntime,
@@ -447,14 +446,12 @@ export function fetchStore(force = false): Promise<void> {
       if (res.entries.length > 0) {
         _store = res.entries;
         _storeError = res.sourceError;
-      } else if (res.sourceError) {
-        _store = fallbackCatalog.plugins;
-        _storeError = res.sourceError;
       } else {
         _store = [];
+        _storeError = res.sourceError;
       }
     } catch (e) {
-      _store = fallbackCatalog.plugins;
+      _store = [];
       _storeError = errText(e);
     } finally {
       _storeLoading = false;
