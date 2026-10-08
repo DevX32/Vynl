@@ -4,12 +4,12 @@
     {
       "id": "listen-along",
       "name": "Listen Along",
-      "description": "Listen Together in Real Time: Host a Session, Share Your Code, and Friends Follow Your Playback — Audio Included — Over Supabase Realtime + WebRTC.",
+      "description": "Listen together in real time: host a session, share your code, and friends follow your playback — audio included — over a direct WebRTC connection. Zero setup.",
       "author": "Vynl",
       "repo": "DevX32/vynl-store",
       "categories": ["other"],
       "tags": ["social", "sync", "realtime", "webrtc"],
-      "version": "1.0.1",
+      "version": "2.0.0",
       "downloadUrl": "https://raw.githubusercontent.com/DevX32/vynl-store/main/plugins/listen-along.zip",
       "homepage": "https://github.com/DevX32/vynl-store/tree/main/plugins/listen-along",
       "addedAt": "2026-09-25T00:00:00Z"
