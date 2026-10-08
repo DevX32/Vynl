@@ -40,6 +40,53 @@
 
   let toast = $state("");
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  let didInitialScroll = false;
+  let userScrolling = $state(false);
+  let scrollAnim: number | null = null;
+  let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const prefersReducedMotion = () =>
+    typeof matchMedia === "function" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function cancelScrollAnim(): void {
+    if (scrollAnim !== null) {
+      cancelAnimationFrame(scrollAnim);
+      scrollAnim = null;
+    }
+  }
+
+  function animateScroll(c: HTMLElement, to: number): void {
+    cancelScrollAnim();
+    const from = c.scrollTop;
+    const delta = to - from;
+    if (Math.abs(delta) < 1) {
+      c.scrollTop = to;
+      return;
+    }
+    if (prefersReducedMotion()) {
+      c.scrollTop = to;
+      return;
+    }
+    const duration = Math.min(620, 200 + Math.abs(delta) * 0.32);
+    const start = performance.now();
+    const step = (now: number): void => {
+      const p = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      c.scrollTop = from + delta * eased;
+      scrollAnim = p < 1 ? requestAnimationFrame(step) : null;
+    };
+    scrollAnim = requestAnimationFrame(step);
+  }
+
+  function noteUserScroll(): void {
+    cancelScrollAnim();
+    userScrolling = true;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(() => {
+      userScrolling = false;
+    }, 2600);
+  }
 
   const np = $derived(getCurrentTrack());
   const selectedCharCount = $derived(
@@ -84,27 +131,55 @@
   $effect(() => {
     return () => {
       if (toastTimer) clearTimeout(toastTimer);
+      if (resumeTimer) clearTimeout(resumeTimer);
+      cancelScrollAnim();
     };
   });
 
   $effect(() => {
     const id = getCurrentId();
+    didInitialScroll = false;
     loadLyrics(id);
     selected = [];
     overlay = null;
   });
 
   $effect(() => {
-    if (!getIsTrackPlaying() || !autoScroll) return;
+    if (!getIsTrackPlaying() || !autoScroll || userScrolling) return;
     const activeIndex = getLyricsActiveIndex();
     if (activeIndex < 0) return;
     const el = lineEls[activeIndex];
     const c = container;
     if (!el || !c) return;
     const target = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2;
-    if (Math.abs(c.scrollTop - target) > 8) {
-      c.scrollTo({ top: target, behavior: "smooth" });
+    if (Math.abs(c.scrollTop - target) <= 2) return;
+    if (didInitialScroll) {
+      animateScroll(c, target);
+      return;
     }
+    didInitialScroll = true;
+    cancelScrollAnim();
+    c.scrollTop = target;
+  });
+
+  $effect(() => {
+    const c = container;
+    if (!c) return;
+    const onWheel = (): void => noteUserScroll();
+    const onTouchMove = (): void => noteUserScroll();
+    const onPointerDownScroll = (e: PointerEvent): void => {
+      const target = e.target as HTMLElement;
+      if (target.closest(".lyr-line")) return;
+      noteUserScroll();
+    };
+    c.addEventListener("wheel", onWheel, { passive: true });
+    c.addEventListener("touchmove", onTouchMove, { passive: true });
+    c.addEventListener("pointerdown", onPointerDownScroll);
+    return () => {
+      c.removeEventListener("wheel", onWheel);
+      c.removeEventListener("touchmove", onTouchMove);
+      c.removeEventListener("pointerdown", onPointerDownScroll);
+    };
   });
 
   $effect(() => {
@@ -318,6 +393,7 @@
           {@const activeIndex = getLyricsActiveIndex()}
           {@const synced = getLyricsSynced()}
           {@const activeWordIndex = getLyricsActiveWordIndex()}
+          {@const instrumental = synced && isInstrumental(line.text)}
           <button
             type="button"
             class="lyr-line"
@@ -325,14 +401,17 @@
             class:before={synced && activeIndex >= 0 && i < activeIndex}
             class:selected={selected.includes(i)}
             class:seekable={synced && line.time >= 0}
+            class:hidden-line={instrumental && i !== activeIndex}
             bind:this={lineEls[i]}
             onclick={(e) => onLineClick(e, i)}
             oncontextmenu={(e) => onLineContextMenu(e, i)}
           >
-            {#if synced && isInstrumental(line.text)}
-              <span class="lyr-dots" class:on={i === activeIndex}>
-                <span></span><span></span><span></span>
-              </span>
+            {#if instrumental}
+              {#if i === activeIndex}
+                <span class="lyr-dots">
+                  <span></span><span></span><span></span>
+                </span>
+              {/if}
             {:else if i === activeIndex && line.words?.length}
               <span class="lyr-text karaoke">
                 {#each line.words as word, wordIndex (wordIndex)}
@@ -625,14 +704,25 @@
     min-height: 0;
     overflow-y: auto;
     scrollbar-width: none;
-    scroll-behavior: smooth;
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 24px 0 80px;
-    mask-image: linear-gradient(to bottom, transparent, black 56px, black calc(100% - 56px), transparent);
-    -webkit-mask-image: linear-gradient(to bottom, transparent, black 56px, black calc(100% - 56px), transparent);
+    gap: 20px;
+    padding: 4vh 0 40vh;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 26px,
+      black calc(100% - 64px),
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 26px,
+      black calc(100% - 64px),
+      transparent 100%
+    );
   }
   .lyrics-scroll::-webkit-scrollbar {
     display: none;
@@ -655,46 +745,50 @@
 
   .lyr-line {
     font-family: var(--font-lyrics);
-    font-size: 18px;
-    line-height: 1.65;
+    font-size: 26px;
+    line-height: 1.5;
+    font-weight: 500;
     color: var(--faint);
-    padding: 6px 16px;
+    padding: 3px 16px;
     flex-shrink: 0;
     position: relative;
     display: block;
     width: 100%;
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
     text-align: center;
     background: none;
     border: none;
     cursor: pointer;
     overflow-wrap: break-word;
+    transform-origin: center center;
+    will-change: transform;
     transition:
-      color 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.55s cubic-bezier(0.34, 1.3, 0.36, 1),
-      background 0.25s ease,
-      text-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-      filter 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+      transform 0.6s var(--ease-out),
+      color 0.5s var(--ease-out),
+      opacity 0.5s var(--ease-out),
+      text-shadow 0.5s var(--ease-out);
   }
   .lyr-line.seekable {
     cursor: pointer;
   }
   .lyr-line.active {
     color: var(--text);
-    font-weight: 500;
-    transform: scale(1.15);
-    transform-origin: center;
-    text-shadow: 0 0 18px var(--accent-glow), 0 0 40px rgba(185, 167, 255, 0.15);
+    font-weight: 600;
+    transform: scale(1.26);
+    text-shadow:
+      0 0 22px var(--accent-glow),
+      0 0 60px rgba(185, 167, 255, 0.12);
   }
   .lyr-line.before {
-    opacity: 0.35;
-    filter: blur(0.3px);
+    color: color-mix(in srgb, var(--dim) 62%, var(--bg));
+    transform: scale(0.9);
   }
   .lyr-line.selected {
     color: var(--accent);
-    padding-left: 14px;
+  }
+  .lyr-line.hidden-line {
+    display: none;
   }
 
   .lyr-text.karaoke {
@@ -702,50 +796,46 @@
   }
   .lyr-text.karaoke > span {
     display: inline;
-    transition: color 0.15s ease, transform 0.15s ease;
-    color: var(--faint);
+    transition: color 0.4s var(--ease-out), transform 0.4s var(--ease-out);
+    color: inherit;
   }
   .lyr-text.karaoke > span.karaoke-active {
     color: var(--accent);
-    transform: scale(1.03);
-    font-weight: 700;
+    transform: scale(1.04);
   }
 
   .lyr-dots {
     display: inline-flex;
-    gap: 6px;
+    gap: 10px;
     align-items: center;
-    opacity: 0.3;
-    transition: opacity 0.2s ease;
-  }
-  .lyr-dots.on {
     opacity: 1;
+    transform: scale(1);
   }
   .lyr-dots span {
-    width: 5px;
-    height: 5px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: currentColor;
+    will-change: transform;
+    animation: lyr-dot-wave 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
-  .lyr-dots.on span {
-    animation: lyr-dot-wave 0.7s ease-in-out infinite;
+  .lyr-dots span:nth-child(2) {
+    animation-delay: 0.22s;
   }
-  .lyr-dots.on span:nth-child(2) {
-    animation-delay: 0.15s;
+  .lyr-dots span:nth-child(3) {
+    animation-delay: 0.44s;
   }
-  .lyr-dots.on span:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-  .lyrics-scroll.paused .lyr-dots.on span {
+  .lyrics-scroll.paused .lyr-dots span {
     animation-play-state: paused;
   }
   @keyframes lyr-dot-wave {
-    0%, 100% {
-      transform: translateY(0);
-      opacity: 0.4;
+    0%,
+    100% {
+      transform: translateY(4px) scale(0.85);
+      opacity: 0.35;
     }
     50% {
-      transform: translateY(-5px);
+      transform: translateY(-4px) scale(1.1);
       opacity: 1;
     }
   }
@@ -835,16 +925,14 @@
     .lyr-line,
     .lyr-text.karaoke > span,
     .lyr-icon,
+    .lyr-dots,
     .mini-switch span {
       transition-duration: 0.01ms !important;
     }
     .lyr-line.active {
       text-shadow: none !important;
     }
-    .lyr-line.before {
-      filter: none !important;
-    }
-    .lyr-dots.on span {
+    .lyr-dots span {
       animation: none;
       opacity: 1;
     }

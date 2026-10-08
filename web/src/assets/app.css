@@ -9,7 +9,7 @@
   font-family: "Sora";
   src: url("../assets/fonts/Sora-Variable.woff2") format("woff2");
   font-weight: 100 800;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {

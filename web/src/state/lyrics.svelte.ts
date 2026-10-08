@@ -119,13 +119,20 @@ function storeInCache(path: string, res: LyricsResult, lines: LyricLine[]): void
   }
 }
 
+const _embedded = new Set<string>();
+
 function tryParseEmbeddedLyrics(res: LyricsResult, t: { path: string }): void {
   if (res.source !== "remote") return;
+  if (_embedded.has(t.path)) return;
   const embedText =
     res.kind === "lrc"
       ? res.text.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/gm, "").trim()
       : res.text;
-  if (embedText) void vynl.lyricsEmbed({ file: t.path, text: embedText }).catch(() => {});
+  if (!embedText) return;
+  _embedded.add(t.path);
+  void vynl
+    .lyricsEmbed({ file: t.path, text: embedText })
+    .catch(() => _embedded.delete(t.path));
 }
 
 export function loadLyrics(id: string | null): void {
@@ -157,16 +164,21 @@ export function loadLyrics(id: string | null): void {
 
     let res: LyricsResult | null = null;
 
-    const viaPlugin = await runLyricsProviders({
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      duration: t.duration,
-    });
+    res = await vynl.lyricsLocal(t.path);
     if (version !== _loadVersion) return;
-    if (viaPlugin) {
-      res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
-      tryParseEmbeddedLyrics(res, t);
+
+    if (!res) {
+      const viaPlugin = await runLyricsProviders({
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        duration: t.duration,
+      });
+      if (version !== _loadVersion) return;
+      if (viaPlugin) {
+        res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
+        tryParseEmbeddedLyrics(res, t);
+      }
     }
 
     if (!res) {
@@ -179,9 +191,6 @@ export function loadLyrics(id: string | null): void {
       if (res) tryParseEmbeddedLyrics(res, t);
     }
 
-    if (!res) {
-      res = await vynl.lyricsLocal(t.path);
-    }
     if (version !== _loadVersion) return;
     if (!res && embeddedLyrics) {
       res = { kind: "txt", text: embeddedLyrics, source: "local" };
