@@ -216,7 +216,6 @@ export const en = {
     mobileSyncToggle: "Mobile sync toggle",
     mobileSyncLoading: "Reading status…",
     mobileSyncUnavailable: "Could not read mobile sync status.",
-    mobileSyncRefresh: "Refresh status",
     mobileSyncTurnedOn: "Mobile sync is live on your local network.",
     mobileSyncTurnedOff: "Mobile sync turned off.",
     mobileSyncPinRotated:
@@ -228,8 +227,6 @@ export const en = {
     mobileSyncNotRunning:
       "Enabled, but the server isn't listening. Restart Vynl to bring it back up.",
     mobileSyncNoNetwork: "No network address found.",
-    mobileSyncScanOnly:
-      "The QR carries the address and PIN. Scan it with the Vynl Android app to pair.",
     mobileSyncNewQr: "New QR",
     mobileSyncQr: "Scan with the Vynl Android app",
     mobileSyncFoot:

@@ -111,23 +111,28 @@
 
   button {
     flex-shrink: 0;
+    align-self: center;
     display: grid;
     place-items: center;
-    width: 24px;
-    height: 24px;
-    margin-block: -3px;
+    width: 20px;
+    height: 20px;
     padding: 0;
     color: var(--faint);
-    background: none;
-    border: 0;
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: color 120ms, background-color 120ms;
+    transform: rotate(45deg);
+    transition: color 120ms, border-color 120ms;
+  }
+
+  button :global(svg) {
+    transform: rotate(-45deg);
   }
 
   button:hover {
     color: var(--fg);
-    background: var(--line);
+    border-color: var(--line-strong);
   }
 
   button:focus-visible {

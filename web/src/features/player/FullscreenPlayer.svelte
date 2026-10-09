@@ -53,7 +53,7 @@
     aria-label={t("player.closeFullscreen")}
     title={t("player.closeFullscreen")}
   >
-    <X size={14} stroke-width={1.5} />
+    <X size={16} stroke-width={1.5} />
   </button>
 
   <div class="fs-content">
@@ -133,9 +133,9 @@
     z-index: 210;
     width: 28px;
     height: 28px;
-    border-radius: 6px;
-    background: none;
-    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
     color: var(--faint);
     display: flex;
     align-items: center;
@@ -154,8 +154,7 @@
   .fs-overlay:hover .fs-close {
     opacity: 1;
     color: var(--text);
-    background: var(--hover-surface);
-    border-color: var(--hover-border);
+    border-color: var(--line-strong);
   }
 
   .fs-art {

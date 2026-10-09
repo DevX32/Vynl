@@ -8,14 +8,15 @@
     closeMobileSyncUi,
     getMobileSyncBusy,
     getMobileSyncLoading,
+    getMobileSyncRotating,
     getMobileSyncStatus,
-    refreshMobileSync,
     rotateMobileSyncPin,
     setMobileSyncEnabled,
   } from "@state/mobile-sync.svelte";
 
   const status = $derived(getMobileSyncStatus());
   const busy = $derived(getMobileSyncBusy());
+  const rotating = $derived(getMobileSyncRotating());
   const loading = $derived(getMobileSyncLoading());
 
   function onKeydown(e: KeyboardEvent): void {
@@ -38,19 +39,9 @@
   >
     <div class="head">
       <span class="title display">{t("settings.mobileSync")}</span>
-      <div class="head-actions">
-        <button
-          class="icon-btn"
-          onclick={() => void refreshMobileSync(true)}
-          disabled={loading || busy}
-          aria-label={t("settings.mobileSyncRefresh")}
-        >
-          <RefreshCw size={13} stroke-width={1.5} class={loading ? "spin" : ""} />
-        </button>
-        <button class="icon-btn" onclick={closeMobileSyncUi} aria-label={t("common.close")}>
-          <X size={14} stroke-width={1.5} />
-        </button>
-      </div>
+      <button class="icon-btn" onclick={closeMobileSyncUi} aria-label={t("common.close")}>
+        <X size={16} stroke-width={1.5} />
+      </button>
     </div>
 
     <div class="body">
@@ -60,8 +51,7 @@
         <div class="empty mono">{t("settings.mobileSyncUnavailable")}</div>
       {:else}
         <div class="row-toggle">
-          <div>
-            <div class="label mono">{t("settings.mobileSync")}</div>
+          <div class="text">
             <div class="hint mono">{t("settings.mobileSyncHint")}</div>
           </div>
           <Switch
@@ -73,11 +63,6 @@
         </div>
 
         {#if status.enabled}
-          <div class="notice">
-            <ShieldAlert size={14} stroke-width={1.5} />
-            <span class="mono">{t("settings.mobileSyncInsecureNotice")}</span>
-          </div>
-
           {#if !status.running}
             <div class="notice warn">
               <WifiOff size={14} stroke-width={1.5} />
@@ -85,25 +70,33 @@
             </div>
           {/if}
 
-          <div class="qr-block">
-            {#if status.qrSvg}
-              <div class="qr">{@html status.qrSvg}</div>
-              <div class="qr-cap mono">{t("settings.mobileSyncQr")}</div>
-            {:else}
-              <div class="qr qr-empty mono">{t("settings.mobileSyncNoNetwork")}</div>
-            {/if}
+          <div class="qr-wrap">
+              {#if status.qrSvg}
+                <div class="qr">{@html status.qrSvg}</div>
+                <div class="qr-cap mono">{t("settings.mobileSyncQr")}</div>
+              {:else}
+                <div class="qr qr-empty mono">
+                  {t("settings.mobileSyncNoNetwork")}
+                </div>
+              {/if}
 
-            <div class="qr-actions">
-              <Button
-                size="sm"
-                onclick={() => void rotateMobileSyncPin()}
-                disabled={busy}
-              >
-                <RefreshCw size={13} stroke-width={1.5} />
-                {t("settings.mobileSyncNewQr")}
-              </Button>
+              <div class="qr-actions">
+                <Button
+                  size="sm"
+                  onclick={() => void rotateMobileSyncPin()}
+                  disabled={busy}
+                >
+                  <span class="qr-icon">
+                    <RefreshCw size={13} stroke-width={1.5} class={rotating ? "spin" : ""} />
+                  </span>
+                  {t("settings.mobileSyncNewQr")}
+                </Button>
+              </div>
             </div>
-            <div class="qr-note mono">{t("settings.mobileSyncScanOnly")}</div>
+
+          <div class="notice insecure">
+            <ShieldAlert size={14} stroke-width={1.5} />
+            <span class="mono">{t("settings.mobileSyncInsecureNotice")}</span>
           </div>
 
           <div class="foot mono">{t("settings.mobileSyncFoot")}</div>
@@ -159,13 +152,6 @@
     flex-shrink: 0;
   }
 
-  .head-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
   .title {
     font-size: 16px;
     font-weight: 600;
@@ -173,38 +159,55 @@
   }
 
   .icon-btn {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
     border-radius: var(--radius-sm);
-    background: none;
-    border: none;
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
     color: var(--faint);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transform: rotate(45deg);
     transition:
       color 0.15s,
+      border-color 0.15s,
       background 0.15s;
   }
 
-  .icon-btn:hover:not(:disabled) {
+  .icon-btn:hover {
     color: var(--text);
-    background: var(--surface);
+    border-color: var(--line-strong);
   }
 
-  .icon-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
+  .icon-btn :global(svg) {
+    transform: rotate(-45deg);
   }
 
-  :global(.spin) {
-    animation: msync-spin 0.9s linear infinite;
+  .qr-icon {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .qr-actions :global(button:disabled) {
+    opacity: 0.75;
+  }
+
+  .qr-icon :global(.spin) {
+    animation: msync-spin 0.7s linear infinite;
   }
 
   @keyframes msync-spin {
     to {
       transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qr-icon :global(.spin) {
+      animation-duration: 2.4s;
     }
   }
 
@@ -233,27 +236,24 @@
     justify-content: space-between;
     gap: 16px;
     padding-bottom: 14px;
+    margin-bottom: 14px;
     border-bottom: 1px solid var(--line);
   }
 
-  .label {
-    font-size: 11px;
-    color: var(--dim);
-    letter-spacing: 0.1em;
+  .text {
+    min-width: 0;
   }
 
   .hint {
     font-size: 11px;
-    color: var(--faint);
+    color: var(--dim);
     line-height: 1.5;
-    margin-top: 4px;
   }
 
   .notice {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    margin-top: 14px;
     padding: 9px 11px;
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
@@ -272,7 +272,11 @@
     border-color: rgba(217, 164, 65, 0.3);
   }
 
-  .qr-block {
+  .notice.insecure {
+    margin-top: 16px;
+  }
+
+  .qr-wrap {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -304,6 +308,7 @@
   }
 
   .qr-cap {
+    width: 200px;
     font-size: 10px;
     color: var(--faint);
     text-align: center;
@@ -316,20 +321,13 @@
     gap: 8px;
   }
 
-  .qr-note {
-    font-size: 10.5px;
-    color: var(--faint);
-    text-align: center;
-    line-height: 1.5;
-    max-width: 260px;
-  }
-
   .foot {
-    margin-top: 18px;
+    margin-top: 16px;
     padding-top: 14px;
     border-top: 1px solid var(--line);
     font-size: 11px;
     color: var(--faint);
     line-height: 1.6;
   }
-</style>
+
+  </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
@@ -15,6 +16,10 @@
 
   let _displayNameTimer: ReturnType<typeof setTimeout> | null = null;
   let _displayNameInput: HTMLInputElement | undefined = $state();
+  let _rolling = $state(false);
+  let _rollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const ROLL_LOCK_MS = 450;
 
   function debouncedDisplayNamePatch(value: string): void {
     if (_displayNameTimer) clearTimeout(_displayNameTimer);
@@ -25,6 +30,7 @@
   }
 
   function rollDisplayName(): void {
+    if (_rolling) return;
     if (_displayNameTimer) {
       clearTimeout(_displayNameTimer);
       _displayNameTimer = null;
@@ -32,7 +38,17 @@
     const next = rollNickname();
     if (_displayNameInput) _displayNameInput.value = next;
     void patchSettings({ displayName: next });
+    _rolling = true;
+    _rollTimer = setTimeout(() => {
+      _rolling = false;
+      _rollTimer = null;
+    }, ROLL_LOCK_MS);
   }
+
+  onDestroy(() => {
+    if (_displayNameTimer) clearTimeout(_displayNameTimer);
+    if (_rollTimer) clearTimeout(_rollTimer);
+  });
 </script>
 
 <div class="panel">
@@ -48,8 +64,10 @@
     />
     <div class="hint-row">
       <div class="hint mono">{t("settings.displayNameHint")}</div>
-      <Button size="sm" onclick={rollDisplayName}>
-        <RefreshCw size={13} stroke-width={1.5} />
+      <Button size="sm" onclick={rollDisplayName} disabled={_rolling}>
+        <span class="roll-icon">
+          <RefreshCw size={13} stroke-width={1.5} class={_rolling ? "spin" : ""} />
+        </span>
         {t("settings.displayNameRoll")}
       </Button>
     </div>
@@ -238,5 +256,28 @@
     transition: border-color 0.15s;
   }
 
+  .roll-icon {
+    display: inline-flex;
+    align-items: center;
+  }
 
+  .hint-row :global(button:disabled) {
+    opacity: 0.75;
+  }
+
+  .roll-icon :global(.spin) {
+    animation: roll-spin 0.7s linear infinite;
+  }
+
+  @keyframes roll-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .roll-icon :global(.spin) {
+      animation-duration: 2.4s;
+    }
+  }
 </style>

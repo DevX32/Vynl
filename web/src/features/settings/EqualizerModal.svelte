@@ -21,7 +21,7 @@
     <div class="head">
       <span class="title display">{t("settings.equalizer")}</span>
       <button class="close" onclick={closeEq} aria-label={t("common.close")}>
-        <X size={14} stroke-width={1.5} />
+        <X size={16} stroke-width={1.5} />
       </button>
     </div>
     <div class="body">
@@ -82,24 +82,30 @@
   }
 
   .close {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--radius-sm);
-    background: none;
-    border: none;
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
     color: var(--faint);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transform: rotate(45deg);
     transition:
       color 0.15s,
+      border-color 0.15s,
       background 0.15s;
   }
 
   .close:hover {
     color: var(--text);
-    background: var(--surface);
+    border-color: var(--line-strong);
+  }
+
+  .close :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .body {

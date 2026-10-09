@@ -203,8 +203,10 @@
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key !== "Escape") return;
       if (overlay) {
+        e.preventDefault();
         closeOverlay();
       } else if (settingsOpen) {
+        e.preventDefault();
         settingsOpen = false;
       }
     };

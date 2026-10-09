@@ -78,7 +78,7 @@
     <div class="add-head">
       <span class="display add-title">{t("playlist.addTracks")}</span>
       <button
-        class="icon-btn"
+        class="icon-btn close-btn"
         onclick={onClose}
         aria-label={t("titleBar.close")}
       >
@@ -248,6 +248,27 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .icon-btn.close-btn {
+    width: 28px;
+    height: 28px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    transform: rotate(45deg);
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
+  }
+
+  .icon-btn.close-btn:hover {
+    background: var(--surface);
+    border-color: var(--line-strong);
+  }
+
+  .icon-btn.close-btn :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .icon-btn.mini {

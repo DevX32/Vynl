@@ -2,37 +2,51 @@
   import { fade } from "svelte/transition";
   import { X } from "lucide-svelte";
   import { t } from "@lib/i18n";
-  import { SHORTCUTS, closeShortcutsOverlay } from "@state/shortcuts.svelte";
+  import {
+    SHORTCUT_CATEGORIES,
+    bindingParts,
+    closeShortcutsOverlay,
+    getShortcutActions,
+    type KeybindAction,
+  } from "@state/shortcuts.svelte";
 
-  const categories = [...new Set(SHORTCUTS.map((s) => s.categoryKey))];
+  const actions = getShortcutActions();
 
-  function formatKey(key: string): string {
-    if (key === " ") return "Space";
-    if (key === "ArrowUp") return "↑";
-    if (key === "ArrowDown") return "↓";
-    if (key === "ArrowLeft") return "←";
-    if (key === "ArrowRight") return "→";
-    return key;
-  }
+  const categories = SHORTCUT_CATEGORIES.map((key) => ({
+    key,
+    items: actions.filter((a: KeybindAction) => a.categoryKey === key),
+  })).filter((c) => c.items.length > 0);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="overlay" transition:fade={{ duration: 150 }} onclick={closeShortcutsOverlay}>
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="panel" onclick={(e) => e.stopPropagation()}>
+  <div
+    class="panel"
+    role="dialog"
+    aria-modal="true"
+    aria-label={t("shortcuts.title")}
+    tabindex="-1"
+    onclick={(e) => e.stopPropagation()}
+  >
     <div class="head">
       <span class="title display">{t("shortcuts.title")}</span>
-      <button class="close" onclick={closeShortcutsOverlay} aria-label={t("dialog.cancel")}>
-        <X size={14} stroke-width={1.5} />
+      <button class="close" onclick={closeShortcutsOverlay} aria-label={t("common.close")}>
+        <X size={16} stroke-width={1.5} />
       </button>
     </div>
     <div class="body">
       {#each categories as cat}
         <div class="cat">
-          <div class="cat-label mono">{t(cat)}</div>
-          {#each SHORTCUTS.filter((s) => s.categoryKey === cat) as shortcut}
+          <div class="cat-label mono">{t(cat.key)}</div>
+          {#each cat.items as shortcut (shortcut.id)}
             <div class="row">
-              <kbd class="key mono">{formatKey(shortcut.key)}</kbd>
+              <span class="keys">
+                {#each bindingParts(shortcut.binding) as part, i (i)}
+                  {#if i > 0}<span class="plus mono">+</span>{/if}
+                  <kbd class="key mono">{part}</kbd>
+                {/each}
+              </span>
               <span class="desc mono">{t(shortcut.labelKey)}</span>
             </div>
           {/each}
@@ -55,8 +69,8 @@
   }
 
   .panel {
-    width: 380px;
-    max-height: 70vh;
+    width: min(420px, calc(100vw - 40px));
+    max-height: 80vh;
     background: var(--bg-raise);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
@@ -64,12 +78,25 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    animation: shortcuts-in 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  @keyframes shortcuts-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     padding: 14px 18px;
     border-bottom: 1px solid var(--line);
   }
@@ -80,30 +107,43 @@
   }
 
   .close {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--radius-sm);
-    background: none;
-    border: none;
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
     color: var(--faint);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: color 0.15s, background 0.15s;
+    transform: rotate(45deg);
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .close:hover {
     color: var(--text);
-    background: var(--bg-raise);
+    border-color: var(--line-strong);
+  }
+
+  .close :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .body {
     padding: 14px 18px;
     overflow-y: auto;
+    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  .body::-webkit-scrollbar {
+    display: none;
   }
 
   .cat {
@@ -126,8 +166,21 @@
     gap: 12px;
   }
 
+  .keys {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    min-width: 104px;
+  }
+
+  .plus {
+    font-size: 10px;
+    color: var(--faint);
+  }
+
   .key {
-    min-width: 40px;
+    min-width: 26px;
     padding: 3px 8px;
     background: var(--bg-raise);
     border: 1px solid var(--line);
