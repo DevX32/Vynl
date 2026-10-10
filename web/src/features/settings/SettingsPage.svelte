@@ -1,9 +1,12 @@
 <script lang="ts">
   import { t } from "@lib/i18n";
   import SettingsPanel from "./SettingsPanel.svelte";
+  import BackupPanel from "./BackupPanel.svelte";
   import PluginSettings from "./PluginSettings.svelte";
   import ToolSetup from "./ToolSetup.svelte";
   import AboutPanel from "./AboutPanel.svelte";
+
+  let { onOpenVault }: { onOpenVault?: () => void } = $props();
 </script>
 
 <section class="settings-page">
@@ -15,6 +18,7 @@
   <div class="body">
     <ToolSetup />
     <SettingsPanel />
+    <BackupPanel {onOpenVault} />
     <PluginSettings />
     <AboutPanel />
   </div>

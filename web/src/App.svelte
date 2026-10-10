@@ -382,7 +382,7 @@
           </div>
         {:else if page === "settings"}
           <div class="page-inner">
-            <SettingsPage />
+            <SettingsPage onOpenVault={openVault} />
           </div>
         {:else if isPluginPage(page)}
           <PluginPageHost pageId={page.slice("plugin:".length)} />

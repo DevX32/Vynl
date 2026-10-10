@@ -58,6 +58,16 @@ pub fn record_download(user_data_dir: &Path, entry: &HistoryEntry) -> Result<(),
     write_history(user_data_dir, &data)
 }
 
+pub fn ok_entries(user_data_dir: &Path) -> Vec<HistoryEntry> {
+    let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    read_history(user_data_dir)
+        .entries
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.ok && !e.url.trim().is_empty())
+        .collect()
+}
+
 pub fn collection_key(kind: &crate::commands::types::CollectionKind, id: &str) -> String {
     let kind_str = match kind {
         crate::commands::types::CollectionKind::Track => "track",

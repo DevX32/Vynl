@@ -29,6 +29,7 @@
   import DownloadFooter from "./DownloadFooter.svelte";
   import InlineSearchResults from "./InlineSearchResults.svelte";
   import PlaylistPicker from "./PlaylistPicker.svelte";
+  import { takeRestore } from "@state/vault-restore.svelte";
   import { Disc3 } from "lucide-svelte";
   import Button from "../../components/Button.svelte";
 
@@ -545,6 +546,29 @@
   function totalDur(): number {
     return totalSeconds(collection?.tracks ?? []);
   }
+
+  function loadRestore(payload: ReturnType<typeof takeRestore>): void {
+    if (!payload) return;
+    dismissSearch();
+    collection = payload.collection;
+    matches = payload.matches;
+    picks = payload.picks;
+    addedTrackIds = new Set(payload.collection.tracks.map((t) => t.id));
+    progress = initProgress("queued");
+    summary = null;
+    error = null;
+    reviewing = false;
+    running = false;
+    doneIds = [];
+    page = 0;
+    trackFilter = "all";
+    void refreshDone({ force: true });
+  }
+
+  $effect(() => {
+    if (!isActive) return;
+    loadRestore(takeRestore());
+  });
 
   function handleFilterChange(filter: string): void {
     trackFilter = filter as typeof trackFilter;

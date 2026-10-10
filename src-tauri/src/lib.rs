@@ -254,6 +254,8 @@ pub fn run() {
             commands::downloaded_paths,
             commands::start_download,
             commands::cancel_download,
+            commands::export_backup,
+            commands::import_backup,
             commands::matches,
             commands::sync_done,
             commands::get_settings,

@@ -263,6 +263,24 @@ export interface UpdateStatus {
   error?: string;
 }
 
+export type ExportFormat = "json" | "csv" | "m3u";
+
+export interface ExportSummary {
+  path: string;
+  format: string;
+  trackCount: number;
+  playlistCount: number;
+  bytes: number;
+}
+
+export interface RestoredBackup {
+  collection: Collection;
+  matches: Record<string, SearchCandidate[]>;
+  picks: Record<string, number>;
+  total: number;
+  knownSources: number;
+}
+
 export interface ArtistInfo {
   name: string;
   disambiguation: string | null;

@@ -3,6 +3,7 @@ pub mod audio;
 pub mod audio_cache;
 pub mod catalog;
 pub mod downloader;
+pub mod export;
 pub mod history;
 pub mod internal;
 pub mod library;
