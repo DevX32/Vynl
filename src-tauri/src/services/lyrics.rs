@@ -206,14 +206,42 @@ pub async fn fetch_lyrics_with_cache(
     result
 }
 
+const LRCLIB_BASE: &str = "https://lrclib.net";
+const LRCRED_BASE: &str = "https://lrc.red";
+
 async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    do_fetch_lrclib(lookup).await
+    if let Some(hit) = do_fetch_lrclib(lookup).await {
+        return Some(hit);
+    }
+    do_fetch_lrcred(lookup).await
 }
 
 const DURATION_EXACT_SECS: f64 = 2.0;
 const DURATION_TOLERANCE_SECS: f64 = 5.0;
 const DURATION_HARD_REJECT_SECS: f64 = 8.0;
 const SYNCED_BONUS: i32 = 100;
+
+struct Hit {
+    title: String,
+    artist: String,
+    duration: Option<f64>,
+}
+
+fn lrclib_hit(data: &serde_json::Value) -> Hit {
+    Hit {
+        title: data["trackName"].as_str().unwrap_or("").to_string(),
+        artist: data["artistName"].as_str().unwrap_or("").to_string(),
+        duration: item_duration(data),
+    }
+}
+
+fn lrcred_hit(data: &serde_json::Value) -> Hit {
+    Hit {
+        title: data["title"].as_str().unwrap_or("").to_string(),
+        artist: data["artist"].as_str().unwrap_or("").to_string(),
+        duration: item_duration(data),
+    }
+}
 
 fn item_duration(data: &serde_json::Value) -> Option<f64> {
     data.get("duration")
@@ -231,12 +259,9 @@ fn duration_acceptable(data: &serde_json::Value, lookup: &LyricsLookup) -> bool 
     }
 }
 
-fn score_lyrics_match(data: &serde_json::Value, lookup: &LyricsLookup) -> i32 {
-    let title = data["trackName"].as_str().unwrap_or("");
-    let artist = data["artistName"].as_str().unwrap_or("");
-
-    let title_lower = title.to_lowercase();
-    let artist_lower = artist.to_lowercase();
+fn score_hit(hit: &Hit, lookup: &LyricsLookup) -> i32 {
+    let title_lower = hit.title.to_lowercase();
+    let artist_lower = hit.artist.to_lowercase();
     let lookup_title = lookup.title.to_lowercase();
     let lookup_artist = lookup.artist.to_lowercase();
 
@@ -256,7 +281,7 @@ fn score_lyrics_match(data: &serde_json::Value, lookup: &LyricsLookup) -> i32 {
         0
     };
 
-    let duration_match = match (item_duration(data), lookup.duration > 0.0) {
+    let duration_match = match (hit.duration, lookup.duration > 0.0) {
         (Some(candidate), true) => {
             let diff = (candidate - lookup.duration).abs();
             if diff <= DURATION_EXACT_SECS {
@@ -331,7 +356,7 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
                 let Some(result) = parse_lrclib_response(Some(item)) else {
                     continue;
                 };
-                let mut score = score_lyrics_match(item, lookup);
+                let mut score = score_hit(&lrclib_hit(item), lookup);
                 if result.kind == crate::commands::types::LyricsKind::Lrc {
                     score += SYNCED_BONUS;
                 }
@@ -344,6 +369,61 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
         }
         _ => None,
     }
+}
+
+fn lrc_is_synced(text: &str) -> bool {
+    text.lines().any(|line| {
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with('[') {
+            return false;
+        }
+        let rest = &trimmed[1..];
+        let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        (1..=2).contains(&digits.len()) && rest[digits.len()..].starts_with(':')
+    })
+}
+
+async fn do_fetch_lrcred(lookup: &LyricsLookup) -> Option<LyricsResult> {
+    let query = format!("{} {}", lookup.artist, lookup.title);
+    let search_url = format!(
+        "{LRCRED_BASE}/search.json?q={}",
+        urlencoding::encode(&query)
+    );
+
+    let hits: serde_json::Value = match http_client().get(&search_url).send().await {
+        Ok(resp) if resp.status().as_u16() == 200 => resp.json().await.ok()?,
+        _ => return None,
+    };
+
+    let items = hits.get("hits")?.as_array()?;
+    let mut best: Option<(i32, String)> = None;
+    for item in items {
+        if !duration_acceptable(item, lookup) {
+            continue;
+        }
+        let score = score_hit(&lrcred_hit(item), lookup);
+        if best.as_ref().is_none_or(|(s, _)| score > *s) {
+            best = item["isrc"].as_str().map(|i| (score, i.to_string()));
+        }
+    }
+
+    let (_, isrc) = best?;
+    let lrc_url = format!("{LRCRED_BASE}/s/{}.lrc", urlencoding::encode(&isrc));
+    let text = match http_client().get(&lrc_url).send().await {
+        Ok(resp) if resp.status().as_u16() == 200 => resp.text().await.ok()?,
+        _ => return None,
+    };
+
+    if text.trim().is_empty() {
+        return None;
+    }
+
+    Some(LyricsResult {
+        kind: crate::commands::types::LyricsKind::Lrc,
+        text: text.trim().to_string(),
+        source: crate::commands::types::LyricsSource::Remote,
+        file: None,
+    })
 }
 
 fn parse_lrclib_response(data: Option<&serde_json::Value>) -> Option<LyricsResult> {
@@ -394,14 +474,101 @@ pub async fn search_lyrics(
         return vec![];
     }
 
-    let url = format!("https://lrclib.net/api/search?{}", params.join("&"));
+    let url = format!("{LRCLIB_BASE}/api/search?{}", params.join("&"));
     let client = http_client();
 
-    match client.get(&url).send().await {
+    let mut results = match client.get(&url).send().await {
         Ok(resp) if resp.status().as_u16() == 200 => resp
             .json::<Vec<crate::commands::types::LrcSearchResult>>()
             .await
             .unwrap_or_default(),
         _ => vec![],
+    };
+
+    let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    for r in results.iter() {
+        seen.insert((r.track_name.to_lowercase(), r.artist_name.to_lowercase()));
     }
+
+    for r in search_lrcred(query, track_name, artist_name).await {
+        let key = (r.track_name.to_lowercase(), r.artist_name.to_lowercase());
+        if seen.insert(key) {
+            results.push(r);
+        }
+    }
+    results
+}
+
+const LRCRED_SEARCH_LIMIT: usize = 10;
+
+async fn search_lrcred(
+    query: &str,
+    track_name: Option<&str>,
+    artist_name: Option<&str>,
+) -> Vec<crate::commands::types::LrcSearchResult> {
+    let mut q = String::new();
+    if let Some(t) = track_name.filter(|s| !s.is_empty()) {
+        q.push_str(t);
+    }
+    if let Some(a) = artist_name.filter(|s| !s.is_empty()) {
+        if !q.is_empty() {
+            q.push(' ');
+        }
+        q.push_str(a);
+    }
+    if q.trim().is_empty() {
+        if query.is_empty() {
+            return vec![];
+        }
+        q = query.to_string();
+    }
+
+    let url = format!(
+        "{LRCRED_BASE}/search.json?q={}",
+        urlencoding::encode(q.trim())
+    );
+    let hits: serde_json::Value = match http_client().get(&url).send().await {
+        Ok(resp) if resp.status().as_u16() == 200 => match resp.json().await {
+            Ok(v) => v,
+            Err(_) => return vec![],
+        },
+        _ => return vec![],
+    };
+
+    let Some(items) = hits.get("hits").and_then(|h| h.as_array()) else {
+        return vec![];
+    };
+
+    let top: Vec<&serde_json::Value> = items.iter().take(LRCRED_SEARCH_LIMIT).collect::<Vec<_>>();
+
+    let mut fetched = futures_util::future::join_all(top.iter().map(|item| async move {
+        let isrc = item["isrc"].as_str()?;
+        let lrc_url = format!("{LRCRED_BASE}/s/{}.lrc", urlencoding::encode(isrc));
+        let text = match http_client().get(&lrc_url).send().await {
+            Ok(resp) if resp.status().as_u16() == 200 => resp.text().await.ok()?,
+            _ => return None,
+        };
+        if text.trim().is_empty() {
+            return None;
+        }
+        Some((text, isrc.to_string()))
+    }))
+    .await;
+
+    let mut out = Vec::new();
+    for (item, pair) in top.iter().zip(fetched.drain(..)) {
+        let Some((text, isrc)) = pair else { continue };
+        let synced = lrc_is_synced(&text);
+        out.push(crate::commands::types::LrcSearchResult {
+            id: isrc,
+            track_name: item["title"].as_str().unwrap_or("").to_string(),
+            artist_name: item["artist"].as_str().unwrap_or("").to_string(),
+            album_name: item["album"].as_str().unwrap_or("").to_string(),
+            duration: item_duration(item).unwrap_or(0.0),
+            instrumental: false,
+            plain_lyrics: if synced { None } else { Some(text.clone()) },
+            synced_lyrics: if synced { Some(text) } else { None },
+        });
+    }
+    out
 }

@@ -198,7 +198,7 @@ export interface LyricsLookup {
 }
 
 export interface LrcSearchResult {
-  id: number;
+  id: string;
   trackName: string;
   artistName: string;
   albumName: string;
