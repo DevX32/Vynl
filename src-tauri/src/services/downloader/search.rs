@@ -39,10 +39,7 @@ const MIN_SEARCH_CANDIDATES: usize = 5;
 
 const MATCH_CACHE_FILE: &str = "match-cache.json";
 
-const SEARCH_PREFIX: &[(MatchSource, &str)] = &[
-    (MatchSource::YouTubeMusic, "ytmsearch"),
-    (MatchSource::YouTube, "ytsearch"),
-];
+const YTM_SONGS_FILTER: &str = "EgWKAQIIAWoKEAoQAxAEEAkQBQ%3D%3D";
 
 const JS_RUNTIMES: &str = "deno,node,quickjs,bun";
 
@@ -58,23 +55,34 @@ pub(super) fn common_yt_args() -> Vec<String> {
     ]
 }
 
-fn search_args(search_term: &str) -> Vec<String> {
+fn yt_search_args(query: &str, count: usize) -> Vec<String> {
     let mut args = vec![
         "--flat-playlist".into(),
         "--dump-single-json".into(),
         "--quiet".into(),
     ];
     args.extend(common_yt_args());
-    args.push(search_term.into());
+    args.push(format!("ytsearch{count}:{query}"));
     args
 }
 
-fn search_prefix(source: &MatchSource) -> &str {
-    SEARCH_PREFIX
-        .iter()
-        .find(|(s, _)| s == source)
-        .map(|(_, p)| *p)
-        .unwrap_or("ytsearch")
+fn ytm_search_args(query: &str, count: usize) -> Vec<String> {
+    let mut args = vec!["--dump-single-json".into(), "--quiet".into()];
+    args.extend(common_yt_args());
+    args.push("--playlist-items".into());
+    args.push(format!("1-{count}"));
+    args.push(format!(
+        "https://music.youtube.com/search?q={}&sp={YTM_SONGS_FILTER}",
+        urlencoding::encode(query)
+    ));
+    args
+}
+
+fn source_search_args(source: &MatchSource, query: &str, count: usize) -> Vec<String> {
+    match source {
+        MatchSource::YouTubeMusic => ytm_search_args(query, count),
+        MatchSource::YouTube => yt_search_args(query, count),
+    }
 }
 
 fn parse_search_entries(data: &Value, source: &MatchSource, out: &mut Vec<SearchCandidate>) {
@@ -83,7 +91,11 @@ fn parse_search_entries(data: &Value, source: &MatchSource, out: &mut Vec<Search
     };
 
     for entry in entries {
-        let Some(url) = entry.get("url").and_then(|v| v.as_str()) else {
+        let Some(url) = entry
+            .get("url")
+            .and_then(|v| v.as_str())
+            .or_else(|| entry.get("webpage_url").and_then(|v| v.as_str()))
+        else {
             continue;
         };
         let title = entry
@@ -132,8 +144,7 @@ fn search_source(
             break;
         }
 
-        let search_term = format!("{}{}:{}", search_prefix(source), per_query, q);
-        let args = search_args(&search_term);
+        let args = source_search_args(source, q, per_query);
 
         if let Some(data) = run_yt_json(ytdlp, &args, remaining) {
             parse_search_entries(&data, source, &mut out);
