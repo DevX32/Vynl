@@ -6,7 +6,10 @@ use crate::commands::types::{SearchCandidate, TrackMeta};
 
 use super::clean_title;
 
-const OFFICIAL_CHANNEL_BONUS: f64 = 12.0;
+const TOPIC_CHANNEL_BONUS: f64 = 35.0;
+const VEVO_CHANNEL_BONUS: f64 = 4.0;
+const MUSIC_VIDEO_PENALTY: f64 = 25.0;
+const AUDIO_UPLOAD_BONUS: f64 = 12.0;
 
 fn normalize_phrase_input(s: &str) -> String {
     let lowered = s.to_lowercase();
@@ -72,6 +75,10 @@ static REJECT_VARIANTS_MATCHER: Lazy<PhraseMatcher> =
 static NON_MUSIC_MATCHER: Lazy<PhraseMatcher> = Lazy::new(|| PhraseMatcher::new(NON_MUSIC_TERMS));
 static VARIANT_PENALTY_MATCHER: Lazy<PhraseMatcher> =
     Lazy::new(|| PhraseMatcher::new(VARIANT_PENALTY_TOKENS));
+static MUSIC_VIDEO_MATCHER: Lazy<PhraseMatcher> =
+    Lazy::new(|| PhraseMatcher::new(MUSIC_VIDEO_MARKERS));
+static AUDIO_UPLOAD_MATCHER: Lazy<PhraseMatcher> =
+    Lazy::new(|| PhraseMatcher::new(AUDIO_UPLOAD_MARKERS));
 
 const REJECT_VARIANTS: &[&str] = &[
     "remix",
@@ -178,6 +185,23 @@ const VARIANT_PENALTY_TOKENS: &[&str] = &[
     "clean",
     "explicit",
 ];
+
+const MUSIC_VIDEO_MARKERS: &[&str] = &[
+    "music video",
+    "official video",
+    "video version",
+    "video clip",
+    "music clip",
+    "lyric video",
+    "lyrics video",
+    "letra video",
+    "visualizer",
+    "visualiser",
+    "mv",
+    "mvi",
+];
+
+const AUDIO_UPLOAD_MARKERS: &[&str] = &["official audio", "audio only", "full audio"];
 
 const UPLOAD_NOISE_TOKENS: &[&str] = &[
     "official",
@@ -332,9 +356,14 @@ fn score_candidate(
         }
     }
 
-    if info.channel_tokens.contains("topic") || info.channel_tokens.contains("vevo") {
-        score += OFFICIAL_CHANNEL_BONUS;
+    if info.channel_tokens.contains("topic") {
+        score += TOPIC_CHANNEL_BONUS;
+    } else if info.channel_tokens.contains("vevo") {
+        score += VEVO_CHANNEL_BONUS;
     }
+
+    score += -MUSIC_VIDEO_PENALTY * MUSIC_VIDEO_MATCHER.count(&info.norm_title) as f64;
+    score += AUDIO_UPLOAD_BONUS * AUDIO_UPLOAD_MATCHER.count(&info.norm_title) as f64;
 
     score += -30.0 * VARIANT_PENALTY_MATCHER.count(&info.norm_title) as f64;
     score += -30.0 * VARIANT_PENALTY_MATCHER.count(&info.norm_channel) as f64 / 2.0;
