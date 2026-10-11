@@ -46,6 +46,7 @@ mdns-sd = "0.21"
 symphonia = { version = "0.6", features = ["isomp4", "aac", "mp3"] }
 mp3lame-encoder = "0.2"
 symphonia-adapter-libopus = "0.3"
+ytmusic = { git = "https://github.com/DevX32/vynl-ytmusic", branch = "main" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.55"

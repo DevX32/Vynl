@@ -149,6 +149,69 @@ fn dedup_candidates(mut candidates: Vec<SearchCandidate>) -> Vec<SearchCandidate
     candidates
 }
 
+fn ytmusic_client() -> &'static ytmusic::YtMusic {
+    static CLIENT: std::sync::OnceLock<ytmusic::YtMusic> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(ytmusic::YtMusic::anonymous)
+}
+
+async fn search_via_ytmusic(query: &str) -> Vec<SearchCandidate> {
+    let Ok(tracks) = ytmusic_client().search_songs(query).await else {
+        return vec![];
+    };
+
+    tracks
+        .into_iter()
+        .filter(|t| t.video_id.is_some() && t.available && t.kind == ytmusic::TrackKind::Song)
+        .map(|t| SearchCandidate {
+            url: format!(
+                "https://www.youtube.com/watch?v={}",
+                t.video_id.unwrap_or_default()
+            ),
+            title: t.title,
+            duration: t.duration.map(|d| d.as_secs_f64()),
+            channel: Some(
+                t.artists
+                    .iter()
+                    .map(|a| a.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            source: MatchSource::YouTubeMusic,
+            view_count: None,
+            channel_verified: None,
+        })
+        .collect()
+}
+
+async fn resolve_candidates(
+    ytdlp: &str,
+    track: &TrackMeta,
+    user_data_dir: &Path,
+) -> Vec<SearchCandidate> {
+    if let Some(cached) = match_cache_get(user_data_dir, &track.id) {
+        return cached;
+    }
+
+    let query = build_query(track);
+    let found = search_via_ytmusic(&query).await;
+    if !found.is_empty() {
+        match_cache_put(user_data_dir, &track.id, found.clone());
+        return found;
+    }
+
+    let query_alt = build_query_simple(track, "");
+    let query_lyrics = build_query_simple(track, " lyrics");
+    let ytdlp = ytdlp.to_string();
+    let found = tokio::task::spawn_blocking(move || {
+        search_candidates(&ytdlp, &query, &query_alt, &query_lyrics)
+    })
+    .await
+    .unwrap_or_default();
+
+    match_cache_put(user_data_dir, &track.id, found.clone());
+    found
+}
+
 pub(super) fn search_candidates(
     ytdlp: &str,
     query: &str,
@@ -303,24 +366,7 @@ pub async fn find_matches(
                     break;
                 }
                 let track = &collection.tracks[i];
-                let cached = match_cache_get(&data_dir, &track.id);
-                let candidates = match cached {
-                    Some(c) => c,
-                    None => {
-                        let query = build_query(track);
-                        let query_alt = build_query_simple(track, "");
-                        let query_lyrics = build_query_simple(track, " lyrics");
-                        let ytdlp_clone = ytdlp.clone();
-                        let found = tokio::task::spawn_blocking(move || {
-                            search_candidates(&ytdlp_clone, &query, &query_alt, &query_lyrics)
-                        })
-                        .await
-                        .unwrap_or_default();
-                        match_cache_put(&data_dir, &track.id, found.clone());
-                        found
-                    }
-                };
-
+                let candidates = resolve_candidates(&ytdlp, track, &data_dir).await;
                 let mut res = result.lock().await;
                 res.insert(track.id.clone(), candidates);
             }
@@ -356,21 +402,6 @@ pub(super) async fn search_and_rank_candidates(
             None => filter_and_rank_candidates(cands.clone(), track),
         };
     }
-    let raw = match match_cache_get(user_data_dir, &track.id) {
-        Some(cached) => cached,
-        None => {
-            let ytdlp_c = ytdlp.to_string();
-            let query = build_query(track);
-            let query_alt = build_query_simple(track, "");
-            let query_lyrics = build_query_simple(track, " lyrics");
-            let found = tokio::task::spawn_blocking(move || {
-                search_candidates(&ytdlp_c, &query, &query_alt, &query_lyrics)
-            })
-            .await
-            .unwrap_or_default();
-            match_cache_put(user_data_dir, &track.id, found.clone());
-            found
-        }
-    };
+    let raw = resolve_candidates(ytdlp, track, user_data_dir).await;
     filter_and_rank_candidates(raw, track)
 }
