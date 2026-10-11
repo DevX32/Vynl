@@ -230,7 +230,10 @@ fn csv_opt<T: std::fmt::Display>(value: Option<T>) -> String {
 fn render_csv(backup: &LibraryBackup) -> String {
     let mut out = String::new();
     out.push_str("# Vynl library export\n");
-    out.push_str(&format!("# app_version,{}\n", csv_field(&backup.app_version)));
+    out.push_str(&format!(
+        "# app_version,{}\n",
+        csv_field(&backup.app_version)
+    ));
     out.push_str(&format!("# output_dir,{}\n", csv_field(&backup.output_dir)));
     out.push_str(&format!(
         "# tracks,{},playlists,{}\n",
@@ -239,18 +242,20 @@ fn render_csv(backup: &LibraryBackup) -> String {
     out.push_str("Title,Artist,Album,Year,Track,Duration,Format,Added,File\n");
 
     for track in &backup.tracks {
-        out.push_str(&[
-            csv_field(&track.title),
-            csv_field(&track.artist),
-            csv_field(&track.album),
-            csv_opt(track.year),
-            csv_opt(track.track_number),
-            csv_opt(Some(track.duration.round() as i64)),
-            csv_field(&track.format),
-            csv_opt(track.added_at),
-            csv_field(&track.file),
-        ]
-        .join(","));
+        out.push_str(
+            &[
+                csv_field(&track.title),
+                csv_field(&track.artist),
+                csv_field(&track.album),
+                csv_opt(track.year),
+                csv_opt(track.track_number),
+                csv_opt(Some(track.duration.round() as i64)),
+                csv_field(&track.format),
+                csv_opt(track.added_at),
+                csv_field(&track.file),
+            ]
+            .join(","),
+        );
         out.push('\n');
     }
     out

@@ -191,12 +191,7 @@ pub async fn export_backup(
                 crate::services::export::build_backup(&settings, &user_data, include_playlists);
             let filename = crate::services::export::suggested_filename(export_format, &backup);
             let content = crate::services::export::render(&backup, export_format)?;
-            Ok::<_, String>((
-                filename,
-                content,
-                backup.track_count,
-                backup.playlist_count,
-            ))
+            Ok::<_, String>((filename, content, backup.track_count, backup.playlist_count))
         })
         .await
         .map_err(|e| format!("Export task failed: {e}"))??;
@@ -228,11 +223,10 @@ pub async fn export_backup(
     };
     let path_string = path.to_string_lossy().to_string();
 
-    let bytes = tokio::task::spawn_blocking(move || {
-        crate::services::export::write_backup(&content, &path)
-    })
-    .await
-    .map_err(|e| format!("Export task failed: {e}"))??;
+    let bytes =
+        tokio::task::spawn_blocking(move || crate::services::export::write_backup(&content, &path))
+            .await
+            .map_err(|e| format!("Export task failed: {e}"))??;
 
     Ok(Some(crate::services::export::ExportSummary {
         path: path_string,

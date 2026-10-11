@@ -235,6 +235,11 @@ export const en = {
     equalizerHint: "Shape the sound of everything you play changes apply live.",
     equalizerHintOff: "Turn on to shape the sound of everything you play.",
     equalizerToggle: "Equalizer toggle",
+    audioFormat: "Audio Format",
+    audioFormatMp3: "MP3",
+    audioFormatOpus: "Opus (original)",
+    audioFormatHint:
+      "MP3 re-encodes the stream and plays everywhere. Opus keeps the audio exactly as YouTube sends it, at roughly a third of the file size.",
     equalizerBand: "band",
     support: "Support Vynl",
     supportHint: "If you like the app, a coffee helps keep it going.",

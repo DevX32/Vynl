@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum AudioFormat {
     Mp3,
+    Opus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -345,7 +346,7 @@ pub struct LyricsLookup {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LrcSearchResult {
-    pub id: i64,
+    pub id: String,
     #[serde(rename = "trackName")]
     pub track_name: String,
     #[serde(rename = "artistName")]

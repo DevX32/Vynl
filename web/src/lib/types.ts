@@ -1,4 +1,4 @@
-export type AudioFormat = "mp3";
+export type AudioFormat = "mp3" | "opus";
 
 type TrackStatus =
   | "queued"
@@ -198,7 +198,7 @@ export interface LyricsLookup {
 }
 
 export interface LrcSearchResult {
-  id: number;
+  id: string;
   trackName: string;
   artistName: string;
   albumName: string;
