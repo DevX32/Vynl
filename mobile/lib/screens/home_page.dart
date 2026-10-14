@@ -120,7 +120,7 @@ class _HomePageState extends State<HomePage> {
     return RefreshIndicator(
       onRefresh: () async {
         final state = context.read<AppState>();
-        if (state.isPaired && !state.syncing) await state.runSync();
+        if (state.isPaired) await state.runSync();
       },
       color: VynlColors.accent,
       backgroundColor: VynlColors.surface,
@@ -161,7 +161,7 @@ class _HomePageState extends State<HomePage> {
                           ? Icons.sync_rounded
                           : Icons.cloud_sync_outlined,
                       label: app.syncing ? 'Syncing' : 'Sync',
-                      onTap: app.syncing ? null : _sync,
+                      onTap: _sync,
                     ),
                     _ActionPill(
                       icon: Icons.library_music_outlined,

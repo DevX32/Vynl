@@ -7,7 +7,10 @@ import type {
   DownloadEvent,
   DownloadOpts,
   DownloadSummary,
+  ExportFormat,
+  ExportSummary,
   LibraryTrack,
+  RestoredBackup,
   LyricsLookup,
   LyricsResult,
   NowPlayingState,
@@ -86,6 +89,14 @@ export const vynl = {
     cmd("start_download", { collection, opts: opts ?? null }),
 
   cancelDownload: (): Promise<void> => cmd("cancel_download"),
+
+  exportBackup: (
+    format: ExportFormat,
+    includePlaylists = true,
+  ): Promise<ExportSummary | null> =>
+    cmd("export_backup", { format, includePlaylists }),
+
+  importBackup: (): Promise<RestoredBackup | null> => cmd("import_backup"),
 
   matches: (
     collection: Collection,

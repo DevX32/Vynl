@@ -171,9 +171,9 @@ Future<void> _openSupport(BuildContext context) async {
               _Row(
                 label: 'Sync library',
                 hint: app.syncing
-                    ? '${app.syncProgress?.phase ?? 'Starting'}…'
+                    ? '${app.syncProgress?.phase ?? 'Starting'}… tap to queue another pass'
                     : 'Pull new and changed tracks from the desktop app',
-                onTap: app.syncing ? null : () => app.runSync(),
+                onTap: () => app.runSync(),
                 trailing: app.syncing
                     ? const SizedBox(
                         width: 17,

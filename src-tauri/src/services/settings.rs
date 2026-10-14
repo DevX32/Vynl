@@ -77,7 +77,7 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
 
     let next = Settings {
         output_dir,
-        format: FIXED_FORMAT,
+        format: patch.format,
         bitrate: Some(FIXED_BITRATE),
         filename_pattern: if patch.filename_pattern.is_empty() {
             current.filename_pattern
@@ -121,7 +121,6 @@ fn get_settings_unlocked(user_data_dir: &Path) -> Settings {
         loaded.accent_color = def.accent_color;
     }
     loaded.eq_bands = crate::services::player::normalize_eq_bands(&loaded.eq_bands);
-    loaded.format = FIXED_FORMAT;
     loaded.bitrate = Some(FIXED_BITRATE);
     loaded
 }

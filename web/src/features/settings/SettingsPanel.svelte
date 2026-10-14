@@ -6,11 +6,13 @@
   import ColorPicker from "@components/ColorPicker.svelte";
   import Button from "@components/Button.svelte";
   import Switch from "@components/Switch.svelte";
+  import Select from "@components/Select.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
   import { openPluginsUi } from "@state/plugins.svelte";
   import MobileSyncSettings from "./MobileSyncSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
+  import type { AudioFormat } from "@lib/types";
 
   const settings = $derived(getCurrentSettings());
 
@@ -111,6 +113,23 @@
           label={t("settings.dynamicAccentToggle")}
           onclick={() =>
             void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
+        />
+      {/snippet}
+    </SettingRow>
+
+    <SettingRow
+      label={t("settings.audioFormat")}
+      hint={t("settings.audioFormatHint")}
+    >
+      {#snippet control()}
+        <Select
+          options={[
+            { value: "mp3", label: t("settings.audioFormatMp3") },
+            { value: "opus", label: t("settings.audioFormatOpus") },
+          ]}
+          value={settings.format}
+          size="sm"
+          onchange={(v) => void patchSettings({ format: v as AudioFormat })}
         />
       {/snippet}
     </SettingRow>

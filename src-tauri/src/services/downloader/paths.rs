@@ -8,8 +8,15 @@ pub(crate) fn tmp_dir(user_data_dir: &Path) -> PathBuf {
     d
 }
 
-pub fn audio_format_ext(_fmt: &AudioFormat) -> &'static str {
-    "mp3"
+pub fn audio_format_ext(fmt: &AudioFormat) -> &'static str {
+    match fmt {
+        AudioFormat::Mp3 => "mp3",
+        AudioFormat::Opus => "opus",
+    }
+}
+
+pub fn keep_native(fmt: &AudioFormat) -> bool {
+    matches!(fmt, AudioFormat::Opus)
 }
 
 pub fn sanitize(name: &str) -> String {

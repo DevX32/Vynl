@@ -212,7 +212,7 @@ pub struct MobilePlaylistDto {
     pub id: String,
     pub name: String,
     pub track_ids: Vec<String>,
-    pub cover: Option<String>,
+    pub has_cover: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -256,6 +256,7 @@ pub async fn serve(
         .route("/pair", post(pair))
         .route("/v1/catalog", get(catalog))
         .route("/v1/playlists", get(playlists_handler))
+        .route("/v1/playlists/{id}/cover", get(playlist_cover))
         .route("/v1/sync-manifest", get(sync_manifest))
         .route("/v1/tracks/{id}/audio", get(track_audio))
         .route("/v1/tracks/{id}/cover", get(track_cover))
@@ -428,11 +429,12 @@ async fn playlists_handler(State(state): State<SharedState>) -> Json<Vec<MobileP
                     .iter()
                     .filter_map(|p| map.get(p).cloned())
                     .collect();
+                let has_cover = pl.cover.is_some();
                 MobilePlaylistDto {
                     id: pl.id,
                     name: pl.name,
                     track_ids,
-                    cover: None,
+                    has_cover,
                     created_at: pl.created_at,
                     updated_at: pl.updated_at,
                 }
@@ -473,18 +475,32 @@ async fn track_cover(State(state): State<SharedState>, AxumPath(id): AxumPath<St
     let Some(cover) = track.cover.as_ref() else {
         return (StatusCode::NOT_FOUND, "no cover").into_response();
     };
+    let ct = image_content_type(Path::new(cover));
     let path = PathBuf::from(cover);
+    serve_file_with_range(path, HeaderMap::new(), ct).await
+}
 
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("jpg")
-        .to_lowercase();
-    let ct = match ext.as_str() {
-        "png" => "image/png",
-        "webp" => "image/webp",
-        _ => "image/jpeg",
+async fn playlist_cover(
+    State(state): State<SharedState>,
+    AxumPath(id): AxumPath<String>,
+) -> Response {
+    let user_data = state.user_data.clone();
+
+    let cover = tokio::task::spawn_blocking(move || {
+        load_playlists(&user_data)
+            .into_iter()
+            .find(|p| p.id == id)
+            .and_then(|p| p.cover)
+            .map(PathBuf::from)
+    })
+    .await
+    .unwrap_or_default();
+
+    let Some(path) = cover else {
+        return (StatusCode::NOT_FOUND, "cover not found").into_response();
     };
+
+    let ct = image_content_type(&path);
     serve_file_with_range(path, HeaderMap::new(), ct).await
 }
 
@@ -545,6 +561,20 @@ async fn track_synced_lyrics(
         })
         .into_response(),
         _ => (StatusCode::NOT_FOUND, "no synced lyrics").into_response(),
+    }
+}
+
+fn image_content_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("jpg")
+        .to_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "webp" => "image/webp",
+        _ => "image/jpeg",
     }
 }
 

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -59,7 +61,6 @@ class PlaylistsPage extends StatelessWidget {
         for (final pl in app.playlists)
           _PlaylistRow(
             playlist: pl,
-            trackCount: pl.trackIds.length,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => PlaylistDetailPage(playlist: pl),
@@ -71,14 +72,45 @@ class PlaylistsPage extends StatelessWidget {
   }
 }
 
-class _PlaylistArt extends StatelessWidget {
-  const _PlaylistArt({required this.tracks, this.size = 60});
+String _playlistSubtitle(({int total, int downloaded}) stats) {
+  if (stats.total == 0) return 'Empty';
+  if (stats.downloaded == stats.total) {
+    return stats.total == 1 ? '1 track' : '${stats.total} tracks';
+  }
+  return '${stats.downloaded} of ${stats.total} offline';
+}
 
+class _PlaylistArt extends StatelessWidget {
+  const _PlaylistArt({
+    required this.playlist,
+    required this.tracks,
+    this.size = 60,
+  });
+
+  final PlaylistDto playlist;
   final List<CatalogTrack> tracks;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    final cover = playlist.cover;
+    if (cover != null && cover.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(VynlRadius.art),
+        child: Image.file(
+          File(cover),
+          fit: BoxFit.cover,
+          width: size,
+          height: size,
+          cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+          errorBuilder: (_, __, ___) => _grid(),
+        ),
+      );
+    }
+    return _grid();
+  }
+
+  Widget _grid() {
     final cells = <Widget>[];
     for (var i = 0; i < 4; i++) {
       final t = i < tracks.length ? tracks[i] : null;
@@ -113,17 +145,16 @@ class _PlaylistArt extends StatelessWidget {
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
     required this.playlist,
-    required this.trackCount,
     required this.onTap,
   });
 
   final PlaylistDto playlist;
-  final int trackCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final app = context.read<AppState>();
+    final app = context.watch<AppState>();
+    final stats = app.playlistStats(playlist);
     final art = app.tracksForPlaylist(playlist).take(4).toList();
 
     return Material(
@@ -136,7 +167,7 @@ class _PlaylistRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           child: Row(
             children: [
-              _PlaylistArt(tracks: art),
+              _PlaylistArt(playlist: playlist, tracks: art),
               const SizedBox(width: 15),
               Expanded(
                 child: Column(
@@ -157,7 +188,7 @@ class _PlaylistRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$trackCount tracks',
+                      _playlistSubtitle(stats),
                       style: const TextStyle(
                         color: VynlColors.dim,
                         fontSize: 12.5,
@@ -188,7 +219,12 @@ class PlaylistDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final player = context.watch<PlayerController>();
+    final playlist = app.playlists.firstWhere(
+      (p) => p.id == this.playlist.id,
+      orElse: () => this.playlist,
+    );
     final current = player.current;
+    final stats = app.playlistStats(playlist);
     final tracks = app.tracksForPlaylist(playlist);
     final art = tracks.take(4).toList();
 
@@ -198,10 +234,41 @@ class PlaylistDetailPage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         appBar: AppBar(title: Text(playlist.name)),
         body: tracks.isEmpty
-            ? const Center(
-                child: Text(
-                  'No downloaded tracks in this playlist yet.',
-                  style: TextStyle(color: VynlColors.dim),
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 44),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.cloud_download_outlined,
+                        size: 40,
+                        color: VynlColors.faint,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        stats.total == 0
+                            ? 'This playlist is empty.'
+                            : 'None of its tracks are on this device yet.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: VynlColors.dim,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Run a sync over Wi-Fi to pull them down.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: VynlColors.faint,
+                          fontSize: 12.5,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               )
             : Column(
@@ -210,7 +277,11 @@ class PlaylistDetailPage extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
                     child: Row(
                       children: [
-                        _PlaylistArt(tracks: art, size: 84),
+                        _PlaylistArt(
+                          playlist: playlist,
+                          tracks: art,
+                          size: 84,
+                        ),
                         const SizedBox(width: 18),
                         Expanded(
                           child: Column(
@@ -230,9 +301,7 @@ class PlaylistDetailPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                tracks.length == 1
-                                    ? '1 track'
-                                    : '${tracks.length} tracks',
+                                _playlistSubtitle(stats),
                                 style: const TextStyle(
                                   color: VynlColors.dim,
                                   fontSize: 13,

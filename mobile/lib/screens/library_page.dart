@@ -118,7 +118,7 @@ class _LibraryPageState extends State<LibraryPage> {
           child: RefreshIndicator(
             onRefresh: () async {
               final state = context.read<AppState>();
-              if (state.isPaired && !state.syncing) await state.runSync();
+              if (state.isPaired) await state.runSync();
             },
             color: VynlColors.accent,
             backgroundColor: VynlColors.surface,

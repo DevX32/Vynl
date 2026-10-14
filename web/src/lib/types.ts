@@ -1,4 +1,4 @@
-export type AudioFormat = "mp3";
+export type AudioFormat = "mp3" | "opus";
 
 type TrackStatus =
   | "queued"
@@ -198,7 +198,7 @@ export interface LyricsLookup {
 }
 
 export interface LrcSearchResult {
-  id: number;
+  id: string;
   trackName: string;
   artistName: string;
   albumName: string;
@@ -261,6 +261,24 @@ export interface UpdateStatus {
   progress?: number;
   ready?: boolean;
   error?: string;
+}
+
+export type ExportFormat = "json" | "csv" | "m3u";
+
+export interface ExportSummary {
+  path: string;
+  format: string;
+  trackCount: number;
+  playlistCount: number;
+  bytes: number;
+}
+
+export interface RestoredBackup {
+  collection: Collection;
+  matches: Record<string, SearchCandidate[]>;
+  picks: Record<string, number>;
+  total: number;
+  knownSources: number;
 }
 
 export interface ArtistInfo {

@@ -20,7 +20,7 @@ mod search;
 
 use matching::filter_and_rank_candidates;
 use paths::tmp_dir;
-pub use paths::{audio_format_ext, render_pattern, sanitize};
+pub use paths::{audio_format_ext, keep_native, render_pattern, sanitize};
 pub use process::cancel_download;
 pub use process::resolve_tool;
 use process::{
@@ -237,6 +237,19 @@ async fn fetch_cover(url: &str, dest: &str) -> bool {
     tokio::fs::write(dest, &bytes).await.is_ok()
 }
 
+fn tag_type_for(file: &str) -> lofty::tag::TagType {
+    match Path::new(file)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("m4a") | Some("mp4") | Some("m4b") => lofty::tag::TagType::Mp4Ilst,
+        Some("opus") | Some("ogg") | Some("flac") => lofty::tag::TagType::VorbisComments,
+        _ => lofty::tag::TagType::Id3v2,
+    }
+}
+
 fn try_tag_with_lofty(
     audio_path: &str,
     track: &TrackMeta,
@@ -246,7 +259,7 @@ fn try_tag_with_lofty(
     use lofty::picture::{Picture, PictureType};
     use lofty::prelude::*;
     use lofty::probe::Probe;
-    use lofty::tag::{ItemKey, TagType};
+    use lofty::tag::ItemKey;
     use std::fs;
 
     let path = Path::new(audio_path);
@@ -255,7 +268,7 @@ fn try_tag_with_lofty(
         .read()
         .map_err(|e| format!("lofty read failed: {e}"))?;
 
-    let tag_type = TagType::Id3v2;
+    let tag_type = tag_type_for(audio_path);
     let tag = if let Some(primary_type) = tagged_file.primary_tag().map(|t| t.tag_type()) {
         if primary_type != tag_type {
             if tagged_file.tag(tag_type).is_none() {
@@ -366,11 +379,16 @@ struct ProcessResult {
     used_url: Option<String>,
 }
 
-fn base_args() -> Vec<String> {
+fn base_args(format: &AudioFormat) -> Vec<String> {
+    let audio_format = if keep_native(format) {
+        "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio".into()
+    } else {
+        "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best".into()
+    };
     let mut args = vec![
         "--no-playlist".into(),
         "--format".into(),
-        "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio".into(),
+        audio_format,
         "--newline".into(),
     ];
 
@@ -478,7 +496,7 @@ async fn download_track(
         };
         track_event(track, TrackStatus::Searching, 0.0, Some(&msg));
 
-        let mut args = base_args();
+        let mut args = base_args(&settings.format);
         args.push("-o".into());
         args.push(
             tmp.join(format!("{}.%(ext)s", track.id))
@@ -612,27 +630,50 @@ async fn download_track(
         let stderr_text = stderr_task.await.unwrap_or_default();
 
         let stream_path = find_downloaded_stream(&tmp, &track.id);
+        let keep_native = crate::services::downloader::keep_native(&settings.format);
 
         if let Some(stream) = stream_path.clone()
             && code == Some(0)
         {
-            let _ = std::fs::remove_file(&raw_path);
+            // In native mode the download already sits at raw_path, so removing
+            // it here would delete the output.
+            let same_file = keep_native && stream == raw_path;
+            if !same_file {
+                let _ = std::fs::remove_file(&raw_path);
+            }
             track_event(
                 track,
                 TrackStatus::Processing,
                 100.0,
-                Some("encoding audio…"),
+                Some(if keep_native {
+                    "packaging original audio…"
+                } else {
+                    "encoding audio…"
+                }),
             );
 
             let src = stream.clone();
             let dest = raw_path.clone();
             let bitrate = settings.bitrate.filter(|b| *b > 0).map(|b| b as u32);
-            let encoded = tokio::task::spawn_blocking(move || {
-                audio::transcode_to_mp3(&src, &dest, bitrate, Some(&CANCELLED_DOWNLOAD))
-            })
-            .await
-            .map_err(|e| format!("Encoding task failed: {e}"))
-            .and_then(|r| r);
+            let encoded = if keep_native {
+                if same_file {
+                    Ok(())
+                } else {
+                    tokio::task::spawn_blocking(move || {
+                        crate::services::opusmux::remux(&src, &dest).map(|_| ())
+                    })
+                    .await
+                    .map_err(|e| format!("Remux task failed: {e}"))
+                    .and_then(|r| r)
+                }
+            } else {
+                tokio::task::spawn_blocking(move || {
+                    audio::transcode_to_mp3(&src, &dest, bitrate, Some(&CANCELLED_DOWNLOAD))
+                })
+                .await
+                .map_err(|e| format!("Encoding task failed: {e}"))
+                .and_then(|r| r)
+            };
 
             let _ = std::fs::remove_file(&stream);
 

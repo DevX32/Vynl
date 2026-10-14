@@ -103,6 +103,7 @@ class PlaylistDto {
     required this.id,
     required this.name,
     required this.trackIds,
+    this.hasCover = false,
     this.cover,
     required this.createdAt,
     required this.updatedAt,
@@ -111,6 +112,8 @@ class PlaylistDto {
   final String id;
   final String name;
   final List<String> trackIds;
+
+  final bool hasCover;
   final String? cover;
   final int createdAt;
   final int updatedAt;
@@ -122,7 +125,7 @@ class PlaylistDto {
       trackIds: (json['trackIds'] as List<dynamic>? ?? [])
           .map((e) => e.toString())
           .toList(),
-      cover: json['cover'] as String?,
+      hasCover: json['hasCover'] == true,
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
       updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
     );
@@ -133,8 +136,20 @@ class PairingCredentials {
   PairingCredentials({
     required this.baseUrl,
     required this.token,
+    this.alternates = const [],
   });
 
   final String baseUrl;
   final String token;
+  final List<String> alternates;
+
+  PairingCredentials copyWith({
+    String? baseUrl,
+    String? token,
+    List<String>? alternates,
+  }) => PairingCredentials(
+    baseUrl: baseUrl ?? this.baseUrl,
+    token: token ?? this.token,
+    alternates: alternates ?? this.alternates,
+  );
 }

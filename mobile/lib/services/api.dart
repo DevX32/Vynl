@@ -118,6 +118,17 @@ class VynlApi {
 
   void dispose() => _client.close();
 
+  Future<bool> ping() async {
+    try {
+      final res = await _client
+          .get(_uri('/health'))
+          .timeout(const Duration(seconds: 4));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> downloadAudio({
     required String trackId,
     required File dest,
@@ -135,6 +146,13 @@ class VynlApi {
     required File dest,
   }) async {
     await _downloadFile(path: '/v1/tracks/$trackId/cover', dest: dest);
+  }
+
+  Future<void> downloadPlaylistCover({
+    required String playlistId,
+    required File dest,
+  }) async {
+    await _downloadFile(path: '/v1/playlists/$playlistId/cover', dest: dest);
   }
 
   Future<RemoteLyrics?> syncedLyrics(String trackId) async {

@@ -32,6 +32,11 @@ class AppState extends ChangeNotifier {
   final SyncNotifications notifications;
   final SyncService syncService;
 
+  final Map<String, CatalogTrack> _trackIndex = {};
+
+  Future<void>? _syncInFlight;
+  bool _syncQueued = false;
+
   PairingCredentials? credentials;
   VynlApi? api;
   List<CatalogTrack> tracks = [];
@@ -151,6 +156,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> refreshLocal() async {
     tracks = await db.allTracks();
+    _trackIndex
+      ..clear()
+      ..addEntries(tracks.map((t) => MapEntry(t.id, t)));
     playlists = await db.allPlaylists();
     cacheBytes = await db.cacheBytes();
     notifyListeners();
@@ -165,10 +173,17 @@ class AppState extends ChangeNotifier {
     lastError = null;
     notifyListeners();
 
+    final bases = _candidateBases(host, alts);
     Object? failure;
-    for (final candidate in [host, ...alts]) {
+    for (final base in bases) {
       try {
-        await _pairOne(candidate, pin);
+        final creds = await VynlApi.pair(baseUrl: base, pin: pin);
+        await _adopt(
+          creds.copyWith(
+            alternates: bases.where((b) => b != base).toList(),
+          ),
+        );
+        unawaited(runSync());
         return;
       } catch (e) {
         failure = e;
@@ -180,32 +195,67 @@ class AppState extends ChangeNotifier {
     throw StateError(lastError!);
   }
 
-  Future<void> _pairOne(String candidate, String pin) async {
+  Future<void> _adopt(PairingCredentials creds) async {
+    api?.dispose();
+    await authStore.save(creds);
+    credentials = creds;
+    api = VynlApi(baseUrl: creds.baseUrl, token: creds.token);
+    notifyListeners();
+  }
+
+  static String _normalizeBase(String candidate) {
     var base = candidate.trim();
     if (!base.startsWith('http://') && !base.startsWith('https://')) {
       base = 'http://$base';
     }
     final uri = Uri.parse(base);
-    final hostOnly = uri.host.isEmpty ? base.replaceFirst(RegExp(r'^https?://'), '') : uri.host;
+    final hostOnly = uri.host.isEmpty
+        ? base.replaceFirst(RegExp(r'^https?://'), '')
+        : uri.host;
     final hasExplicitPort = RegExp(r':\d+(/|$)').hasMatch(base) ||
         (uri.hasPort && uri.port != 80 && uri.port != 443);
     if (hasExplicitPort) {
-      base = uri.hasPort
+      return uri.hasPort
           ? '${uri.scheme}://${uri.host}:${uri.port}'
           : base.split('/').take(3).join('/');
-    } else {
-      base = '${uri.scheme.isEmpty ? 'http' : uri.scheme}://$hostOnly:17865';
     }
-    final creds = await VynlApi.pair(baseUrl: base, pin: pin);
-    await authStore.save(creds);
-    credentials = creds;
-    api = VynlApi(baseUrl: creds.baseUrl, token: creds.token);
-    notifyListeners();
-    unawaited(runSync());
+    return '${uri.scheme.isEmpty ? 'http' : uri.scheme}://$hostOnly:17865';
+  }
+
+  static List<String> _candidateBases(String host, List<String> alts) {
+    final out = <String>[];
+    for (final candidate in [host, ...alts]) {
+      final base = _normalizeBase(candidate);
+      if (base.isNotEmpty && !out.contains(base)) out.add(base);
+    }
+    return out;
+  }
+
+  Future<VynlApi?> _reconnect(VynlApi stale) async {
+    final creds = credentials;
+    if (creds == null) return null;
+
+    for (final base in [creds.baseUrl, ...creds.alternates]) {
+      if (base == stale.baseUrl) continue;
+      final probe = VynlApi(baseUrl: base, token: creds.token);
+      if (await probe.ping()) {
+        final remaining = [
+          creds.baseUrl,
+          ...creds.alternates.where((a) => a != base),
+        ].where((a) => a != base).toList();
+        await _adopt(creds.copyWith(baseUrl: base, alternates: remaining));
+        probe.dispose();
+        debugPrint('desktop moved to $base');
+        return api;
+      }
+      probe.dispose();
+    }
+    return null;
   }
 
   Future<void> unpair() async {
     syncService.cancel();
+    _syncQueued = false;
     api?.dispose();
     await authStore.clear();
     credentials = null;
@@ -214,13 +264,45 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> runSync() async {
-    final client = api;
-    if (client == null || syncing) return;
+    if (api == null) return;
+
+    final running = _syncInFlight;
+    if (running != null) {
+      _syncQueued = true;
+      await running;
+      return;
+    }
+
+    final pass = _runSyncPass();
+    _syncInFlight = pass;
+    try {
+      await pass;
+    } finally {
+      _syncInFlight = null;
+      if (_syncQueued) {
+        _syncQueued = false;
+        unawaited(runSync());
+      }
+    }
+  }
+
+  Future<void> _runSyncPass() async {
+    var client = api;
+    if (client == null) return;
     syncing = true;
     lastError = null;
     syncProgress = SyncProgress(phase: 'Starting', done: 0, total: 1);
     notifyListeners();
     try {
+      if (!await client.ping()) {
+        syncProgress = SyncProgress(
+          phase: 'Looking for your desktop',
+          done: 0,
+          total: 1,
+        );
+        notifyListeners();
+        client = await _reconnect(client) ?? client;
+      }
       await syncService.sync(
         api: client,
         onProgress: (p) {
@@ -228,7 +310,6 @@ class AppState extends ChangeNotifier {
           notifyListeners();
         },
       );
-      await refreshLocal();
     } catch (e) {
       lastError = e.toString();
       syncProgress = SyncProgress(
@@ -239,8 +320,8 @@ class AppState extends ChangeNotifier {
       );
     } finally {
       syncing = false;
-      notifyListeners();
     }
+    await refreshLocal();
   }
 
   Future<void> clearCache() async {
@@ -248,12 +329,7 @@ class AppState extends ChangeNotifier {
     await refreshLocal();
   }
 
-  CatalogTrack? trackById(String id) {
-    for (final t in tracks) {
-      if (t.id == id) return t;
-    }
-    return null;
-  }
+  CatalogTrack? trackById(String id) => _trackIndex[id];
 
   List<CatalogTrack> tracksForPlaylist(PlaylistDto pl) {
     return pl.trackIds
@@ -261,5 +337,14 @@ class AppState extends ChangeNotifier {
         .whereType<CatalogTrack>()
         .where((t) => t.isDownloaded)
         .toList();
+  }
+
+  ({int total, int downloaded}) playlistStats(PlaylistDto pl) {
+    var downloaded = 0;
+    for (final id in pl.trackIds) {
+      final t = _trackIndex[id];
+      if (t != null && t.isDownloaded) downloaded += 1;
+    }
+    return (total: pl.trackIds.length, downloaded: downloaded);
   }
 }
