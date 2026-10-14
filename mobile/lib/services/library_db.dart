@@ -7,6 +7,8 @@ import 'package:sqflite/sqflite.dart';
 import '../models.dart';
 
 class LibraryDb {
+  static const _dbVersion = 2;
+
   Database? _db;
   Directory? _mediaDir;
 
@@ -17,7 +19,7 @@ class LibraryDb {
     final dbPath = p.join(docs.path, 'vynl.db');
     _db = await openDatabase(
       dbPath,
-      version: 1,
+      version: _dbVersion,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE tracks (
@@ -41,6 +43,7 @@ class LibraryDb {
           CREATE TABLE playlists (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
+            cover TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           )
@@ -59,6 +62,11 @@ class LibraryDb {
             value TEXT NOT NULL
           )
         ''');
+      },
+      onUpgrade: (db, from, to) async {
+        if (from < 2) {
+          await db.execute('ALTER TABLE playlists ADD COLUMN cover TEXT');
+        }
       },
     );
   }
@@ -80,6 +88,9 @@ class LibraryDb {
 
   File coverFileFor(String id) =>
       File(p.join(mediaDir.path, 'covers', '$id.jpg'));
+
+File coverFileForPlaylist(String id) =>
+      File(p.join(mediaDir.path, 'covers', 'pl-$id.jpg'));
 
   Future<List<CatalogTrack>> allTracks() async {
     final rows = await db.query('tracks', orderBy: 'title COLLATE NOCASE ASC');
@@ -160,28 +171,56 @@ class LibraryDb {
   }
 
   Future<void> replacePlaylists(List<PlaylistDto> playlists) async {
-    await db.delete('playlist_tracks');
-    await db.delete('playlists');
-    final batch = db.batch();
-    for (final pl in playlists) {
-      batch.insert('playlists', {
-        'id': pl.id,
-        'name': pl.name,
-        'created_at': pl.createdAt,
-        'updated_at': pl.updatedAt,
-      });
-      for (var i = 0; i < pl.trackIds.length; i++) {
-        batch.insert('playlist_tracks', {
-          'playlist_id': pl.id,
-          'track_id': pl.trackIds[i],
-          'position': i,
-        });
+    final covers = await localPlaylistCovers();
+    await db.transaction((txn) async {
+      await txn.delete('playlist_tracks');
+      await txn.delete('playlists');
+      final batch = txn.batch();
+      for (final pl in playlists) {
+        batch.insert(
+          'playlists',
+          {
+            'id': pl.id,
+            'name': pl.name,
+            'cover': covers[pl.id],
+            'created_at': pl.createdAt,
+            'updated_at': pl.updatedAt,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        for (var i = 0; i < pl.trackIds.length; i++) {
+          batch.insert(
+            'playlist_tracks',
+            {
+              'playlist_id': pl.id,
+              'track_id': pl.trackIds[i],
+              'position': i,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
-    }
-    await batch.commit(noResult: true);
+      await batch.commit(noResult: true);
+    });
   }
 
-  Future<List<PlaylistDto>> allPlaylists() async {
+  Future<void> setPlaylistCover(String id, String path) async {
+    await db.update(
+      'playlists',
+      {'cover': path},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+Future<Map<String, String?>> localPlaylistCovers() async {
+    final rows = await db.query('playlists', columns: ['id', 'cover']);
+    return {
+      for (final r in rows) r['id'] as String: r['cover'] as String?,
+    };
+  }
+
+Future<List<PlaylistDto>> allPlaylists() async {
     final rows = await db.query('playlists', orderBy: 'name COLLATE NOCASE ASC');
     final out = <PlaylistDto>[];
     for (final row in rows) {
@@ -193,11 +232,14 @@ class LibraryDb {
         whereArgs: [id],
         orderBy: 'position ASC',
       );
+      final cover = row['cover'] as String?;
       out.add(
         PlaylistDto(
           id: id,
           name: row['name'] as String,
           trackIds: trackRows.map((r) => r['track_id'] as String).toList(),
+          hasCover: cover != null && cover.isNotEmpty,
+          cover: cover,
           createdAt: row['created_at'] as int,
           updatedAt: row['updated_at'] as int,
         ),
@@ -234,6 +276,13 @@ class LibraryDb {
   }
 
   Future<void> clearCache() async {
+    final playlists = await allPlaylists();
+    for (final pl in playlists) {
+      final cover = pl.cover;
+      if (cover == null) continue;
+      final f = File(cover);
+      if (await f.exists()) await f.delete();
+    }
     final tracks = await allTracks();
     for (final t in tracks) {
       if (t.localAudioPath != null) {
@@ -250,6 +299,7 @@ class LibraryDb {
       'local_cover_path': null,
       'size': 0,
     });
+    await db.update('playlists', {'cover': null});
     if (await mediaDir.exists()) {
       await mediaDir.delete(recursive: true);
       await mediaDir.create(recursive: true);

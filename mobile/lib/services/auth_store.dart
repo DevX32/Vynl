@@ -8,6 +8,7 @@ class AuthStore {
 
   static const _tokenKey = 'vynl_token';
   static const _baseUrlKey = 'vynl_base_url';
+  static const _altsKey = 'vynl_base_url_alts';
 
   final FlutterSecureStorage _secure = const FlutterSecureStorage();
 
@@ -18,18 +19,24 @@ class AuthStore {
     if (baseUrl == null || baseUrl.isEmpty || token == null || token.isEmpty) {
       return null;
     }
-    return PairingCredentials(baseUrl: baseUrl, token: token);
+    return PairingCredentials(
+      baseUrl: baseUrl,
+      token: token,
+      alternates: prefs.getStringList(_altsKey) ?? const [],
+    );
   }
 
   Future<void> save(PairingCredentials creds) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_baseUrlKey, creds.baseUrl);
+    await prefs.setStringList(_altsKey, creds.alternates);
     await _secure.write(key: _tokenKey, value: creds.token);
   }
 
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_baseUrlKey);
+    await prefs.remove(_altsKey);
     await _secure.delete(key: _tokenKey);
   }
 }

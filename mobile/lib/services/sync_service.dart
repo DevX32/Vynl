@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import '../models.dart';
 import 'api.dart';
 import 'library_db.dart';
@@ -139,11 +143,15 @@ class SyncService {
           final now = DateTime.now();
           if (now.difference(lastNotify) >= _notifyInterval) {
             lastNotify = now;
-            await notifications.showProgress(
-              done: done,
-              total: total,
-              detail: track.title,
-            );
+            try {
+              await notifications.showProgress(
+                done: done,
+                total: total,
+                detail: track.title,
+              );
+            } catch (e) {
+              debugPrint('sync progress notification failed: $e');
+            }
           }
         }
       }
@@ -162,13 +170,36 @@ class SyncService {
     if (_cancelled) return;
 
     onProgress(SyncProgress(phase: 'Playlists', done: total, total: total));
-    final playlists = await api.playlists();
-    await db.replacePlaylists(playlists);
+    String? playlistError;
+    try {
+      final playlists = await api.playlists();
+      if (_cancelled) return;
+      await db.replacePlaylists(playlists);
+      await _syncPlaylistCovers(api: api, playlists: playlists);
+    } catch (e) {
+      debugPrint('playlist sync failed, retrying: $e');
+      try {
+        final playlists = await api.playlists();
+        if (_cancelled) return;
+        await db.replacePlaylists(playlists);
+        await _syncPlaylistCovers(api: api, playlists: playlists);
+      } catch (e2) {
+        playlistError = 'Playlists: $e2';
+        debugPrint('playlist sync failed: $e2');
+      }
+    }
 
-    final errSummary = errors.isEmpty
+    final downloadError = errors.isEmpty
         ? null
         : '${errors.length} failed — ${errors.first}';
-    await notifications.showDone(count: done, error: errSummary);
+    final parts = [downloadError, playlistError].whereType<String>().toList();
+    final errSummary = parts.isEmpty ? null : parts.join(' · ');
+
+    try {
+      await notifications.showDone(count: done, error: errSummary);
+    } catch (e) {
+      debugPrint('sync done notification failed: $e');
+    }
     onProgress(
       SyncProgress(
         phase: 'Done',
@@ -177,6 +208,43 @@ class SyncService {
         error: errSummary,
       ),
     );
+  }
+
+  Future<void> _syncPlaylistCovers({
+    required VynlApi api,
+    required List<PlaylistDto> playlists,
+  }) async {
+    final local = await db.localPlaylistCovers();
+    for (final pl in playlists) {
+      if (_cancelled) return;
+
+      final existing = local[pl.id];
+      final hasFile = existing != null &&
+          existing.isNotEmpty &&
+          await File(existing).exists();
+
+      if (!pl.hasCover) {
+        if (hasFile) {
+          try {
+            await File(existing!).delete();
+          } catch (e) {
+            debugPrint('could not remove stale cover for ${pl.name}: $e');
+          }
+          await db.setPlaylistCover(pl.id, '');
+        }
+        continue;
+      }
+
+      if (hasFile) continue;
+
+      try {
+        final dest = db.coverFileForPlaylist(pl.id);
+        await api.downloadPlaylistCover(playlistId: pl.id, dest: dest);
+        await db.setPlaylistCover(pl.id, dest.path);
+      } catch (e) {
+        debugPrint('playlist cover failed for ${pl.name}: $e');
+      }
+    }
   }
 
   Future<Object?> _downloadOne({
