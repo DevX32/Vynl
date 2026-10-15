@@ -719,8 +719,7 @@ async fn download_track(
             let _ = std::fs::remove_file(f);
         }
         failures.push(
-            describe_no_audio_format(&stderr_text)
-                .unwrap_or_else(|| last_error(&stderr_text)),
+            describe_no_audio_format(&stderr_text).unwrap_or_else(|| last_error(&stderr_text)),
         );
     }
 
