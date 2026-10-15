@@ -631,8 +631,6 @@ async fn download_track(
         if let Some(stream) = stream_path.clone()
             && code == Some(0)
         {
-            // In native mode the download already sits at raw_path, so removing
-            // it here would delete the output.
             let same_file = keep_native && stream == raw_path;
             if !same_file {
                 let _ = std::fs::remove_file(&raw_path);

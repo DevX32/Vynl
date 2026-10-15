@@ -7,7 +7,6 @@ import type {
   DownloadEvent,
   DownloadOpts,
   DownloadSummary,
-  ExportFormat,
   ExportSummary,
   LibraryTrack,
   RestoredBackup,
@@ -90,11 +89,8 @@ export const vynl = {
 
   cancelDownload: (): Promise<void> => cmd("cancel_download"),
 
-  exportBackup: (
-    format: ExportFormat,
-    includePlaylists = true,
-  ): Promise<ExportSummary | null> =>
-    cmd("export_backup", { format, includePlaylists }),
+  exportBackup: (): Promise<ExportSummary | null> =>
+    cmd("export_backup", {}),
 
   importBackup: (): Promise<RestoredBackup | null> => cmd("import_backup"),
 

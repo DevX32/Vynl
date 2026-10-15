@@ -263,8 +263,6 @@ export interface UpdateStatus {
   error?: string;
 }
 
-export type ExportFormat = "json" | "csv" | "m3u";
-
 export interface ExportSummary {
   path: string;
   format: string;

@@ -562,7 +562,7 @@
     doneIds = [];
     page = 0;
     trackFilter = "all";
-    void refreshDone({ force: true });
+    void confirmDownload();
   }
 
   $effect(() => {

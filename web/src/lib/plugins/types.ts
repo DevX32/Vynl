@@ -203,11 +203,6 @@ export interface VynlPluginAPI {
   readonly apiVersion: number;
 
   App: {
-    /**
-     * The user's name as configured in Settings, falling back to their random
-     * nickname when it is left blank. Returns "" on hosts that predate
-     * `api.App` (apiVersion 1), so feature-detect rather than assume.
-     */
     getDisplayName(): string;
   };
 

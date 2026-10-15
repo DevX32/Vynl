@@ -1,7 +1,7 @@
 export const DEFAULT_ACCENT_COLOR = "#a894e8";
 
 export const ACCENT_PRESETS = [
-  "#a894e8", // default (lavender)
+  "#a894e8", // lavender
   "#7aa2f7", // blue
   "#8fd694", // green
   "#e8c86a", // gold
@@ -95,10 +95,10 @@ function relativeLuminance([r, g, b]: [number, number, number]): number {
 
 type Rgb = [number, number, number];
 
-const ACCENT_TEXT_DARK: Rgb = [22, 17, 40]; 
-const ACCENT_TEXT_LIGHT: Rgb = [245, 243, 255]; 
+const ACCENT_TEXT_DARK: Rgb = [22, 17, 40];
+const ACCENT_TEXT_LIGHT: Rgb = [245, 243, 255];
 
-const ANIM_DURATION = 450; 
+const ANIM_DURATION = 450;
 
 function rgbToHexString([r, g, b]: Rgb): string {
   return `#${componentToHex(r)}${componentToHex(g)}${componentToHex(b)}`;

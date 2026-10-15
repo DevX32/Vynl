@@ -8,39 +8,8 @@ use crate::services::{history, library, playlists, util};
 pub const BACKUP_VERSION: u32 = 1;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExportFormat {
-    Json,
-    Csv,
-    M3u,
-}
-
-impl ExportFormat {
-    pub fn parse(raw: &str) -> Result<Self, String> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "json" => Ok(ExportFormat::Json),
-            "csv" => Ok(ExportFormat::Csv),
-            "m3u" | "m3u8" => Ok(ExportFormat::M3u),
-            other => Err(format!("Unsupported export format: {other}")),
-        }
-    }
-
-    pub fn extension(self) -> &'static str {
-        match self {
-            ExportFormat::Json => "json",
-            ExportFormat::Csv => "csv",
-            ExportFormat::M3u => "m3u",
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            ExportFormat::Json => "Vynl backup (JSON)",
-            ExportFormat::Csv => "Track list (CSV)",
-            ExportFormat::M3u => "Playlist (M3U)",
-        }
-    }
-}
+pub const EXPORT_EXTENSION: &str = "json";
+pub const EXPORT_LABEL: &str = "Vynl backup (JSON)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -118,11 +87,7 @@ fn round_secs(value: f64) -> f64 {
     (value * 1000.0).round() / 1000.0
 }
 
-pub fn build_backup(
-    settings: &Settings,
-    user_data_dir: &Path,
-    include_playlists: bool,
-) -> LibraryBackup {
+pub fn build_backup(settings: &Settings, user_data_dir: &Path) -> LibraryBackup {
     let output_dir = PathBuf::from(&settings.output_dir);
     let (tracks, _) = library::scan_cached_library(&output_dir, user_data_dir);
 
@@ -143,11 +108,7 @@ pub fn build_backup(
     let by_path: std::collections::HashMap<String, &ExportedTrack> =
         tracks.iter().map(|t| (t.file.clone(), t)).collect();
 
-    let metas = if include_playlists {
-        playlists::list_playlists(&output_dir)
-    } else {
-        Vec::new()
-    };
+    let metas = playlists::list_playlists(&output_dir);
     let playlists = metas
         .iter()
         .map(|meta: &PlaylistMeta| {
@@ -182,9 +143,9 @@ pub fn build_backup(
     }
 }
 
-pub fn suggested_filename(format: ExportFormat, backup: &LibraryBackup) -> String {
+pub fn suggested_filename(backup: &LibraryBackup) -> String {
     let stamp = iso_stamp(backup.exported_at);
-    format!("vynl-{stamp}.{}", format.extension())
+    format!("vynl-{stamp}.{EXPORT_EXTENSION}")
 }
 
 fn iso_stamp(ms: i64) -> String {
@@ -207,104 +168,8 @@ fn iso_stamp(ms: i64) -> String {
     format!("{y:04}{m:02}{d:02}-{hour:02}{minute:02}{second:02}")
 }
 
-pub fn render(backup: &LibraryBackup, format: ExportFormat) -> Result<String, String> {
-    match format {
-        ExportFormat::Json => serde_json::to_string_pretty(backup).map_err(|e| e.to_string()),
-        ExportFormat::Csv => Ok(render_csv(backup)),
-        ExportFormat::M3u => Ok(render_m3u(backup)),
-    }
-}
-
-fn csv_field(value: &str) -> String {
-    if value.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_string()
-    }
-}
-
-fn csv_opt<T: std::fmt::Display>(value: Option<T>) -> String {
-    value.map(|v| v.to_string()).unwrap_or_default()
-}
-
-fn render_csv(backup: &LibraryBackup) -> String {
-    let mut out = String::new();
-    out.push_str("# Vynl library export\n");
-    out.push_str(&format!(
-        "# app_version,{}\n",
-        csv_field(&backup.app_version)
-    ));
-    out.push_str(&format!("# output_dir,{}\n", csv_field(&backup.output_dir)));
-    out.push_str(&format!(
-        "# tracks,{},playlists,{}\n",
-        backup.track_count, backup.playlist_count
-    ));
-    out.push_str("Title,Artist,Album,Year,Track,Duration,Format,Added,File\n");
-
-    for track in &backup.tracks {
-        out.push_str(
-            &[
-                csv_field(&track.title),
-                csv_field(&track.artist),
-                csv_field(&track.album),
-                csv_opt(track.year),
-                csv_opt(track.track_number),
-                csv_opt(Some(track.duration.round() as i64)),
-                csv_field(&track.format),
-                csv_opt(track.added_at),
-                csv_field(&track.file),
-            ]
-            .join(","),
-        );
-        out.push('\n');
-    }
-    out
-}
-
-fn m3u_duration(secs: f64) -> i64 {
-    if !secs.is_finite() || secs < 0.0 {
-        return -1;
-    }
-    secs.round() as i64
-}
-
-fn m3u_section(out: &mut String, name: &str, tracks: &[&ExportedTrack]) {
-    out.push_str("\n#PLAYLIST:");
-    out.push_str(name);
-    for track in tracks {
-        out.push_str("\n#EXTINF:");
-        out.push_str(&m3u_duration(track.duration).to_string());
-        out.push(',');
-        out.push_str(&track.artist);
-        out.push_str(" - ");
-        out.push_str(&track.title);
-        out.push('\n');
-        out.push_str(&track.file);
-        out.push('\n');
-    }
-}
-
-fn render_m3u(backup: &LibraryBackup) -> String {
-    let mut out = String::from("#EXTM3U\n");
-    let all = backup
-        .tracks
-        .iter()
-        .map(|t| t as &ExportedTrack)
-        .collect::<Vec<_>>();
-    m3u_section(&mut out, "All Tracks", &all);
-
-    for playlist in &backup.playlists {
-        if playlist.tracks.is_empty() {
-            continue;
-        }
-        let refs = playlist
-            .tracks
-            .iter()
-            .map(|t| t as &ExportedTrack)
-            .collect::<Vec<_>>();
-        m3u_section(&mut out, &playlist.name, &refs);
-    }
-    out
+pub fn render(backup: &LibraryBackup) -> Result<String, String> {
+    serde_json::to_string_pretty(backup).map_err(|e| e.to_string())
 }
 
 pub fn write_backup(content: &str, path: &Path) -> Result<u64, String> {

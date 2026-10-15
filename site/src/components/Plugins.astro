@@ -24,7 +24,6 @@ export default {
   },
 
   async onEnable() {
-    // host a session, share the code, friends follow along
     this.session = await this.api.sessions.create({
       control: ['play', 'pause', 'seek']
     })

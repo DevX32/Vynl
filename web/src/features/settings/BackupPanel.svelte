@@ -7,10 +7,8 @@
   import { getCurrentPlaylists, refreshPlaylists } from "@state/playlists.svelte";
   import { queueRestore } from "@state/vault-restore.svelte";
   import Button from "@components/Button.svelte";
-  import Select from "@components/Select.svelte";
-  import Switch from "@components/Switch.svelte";
   import SettingRow from "./SettingRow.svelte";
-  import type { ExportFormat, ExportSummary } from "@lib/types";
+  import type { ExportSummary } from "@lib/types";
 
   let {
     onOpenVault,
@@ -18,30 +16,12 @@
     onOpenVault?: () => void;
   } = $props();
 
-  let format = $state<ExportFormat>("json");
-  let includePlaylists = $state(true);
   let exporting = $state(false);
   let importing = $state(false);
   let lastExport = $state<ExportSummary | null>(null);
   let trackCount = $state<number | null>(null);
 
-  const formats = $derived([
-    { value: "json", label: t("backup.formatJson") },
-    { value: "csv", label: t("backup.formatCsv") },
-    { value: "m3u", label: t("backup.formatM3u") },
-  ]);
-
-  const formatHint = $derived(
-    format === "json"
-      ? t("backup.formatJsonHint")
-      : format === "csv"
-        ? t("backup.formatCsvHint")
-        : t("backup.formatM3uHint"),
-  );
-
-  const playlistCount = $derived(
-    includePlaylists ? getCurrentPlaylists().length : 0,
-  );
+  const playlistCount = $derived(getCurrentPlaylists().length);
 
   const busy = $derived(exporting || trackCount === null || trackCount === 0);
 
@@ -103,7 +83,7 @@
     if (exporting) return;
     exporting = true;
     try {
-      const result = await vynl.exportBackup(format, includePlaylists);
+      const result = await vynl.exportBackup();
       if (!result) return;
       lastExport = result;
       const params = {
@@ -137,32 +117,6 @@
   </div>
 
   <div class="group">
-    <SettingRow label={t("backup.format")} hint={formatHint}>
-      {#snippet control()}
-        <Select
-          options={formats}
-          bind:value={format}
-          disabled={exporting}
-          size="sm"
-        />
-      {/snippet}
-    </SettingRow>
-
-    <SettingRow
-      label={t("backup.includePlaylists")}
-      hint={includePlaylists
-        ? t("backup.includePlaylistsHint")
-        : t("backup.includePlaylistsOff")}
-    >
-      {#snippet control()}
-        <Switch
-          on={includePlaylists}
-          label={t("backup.includePlaylistsToggle")}
-          onclick={() => (includePlaylists = !includePlaylists)}
-        />
-      {/snippet}
-    </SettingRow>
-
     <SettingRow
       label={t("backup.contents")}
       hint={trackCount === null
@@ -194,15 +148,18 @@
     </div>
   {/if}
 
-  <div class="section restore">
-    <div class="label mono">{t("backup.restoreTitle")}</div>
-    <div class="hint mono">{t("backup.restoreHint")}</div>
-    <div>
-      <Button size="sm" disabled={importing} onclick={runImport}>
-        <Upload size={13} stroke-width={1.5} />
-        {importing ? t("backup.restoring") : t("backup.restore")}
-      </Button>
-    </div>
+  <div class="group">
+    <SettingRow
+      label={t("backup.restoreTitle")}
+      hint={t("backup.restoreHint")}
+    >
+      {#snippet control()}
+        <Button size="sm" disabled={importing} onclick={runImport}>
+          <Upload size={13} stroke-width={1.5} />
+          {importing ? t("backup.restoring") : t("backup.restore")}
+        </Button>
+      {/snippet}
+    </SettingRow>
   </div>
 </div>
 
@@ -252,10 +209,5 @@
     color: var(--faint);
     line-height: 1.5;
     overflow-wrap: anywhere;
-  }
-
-  .restore {
-    border-top: 1px solid var(--line);
-    gap: 8px;
   }
 </style>
