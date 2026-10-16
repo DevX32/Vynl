@@ -349,7 +349,7 @@ public class AudioService extends MediaBrowserServiceCompat {
     @Override
     public int onStartCommand(final Intent intent, int flags, int startId) {
         MediaButtonReceiver.handleIntent(mediaSession, intent);
-        return START_NOT_STICKY;
+        return START_STICKY;
     }
 
     public void stop() {

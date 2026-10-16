@@ -44,6 +44,10 @@ class PlayerController extends ChangeNotifier {
   RepeatPreset _repeat = RepeatPreset.off;
   bool _accentFromArt = false;
 
+  StreamSubscription<int?>? _indexSub;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+  StreamSubscription<void>? _noisySub;
+
   Color get accent => _accent;
   bool get accentFromArt => _accentFromArt;
   RepeatPreset get repeatMode => _repeat;
@@ -95,7 +99,59 @@ class PlayerController extends ChangeNotifier {
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    _player.currentIndexStream.listen((_) => _onTrackChanged());
+
+    _interruptionSub = session.interruptionEventStream.listen((event) async {
+      if (event.begin) {
+        switch (event.type) {
+          case AudioInterruptionType.duck:
+            try {
+              await _player.setVolume(0.35);
+            } catch (e) {
+              debugPrint('duck volume failed: $e');
+            }
+            break;
+          case AudioInterruptionType.pause:
+          case AudioInterruptionType.unknown:
+            try {
+              await _player.pause();
+            } catch (e) {
+              debugPrint('interruption pause failed: $e');
+            }
+            break;
+        }
+      } else {
+        switch (event.type) {
+          case AudioInterruptionType.duck:
+            try {
+              await _player.setVolume(1.0);
+            } catch (e) {
+              debugPrint('restore volume failed: $e');
+            }
+            break;
+          case AudioInterruptionType.pause:
+            try {
+              if (!_player.playing) await _player.play();
+            } catch (e) {
+              debugPrint('interruption resume failed: $e');
+            }
+            break;
+          case AudioInterruptionType.unknown:
+            break;
+        }
+      }
+      notifyListeners();
+    });
+
+    _noisySub = session.becomingNoisyEventStream.listen((_) async {
+      try {
+        await _player.pause();
+      } catch (e) {
+        debugPrint('becoming noisy pause failed: $e');
+      }
+      notifyListeners();
+    });
+
+    _indexSub = _player.currentIndexStream.listen((_) => _onTrackChanged());
     await _loadRepeat();
   }
 
@@ -243,6 +299,9 @@ class PlayerController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _indexSub?.cancel();
+    _interruptionSub?.cancel();
+    _noisySub?.cancel();
     _player.dispose();
     super.dispose();
   }

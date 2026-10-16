@@ -15,6 +15,6 @@ Future<void> configurePlatform() async {
     androidNotificationChannelName: 'Now playing',
     androidNotificationChannelDescription: 'Playback controls',
     androidNotificationOngoing: true,
-    androidStopForegroundOnPause: true,
+    androidStopForegroundOnPause: false,
   );
 }

@@ -22,8 +22,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   PaintingBinding.instance.imageCache
-    ..maximumSize = 3000
-    ..maximumSizeBytes = 300 << 20;
+    ..maximumSize = 2000
+    ..maximumSizeBytes = 128 << 20;
 
   await configurePlatform();
 
