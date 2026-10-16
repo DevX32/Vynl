@@ -210,10 +210,10 @@ export const en = {
     pluginsAutoUpdateHint:
       "Automatically install updates for plugins installed from the store.",
     pluginsAutoUpdateToggle: "Auto-update plugins toggle",
-    displayName: "Display Name",
-    displayNameHint:
+    nickname: "Nickname",
+    nicknameHint:
       "Your name across Vynl. Leave blank for a random nickname.",
-    displayNameRoll: "Roll nickname",
+    nicknameRoll: "Roll nickname",
     mobileSync: "Mobile Sync",
     mobileSyncHint:
       "Share your library with the Vynl Android app over your local Wi‑Fi.",
@@ -254,7 +254,7 @@ export const en = {
     hint: "Save your whole library — every track, playlist and your settings — to one file you can keep or move to another machine.",
     contents: "Ready to export",
     contentsHint: "{tracks} tracks and {playlists} playlists from your library, always included.",
-    export: "Export…",
+    export: "Export",
     exporting: "Exporting…",
     cancel: "Cancel",
     saved: "Exported {tracks} tracks to {path}",

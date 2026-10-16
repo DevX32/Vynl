@@ -55,7 +55,7 @@
 
 <div class="panel">
   <div class="section">
-    <div class="label mono">{t("settings.displayName")}</div>
+    <div class="label mono">{t("settings.nickname")}</div>
     <input
       class="text"
       bind:this={_displayNameInput}
@@ -65,12 +65,12 @@
       placeholder={getNickname()}
     />
     <div class="hint-row">
-      <div class="hint mono">{t("settings.displayNameHint")}</div>
+      <div class="hint mono">{t("settings.nicknameHint")}</div>
       <Button size="sm" onclick={rollDisplayName} disabled={_rolling}>
         <span class="roll-icon">
           <RefreshCw size={13} stroke-width={1.5} class={_rolling ? "spin" : ""} />
         </span>
-        {t("settings.displayNameRoll")}
+        {t("settings.nicknameRoll")}
       </Button>
     </div>
   </div>
