@@ -75,6 +75,7 @@ const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (
 
 static BUSY: AtomicBool = AtomicBool::new(false);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+static TEMP_KEY_GEN: AtomicU64 = AtomicU64::new(0);
 
 pub(super) fn clean_title(s: &str) -> String {
     let no_parens = PAREN_RE.replace_all(s, " ");
@@ -458,8 +459,13 @@ async fn download_track(
     };
     let tmp = tmp_dir(user_data_dir);
     let ext = audio_format_ext(&settings.format);
-    let raw_path = tmp.join(format!("{}.{}", track.id, ext));
-    let tagged_path = tmp.join(format!("{}.tagged.{}", track.id, ext));
+    let download_key = format!(
+        "{}-{}",
+        track.id,
+        TEMP_KEY_GEN.fetch_add(1, Ordering::Relaxed)
+    );
+    let raw_path = tmp.join(format!("{}.{}", download_key, ext));
+    let tagged_path = tmp.join(format!("{}.tagged.{}", download_key, ext));
 
     for f in [&raw_path, &tagged_path] {
         let _ = std::fs::remove_file(f);
@@ -495,7 +501,7 @@ async fn download_track(
         let mut args = base_args(&settings.format);
         args.push("-o".into());
         args.push(
-            tmp.join(format!("{}.%(ext)s", track.id))
+            tmp.join(format!("{}.%(ext)s", download_key))
                 .to_string_lossy()
                 .to_string(),
         );
@@ -607,11 +613,11 @@ async fn download_track(
             for f in [
                 &raw_path,
                 &tagged_path,
-                &tmp.join(format!("{}.part", track.id)),
+                &tmp.join(format!("{}.part", download_key)),
             ] {
                 let _ = std::fs::remove_file(f);
             }
-            if let Some(stream) = find_downloaded_stream(&tmp, &track.id) {
+            if let Some(stream) = find_downloaded_stream(&tmp, &download_key) {
                 let _ = std::fs::remove_file(stream);
             }
             let msg = format!(
@@ -625,7 +631,7 @@ async fn download_track(
 
         let stderr_text = stderr_task.await.unwrap_or_default();
 
-        let stream_path = find_downloaded_stream(&tmp, &track.id);
+        let stream_path = find_downloaded_stream(&tmp, &download_key);
         let keep_native = crate::services::downloader::keep_native(&settings.format);
 
         if let Some(stream) = stream_path.clone()
@@ -708,7 +714,7 @@ async fn download_track(
         for f in [
             &raw_path,
             &tagged_path,
-            &tmp.join(format!("{}.part", track.id)),
+            &tmp.join(format!("{}.part", download_key)),
         ] {
             let _ = std::fs::remove_file(f);
         }
