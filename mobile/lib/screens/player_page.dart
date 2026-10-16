@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -46,6 +46,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final lyricsOn = hasLyrics && _lyricsOn;
 
     return ArtBackdrop(
+      key: ValueKey('backdrop-${track.id}-${track.localCoverPath ?? ''}'),
       coverPath: track.localCoverPath,
       tint: VynlColors.accent,
       blur: lyricsOn ? 120 : 80,

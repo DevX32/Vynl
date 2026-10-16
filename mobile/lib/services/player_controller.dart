@@ -129,11 +129,6 @@ class PlayerController extends ChangeNotifier {
             }
             break;
           case AudioInterruptionType.pause:
-            try {
-              if (!_player.playing) await _player.play();
-            } catch (e) {
-              debugPrint('interruption resume failed: $e');
-            }
             break;
           case AudioInterruptionType.unknown:
             break;

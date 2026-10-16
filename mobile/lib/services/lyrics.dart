@@ -1,4 +1,4 @@
-class LyricWord {
+﻿class LyricWord {
   const LyricWord({required this.time, required this.text});
 
   final double time;
