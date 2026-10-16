@@ -3,6 +3,7 @@
     getCurrentTrack,
     getUserQueue,
     getContextUpcoming,
+    getPlayToken,
   } from "@state/now-playing.svelte";
   import {
     playTrack,
@@ -13,6 +14,7 @@
   import { fmtTime } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
   import { t } from "@lib/i18n";
+  import { fade } from "svelte/transition";
   import type { LibraryTrack } from "@lib/types";
   import ContextMenu from "../../components/ContextMenu.svelte";
   import VirtualList from "../../components/VirtualList.svelte";
@@ -33,14 +35,28 @@
     localStorage.setItem("vynl.queueCollapsed", String(value));
   }
 
-  let queueEl: HTMLElement | undefined = $state();
   let queueBodyEl: HTMLDivElement | undefined = $state();
   let ctx = $state<{ x: number; y: number; path: string } | null>(null);
 
+  const calm =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   const np = $derived(getCurrentTrack());
+  const playToken = $derived(getPlayToken());
+  const repeating = $derived(getCurrentLoop() === "one");
   const userQueue = $derived(getUserQueue());
   const contextUpcoming = $derived(
     getContextUpcoming(getCurrentShuffle(), getCurrentLoop()),
+  );
+  const upcomingCount = $derived(
+    repeating ? 1 : userQueue.length + contextUpcoming.length + 1,
+  );
+  const nextUpLabel = $derived.by(() =>
+    getCurrentLoop() === "all"
+      ? t("player.nextUpRepeatAll")
+      : t("player.nextUp"),
   );
 
   function tracksOf(section: string | null) {
@@ -64,13 +80,17 @@
   }
 
   $effect(() => {
-    if (!np?.id || !queueEl) return;
-    queueEl.querySelector(".now-playing")?.scrollIntoView({ block: "nearest" });
+    if (!np?.id || !queueBodyEl) return;
+    void playToken;
+    queueBodyEl.scrollTo({
+      top: 0,
+      behavior: calm ? "auto" : "smooth",
+    });
   });
 
 </script>
 
-<aside class="queue" class:collapsed bind:this={queueEl}>
+<aside class="queue" class:collapsed>
   <div class="expanded-content">
     {#snippet qrow(q: LibraryTrack, section: QueueSection, i: number)}
       <div
@@ -126,59 +146,84 @@
         <span class="mono">{t("player.queue")}</span>
       </div>
       {#if np}
-        <span class="queue-count mono">{userQueue.length + contextUpcoming.length + 1}</span>
+        <span
+          class="queue-count mono"
+          title={t("player.queuedTracks", { n: upcomingCount })}
+          >{upcomingCount}</span
+        >
       {/if}
     </div>
 
     {#if np}
-        <div class="now-playing">
-          <div class="q-cover">
-            <TrackCover src={np.cover} />
-          </div>
-          <div class="q-meta">
-            <span class="q-title accent">{np.title}</span>
-            {#if "artist" in np && np.artist}
-              <span class="q-artist">{np.artist}</span>
-            {/if}
-          </div>
-          <span class="q-dur mono">{fmtTime(np.duration, "--:--")}</span>
+        <div class="np-slot">
+          {#key `${np.id}:${playToken}`}
+            <div
+              class="now-playing"
+              in:fade={{ duration: calm ? 0 : 200 }}
+              out:fade={{ duration: calm ? 0 : 140 }}
+            >
+              <div class="q-cover">
+                <TrackCover src={np.cover} />
+              </div>
+              <div class="q-meta">
+                <span class="q-title accent">{np.title}</span>
+                {#if "artist" in np && np.artist}
+                  <span class="q-artist">{np.artist}</span>
+                {/if}
+              </div>
+              <span class="q-dur mono">{fmtTime(np.duration, "--:--")}</span>
+            </div>
+          {/key}
         </div>
 
       <div class="queue-body" bind:this={drag.rowsEl} bind:this={queueBodyEl}>
-        {#if userQueue.length > 0}
-          <span class="section-label mono">{t("player.queue")}</span>
-          {#snippet userRow(q: LibraryTrack, i: number)}
-            {@render qrow(q, "user", i)}
-          {/snippet}
-          <VirtualList
-            items={userQueue}
-            row={userRow}
-            scrollEl={queueBodyEl ?? null}
-            rowKey={(q) => q.path}
-            estimateRowHeight={48}
-            rowGap={1}
-          />
+        {#if !repeating && userQueue.length > 0}
+          <div class="queue-section" in:fade={{ duration: calm ? 0 : 180 }}>
+            <span class="section-label mono">{t("player.queue")}</span>
+            {#snippet userRow(q: LibraryTrack, i: number)}
+              {@render qrow(q, "user", i)}
+            {/snippet}
+            <VirtualList
+              items={userQueue}
+              row={userRow}
+              scrollEl={queueBodyEl ?? null}
+              rowKey={(q) => q.path}
+              estimateRowHeight={48}
+              rowGap={1}
+              smooth
+            />
+          </div>
         {/if}
 
         {#if contextUpcoming.length > 0}
-          <span class="section-label mono">{t("player.nextUp")}</span>
-          {#snippet contextRow(q: LibraryTrack, i: number)}
-            {@render qrow(q, "context", i)}
-          {/snippet}
-          <VirtualList
-            items={contextUpcoming}
-            row={contextRow}
-            scrollEl={queueBodyEl ?? null}
-            rowKey={(q) => q.path}
-            estimateRowHeight={48}
-            rowGap={1}
-          />
+          <div class="queue-section" in:fade={{ duration: calm ? 0 : 180 }}>
+            <span class="section-label mono">{nextUpLabel}</span>
+            {#snippet contextRow(q: LibraryTrack, i: number)}
+              {@render qrow(q, "context", i)}
+            {/snippet}
+            <VirtualList
+              items={contextUpcoming}
+              row={contextRow}
+              scrollEl={queueBodyEl ?? null}
+              rowKey={(q) => q.path}
+              estimateRowHeight={48}
+              rowGap={1}
+              smooth
+            />
+          </div>
         {/if}
 
         {#if userQueue.length === 0 && contextUpcoming.length === 0}
           <div class="queue-empty">
-            <span class="mono">{t("player.nothingPlaying")}</span>
-            <span class="queue-empty-sub mono">{t("player.pickFromLibrary")}</span>
+            {#if repeating}
+              <span class="mono">{t("player.nothingQueued")}</span>
+              <span class="queue-empty-sub mono">{t("player.repeating")}</span>
+            {:else}
+              <span class="mono">{t("player.nothingPlaying")}</span>
+              <span class="queue-empty-sub mono"
+                >{t("player.pickFromLibrary")}</span
+              >
+            {/if}
           </div>
         {/if}
       </div>
@@ -377,7 +422,15 @@
     border-radius: 5px;
   }
 
+  .np-slot {
+    position: relative;
+    flex: none;
+    height: 48px;
+  }
+
   .now-playing {
+    position: absolute;
+    inset: 0;
     display: grid;
     grid-template-columns: 36px 1fr 42px;
     align-items: center;
@@ -385,6 +438,13 @@
     padding: 6px 10px;
     border-radius: var(--radius-sm);
     background: var(--accent-soft);
+  }
+
+  .queue-section {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
   }
 
   .section-label {

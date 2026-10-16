@@ -2,7 +2,7 @@ import type { LibraryTrack, NowPlaying } from "@lib/types";
 import { RPC_THROTTLE } from "@lib/constants";
 import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
-import { getLibrary, whenLibraryLoaded } from "./library.svelte";
+import { getLibrary, whenLibraryLoaded, onLibraryChanged } from "./library.svelte";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -11,6 +11,7 @@ let _contextQueue = $state<string[]>([]);
 let _contextIndex = $state(0);
 let _currentTime = $state(0);
 let _shuffleUpcoming = $state<string[]>([]);
+let _shuffleScope: string[] = [];
 let _shuffleHistory = $state<string[]>([]);
 let _shuffleRedo = $state<string[]>([]);
 
@@ -118,14 +119,23 @@ function shuffled(paths: readonly string[]): string[] {
   return result;
 }
 
+function fallbackScope(): string[] {
+  if (_shuffleScope.length > 0) return _shuffleScope;
+  return getLibrary().map((track) => track.path);
+}
+
 function startShuffleSession(
   contextQueue: readonly string[],
   startIndex: number,
   currentPath: string | null = contextQueue[startIndex] ?? null,
 ): void {
   const byPath = libraryByPath();
+  _shuffleScope =
+    contextQueue.length > 0
+      ? [...contextQueue]
+      : getLibrary().map((track) => track.path);
   const seen = new Set<string>();
-  const upcoming = contextQueue.filter((path) => {
+  const upcoming = _shuffleScope.filter((path) => {
     if (path === currentPath || seen.has(path)) return false;
     if (!byPath.has(path)) return false;
     seen.add(path);
@@ -141,7 +151,7 @@ function refillShuffleSession(currentPath: string | null): void {
   const byPath = libraryByPath();
   const queued = new Set(_userQueue);
   const seen = new Set<string>();
-  const candidates = _contextQueue.filter((path) => {
+  const candidates = _shuffleScope.filter((path) => {
     if (path === currentPath || seen.has(path)) return false;
     if (!byPath.has(path)) return false;
     seen.add(path);
@@ -153,6 +163,7 @@ function refillShuffleSession(currentPath: string | null): void {
     _shuffleUpcoming.length === 0 &&
     currentPath &&
     !queued.has(currentPath) &&
+    _shuffleScope.includes(currentPath) &&
     byPath.has(currentPath)
   ) {
     _shuffleUpcoming = [currentPath];
@@ -160,10 +171,10 @@ function refillShuffleSession(currentPath: string | null): void {
 }
 
 function takeShufflePath(): string | null {
-  const context = new Set(_contextQueue);
+  const scope = new Set(_shuffleScope);
   const byPath = libraryByPath();
   _shuffleUpcoming = _shuffleUpcoming.filter(
-    (path) => context.has(path) && byPath.has(path),
+    (path) => scope.has(path) && byPath.has(path),
   );
 
   const path = _shuffleUpcoming[0] ?? null;
@@ -201,20 +212,20 @@ export function getContextUpcoming(
   const byPath = libraryByPath();
   const seen = new Set<string>();
   if (currentId) seen.add(currentId);
-  if (shuffle) {
-    tracksForPaths(_userQueue, byPath, seen);
-    const upcoming = tracksForPaths(_shuffleUpcoming, byPath, seen);
-    if (upcoming.length > 0) return upcoming;
-    if (loop !== "all" || _contextQueue.length === 0) return [];
-    return tracksForPaths(_contextQueue, byPath, seen);
+  if (loop === "one") {
+    return [];
   }
   tracksForPaths(_userQueue, byPath, seen);
-  if (loop === "all" && _contextQueue.length > 0) {
-    const order = [
-      ..._contextQueue.slice(_contextIndex + 1),
-      ..._contextQueue.slice(0, _contextIndex),
-    ];
-    return tracksForPaths(order, byPath, seen);
+  if (shuffle) {
+    const upcoming = tracksForPaths(_shuffleUpcoming, byPath, seen);
+    if (upcoming.length > 0) return upcoming;
+    if (loop !== "all") return [];
+    const scope =
+      _contextQueue.length > 0 ? _contextQueue : _shuffleScope;
+    return tracksForPaths(scope, byPath, seen);
+  }
+  if (loop === "all" && _contextQueue.length === 0) {
+    return tracksForPaths(fallbackScope(), byPath, seen);
   }
   return tracksForPaths(_contextQueue.slice(_contextIndex + 1), byPath, seen);
 }
@@ -270,9 +281,16 @@ export function nowPlayingFromTrack(track: LibraryTrack, time = 0): NowPlaying {
   };
 }
 
+let _playToken = $state(0);
+
+export function getPlayToken(): number {
+  return _playToken;
+}
+
 export function setNowPlaying(t: NowPlaying): void {
   _state = t;
   _currentTime = t.time;
+  _playToken += 1;
   syncRpc(true);
   persistNowPlaying();
 }
@@ -357,6 +375,69 @@ export function requestPlay(id: string, queue?: string[]): void {
   playHandler?.(id, queue);
 }
 
+export function refreshQueues(): void {
+  const library = getLibrary();
+  if (library.length === 0) return;
+
+  const byPath = libraryByPath();
+  let changed = false;
+
+  const userQueue = _userQueue.filter((path) => byPath.has(path));
+  if (userQueue.length !== _userQueue.length) {
+    _userQueue = userQueue;
+    changed = true;
+  }
+
+  const contextQueue = _contextQueue.filter((path) => byPath.has(path));
+  if (contextQueue.length !== _contextQueue.length) {
+    _contextQueue = contextQueue;
+    changed = true;
+  }
+
+  const scope = _shuffleScope.filter((path) => byPath.has(path));
+  if (scope.length !== _shuffleScope.length) _shuffleScope = scope;
+  const scopePaths = new Set(scope);
+  const upcoming = _shuffleUpcoming.filter(
+    (path) => byPath.has(path) && scopePaths.has(path),
+  );
+  if (upcoming.length !== _shuffleUpcoming.length) {
+    _shuffleUpcoming = upcoming;
+    changed = true;
+  }
+
+  const history = _shuffleHistory.filter((path) => byPath.has(path));
+  if (history.length !== _shuffleHistory.length) {
+    _shuffleHistory = history;
+    changed = true;
+  }
+
+  const redo = _shuffleRedo.filter((path) => byPath.has(path));
+  if (redo.length !== _shuffleRedo.length) {
+    _shuffleRedo = redo;
+    changed = true;
+  }
+
+  if (contextQueue.length > 0) {
+    const currentPath = _state?.path ?? null;
+    const at = currentPath ? contextQueue.indexOf(currentPath) : -1;
+    const next =
+      at >= 0 ? at : Math.max(0, Math.min(_contextIndex, contextQueue.length - 1));
+    if (next !== _contextIndex) {
+      _contextIndex = next;
+      changed = true;
+    }
+  } else if (_contextIndex !== 0) {
+    _contextIndex = 0;
+    changed = true;
+  }
+
+  if (changed) flushNowPlaying();
+}
+
+onLibraryChanged(() => {
+  refreshQueues();
+});
+
 export function addToQueue(path: string): void {
   if (!_userQueue.includes(path)) {
     _userQueue = [..._userQueue, path];
@@ -438,33 +519,31 @@ export function reorderContextQueue(fromPath: string, toPath: string): void {
 }
 
 export function pickNextId(
-  userQueue: string[],
-  contextQueue: string[],
+  userQueue: readonly string[],
+  contextQueue: readonly string[],
   contextIndex: number,
   currentId: string | null,
   shuffle: boolean,
   loop: LoopMode,
 ): string | null {
   const library = getLibrary();
+  const trackAt = (path: string): LibraryTrack | undefined =>
+    library.find((track) => track.path === path);
 
   if (loop === "one" && currentId) {
     return currentId;
   }
 
   if (shuffle) {
-    const queuedPath = userQueue.find((path) =>
-      library.some((track) => track.path === path),
-    );
+    const queuedPath = userQueue.find((path) => trackAt(path) !== undefined);
     if (queuedPath) {
-      return library.find((track) => track.path === queuedPath)?.id ?? null;
+      return trackAt(queuedPath)?.id ?? null;
     }
 
-    _shuffleRedo = _shuffleRedo.filter((path) =>
-      library.some((track) => track.path === path),
-    );
+    _shuffleRedo = _shuffleRedo.filter((path) => trackAt(path) !== undefined);
     const redoPath = _shuffleRedo[0];
     if (redoPath) {
-      return library.find((track) => track.path === redoPath)?.id ?? null;
+      return trackAt(redoPath)?.id ?? null;
     }
 
     let path = takeShufflePath();
@@ -475,38 +554,56 @@ export function pickNextId(
       path = takeShufflePath();
     }
     if (!path) return null;
-    return library.find((track) => track.path === path)?.id ?? null;
+    return trackAt(path)?.id ?? null;
   }
 
-  if (userQueue.length > 0) {
-    const t = library.find((x) => x.path === userQueue[0]);
-    return t?.id ?? null;
+  const queuedPath = userQueue.find((path) => trackAt(path) !== undefined);
+  if (queuedPath) {
+    return trackAt(queuedPath)?.id ?? null;
   }
-  if (contextIndex + 1 < contextQueue.length) {
-    const t = library.find((x) => x.path === contextQueue[contextIndex + 1]);
-    return t?.id ?? null;
+
+  const scope = contextQueue.length > 0 ? contextQueue : fallbackScope();
+  const total = scope.length;
+  if (total === 0) return null;
+
+  const currentPath = library.find((t) => t.id === currentId)?.path ?? null;
+
+  if (contextQueue.length === 0) {
+    if (loop !== "all") return null;
+    for (const path of scope) {
+      if (path === currentPath && total > 1) continue;
+      const track = trackAt(path);
+      if (track) return track.id;
+    }
+    return null;
   }
-  if (loop === "all" && contextQueue.length > 0) {
-    const t = library.find((x) => x.path === contextQueue[0]);
-    return t?.id ?? null;
+
+  const start = Math.min(Math.max(0, contextIndex), total - 1);
+  const stop = loop === "all" ? start + total : total;
+  for (let i = start + 1; i < stop; i += 1) {
+    const idx = i % total;
+    if (idx === start && total > 1) continue;
+    const track = trackAt(scope[idx]);
+    if (track) return track.id;
   }
   return null;
 }
 
 export function pickPrevId(
   currentId: string | null,
-  contextQueue: string[],
+  contextQueue: readonly string[],
   contextIndex: number,
   shuffle: boolean,
   loop: LoopMode,
 ): string | null {
   const library = getLibrary();
+  const trackAt = (path: string): LibraryTrack | undefined =>
+    library.find((track) => track.path === path);
+
   if (shuffle) {
     const currentPath = library.find((track) => track.id === currentId)?.path;
     if (!currentPath) return null;
-    _shuffleHistory = _shuffleHistory.filter((path) =>
-      library.some((track) => track.path === path),
-    );
+    _shuffleHistory = _shuffleHistory.filter((path) => trackAt(path) !== undefined);
     if (_shuffleHistory[_shuffleHistory.length - 1] !== currentPath) {
       _shuffleHistory = [..._shuffleHistory, currentPath].slice(
         -SHUFFLE_HISTORY_LIMIT,
@@ -520,17 +617,19 @@ export function pickPrevId(
       0,
       SHUFFLE_HISTORY_LIMIT,
     );
-    return library.find((track) => track.path === previousPath)?.id ?? null;
+    return trackAt(previousPath)?.id ?? null;
   }
-  if (contextIndex > 0) {
-    const t = library.find((x) => x.path === contextQueue[contextIndex - 1]);
-    return t?.id ?? null;
-  }
-  if (loop === "all" && contextQueue.length > 0) {
-    const t = library.find(
-      (x) => x.path === contextQueue[contextQueue.length - 1],
-    );
-    return t?.id ?? null;
+
+  const total = contextQueue.length;
+  if (total === 0) return null;
+
+  const start = Math.min(Math.max(0, contextIndex), total - 1);
+  const span = loop === "all" ? total : start;
+  for (let step = 1; step <= span; step += 1) {
+    const idx = (((start - step) % total) + total) % total;
+    if (idx === start && total > 1) continue;
+    const track = trackAt(contextQueue[idx]);
+    if (track) return track.id;
   }
   return null;
 }
@@ -578,6 +677,7 @@ export async function restoreNowPlaying(): Promise<{
     _contextQueue = saved.queue;
     _contextIndex = 0;
   }
+  refreshQueues();
   startShuffleSession(_contextQueue, _contextIndex, saved.path);
   return { id: saved.id, queue: saved.queue };
 }

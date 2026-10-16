@@ -234,6 +234,11 @@
         tracks: [track],
       };
     }
+    progress = {
+      ...progress,
+      [track.id]: { trackId: track.id, status: "queued", percent: 0 },
+    };
+    summary = null;
     dismissSearch();
   }
 

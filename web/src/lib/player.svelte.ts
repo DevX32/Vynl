@@ -36,6 +36,7 @@ import {
   setVolume,
   onMuteChange,
 } from "@state/player.svelte";
+import type { LoopMode } from "@state/player.svelte";
 import { vynl } from "@lib/vynl";
 import { clamp01 } from "@lib/pointer";
 import { t } from "@lib/i18n";
@@ -556,8 +557,8 @@ function advanceNext(automatic: boolean): void {
 
 function resolveNextTrack(automatic: boolean): LibraryTrack | null {
   const np = getCurrentTrack();
-  const selectedLoop = getCurrentLoop();
-  const loop = automatic || selectedLoop !== "one" ? selectedLoop : "off";
+  const selected = getCurrentLoop();
+  const loop: LoopMode = !automatic && selected === "one" ? "off" : selected;
   const nextId = pickNextId(
     getUserQueuePaths(),
     getContextQueuePaths(),

@@ -10,6 +10,7 @@
     estimateRowHeight = 54,
     rowGap = 0,
     overscan = 6,
+    smooth = false,
     class: className = "",
   }: {
     items: readonly T[];
@@ -19,6 +20,7 @@
     estimateRowHeight?: number;
     rowGap?: number;
     overscan?: number;
+    smooth?: boolean;
     class?: string;
   } = $props();
 
@@ -99,7 +101,12 @@
   });
 </script>
 
-<div class="vlist {className}" style:height="{totalHeight}px" bind:this={rootEl}>
+<div
+  class="vlist {className}"
+  class:smooth
+  style:height="{totalHeight}px"
+  bind:this={rootEl}
+>
   {#each visible as entry (rowKey(entry.item, entry.index))}
     <div
       class="vrow"
@@ -118,11 +125,19 @@
     width: 100%;
   }
 
+  .vlist.smooth {
+    transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .vrow {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     box-sizing: border-box;
+  }
+
+  .vlist.smooth .vrow {
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 </style>

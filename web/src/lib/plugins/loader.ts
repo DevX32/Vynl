@@ -47,7 +47,7 @@ export async function evaluatePlugin(code: string): Promise<VynlPlugin> {
   const blob = new Blob([code], { type: "text/javascript" });
   const url = URL.createObjectURL(blob);
   try {
-    const mod = (await import(url)) as {
+    const mod = (await import(/* @vite-ignore */ url)) as {
       default?: VynlPlugin;
     };
     const plugin = mod.default;

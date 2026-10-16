@@ -55,14 +55,41 @@ function libraryChanged(next: LibraryTrack[]): boolean {
   });
 }
 
+type LibraryListener = (library: LibraryTrack[]) => void;
+
+let _listeners: LibraryListener[] = [];
+
+function notifyLibraryChanged(next: LibraryTrack[]): void {
+  if (_listeners.length === 0) return;
+  for (const fn of [..._listeners]) {
+    try {
+      fn(next);
+    } catch (e) {
+      console.warn("library listener failed:", e);
+    }
+  }
+}
+
+export function onLibraryChanged(fn: LibraryListener): () => void {
+  _listeners.push(fn);
+  return () => {
+    _listeners = _listeners.filter((f) => f !== fn);
+  };
+}
+
+function applyLibrary(next: LibraryTrack[]): void {
+  _library = next;
+  _libraryRevision += 1;
+  notifyLibraryChanged(next);
+}
+
 function startListening(): Promise<void> {
   if (_listenerReady) return _listenerReady;
   _listenerReady = new Promise((resolve) => {
     vynl.onLibraryUpdated((tracks) => {
       markLibraryLoaded();
       if (!libraryChanged(tracks)) return;
-      _library = tracks;
-      _libraryRevision += 1;
+      applyLibrary(tracks);
       emitAppEvent("library-updated", { count: tracks.length });
     }, resolve);
   });
@@ -80,7 +107,7 @@ export function refreshLibrary(): Promise<void> {
       const tracks = await vynl.getLibrary();
       if (_libraryRevision === requestRevision) {
         _libraryError = null;
-        if (libraryChanged(tracks)) _library = tracks;
+        if (libraryChanged(tracks)) applyLibrary(tracks);
       }
     } catch (e) {
       console.warn("refreshLibrary failed:", e);

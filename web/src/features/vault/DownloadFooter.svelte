@@ -36,8 +36,14 @@
     onDone: () => void;
   } = $props();
 
+  const total = $derived(collection?.tracks.length ?? 0);
   const finishedOk = $derived(
-    summary != null && !summary.cancelled && counts.failed === 0,
+    summary != null &&
+      !summary.cancelled &&
+      counts.failed === 0 &&
+      counts.queued === 0 &&
+      counts.active === 0 &&
+      total > 0,
   );
 
   const canSave = $derived(counts.done + counts.skipped > 0);
@@ -47,7 +53,6 @@
   <div class="footer-bar">
     <div class="controls">
       {#if running}
-        {@const total = collection?.tracks.length ?? 0}
         {@const completed = counts.done + counts.failed + counts.skipped}
         <div class="progress-pill mono">
           <div class="pill-bar">
@@ -64,7 +69,6 @@
           <span>{t("vault.abort")}</span>
         </button>
       {:else if collection}
-        {@const total = collection.tracks.length}
         {#if total > 0}
           <div class="track-pill mono">
             <span class="pill-num">{total}</span>
