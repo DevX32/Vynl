@@ -32,6 +32,14 @@ pub(super) fn progress_from_line(line: &str) -> Option<f64> {
         .map(|p| p.min(100.0))
 }
 
+pub(super) fn describe_no_audio_format(stderr: &str) -> Option<String> {
+    let lower = stderr.to_lowercase();
+    let no_audio = lower.contains("no video formats found")
+        || lower.contains("requested format is not available")
+        || lower.contains("no formats found");
+    no_audio.then(|| "No audio-only stream available for this match.".to_string())
+}
+
 pub(super) fn last_error(stderr: &str) -> String {
     let lines: Vec<&str> = stderr.lines().collect();
     let error_lines: Vec<&str> = lines

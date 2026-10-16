@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use once_cell::sync::Lazy;
 
-use crate::commands::types::{SearchCandidate, TrackMeta};
+use crate::commands::types::{MatchSource, SearchCandidate, TrackMeta};
 
 use super::clean_title;
 
@@ -10,6 +10,8 @@ const TOPIC_CHANNEL_BONUS: f64 = 35.0;
 const VEVO_CHANNEL_BONUS: f64 = 4.0;
 const MUSIC_VIDEO_PENALTY: f64 = 25.0;
 const AUDIO_UPLOAD_BONUS: f64 = 12.0;
+
+const CATALOG_SOURCE_BONUS: f64 = 10.0;
 
 fn normalize_phrase_input(s: &str) -> String {
     let lowered = s.to_lowercase();
@@ -258,8 +260,33 @@ pub(crate) fn title_tokens(title: &str) -> HashSet<String> {
     tokens
 }
 
-fn is_rejected_norm(norm: &str) -> bool {
-    REJECT_VARIANTS_MATCHER.is_match(norm) || NON_MUSIC_MATCHER.is_match(norm)
+#[derive(PartialEq, Eq)]
+enum MatchTier {
+    Studio,
+    Variant,
+    NonMusic,
+}
+
+impl MatchTier {
+    fn rank(self) -> u8 {
+        match self {
+            MatchTier::Studio => 0,
+            MatchTier::Variant => 1,
+            MatchTier::NonMusic => 2,
+        }
+    }
+}
+
+fn tier_of(info: &CandidateInfo) -> MatchTier {
+    if NON_MUSIC_MATCHER.is_match(&info.norm_title) {
+        MatchTier::NonMusic
+    } else if REJECT_VARIANTS_MATCHER.is_match(&info.norm_title)
+        || REJECT_VARIANTS_MATCHER.is_match(&info.norm_channel)
+    {
+        MatchTier::Variant
+    } else {
+        MatchTier::Studio
+    }
 }
 
 fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
@@ -407,10 +434,16 @@ pub(crate) fn filter_and_rank_candidates(
         .filter(|(info, c)| relevant(info, c))
         .collect();
 
-    let (clean, rejected): (Vec<_>, Vec<_>) = relevant.into_iter().partition(|(info, _)| {
-        !is_rejected_norm(&info.norm_title) && !REJECT_VARIANTS_MATCHER.is_match(&info.norm_channel)
-    });
-    let pool = if clean.is_empty() { rejected } else { clean };
+    let best_rank = relevant
+        .iter()
+        .map(|(info, _)| tier_of(info).rank())
+        .min()
+        .unwrap_or(MatchTier::Studio.rank());
+
+    let pool: Vec<(CandidateInfo, SearchCandidate)> = relevant
+        .into_iter()
+        .filter(|(info, _)| tier_of(info).rank() == best_rank)
+        .collect();
 
     let mut scored: Vec<(f64, SearchCandidate)> = pool
         .into_iter()

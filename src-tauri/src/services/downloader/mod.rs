@@ -24,7 +24,8 @@ pub use paths::{audio_format_ext, keep_native, render_pattern, sanitize};
 pub use process::cancel_download;
 pub use process::resolve_tool;
 use process::{
-    CANCELLED_DOWNLOAD, CHILDREN, fmt_dur, last_error, progress_from_line, watch_for_stall,
+    CANCELLED_DOWNLOAD, CHILDREN, describe_no_audio_format, fmt_dur, last_error,
+    progress_from_line, watch_for_stall,
 };
 pub use search::find_matches;
 use search::{common_yt_args, search_and_rank_candidates};
@@ -491,7 +492,10 @@ async fn download_track(
             break;
         }
 
-        let source_label = "youtube";
+        let source_label = match cand.source {
+            MatchSource::YouTubeMusic => "youtube music",
+            MatchSource::YouTube => "youtube",
+        };
         let msg = match &cand.channel {
             Some(ch) => format!("{} · {}", source_label, ch),
             None => source_label.to_string(),
@@ -718,7 +722,9 @@ async fn download_track(
         ] {
             let _ = std::fs::remove_file(f);
         }
-        failures.push(last_error(&stderr_text));
+        failures.push(
+            describe_no_audio_format(&stderr_text).unwrap_or_else(|| last_error(&stderr_text)),
+        );
     }
 
     ProcessResult {
