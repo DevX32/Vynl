@@ -1,4 +1,4 @@
-export type AudioFormat = "mp3" | "opus";
+export type AudioFormat = "mp3";
 
 type TrackStatus =
   | "queued"

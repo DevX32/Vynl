@@ -1,4 +1,4 @@
-import type { Settings, ToolName, ToolStatus } from "@lib/types";
+import type { Settings, ToolName, ToolStatus, AudioFormat } from "@lib/types";
 import { BITRATES } from "@lib/constants";
 import { eqFlat, loadEqDesign } from "@lib/eq.svelte";
 import { vynl } from "@lib/vynl";
@@ -34,16 +34,17 @@ let _toolsUnlisten: (() => void) | null = null;
 const currentSettings = $derived(_settings ?? defaultSettings());
 const currentTools = $derived(_tools);
 
-function normalizeBitrate(s: Settings): Settings {
-  const br = BITRATES[s.format];
+function normalizeSettings(s: Settings): Settings {
+  const format: AudioFormat = "mp3";
+  const br = BITRATES.mp3;
   if (br && s.bitrate != null && !br.includes(s.bitrate)) {
     console.warn(
       `[Settings] Bitrate ${s.bitrate} is not valid. ` +
         `Valid bitrates: ${br.join(", ")}. Using ${br[br.length - 1]} as fallback.`
     );
-    return { ...s, bitrate: br[br.length - 1] };
+    return { ...s, format, bitrate: br[br.length - 1] };
   }
-  return s;
+  return { ...s, format };
 }
 
 export function getCurrentSettings(): Settings {
@@ -56,7 +57,7 @@ export function getCurrentTools(): ToolStatus[] {
 export async function initSettings(): Promise<void> {
   await loadEqDesign();
   const loaded = await vynl.getSettings();
-  _settings = normalizeBitrate(loaded);
+  _settings = normalizeSettings(loaded);
   applyAccentColor(_settings.accentColor, false);
   startDynamicAccent();
   _tools = await vynl.getTools();
@@ -88,7 +89,7 @@ async function autoInstallMissingTools(): Promise<void> {
 
 export async function patchSettings(patch: Partial<Settings>): Promise<void> {
   if (!_settings) return;
-  const next = normalizeBitrate({ ..._settings, ...patch });
+  const next = normalizeSettings({ ..._settings, ...patch });
   const updated = await vynl.setSettings(next);
   _settings = updated;
   if (patch.accentColor !== undefined) applyAccentColor(updated.accentColor);
