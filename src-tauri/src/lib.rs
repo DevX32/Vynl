@@ -154,6 +154,12 @@ pub fn run() {
             let user_data = app.path().app_data_dir().unwrap_or_default();
             let settings = crate::services::settings::get_settings(&user_data);
 
+            if let Some(win) = app.get_webview_window("main") {
+                if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico")) {
+                    let _ = win.set_icon(icon);
+                }
+            }
+
             crate::services::tools::remove_unused_binaries(&user_data);
 
             sync_launch_at_startup(settings.launch_at_startup);

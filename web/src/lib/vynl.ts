@@ -36,10 +36,11 @@ async function cmd<T>(command: string, args?: InvokeArgs): Promise<T> {
   return invoke<T>(command, args);
 }
 
-const APP_UPDATE_CACHE_MS = 5 * 60 * 1000;
-let appUpdateCache: { status: UpdateStatus; at: number } | null = null;
 let appUpdateCheck: Promise<UpdateStatus> | null = null;
 let appUpdateInstall: Promise<void> | null = null;
+
+const APP_UPDATE_CACHE_MS = 5 * 60 * 1000;
+let appUpdateCache: { status: UpdateStatus; at: number } | null = null;
 
 function rememberUpdateStatus(status: UpdateStatus): void {
   appUpdateCache = { status, at: Date.now() };

@@ -82,7 +82,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Vynl ${{ needs.verify.outputs.version }}
           releaseBody: |
-            64-bit Windows (.exe, Windows 10 or newer; SmartScreen may warn on first run because the installers are not code-signed) and Linux (.AppImage, .deb, .rpm; no macOS build). Android APKs are split by CPU architecture — arm64-v8a covers essentially every phone from the last decade, older or Intel-based devices want armeabi-v7a or x86_64; allow your browser to "install unknown apps", then open the APK. These are sideloaded builds and are not distributed through a store.
+            - **Windows** (.exe, Windows 10+) - SmartScreen may warn (unsigned)
+            - **Linux** (.AppImage, .deb, .rpm) - no macOS build
+            - **Android** - APKs by CPU: arm64-v8a (most phones), armeabi-v7a / x86_64 (older/Intel). Allow "install unknown apps", then open. Sideloading only.
           releaseDraft: false
           prerelease: false
 

@@ -33,27 +33,28 @@ const upToDate = $derived(
     void initAppUpdate();
   });
 
-  function rowLabel(): string {
-    if (available) {
-      return t("update.updateTo", { version: status?.version ?? "" });
-    }
-    return t("update.checkUpdates");
-  }
+  const rowLabel = $derived(
+    available
+      ? t("update.updateTo", { version: status?.version ?? "" })
+      : t("update.checkUpdates"),
+  );
 
-  function rowHint(): string {
+  const rowHint = $derived.by(() => {
     if (failed) return status?.error ?? "";
     if (downloading || ready) return t("update.downloadingTitle");
     if (available) return t("update.updateAvailableHint");
     if (checking) return t("update.checking");
     if (upToDate) return t("update.upToDate");
     return "";
-  }
+  });
 
-  function chipLabel(): string {
-    if (installing || checking) return t("update.checking");
-    if (available) return t("update.updateButton");
-    return t("update.check");
-  }
+  const chipLabel = $derived(
+    installing || checking
+      ? t("update.checking")
+      : available
+        ? t("update.updateButton")
+        : t("update.check"),
+  );
 </script>
 
 <div class="panel">
@@ -70,8 +71,8 @@ const upToDate = $derived(
   </div>
 
   <SettingRow
-    label={rowLabel()}
-    hint={rowHint()}
+    label={rowLabel}
+    hint={rowHint}
   >
     {#snippet control()}
       {#if downloading}
@@ -85,7 +86,7 @@ const upToDate = $derived(
           onclick={() => void installAppUpdate()}
           disabled={busy}
         >
-          {chipLabel()}
+          {chipLabel}
         </Button>
       {:else}
         <Button
@@ -93,7 +94,7 @@ const upToDate = $derived(
           onclick={() => void checkForAppUpdate(true, true)}
           disabled={busy}
         >
-          {chipLabel()}
+          {chipLabel}
         </Button>
       {/if}
     {/snippet}

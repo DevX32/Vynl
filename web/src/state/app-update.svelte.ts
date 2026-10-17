@@ -82,6 +82,7 @@ export async function installAppUpdate(): Promise<void> {
   _installing = true;
   try {
     await vynl.installAppUpdate();
+    await new Promise((resolve) => setTimeout(resolve, 900));
     void vynl.restartApp();
   } catch (e) {
     toasts.error(t("update.checkFailed", { error: errText(e) }));
