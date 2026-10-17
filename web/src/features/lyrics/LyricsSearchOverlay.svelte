@@ -86,11 +86,11 @@
     onkeydown={(e) => e.key === "Enter" && runSearch()}
   />
   <button
-    class="btn-primary"
+    class="btn-ghost"
     onclick={() => runSearch()}
     disabled={searchLoading}
   >
-    {searchLoading ? "…" : t("lyrics.search")}
+    {t("lyrics.search")}
   </button>
 </div>
 
@@ -132,10 +132,11 @@
     font-size: 11px;
     letter-spacing: 0.05em;
     outline: none;
-    transition: border-color 0.15s;
+    transition: outline-color 0.15s;
   }
   .search-input:focus {
-    border-color: var(--accent);
+    outline: 1px solid color-mix(in srgb, var(--text) 40%, transparent);
+    outline-offset: -1px;
   }
   .search-results {
     max-height: 300px;
@@ -182,27 +183,26 @@
     color: var(--red);
   }
 
-  .btn-primary {
-    background: var(--accent);
-    border: none;
+  .btn-ghost {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
     border-radius: var(--radius-sm);
-    color: var(--bg);
+    color: var(--dim);
+    box-shadow: none;
+    text-shadow: none;
     padding: 7px 16px;
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
     transition:
-      opacity 0.15s,
-      transform 0.1s;
+      color 0.15s,
+      border-color 0.15s,
+      opacity 0.15s;
   }
-  .btn-primary:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-  .btn-primary:disabled {
-    opacity: 0.5;
+  .btn-ghost:disabled {
+    opacity: 0.55;
     cursor: not-allowed;
   }
 </style>

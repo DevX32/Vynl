@@ -18,9 +18,10 @@
     getLyricsLines,
     getLyricsSynced,
     getLyricsActiveIndex,
-    getLyricsActiveWordIndex,
     isInstrumental,
   } from "@state/lyrics.svelte";
+  import { startClock, stopClock } from "@state/media-clock.svelte";
+  import KaraokeWords from "./KaraokeWords.svelte";
   import LyricsSearchOverlay from "./LyricsSearchOverlay.svelte";
   import LyricsPasteOverlay from "./LyricsPasteOverlay.svelte";
   import LyricsHelpOverlay from "./LyricsHelpOverlay.svelte";
@@ -56,10 +57,14 @@
     }
   }
 
+  const ACTIVE_LINE_RATIO = 0.2;
+  const BOTTOM_FADE_PX = 64;
+
   function scrollTarget(c: HTMLElement, el: HTMLElement): number {
-    const half = c.clientHeight / 2;
+    const anchor = c.clientHeight * ACTIVE_LINE_RATIO;
     const max = c.scrollHeight - c.clientHeight;
-    return Math.min(el.offsetTop - half + el.clientHeight / 2, max - half * 0.35);
+    const centered = el.offsetTop - anchor + el.clientHeight / 2;
+    return Math.max(0, Math.min(centered, max - BOTTOM_FADE_PX));
   }
 
   function animateScroll(c: HTMLElement, to: number): void {
@@ -151,7 +156,13 @@
   });
 
   $effect(() => {
-    if (!getIsTrackPlaying() || !autoScroll || userScrolling) return;
+    if (!getIsTrackPlaying() || getLyricsLines().length === 0) return;
+    startClock();
+    return () => stopClock();
+  });
+
+  $effect(() => {
+    if (!autoScroll || userScrolling) return;
     const activeIndex = getLyricsActiveIndex();
     if (activeIndex < 0) return;
     const el = lineEls[activeIndex];
@@ -400,7 +411,6 @@
         {#each getLyricsLines() as line, i (i)}
           {@const activeIndex = getLyricsActiveIndex()}
           {@const synced = getLyricsSynced()}
-          {@const activeWordIndex = getLyricsActiveWordIndex()}
           {@const instrumental = synced && isInstrumental(line.text)}
           {@const active = i === activeIndex}
           <button
@@ -425,14 +435,7 @@
                 </span>
               {/if}
             {:else if active && line.words?.length}
-              <span class="lyr-text karaoke">
-                {#each line.words as word, wordIndex (wordIndex)}
-                  <span
-                    class:karaoke-active={wordIndex <= activeWordIndex}
-                    class:karaoke-bg={word.bg}
-                  >{word.text}{" "}</span>
-                {/each}
-              </span>
+              <KaraokeWords words={line.words} lineEnd={line.end} />
             {:else}
               <span class="lyr-text">{line.text || "\u00A0"}</span>
             {/if}
@@ -721,23 +724,24 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: none;
     position: relative;
     display: flex;
     flex-direction: column;
     gap: 20px;
-    padding: 4vh 0 12vh;
+    padding: 8vh 0 14vh;
     mask-image: linear-gradient(
       to bottom,
       transparent 0,
-      black 26px,
+      black 96px,
       black calc(100% - 64px),
       transparent 100%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0,
-      black 26px,
+      black 96px,
       black calc(100% - 64px),
       transparent 100%
     );
@@ -784,8 +788,7 @@
     transition:
       transform 0.6s var(--ease-out),
       color 0.5s var(--ease-out),
-      opacity 0.5s var(--ease-out),
-      text-shadow 0.5s var(--ease-out);
+      opacity 0.5s var(--ease-out);
   }
   .lyr-line.seekable {
     cursor: pointer;
@@ -793,40 +796,17 @@
   .lyr-line.active {
     color: var(--text);
     font-weight: 600;
-    transform: scale(1.26);
-    text-shadow:
-      0 0 18px rgba(240, 240, 236, 0.22),
-      0 0 52px rgba(240, 240, 236, 0.08);
+    transform: scale(1.04);
   }
   .lyr-line.before {
     color: color-mix(in srgb, var(--dim) 62%, var(--bg));
-    transform: scale(0.9);
+    transform: scale(0.98);
   }
   .lyr-line.selected {
     color: var(--accent);
   }
   .lyr-line.hidden-line {
     display: none;
-  }
-
-  .lyr-text.karaoke {
-    display: inline;
-  }
-  .lyr-text.karaoke > span {
-    display: inline;
-    transition: color 0.4s var(--ease-out), transform 0.4s var(--ease-out);
-    color: inherit;
-  }
-  .lyr-text.karaoke > span.karaoke-active {
-    color: var(--accent);
-    transform: scale(1.04);
-  }
-  .lyr-text.karaoke > span.karaoke-bg {
-    color: var(--dim);
-    font-style: italic;
-  }
-  .lyr-text.karaoke > span.karaoke-active.karaoke-bg {
-    color: var(--text);
   }
 
   .lyr-line.bg {
@@ -836,7 +816,6 @@
     font-size: 25px;
     transform: scale(1);
     color: var(--dim);
-    text-shadow: none;
   }
   .lyr-line.duet-left,
   .lyr-line.duet-right {
@@ -981,14 +960,10 @@
 
   @media (prefers-reduced-motion: reduce) {
     .lyr-line,
-    .lyr-text.karaoke > span,
     .lyr-icon,
     .lyr-dots,
     .mini-switch span {
       transition-duration: 0.01ms !important;
-    }
-    .lyr-line.active {
-      text-shadow: none !important;
     }
     .lyr-dots span {
       animation: none;

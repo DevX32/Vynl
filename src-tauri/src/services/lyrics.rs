@@ -57,7 +57,7 @@ pub fn legacy_sidecar_path(file: &str, ext: &str) -> PathBuf {
 }
 
 pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
-    for kind in &["lrc", "ttml", "txt"] {
+    for kind in &["ttml", "lrc", "txt"] {
         for p in [sidecar_path(file, kind), legacy_sidecar_path(file, kind)] {
             match fs::read_to_string(&p) {
                 Ok(text) if !text.trim().is_empty() => {
@@ -213,7 +213,73 @@ async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
     if let Some(hit) = do_fetch_lrclib(lookup).await {
         return Some(hit);
     }
-    do_fetch_lrcred(lookup).await
+    if let Some(hit) = do_fetch_lrcred(lookup).await {
+        return Some(hit);
+    }
+    do_fetch_betterlyrics(lookup).await
+}
+
+const BETTERLYRICS_BASE: &str = "https://lyrics-api.boidu.dev";
+
+fn parse_betterlyrics(data: &serde_json::Value) -> Option<LyricsResult> {
+    use crate::commands::types::LyricsKind;
+    for (key, kind) in [
+        ("ttml", LyricsKind::Ttml),
+        ("syncedLyrics", LyricsKind::Lrc),
+        ("lrc", LyricsKind::Lrc),
+        ("lyrics", LyricsKind::Txt),
+    ] {
+        let Some(text) = data.get(key).and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        return Some(LyricsResult {
+            kind,
+            text: text.trim().to_string(),
+            source: crate::commands::types::LyricsSource::Remote,
+            file: None,
+        });
+    }
+    None
+}
+
+async fn do_fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
+    if lookup.duration <= 0.0 {
+        return None;
+    }
+    let client = http_client();
+    for with_album in [true, false] {
+        if !with_album && lookup.album.is_empty() {
+            break;
+        }
+        let mut params = vec![
+            ("s", lookup.title.clone()),
+            ("a", lookup.artist.clone()),
+            ("d", format!("{}", lookup.duration.round() as i64)),
+        ];
+        if with_album && !lookup.album.is_empty() {
+            params.push(("al", lookup.album.clone()));
+        }
+        let query = params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+        let url = format!("{BETTERLYRICS_BASE}/getLyrics?{query}");
+        let resp = match client.get(url).send().await {
+            Ok(resp) if resp.status().as_u16() == 200 => resp,
+            _ => continue,
+        };
+        let Ok(json) = resp.json::<serde_json::Value>().await else {
+            continue;
+        };
+        if let Some(result) = parse_betterlyrics(&json) {
+            return Some(result);
+        }
+    }
+    None
 }
 
 const DURATION_EXACT_SECS: f64 = 2.0;
@@ -408,22 +474,35 @@ async fn do_fetch_lrcred(lookup: &LyricsLookup) -> Option<LyricsResult> {
     }
 
     let (_, isrc) = best?;
-    let lrc_url = format!("{LRCRED_BASE}/s/{}.lrc", urlencoding::encode(&isrc));
-    let text = match http_client().get(&lrc_url).send().await {
-        Ok(resp) if resp.status().as_u16() == 200 => resp.text().await.ok()?,
-        _ => return None,
-    };
+    fetch_lrcred_isrc(&isrc).await
+}
 
-    if text.trim().is_empty() {
-        return None;
+async fn fetch_lrcred_isrc(isrc: &str) -> Option<LyricsResult> {
+    for ext in ["ttml", "lrc"] {
+        let url = format!("{LRCRED_BASE}/s/{}.{ext}", urlencoding::encode(isrc));
+        let resp = match http_client().get(url).send().await {
+            Ok(resp) if resp.status().as_u16() == 200 => resp,
+            _ => continue,
+        };
+        let Ok(text) = resp.text().await else {
+            continue;
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        let kind = if ext == "ttml" {
+            crate::commands::types::LyricsKind::Ttml
+        } else {
+            crate::commands::types::LyricsKind::Lrc
+        };
+        return Some(LyricsResult {
+            kind,
+            text: text.trim().to_string(),
+            source: crate::commands::types::LyricsSource::Remote,
+            file: None,
+        });
     }
-
-    Some(LyricsResult {
-        kind: crate::commands::types::LyricsKind::Lrc,
-        text: text.trim().to_string(),
-        source: crate::commands::types::LyricsSource::Remote,
-        file: None,
-    })
+    None
 }
 
 fn parse_lrclib_response(data: Option<&serde_json::Value>) -> Option<LyricsResult> {

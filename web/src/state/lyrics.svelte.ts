@@ -1,10 +1,11 @@
 import type { LyricsResult } from "@lib/types";
 import { vynl } from "@lib/vynl";
 import { runLyricsProviders } from "@lib/plugins/providers";
-import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
+import { getCurrentTrack } from "@state/now-playing.svelte";
+import { getSmoothTime } from "@state/media-clock.svelte";
 
-type Word = { time: number; text: string; end?: number; bg?: boolean };
-type LyricLine = {
+export type Word = { time: number; text: string; end?: number; bg?: boolean };
+export type LyricLine = {
   time: number;
   text: string;
   words?: Word[];
@@ -60,6 +61,31 @@ function readOffsetSecs(text: string): number {
   return 0;
 }
 
+const NOMINAL_LINE_SECS = 4;
+const MIN_WORD_SECS = 0.12;
+
+function distributeWords(text: string, start: number, end: number): Word[] {
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return [];
+  const slice = Math.max(end - start, MIN_WORD_SECS * parts.length) / parts.length;
+  return parts.map((w, i) => ({
+    time: start + i * slice,
+    text: w,
+    end: start + (i + 1) * slice,
+  }));
+}
+
+function applyEstimatedWords(lines: LyricLine[]): LyricLine[] {
+  return lines.map((line, i) => {
+    if (line.time < 0 || line.words?.length || isInstrumental(line.text)) return line;
+    const next = lines[i + 1];
+    const end =
+      next && next.time > line.time ? next.time : line.time + NOMINAL_LINE_SECS;
+    const words = distributeWords(line.text, line.time, end);
+    return words.length > 0 ? { ...line, end, words } : line;
+  });
+}
+
 function parseLrc(text: string): LyricLine[] {
   const out: LyricLine[] = [];
   const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
@@ -95,7 +121,7 @@ function parseLrc(text: string): LyricLine[] {
         words: words ?? undefined,
       });
   }
-  return out.sort((a, b) => a.time - b.time);
+  return applyEstimatedWords(out.sort((a, b) => a.time - b.time));
 }
 
 function parseClock(value: string): number {
@@ -363,17 +389,48 @@ function findActiveWordIndex(words: Word[], t: number): number {
   return wIdx;
 }
 
+const LAST_WORD_FALLBACK_SECS = 0.45;
+
+export function wordEndAt(
+  words: Word[],
+  i: number,
+  lineEnd?: number,
+): number {
+  const w = words[i];
+  if (!w) return 0;
+  if (w.end !== undefined && w.end > w.time) return w.end;
+  const next = words[i + 1];
+  if (next && next.time > w.time) return next.time;
+  if (lineEnd !== undefined && lineEnd > w.time) return lineEnd;
+  return w.time + LAST_WORD_FALLBACK_SECS;
+}
+
+export function wordFill(
+  words: Word[],
+  i: number,
+  t: number,
+  lineEnd?: number,
+): number {
+  const w = words[i];
+  if (!w || t <= w.time) return 0;
+  const end = wordEndAt(words, i, lineEnd);
+  const span = end - w.time;
+  if (span <= 0) return 1;
+  const fill = (t - w.time) / span;
+  return fill < 0 ? 0 : fill > 1 ? 1 : fill;
+}
+
 const _synced = $derived(_result?.kind === "lrc" || _result?.kind === "ttml");
 
 const _activeIndex = $derived(
   _synced
-    ? findActiveLineIndex(_lines, getCurrentTime())
+    ? findActiveLineIndex(_lines, getSmoothTime())
     : -1,
 );
 
 const _activeWordIndex = $derived(
   _synced && _activeIndex >= 0 && _lines[_activeIndex]?.words
-    ? findActiveWordIndex(_lines[_activeIndex]!.words!, getCurrentTime())
+    ? findActiveWordIndex(_lines[_activeIndex]!.words!, getSmoothTime())
     : -1,
 );
 

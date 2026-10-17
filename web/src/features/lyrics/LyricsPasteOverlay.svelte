@@ -41,7 +41,7 @@
 ></textarea>
 <div class="paste-actions">
   <button class="btn-ghost" onclick={onClose}>{t("lyrics.cancel")}</button>
-  <button class="btn-primary" onclick={applyPastedLyrics} disabled={!pasteText.trim()}>
+  <button class="btn-ghost btn-primary" onclick={applyPastedLyrics} disabled={!pasteText.trim()}>
     {t("lyrics.apply")}
   </button>
 </div>
@@ -58,10 +58,11 @@
     resize: vertical;
     outline: none;
     min-height: 160px;
-    transition: border-color 0.15s;
+    transition: outline-color 0.15s;
   }
   .paste-input:focus {
-    border-color: var(--accent);
+    outline: 1px solid color-mix(in srgb, var(--text) 40%, transparent);
+    outline-offset: -1px;
   }
   .paste-actions {
     display: flex;
@@ -70,37 +71,31 @@
   }
 
   .btn-ghost {
+    appearance: none;
+    -webkit-appearance: none;
     background: none;
-    border: none;
-    color: var(--dim);
-    font-size: 11px;
-    letter-spacing: 0.05em;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-  .btn-ghost:hover {
-    color: var(--accent);
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    border: none;
+    border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
     border-radius: var(--radius-sm);
-    color: var(--bg);
+    color: var(--dim);
+    box-shadow: none;
+    text-shadow: none;
     padding: 7px 16px;
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      opacity 0.15s;
   }
-  .btn-primary:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-  .btn-primary:disabled {
-    opacity: 0.5;
+  .btn-ghost:disabled {
+    opacity: 0.62;
     cursor: not-allowed;
+  }
+
+  .btn-primary {
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+    box-shadow: none;
   }
 </style>
