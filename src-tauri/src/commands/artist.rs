@@ -161,6 +161,32 @@ fn put_cached(key: &str, info: &ArtistInfo, user_data_dir: &Path) {
     save_disk_cache(user_data_dir, &disk);
 }
 
+pub fn evict_cached_artists(user_data_dir: &Path, artists: &[String]) {
+    if artists.is_empty() {
+        return;
+    }
+
+    let keys: Vec<String> = artists.iter().map(|a| cache_key(a)).collect();
+
+    if let Ok(mut guard) = mem_cache().lock() {
+        for key in &keys {
+            guard.remove(key);
+        }
+        guard.remove("");
+    }
+
+    let mut disk = load_disk_cache(user_data_dir);
+    let mut changed = disk.remove("").is_some();
+    for key in &keys {
+        if disk.remove(key).is_some() {
+            changed = true;
+        }
+    }
+    if changed {
+        save_disk_cache(user_data_dir, &disk);
+    }
+}
+
 fn ranked_names(tags: Option<Vec<MbTag>>, limit: usize) -> Vec<String> {
     let mut items = tags.unwrap_or_default();
     items.sort_by_key(|item| std::cmp::Reverse(item.count.unwrap_or(0)));

@@ -1262,6 +1262,19 @@ async fn download_collection_inner(
         s.cancelled = true;
     }
 
+    let stale_artists: Vec<String> = {
+        let mut seen: HashSet<String> = HashSet::new();
+        collection
+            .tracks
+            .iter()
+            .map(|t| t.artist.trim().to_string())
+            .filter(|a| !a.is_empty() && seen.insert(a.clone()))
+            .collect()
+    };
+    if !stale_artists.is_empty() {
+        crate::commands::artist::evict_cached_artists(user_data_dir, &stale_artists);
+    }
+
     emit_final_summary(app_handle, &summary).await;
 
     let _ = app_handle.emit("vynl:dl", DownloadEvent::Finished);

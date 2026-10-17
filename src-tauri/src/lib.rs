@@ -155,7 +155,9 @@ pub fn run() {
             let settings = crate::services::settings::get_settings(&user_data);
 
             if let Some(win) = app.get_webview_window("main") {
-                if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico")) {
+                if let Ok(icon) =
+                    tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico"))
+                {
                     let _ = win.set_icon(icon);
                 }
             }

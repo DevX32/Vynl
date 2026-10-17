@@ -264,8 +264,8 @@ export const en = {
     restoreTitle: "Re-download from a backup",
     restoreHint:
       "Load a Vynl JSON backup and start downloading right away — no match review, it runs in the background. Tracks still on disk are skipped, the rest are fetched again.",
-    restore: "Load backup…",
-    restoring: "Reading backup…",
+    restore: "Load backup",
+    restoring: "Reading backup",
     restoredTitle: "Restored backup",
     restored: "Importing {tracks} tracks from your backup — downloading in the background ({known} already have a saved source).",
     restoreFailed: "Couldn't read that backup: {error}",

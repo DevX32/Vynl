@@ -1,6 +1,7 @@
 import type { LibraryTrack } from "@lib/types";
 import { vynl } from "@lib/vynl";
 import { emitAppEvent } from "@lib/plugins/events";
+import { invalidateArtistCache } from "@lib/artist-cache";
 
 let _library = $state<LibraryTrack[]>([]);
 let _libraryError = $state<string | null>(null);
@@ -55,6 +56,19 @@ function libraryChanged(next: LibraryTrack[]): boolean {
   });
 }
 
+function staleArtists(prev: LibraryTrack[], next: LibraryTrack[]): string[] {
+  const prevById = new Map(prev.map((t) => [t.id, t.artist]));
+  const out: string[] = [];
+  for (const track of next) {
+    const before = prevById.get(track.id);
+    if (before === undefined || before !== track.artist) {
+      const name = track.artist.trim();
+      if (name && !out.includes(name)) out.push(track.artist);
+    }
+  }
+  return out;
+}
+
 type LibraryListener = (library: LibraryTrack[]) => void;
 
 let _listeners: LibraryListener[] = [];
@@ -89,7 +103,9 @@ function startListening(): Promise<void> {
     vynl.onLibraryUpdated((tracks) => {
       markLibraryLoaded();
       if (!libraryChanged(tracks)) return;
+      const stale = staleArtists(_library, tracks);
       applyLibrary(tracks);
+      if (stale.length > 0) invalidateArtistCache(stale);
       emitAppEvent("library-updated", { count: tracks.length });
     }, resolve);
   });
