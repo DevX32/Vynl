@@ -373,6 +373,10 @@ fn score_candidate(
         score += 10.0;
     }
 
+    if candidate.source == MatchSource::YouTubeMusic {
+        score += CATALOG_SOURCE_BONUS;
+    }
+
     if let Some(views) = candidate.view_count {
         if views > 1_000_000 {
             score += 5.0;

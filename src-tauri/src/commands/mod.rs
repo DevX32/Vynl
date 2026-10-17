@@ -721,6 +721,20 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
     use crate::services::update as update_svc;
     match update_svc::check_for_update(&app).await {
         Ok(Some(update)) => {
+            if update.version == env!("CARGO_PKG_VERSION") {
+                clear_pending_update(&app)?;
+                let status = UpdateStatus {
+                    available: false,
+                    version: None,
+                    current_version: env!("CARGO_PKG_VERSION").to_string(),
+                    downloading: None,
+                    progress: None,
+                    ready: None,
+                    error: None,
+                };
+                update_svc::emit_status(&app, &status);
+                return Ok(status);
+            }
             let status = UpdateStatus {
                 available: true,
                 version: Some(update.version.clone()),

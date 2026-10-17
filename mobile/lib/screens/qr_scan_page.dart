@@ -75,7 +75,6 @@ class _QrScanPageState extends State<QrScanPage> {
   Widget _buildError(
     BuildContext context,
     MobileScannerException error,
-    Widget? child,
   ) {
     debugPrint(
       'mobile_scanner ${error.errorCode.name} '

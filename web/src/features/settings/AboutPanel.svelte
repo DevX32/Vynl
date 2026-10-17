@@ -13,7 +13,6 @@
     getUpdateStatus,
     checkForAppUpdate,
     installAppUpdate,
-    restartAndInstall,
     initAppUpdate,
   } from "@state/app-update.svelte";
 
@@ -35,7 +34,6 @@ const upToDate = $derived(
   });
 
   function rowLabel(): string {
-    if (ready) return t("update.readyTitle");
     if (available) {
       return t("update.updateTo", { version: status?.version ?? "" });
     }
@@ -44,8 +42,7 @@ const upToDate = $derived(
 
   function rowHint(): string {
     if (failed) return status?.error ?? "";
-    if (ready) return t("update.readySub", { version: status?.version ?? "" });
-    if (downloading) return t("update.downloadingTitle");
+    if (downloading || ready) return t("update.downloadingTitle");
     if (available) return t("update.updateAvailableHint");
     if (checking) return t("update.checking");
     if (upToDate) return t("update.upToDate");
@@ -81,14 +78,6 @@ const upToDate = $derived(
         <div class="bar">
           <div class="fill" style:width={`${status?.progress ?? 0}%`}></div>
         </div>
-      {:else if ready}
-        <Button
-          variant="primary"
-          size="sm"
-          onclick={restartAndInstall}
-        >
-          {t("update.restartInstall")}
-        </Button>
       {:else if available}
         <Button
           variant="primary"

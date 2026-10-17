@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'package:palette_generator/palette_generator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
@@ -238,13 +238,33 @@ class PlayerController extends ChangeNotifier {
     final path = track.localCoverPath;
     if (path == null || path.isEmpty) return;
     try {
-      final palette = await PaletteGenerator.fromImageProvider(
-        ResizeImage(FileImage(File(path)), width: _paletteWidth),
-        maximumColorCount: 8,
+      final bytes = await File(path).readAsBytes();
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: _paletteWidth,
       );
-      final tone = palette.dominantColor;
-      if (tone == null) return;
-      final hsl = HSLColor.fromColor(tone.color);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      if (data == null) return;
+
+      var r = 0, g = 0, b = 0, count = 0;
+      for (var i = 0; i + 3 < data.lengthInBytes; i += 4) {
+        r += data.getUint8(i);
+        g += data.getUint8(i + 1);
+        b += data.getUint8(i + 2);
+        count += 1;
+      }
+      if (count == 0) return;
+
+      final color = Color.fromARGB(
+        255,
+        (r / count).round(),
+        (g / count).round(),
+        (b / count).round(),
+      );
+      final hsl = HSLColor.fromColor(color);
       _accent = hsl
           .withLightness(hsl.lightness.clamp(0.62, 0.80))
           .withSaturation(hsl.saturation.clamp(0.35, 0.75))
@@ -252,7 +272,7 @@ class PlayerController extends ChangeNotifier {
       _accentFromArt = true;
       notifyListeners();
     } catch (e) {
-      debugPrint('palette failed: $e');
+      debugPrint('accent extraction failed: $e');
     }
   }
 

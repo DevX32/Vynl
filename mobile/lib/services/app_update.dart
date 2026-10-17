@@ -175,6 +175,7 @@ class AppUpdate extends ChangeNotifier {
     if (_busy) return;
     _busy = true;
     _error = null;
+    _available = null;
     if (!force && _dismissedVersion.isNotEmpty) {
       _current = await _installedVersion();
       _busy = false;

@@ -148,7 +148,7 @@
         toasts.success(t("update.availableTitle"));
       }
       if (s.ready) {
-        toasts.success(t("update.readyTitle"));
+        // Auto-restart is triggered by installAppUpdate(); no manual action.
       }
       if (s.error) {
         toasts.error(t("update.failedTitle"));
