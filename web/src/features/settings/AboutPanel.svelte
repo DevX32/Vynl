@@ -26,7 +26,7 @@
   const failed = $derived(!!status?.error);
   const busy = $derived(checking || installing);
 const upToDate = $derived(
-  !checking && !failed && getUpdateCheckedAt() !== null && !available && !ready,
+  !failed && getUpdateCheckedAt() !== null && !available && !ready,
 );
 
   onMount(() => {
@@ -43,7 +43,6 @@ const upToDate = $derived(
     if (failed) return status?.error ?? "";
     if (downloading || ready) return t("update.downloadingTitle");
     if (available) return t("update.updateAvailableHint");
-    if (checking) return t("update.checking");
     if (upToDate) return t("update.upToDate");
     return "";
   });
