@@ -111,7 +111,7 @@ List<LyricLine> parseLrcText(String text) {
   }
 
   out.sort((a, b) => a.time.compareTo(b.time));
-  return out;
+  return _withEstimatedWords(out);
 }
 
 final _linesCache = Expando<List<LyricLine>>('vynl.lyricLines');
@@ -186,6 +186,57 @@ int activeWordIndex(List<LyricWord> words, Duration position) {
     }
   }
   return idx;
+}
+
+double wordEndAt(List<LyricWord> words, int i) {
+  final w = words[i];
+  if (i + 1 < words.length) {
+    final next = words[i + 1];
+    if (next.time > w.time) return next.time;
+  }
+  return w.time + 0.45;
+}
+
+double wordFill(List<LyricWord> words, int i, double t) {
+  final w = words[i];
+  if (t <= w.time) return 0;
+  final end = wordEndAt(words, i);
+  final span = end - w.time;
+  if (span <= 0) return 1;
+  final f = (t - w.time) / span;
+  return f < 0 ? 0 : (f > 1 ? 1 : f);
+}
+
+List<LyricWord> _distributeWords(String text, double start, double end) {
+  final parts = text.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+  if (parts.isEmpty) return const [];
+  final slice = (end - start) / parts.length;
+  return [
+    for (var i = 0; i < parts.length; i++)
+      LyricWord(time: start + i * slice, text: parts[i]),
+  ];
+}
+
+List<LyricLine> _withEstimatedWords(List<LyricLine> lines) {
+  return [
+    for (var i = 0; i < lines.length; i++)
+      if (lines[i].words == null &&
+          lines[i].time >= 0 &&
+          !isInstrumental(lines[i].text))
+        LyricLine(
+          time: lines[i].time,
+          text: lines[i].text,
+          words: _distributeWords(
+            lines[i].text,
+            lines[i].time,
+            i + 1 < lines.length && lines[i + 1].time > lines[i].time
+                ? lines[i + 1].time
+                : lines[i].time + 4,
+          ),
+        )
+      else
+        lines[i],
+  ];
 }
 
 bool isInstrumental(String text) {

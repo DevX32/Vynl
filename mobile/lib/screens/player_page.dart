@@ -437,8 +437,8 @@ class _SyncedLinesState extends State<_SyncedLines> {
                   : (active >= 0 && i < active)
                       ? VynlColors.faint
                       : VynlColors.dim,
-              fontSize: isActive ? 16 : 12.5,
-              height: 1.32,
+              fontSize: isActive ? 22 : 16,
+              height: 1.5,
               fontVariations: [FontVariation.weight(isActive ? 700 : 520)],
               letterSpacing: isActive ? -0.4 : -0.15,
               shadows: const [
@@ -456,7 +456,7 @@ class _SyncedLinesState extends State<_SyncedLines> {
                       ),
               child: Padding(
                 key: widget.keyFor(i),
-                padding: const EdgeInsets.symmetric(vertical: 5),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: AnimatedScale(
                   duration: VynlMotion.fast,
                   curve: VynlMotion.emphasized,
@@ -519,31 +519,48 @@ class _KaraokeWords extends StatelessWidget {
   final List<LyricWord> words;
   final TextStyle style;
 
+  static const _feather = 0.06;
+
+  double _sweep(Duration position) {
+    final t = position.inMilliseconds / 1000;
+    for (var i = 0; i < words.length; i++) {
+      if (t < words[i].time) {
+        return i == 0 ? 0.0 : wordFill(words, i - 1, t);
+      }
+    }
+    return wordFill(words, words.length - 1, t);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<int>(
-      stream: player.positionStream
-          .map((p) => activeWordIndex(words, p))
-          .distinct(),
+    return StreamBuilder<double>(
+      stream: player.positionStream.map(_sweep),
       builder: (context, snap) {
-        final sung = snap.data ?? -1;
-        return Text.rich(
-          TextSpan(
-            children: [
-              for (var i = 0; i < words.length; i++)
-                TextSpan(
-                  text: words[i].text,
-                  style: TextStyle(
-                    color: i <= sung ? VynlColors.accent : style.color,
-                    fontVariations: [
-                      FontVariation.weight(i <= sung ? 700 : 520),
-                    ],
-                  ),
-                ),
-            ],
+        final fill = snap.data ?? 0;
+        final lit = (fill - _feather).clamp(0.0, 1.0);
+
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (Rect bounds) {
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: const [
+                VynlColors.text,
+                VynlColors.text,
+                VynlColors.dim,
+                VynlColors.dim,
+              ],
+              stops: [0, lit, fill, 1],
+            ).createShader(bounds);
+          },
+          child: Text.rich(
+            TextSpan(
+              children: [for (final w in words) TextSpan(text: '${w.text} ')],
+            ),
+            textAlign: TextAlign.center,
+            style: style.copyWith(color: VynlColors.dim),
           ),
-          textAlign: TextAlign.center,
-          style: style,
         );
       },
     );
