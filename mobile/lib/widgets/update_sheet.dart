@@ -118,6 +118,16 @@ class UpdateSheet extends StatelessWidget {
                   style: const TextStyle(color: VynlColors.danger, fontSize: 12.5),
                 ),
               ],
+              if (app.needsInstallPermission) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: app.openInstallSettings,
+                    child: const Text('Open settings'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               Center(
                 child: TextButton(

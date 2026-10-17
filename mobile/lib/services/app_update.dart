@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' as ffi;
 import 'dart:io';
 
+import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -15,13 +17,16 @@ const _dismissedKey = 'vynl.update.dismissed';
 const _attempts = 3;
 const _backoff = [Duration(seconds: 2), Duration(seconds: 6)];
 
+const _minApkBytes = 1024 * 1024;
+
 Future<void> _pause(int attempt) {
   return Future<void>.delayed(
     attempt < _backoff.length ? _backoff[attempt] : const Duration(seconds: 10),
   );
 }
 
-String abiOfDevice() => AppUpdate.abiFor(Platform.version) ?? 'arm64-v8a';
+String abiOfDevice() =>
+    AppUpdate.abiFor(ffi.Abi.current().toString()) ?? 'arm64-v8a';
 
 class ReleaseNote {
   const ReleaseNote({required this.version, required this.notes});
@@ -41,6 +46,7 @@ class AppUpdate extends ChangeNotifier {
   String? _error;
   String? _apkPath;
   bool _busy = false;
+  bool _needsPermission = false;
   String _current = '';
   bool _checked = false;
   String _dismissedVersion = '';
@@ -53,6 +59,8 @@ class AppUpdate extends ChangeNotifier {
   bool get readyToInstall => _apkPath != null && File(_apkPath!).existsSync();
   bool get checked => _checked;
   String get currentVersion => _current;
+
+  bool get needsInstallPermission => _needsPermission;
 
   ReleaseNote? get release => _available;
 
@@ -74,9 +82,16 @@ class AppUpdate extends ChangeNotifier {
   }
 
   static String? abiFor(String raw) {
-    if (raw.contains('arm64') || raw.contains('aarch64')) return 'arm64-v8a';
-    if (raw.contains('x86_64') || raw.contains('amd64')) return 'x86_64';
-    if (raw.contains('armeabi') || raw.contains('armv7')) {
+    final s = raw.toLowerCase();
+    if (s.contains('x86_64') ||
+        s.contains('amd64') ||
+        s.contains('androidx64')) {
+      return 'x86_64';
+    }
+    if (s.contains('arm64') || s.contains('aarch64')) return 'arm64-v8a';
+    if (s.contains('armeabi') ||
+        s.contains('armv7') ||
+        s.contains('androidarm')) {
       return 'armeabi-v7a';
     }
     return null;
@@ -176,12 +191,6 @@ class AppUpdate extends ChangeNotifier {
     _busy = true;
     _error = null;
     _available = null;
-    if (!force && _dismissedVersion.isNotEmpty) {
-      _current = await _installedVersion();
-      _busy = false;
-      notifyListeners();
-      return;
-    }
     try {
       final text = await _fetchText(_manifestUrl);
       final body = jsonDecode(text) as Map<String, dynamic>;
@@ -189,9 +198,8 @@ class AppUpdate extends ChangeNotifier {
       if (latest.isEmpty) throw const FormatException('no version');
       final current = await _installedVersion();
       _current = current;
-      if (compare(latest, current) <= 0) {
-        _available = null;
-      } else {
+      final dismissed = !force && latest == _dismissedVersion;
+      if (compare(latest, current) > 0 && !dismissed) {
         _available = ReleaseNote(
           version: latest,
           notes: body['notes'] as String? ?? '',
@@ -231,14 +239,17 @@ class AppUpdate extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final url =
-          'https://github.com/DevX32/Vynl/releases/download/v$version/'
+      final url = 'https://github.com/DevX32/Vynl/releases/download/v$version/'
           'Vynl-mobile-$version-$abi.apk';
       final dir = await getTemporaryDirectory();
       final dest = File('${dir.path}/Vynl-mobile-$version-$abi.apk');
 
       await _download(url, dest);
+      if (!await _isUsableApk(dest)) {
+        throw const FormatException('downloaded file is not a valid APK');
+      }
       _apkPath = dest.path;
+      _needsPermission = false;
       _progress = 1;
     } catch (e) {
       _error = 'Download failed';
@@ -251,19 +262,58 @@ class AppUpdate extends ChangeNotifier {
   Future<void> install() async {
     final path = _apkPath;
     if (path == null) return;
+    if (!await _isUsableApk(File(path))) {
+      _error = 'The downloaded update is incomplete. Download it again.';
+      _apkPath = null;
+      notifyListeners();
+      return;
+    }
     try {
       final result = await OpenFilex.open(
         path,
         type: 'application/vnd.android.package-archive',
       );
-      if (result.type != ResultType.done) {
-        _error = 'Could not open the installer';
-        notifyListeners();
-      }
+      if (result.type == ResultType.done) return;
+      _needsPermission = result.type == ResultType.permissionDenied;
+      _error = switch (result.type) {
+        ResultType.noAppToOpen => 'No installer available on this device.',
+        ResultType.permissionDenied => 'Vynl needs permission to install apps.',
+        ResultType.fileNotFound => 'The downloaded update went missing.',
+        _ => 'Could not open the installer.',
+      };
+      notifyListeners();
     } catch (e) {
-      _error = 'Could not open the installer';
+      _error = 'Could not open the installer.';
       debugPrint('update install failed: $e');
       notifyListeners();
+    }
+  }
+
+  Future<void> openInstallSettings() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      await AndroidIntent(
+        action: 'android.settings.MANAGE_UNKNOWN_APP_SOURCES',
+        data: 'package:${info.packageName}',
+      ).launch();
+    } catch (e) {
+      debugPrint('update install settings failed: $e');
+    }
+  }
+
+  Future<bool> _isUsableApk(File file) async {
+    try {
+      if (!await file.exists()) return false;
+      if (await file.length() < _minApkBytes) return false;
+      final handle = await file.open();
+      try {
+        final head = await handle.read(2);
+        return head.length == 2 && head[0] == 0x50 && head[1] == 0x4B;
+      } finally {
+        await handle.close();
+      }
+    } catch (_) {
+      return false;
     }
   }
 }
