@@ -4,13 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: "Set true to publish the draft release for the selected tag"
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -89,34 +82,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Vynl ${{ needs.verify.outputs.version }}
           releaseBody: |
-            ## Desktop
-
-            - **Windows** — grab the `.exe`. It is a 64-bit NSIS installer and needs Windows 10 or newer.
-            - **Linux** — grab the `.AppImage` to run it straight from disk, the `.deb` for Debian/Ubuntu, or the `.rpm` for Fedora/openSUSE.
-
-            There is no macOS build. On Windows, SmartScreen may warn on first run because
-            the installers are not code-signed.
-
-            ## Android
-
-            Grab the APK that matches your phone's CPU architecture. `arm64-v8a` covers
-            essentially every phone from the last decade; older or Intel-based devices
-            want `armeabi-v7a` or `x86_64`.
-
-            Allow your browser to "install unknown apps", then open the APK. These are
-            sideloaded builds and are not distributed through a store.
-
-            ## Pairing with the desktop app
-
-            The mobile app syncs over your local network, so the desktop app has to be
-            running. On the desktop, open **Settings → Mobile Sync** and scan the QR code
-            shown there.
-
-            ## About the `.sig` files
-
-            Those are updater signatures the built-in auto-updater uses to verify what it
-            downloads. The app fetches them itself, so you do not need to grab them.
-          releaseDraft: true
+            64-bit Windows (.exe, Windows 10 or newer; SmartScreen may warn on first run because the installers are not code-signed) and Linux (.AppImage, .deb, .rpm; no macOS build). Android APKs are split by CPU architecture — arm64-v8a covers essentially every phone from the last decade, older or Intel-based devices want armeabi-v7a or x86_64; allow your browser to "install unknown apps", then open the APK. These are sideloaded builds and are not distributed through a store.
+          releaseDraft: false
           prerelease: false
 
   mobile:
@@ -218,10 +185,27 @@ jobs:
           done
           echo "APKs attached to $TAG"
 
+      - name: Remove updater signature assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          sigs=$(gh release view "$TAG" --json assets --jq '.assets[].name | select(endswith(".sig"))')
+          if [ -z "$sigs" ]; then
+            echo "No .sig assets on $TAG"
+            exit 0
+          fi
+          while read -r asset; do
+            [ -n "$asset" ] || continue
+            echo "Deleting $asset"
+            gh release delete-asset "$TAG" "$asset" --yes
+          done <<< "$sigs"
   publish:
     name: Publish release
     needs: [build, mobile]
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish
+    if: always() && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
