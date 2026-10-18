@@ -541,6 +541,15 @@ import { toggleLyrics } from "@state/player.svelte";
     margin: 0;
   }
 
+  .lyr-art :global(.now-title) {
+    max-width: 100%;
+    font-size: 22px;
+  }
+
+  .lyr-art :global(.now-artist) {
+    max-width: 100%;
+  }
+
 
   .lyrics-page.fullscreen .lyrics-scroll {
     flex: 1 1 auto;
