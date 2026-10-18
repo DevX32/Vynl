@@ -278,20 +278,3 @@ export interface RestoredBackup {
   total: number;
   knownSources: number;
 }
-
-export interface ArtistInfo {
-  name: string;
-  disambiguation: string | null;
-  country: string | null;
-  beginArea: string | null;
-  lifeSpan: {
-    ended: boolean;
-    begin: string | null;
-    end: string | null;
-  } | null;
-  genres: string[];
-  tags: string[];
-  bio: string | null;
-  artistType: string | null;
-  score: number | null;
-}

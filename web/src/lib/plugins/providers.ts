@@ -1,11 +1,10 @@
 
-import type { ArtistInfo, Collection } from "@lib/types";
+import type { Collection } from "@lib/types";
 import { vynl } from "@lib/vynl";
 import type {
   PluginLyricsLookup,
   PluginLyricsProvider,
   PluginLyricsResult,
-  PluginMetadataProvider,
   PluginProvider,
   PluginProviderKind,
   PluginResolverProvider,
@@ -92,23 +91,6 @@ export async function runLyricsProviders(
       }
     } catch (e) {
       console.warn(`[plugins] lyrics provider "${provider.id}" failed:`, e);
-    }
-  }
-  return null;
-}
-
-export async function runArtistInfoProviders(
-  artist: string,
-): Promise<ArtistInfo | null> {
-  for (const { provider } of providers) {
-    if (provider.kind !== "metadata") continue;
-    const metaProvider = provider as PluginMetadataProvider;
-    if (!metaProvider.artistInfo) continue;
-    try {
-      const res = await metaProvider.artistInfo(artist);
-      if (res && typeof res.name === "string") return res;
-    } catch (e) {
-      console.warn(`[plugins] metadata provider "${provider.id}" failed:`, e);
     }
   }
   return null;

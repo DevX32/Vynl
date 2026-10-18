@@ -275,9 +275,6 @@ export const vynl = {
 
   clearAudioCache: (): Promise<void> => cmd("clear_audio_cache"),
 
-  fetchArtistInfo: (artist: string): Promise<import("../lib/types").ArtistInfo> =>
-    cmd("fetch_artist_info", { artist }),
-
   pluginsList: (): Promise<import("./plugins/types").PluginEntry[]> =>
     cmd("plugins_list"),
 

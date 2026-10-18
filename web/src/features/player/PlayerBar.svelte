@@ -17,12 +17,10 @@
     onOpenPlayer,
     fullscreen = false,
     onToggleFullscreen,
-    onArtistClick,
   }: {
     onOpenPlayer: () => void;
     fullscreen?: boolean;
     onToggleFullscreen: () => void;
-    onArtistClick?: (artist: string) => void;
   } = $props();
 
   let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
@@ -71,21 +69,7 @@
             {#if i > 0}
               <span class="artist-sep">, </span>
             {/if}
-            <span
-              class="artist-link"
-              role="button"
-              tabindex="0"
-              onclick={(e) => {
-                e.stopPropagation();
-                onArtistClick?.(artistName);
-              }}
-              onkeydown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                  onArtistClick?.(artistName);
-                }
-              }}
-            >{artistName}</span>
+            <span class="artist-link">{artistName}</span>
           {/each}
         {:else}
           <span>{t("player.unknownArtist")}</span>
@@ -260,18 +244,13 @@
   }
 
   .artist-link {
-    background: none;
-    border: none;
-    padding: 0;
     color: var(--dim);
     font: inherit;
     font-size: inherit;
     letter-spacing: inherit;
-    cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: color 0.15s;
   }
 
   .artist-sep {
@@ -279,12 +258,6 @@
     font: inherit;
     font-size: inherit;
     letter-spacing: inherit;
-  }
-
-  .artist-link:hover {
-    color: var(--text);
-    text-decoration: underline;
-    text-underline-offset: 2px;
   }
 
   .center-stack {

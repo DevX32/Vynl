@@ -311,7 +311,6 @@ pub fn run() {
             commands::player_is_playing,
             commands::cache_remote_audio,
             commands::clear_audio_cache,
-            commands::artist::fetch_artist_info,
             commands::plugins::plugins_list,
             commands::plugins::plugins_set_enabled,
             commands::plugins::plugins_remove,
