@@ -58,6 +58,7 @@ class AppUpdate extends ChangeNotifier {
   String? get apkPath => _apkPath;
   bool get readyToInstall => _apkPath != null && File(_apkPath!).existsSync();
   bool get checked => _checked;
+  bool get busy => _busy;
   String get currentVersion => _current;
 
   bool get needsInstallPermission => _needsPermission;

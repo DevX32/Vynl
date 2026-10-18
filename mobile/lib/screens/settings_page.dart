@@ -61,6 +61,10 @@ class SettingsPage extends StatelessWidget {
 
   Future<void> _checkForUpdates(BuildContext context) async {
   final updates = context.read<AppUpdate>();
+  while (updates.busy) {
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (!context.mounted) return;
+  }
   await updates.check(force: true);
   if (!context.mounted) return;
   final message = updates.error != null
