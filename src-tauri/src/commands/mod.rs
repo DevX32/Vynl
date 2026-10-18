@@ -1,4 +1,3 @@
-pub mod artist;
 pub mod plugins;
 pub mod types;
 

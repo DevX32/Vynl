@@ -1,4 +1,4 @@
-import type { ArtistInfo, Collection } from "@lib/types";
+import type { Collection } from "@lib/types";
 
 export const PLUGIN_API_VERSION = 2;
 
@@ -126,7 +126,6 @@ export interface PluginMetadataProvider {
   id: string;
   kind: "metadata";
   name: string;
-  artistInfo?: (artist: string) => Promise<ArtistInfo | null>;
 }
 
 export interface PluginResolverProvider {

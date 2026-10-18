@@ -42,7 +42,6 @@
   import VaultPage from "./features/vault/VaultPage.svelte";
   import HomePage from "./features/home/HomePage.svelte";
   import PluginPageHost from "./features/plugins/PluginPageHost.svelte";
-  import ArtistPage from "./features/artist/ArtistPage.svelte";
   import TitleBar from "./components/TitleBar.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
   import { isPluginPage, type Page } from "@lib/types";
@@ -56,7 +55,6 @@
 
   let sidebarOpen = $state(loadSidebarOpen());
   let showFullscreen = $state(false);
-  let selectedArtist = $state<string | null>(null);
 
   const history = $state<Page[]>(["home"]);
   let historyIdx = $state(0);
@@ -218,14 +216,6 @@
 
   function openVault(): void {
     navigate("vault");
-  }
-
-  function openArtist(name: string): void {
-    selectedArtist = name;
-  }
-
-  function closeArtist(): void {
-    selectedArtist = null;
   }
 
   function openLibrary(): void {
@@ -394,18 +384,8 @@
     </main>
   </div>
 
-  <PlayerBar onOpenPlayer={openPlayer} fullscreen={showFullscreen} onToggleFullscreen={() => { showFullscreen = !showFullscreen; }} onArtistClick={openArtist} />
+  <PlayerBar onOpenPlayer={openPlayer} fullscreen={showFullscreen} onToggleFullscreen={() => { showFullscreen = !showFullscreen; }} />
 </div>
-
-{#if selectedArtist}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_interactive_supports_focus -->
-  <div class="artist-overlay" role="dialog" tabindex="-1" onclick={(e) => { if (e.target === e.currentTarget) closeArtist(); }} onkeydown={(e) => { if (e.key === "Escape") closeArtist(); }}>
-    <div class="artist-modal">
-      <ArtistPage artist={selectedArtist} onBack={closeArtist} />
-    </div>
-  </div>
-{/if}
 
 {#if showFullscreen}
   <FullscreenPlayer onclose={() => { showFullscreen = false; }} />
@@ -533,39 +513,6 @@
 
   .page-inner.hidden {
     display: none;
-  }
-
-  .artist-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(6px);
-  }
-
-  .artist-modal {
-    width: min(600px, 85vw);
-    max-height: 78vh;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-  }
-
-  .artist-modal :global(.artist-page) {
-    height: auto;
-    min-height: 0;
-  }
-
-  .artist-modal :global(.view) {
-    max-height: 78vh;
-    overflow-y: auto;
-    padding: 40px 44px 48px;
   }
 
   @container player (max-width: 620px) {

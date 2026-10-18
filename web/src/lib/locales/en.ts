@@ -449,17 +449,6 @@ export const en = {
     },
     unavailable: "Equalizer unavailable — could not read the audio settings.",
   },
-  artist: {
-    genres: "Genres",
-    tags: "Tags",
-    note: "Note",
-    loading: "Loading artist info…",
-    loadError: "Could not load artist info",
-    bio: "Biography",
-    readMore: "Read more",
-    showLess: "Show less",
-    noInfo: "No additional information available.",
-  },
   common: {
     close: "Close",
     select: "Select…",
