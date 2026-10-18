@@ -536,19 +536,18 @@ class _KaraokeWordsState extends State<_KaraokeWords>
 
   Duration _anchorPosition = Duration.zero;
   Duration _anchorElapsed = Duration.zero;
+  Duration _tickerElapsed = Duration.zero;
   int _index = -1;
   double _fill = 0;
 
   Duration get _position {
     if (!_ticker.isActive) return _anchorPosition;
-    return _anchorPosition +
-        (_ticker.lastElapsedDuration ?? Duration.zero) -
-        _anchorElapsed;
+    return _anchorPosition + _tickerElapsed - _anchorElapsed;
   }
 
   void _reanchor(Duration position) {
     _anchorPosition = position;
-    _anchorElapsed = _ticker.lastElapsedDuration ?? Duration.zero;
+    _anchorElapsed = _ticker.isActive ? _tickerElapsed : Duration.zero;
   }
 
   void _apply(Duration position) {
@@ -573,15 +572,17 @@ class _KaraokeWordsState extends State<_KaraokeWords>
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) {
+    _ticker = createTicker((elapsed) {
+      _tickerElapsed = elapsed;
       if (_index >= 0) _apply(_position);
     });
     _positions = widget.player.positionStream.listen((position) {
       _reanchor(position);
       _apply(position);
     });
-    _playingSub = widget.player.player.playing.listen((playing) {
+    _playingSub = widget.player.player.playingStream.listen((playing) {
       if (playing) {
+        _tickerElapsed = Duration.zero;
         _ticker.start();
       } else {
         _ticker.stop();
@@ -589,7 +590,10 @@ class _KaraokeWordsState extends State<_KaraokeWords>
       _reanchor(widget.player.player.position);
     });
     final position = widget.player.player.position;
-    if (widget.player.player.playing) _ticker.start();
+    if (widget.player.player.playing) {
+      _tickerElapsed = Duration.zero;
+      _ticker.start();
+    }
     _reanchor(position);
     _apply(position);
   }
