@@ -157,6 +157,66 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, "&");
 }
 
+type RawSpan = {
+  time: number;
+  text: string;
+  end: number | null;
+  bg: boolean;
+  sep: boolean;
+};
+
+function collectSpans(
+  node: Node,
+  out: RawSpan[],
+  sep: boolean,
+  bg: boolean,
+  offset: number,
+  attr: (el: Element, name: string) => string | null,
+  bgRole: RegExp,
+): void {
+  let separated = sep;
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === 3) {
+      const text = child.textContent ?? "";
+      if (text.length > 0) separated = /\s$/.test(text);
+      continue;
+    }
+    const el = child as Element;
+    if (el.nodeName === "br") {
+      separated = true;
+      continue;
+    }
+
+    const childBg = bg || bgRole.test(attr(el, "ttm:role") ?? attr(el, "role") ?? "");
+    const beginRaw = attr(el, "begin");
+
+    if (el.nodeName === "span" && beginRaw !== null) {
+      const text = decodeEntities(el.textContent ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!text) {
+        separated = false;
+        continue;
+      }
+      const time = parseClock(beginRaw) + offset;
+      const endRaw = attr(el, "end");
+      const endNum = endRaw !== null ? parseClock(endRaw) + offset : null;
+      out.push({
+        time,
+        text,
+        end: endNum !== null && endNum > time ? endNum : null,
+        bg: childBg,
+        sep: separated,
+      });
+      separated = false;
+      continue;
+    }
+
+    collectSpans(el, out, separated, childBg, offset, attr, bgRole);
+    separated = false;
+  }
+}
+
 function parseTtml(text: string): LyricLine[] {
   const doc = new DOMParser().parseFromString(text, "application/xml");
   if (doc.querySelector("parsererror")) return [];
@@ -195,28 +255,32 @@ function parseTtml(text: string): LyricLine[] {
 
     const role = roleOf(p);
     const romanRole = /translation|romanization|romaji|translit/.test(role);
-    const bgRole = /(^|[-_])bg$|background/.test(role);
+    const bgRole = /(^|[-_])bg$|background/;
 
-    const spans = Array.from(p.querySelectorAll("span")).filter(
-      (s) => attr(s, "begin") !== null,
-    );
-    const words: Word[] = [];
+    const spans: RawSpan[] = [];
+    collectSpans(p, spans, false, false, offset, attr, bgRole);
+
     let full = "";
+    for (let i = 0; i < spans.length; i++) {
+      full += (i > 0 && spans[i].sep ? " " : "") + spans[i].text;
+    }
 
+    const words: Word[] = [];
     for (const span of spans) {
-      const sb = attr(span, "begin")!;
-      const se = attr(span, "end");
-      const wStart = parseClock(sb) + offset;
-      const wEndRaw = se !== null ? parseClock(se) + offset : null;
-      const wEnd = wEndRaw !== null && wEndRaw > wStart ? wEndRaw : null;
-      const wText = decodeEntities(span.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (!wText) continue;
-      full += (full ? " " : "") + wText;
+      if (span.bg) continue;
+      const last = words[words.length - 1];
+      if (last && !span.sep) {
+        words[words.length - 1] = {
+          ...last,
+          text: last.text + span.text,
+          ...(span.end !== null ? { end: span.end } : {}),
+        };
+        continue;
+      }
       words.push({
-        time: wStart,
-        text: wText,
-        ...(wEnd !== null ? { end: wEnd } : {}),
-        ...(/bg|background/.test(roleOf(span)) ? { bg: true } : {}),
+        time: span.time,
+        text: span.text,
+        ...(span.end !== null ? { end: span.end } : {}),
       });
     }
 

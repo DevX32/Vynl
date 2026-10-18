@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
@@ -278,13 +279,13 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   }
 
   double get _estimatedExtent {
-    if (_lineKeys.isEmpty) return 38;
+    if (_lineKeys.isEmpty) return 48;
     var sum = 0.0;
     for (final key in _lineKeys.values) {
       final box = key.currentContext?.findRenderObject() as RenderBox?;
       if (box != null && box.hasSize) sum += box.size.height;
     }
-    return _lineKeys.isEmpty ? 38 : (sum / _lineKeys.length).clamp(28.0, 64.0);
+    return _lineKeys.isEmpty ? 48 : (sum / _lineKeys.length).clamp(36.0, 96.0);
   }
 
   Key _keyFor(int index) =>
@@ -508,7 +509,7 @@ class _LineBody extends StatelessWidget {
   }
 }
 
-class _KaraokeWords extends StatelessWidget {
+class _KaraokeWords extends StatefulWidget {
   const _KaraokeWords({
     required this.player,
     required this.words,
@@ -519,50 +520,154 @@ class _KaraokeWords extends StatelessWidget {
   final List<LyricWord> words;
   final TextStyle style;
 
-  static const _feather = 0.06;
+  @override
+  State<_KaraokeWords> createState() => _KaraokeWordsState();
+}
 
-  double _sweep(Duration position) {
+class _KaraokeWordsState extends State<_KaraokeWords>
+    with SingleTickerProviderStateMixin {
+  static const _steps = 120.0;
+  static const _feather = 0.35;
+  static const _lift = 3.0;
+
+  late final Ticker _ticker;
+  StreamSubscription<Duration>? _positions;
+  StreamSubscription<bool>? _playingSub;
+
+  Duration _anchorPosition = Duration.zero;
+  Duration _anchorElapsed = Duration.zero;
+  int _index = -1;
+  double _fill = 0;
+
+  Duration get _position {
+    if (!_ticker.isActive) return _anchorPosition;
+    return _anchorPosition +
+        (_ticker.lastElapsedDuration ?? Duration.zero) -
+        _anchorElapsed;
+  }
+
+  void _reanchor(Duration position) {
+    _anchorPosition = position;
+    _anchorElapsed = _ticker.lastElapsedDuration ?? Duration.zero;
+  }
+
+  void _apply(Duration position) {
     final t = position.inMilliseconds / 1000;
-    for (var i = 0; i < words.length; i++) {
-      if (t < words[i].time) {
-        return i == 0 ? 0.0 : wordFill(words, i - 1, t);
+    var index = -1;
+    for (var i = 0; i < widget.words.length; i++) {
+      if (widget.words[i].time <= t) {
+        index = i;
+      } else {
+        break;
       }
     }
-    return wordFill(words, words.length - 1, t);
+    final raw = index < 0 ? 0.0 : wordFill(widget.words, index, t);
+    final fill = (raw * _steps).roundToDouble() / _steps;
+    if (index == _index && fill == _fill) return;
+    setState(() {
+      _index = index;
+      _fill = fill;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) {
+      if (_index >= 0) _apply(_position);
+    });
+    _positions = widget.player.positionStream.listen((position) {
+      _reanchor(position);
+      _apply(position);
+    });
+    _playingSub = widget.player.player.playing.listen((playing) {
+      if (playing) {
+        _ticker.start();
+      } else {
+        _ticker.stop();
+      }
+      _reanchor(widget.player.player.position);
+    });
+    final position = widget.player.player.position;
+    if (widget.player.player.playing) _ticker.start();
+    _reanchor(position);
+    _apply(position);
+  }
+
+  @override
+  void didUpdateWidget(_KaraokeWords oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.words != oldWidget.words) {
+      _index = -2;
+      _apply(widget.player.player.position);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.stop();
+    _ticker.dispose();
+    _positions?.cancel();
+    _playingSub?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<double>(
-      stream: player.positionStream.map(_sweep),
-      builder: (context, snap) {
-        final fill = snap.data ?? 0;
-        final lit = (fill - _feather).clamp(0.0, 1.0);
+    final words = widget.words;
+    final style = widget.style;
+    final children = <InlineSpan>[];
 
-        return ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (Rect bounds) {
-            return LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: const [
-                VynlColors.text,
-                VynlColors.text,
-                VynlColors.dim,
-                VynlColors.dim,
-              ],
-              stops: [0, lit, fill, 1],
-            ).createShader(bounds);
-          },
-          child: Text.rich(
-            TextSpan(
-              children: [for (final w in words) TextSpan(text: '${w.text} ')],
+    for (var i = 0; i < words.length; i++) {
+      if (i == _index) {
+        children.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: Transform.translate(
+              offset: const Offset(0, -_lift),
+              child: ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (Rect bounds) => LinearGradient(
+                  colors: const [
+                    VynlColors.text,
+                    VynlColors.text,
+                    VynlColors.dim,
+                    VynlColors.dim,
+                  ],
+                  stops: [
+                    0,
+                    (_fill - _feather).clamp(0.0, 1.0),
+                    _fill,
+                    1,
+                  ],
+                ).createShader(bounds),
+                child: Text(words[i].text, style: style),
+              ),
             ),
-            textAlign: TextAlign.center,
-            style: style.copyWith(color: VynlColors.dim),
           ),
         );
-      },
+      } else {
+        children.add(
+          TextSpan(
+            text: words[i].text,
+            style: TextStyle(
+              color: i < _index ? VynlColors.text : VynlColors.dim,
+              fontVariations: [
+                FontVariation.weight(i < _index ? 700 : 520),
+              ],
+            ),
+          ),
+        );
+      }
+
+      if (i < words.length - 1) children.add(TextSpan(text: ' '));
+    }
+
+    return Text.rich(
+      TextSpan(children: children),
+      textAlign: TextAlign.center,
+      style: style,
     );
   }
 }

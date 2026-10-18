@@ -520,11 +520,15 @@ async fn track_synced_lyrics(
         .unwrap_or_default()
         .trim()
         .to_string();
-    let is_synced = |t: &str| t.contains('[') && t.contains(':');
+    let embedded_kind = if !embedded.is_empty() {
+        embedded_lyrics_kind(&embedded)
+    } else {
+        None
+    };
 
-    if !embedded.is_empty() && is_synced(&embedded) {
+    if let Some(kind) = embedded_kind {
         return Json(MobileLyrics {
-            kind: "lrc".into(),
+            kind: kind.into(),
             text: embedded,
             source: "embedded".into(),
         })
@@ -553,14 +557,33 @@ async fn track_synced_lyrics(
     .await
     .unwrap_or(None);
 
-    match fetched {
-        Some(res) if is_synced(&res.text) => Json(MobileLyrics {
-            kind: "lrc".into(),
+    match fetched.and_then(|res| result_lyrics_kind(&res.kind).map(|kind| (kind, res))) {
+        Some((kind, res)) => Json(MobileLyrics {
+            kind: kind.into(),
             text: res.text,
             source: format!("{:?}", res.source).to_lowercase(),
         })
         .into_response(),
-        _ => (StatusCode::NOT_FOUND, "no synced lyrics").into_response(),
+        None => (StatusCode::NOT_FOUND, "no synced lyrics").into_response(),
+    }
+}
+
+fn embedded_lyrics_kind(text: &str) -> Option<&'static str> {
+    if crate::services::lyrics::is_ttml(text) {
+        return Some("ttml");
+    }
+    if crate::services::lyrics::is_lrc(text) {
+        return Some("lrc");
+    }
+    None
+}
+
+fn result_lyrics_kind(kind: &crate::commands::types::LyricsKind) -> Option<&'static str> {
+    use crate::commands::types::LyricsKind;
+    match kind {
+        LyricsKind::Ttml => Some("ttml"),
+        LyricsKind::Lrc => Some("lrc"),
+        LyricsKind::Txt => None,
     }
 }
 
