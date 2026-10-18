@@ -34,10 +34,10 @@ dependencies:
   collection: ^1.18.0
   # palette_generator removed (discontinued); accent extraction uses dart:ui
   just_audio_background: ^0.0.1-beta.17
-  package_info_plus: ^9.0.1
+  package_info_plus: ^10.0.0
   open_filex: ^4.7.0
   url_launcher: ^6.3.0
-  android_intent_plus: ^5.3.0
+  android_intent_plus: ^6.0.0
 
 dev_dependencies:
   flutter_test:
