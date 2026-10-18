@@ -87,8 +87,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  String get greetingName =>
-      displayName.trim().isEmpty ? nickname : displayName.trim();
+  String get greetingName => resolveDisplayName(displayName, nickname);
 
   void rollNickname() {
     nickname = randomNickname();

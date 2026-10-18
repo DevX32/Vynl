@@ -22,6 +22,8 @@
   } from "@state/lyrics.svelte";
   import { startClock, stopClock } from "@state/media-clock.svelte";
   import KaraokeWords from "./KaraokeWords.svelte";
+import NowPlayingArt from "../player/NowPlayingArt.svelte";
+import { toggleLyrics } from "@state/player.svelte";
   import LyricsSearchOverlay from "./LyricsSearchOverlay.svelte";
   import LyricsPasteOverlay from "./LyricsPasteOverlay.svelte";
   import LyricsHelpOverlay from "./LyricsHelpOverlay.svelte";
@@ -303,8 +305,21 @@
   </div>
 {/snippet}
 
-<section class="lyrics-page">
+<section class="lyrics-page" class:fullscreen>
   {#if np}
+    {#if fullscreen}
+      <aside class="lyr-art">
+        <NowPlayingArt
+          current={np}
+          playing={getIsTrackPlaying()}
+          playError={null}
+          scanning={false}
+          lyricsOpen={true}
+          onToggleLyrics={toggleLyrics}
+          showLyricsButton={false}
+        />
+      </aside>
+    {/if}
     {#if !fullscreen}
       <header class="lyr-head">
         <div class="lyr-track">
@@ -500,6 +515,36 @@
     flex-direction: column;
     gap: 20px;
     padding: 20px 0;
+  }
+
+  .lyrics-page.fullscreen {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 24px;
+    padding: 24px;
+  }
+
+  .lyr-art {
+    flex: 0 0 auto;
+    width: 360px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .lyr-art :global(.now) {
+    padding: 0;
+  }
+
+  .lyr-art :global(.now-art) {
+    width: 300px;
+    margin: 0;
+  }
+
+
+  .lyrics-page.fullscreen .lyrics-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .lyr-head {
@@ -949,7 +994,7 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 50;
-    background: rgba(24, 24, 28, 0.92);
+    background: var(--bg-raise);
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
     padding: 8px 18px;

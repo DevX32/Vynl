@@ -12,6 +12,7 @@
     scanning,
     lyricsOpen,
     onToggleLyrics,
+    showLyricsButton = true,
   }: {
     current: NowPlaying | null;
     playing: boolean;
@@ -19,6 +20,7 @@
     scanning: boolean;
     lyricsOpen: boolean;
     onToggleLyrics: () => void;
+    showLyricsButton?: boolean;
   } = $props();
 
   const dust = Array.from({ length: 14 }, (_, i) => ({
@@ -102,14 +104,16 @@
         {current.artist || t("player.unknownArtist")}
       </div>
     {/key}
-    <button
-      class="lyr-btn"
-      class:active={lyricsOpen}
-      onclick={onToggleLyrics}
-      aria-label={t("player.lyrics")}
-    >
-      <Music2 size={14} stroke-width={1.5} />
-    </button>
+    {#if showLyricsButton}
+      <button
+        class="lyr-btn"
+        class:active={lyricsOpen}
+        onclick={onToggleLyrics}
+        aria-label={t("player.lyrics")}
+      >
+        <Music2 size={14} stroke-width={1.5} />
+      </button>
+    {/if}
     {#if playError}
       <div class="play-error mono" in:fade={{ duration: 180 }}>
         <X size={12} stroke-width={1.5} /> <span>{playError}</span>

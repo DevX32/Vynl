@@ -48,7 +48,7 @@
 
 <style>
   .paste-input {
-    background: var(--bg);
+    background: var(--bg-raise);
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
     padding: 10px;

@@ -165,7 +165,7 @@ String randomNickname() =>
     '${_adjectives[_random.nextInt(_adjectives.length)]} '
     '${_nouns[_random.nextInt(_nouns.length)]}';
 
-String resolveDisplayName(String configured) {
+String resolveDisplayName(String configured, String nickname) {
   final name = configured.trim();
-  return name.isEmpty ? randomNickname() : name;
+  return name.isEmpty ? nickname : name;
 }
