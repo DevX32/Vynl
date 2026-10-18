@@ -159,7 +159,7 @@ class VynlApi {
     try {
       final res = await _client
           .get(_uri('/v1/tracks/$trackId/synced-lyrics'), headers: _headers)
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 60));
       if (res.statusCode != 200) return null;
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final text = body['text'] as String? ?? '';

@@ -24,8 +24,19 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> {
   bool _lyricsOn = false;
+  bool _remoteAvailable = false;
+  String? _fetchedFor;
 
   void _toggleLyrics() => setState(() => _lyricsOn = !_lyricsOn);
+
+  void _fetchRemoteLyrics(String trackId) {
+    final api = context.read<AppState>().api;
+    if (api == null) return;
+    api.syncedLyrics(trackId).then((res) {
+      if (!mounted || _fetchedFor != trackId) return;
+      if (res != null) setState(() => _remoteAvailable = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +54,19 @@ class _PlayerPageState extends State<PlayerPage> {
       );
     }
 
-    final hasLyrics = (track.lyrics ?? '').trim().isNotEmpty;
+    if (_fetchedFor != track.id) {
+      _fetchedFor = track.id;
+      _remoteAvailable = (track.lyrics ?? '').trim().isNotEmpty;
+      if (!_remoteAvailable) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _fetchedFor == track.id) {
+            _fetchRemoteLyrics(track.id);
+          }
+        });
+      }
+    }
+
+    final hasLyrics = (track.lyrics ?? '').trim().isNotEmpty || _remoteAvailable;
     final lyricsOn = hasLyrics && _lyricsOn;
 
     return ArtBackdrop(
@@ -582,6 +605,7 @@ class _KaraokeWordsState extends State<_KaraokeWords>
     });
     _playingSub = widget.player.player.playingStream.listen((playing) {
       if (playing) {
+        if (_ticker.isActive) _ticker.stop();
         _tickerElapsed = Duration.zero;
         _ticker.start();
       } else {
@@ -591,6 +615,7 @@ class _KaraokeWordsState extends State<_KaraokeWords>
     });
     final position = widget.player.player.position;
     if (widget.player.player.playing) {
+      if (_ticker.isActive) _ticker.stop();
       _tickerElapsed = Duration.zero;
       _ticker.start();
     }
