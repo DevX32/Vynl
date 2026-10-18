@@ -56,6 +56,30 @@ pub fn legacy_sidecar_path(file: &str, ext: &str) -> PathBuf {
     parent.join(format!("{}.{}", stem, ext))
 }
 
+pub fn is_ttml(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    for i in 0..bytes.len().saturating_sub(3) {
+        if bytes[i] != b'<' {
+            continue;
+        }
+        let (b1, b2, b3) = (bytes[i + 1], bytes[i + 2], bytes[i + 3]);
+        if !b1.eq_ignore_ascii_case(&b't') || !b2.eq_ignore_ascii_case(&b't') {
+            continue;
+        }
+        if matches!(b3, b' ' | b'\t' | b'\r' | b'\n' | b'>' | b'/') {
+            return true;
+        }
+        if b3.eq_ignore_ascii_case(&b'm') || b3.eq_ignore_ascii_case(&b'l') {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn is_lrc(text: &str) -> bool {
+    text.contains('[') && text.contains(':')
+}
+
 pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
     for kind in &["ttml", "lrc", "txt"] {
         for p in [sidecar_path(file, kind), legacy_sidecar_path(file, kind)] {
