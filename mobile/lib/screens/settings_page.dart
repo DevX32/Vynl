@@ -393,7 +393,7 @@ class _DisplayNameFieldState extends State<_DisplayNameField> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'DISPLAY NAME',
+            'NICKNAME',
             style: TextStyle(
               color: VynlColors.faint,
               fontSize: 11,

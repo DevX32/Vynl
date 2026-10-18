@@ -949,7 +949,7 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 50;
-    background: rgba(24, 24, 28, 0.92);
+    background: var(--bg-raise);
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
     padding: 8px 18px;

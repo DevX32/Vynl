@@ -141,9 +141,13 @@
   .search-results {
     max-height: 300px;
     overflow-y: auto;
+    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+  .search-results::-webkit-scrollbar {
+    display: none;
   }
   .search-item {
     background: none;
