@@ -31,9 +31,18 @@ class LyricsResult {
 
 enum LyricsSource { embedded }
 
-final _stampRe = RegExp(r'\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]');
-final _wordTagRe = RegExp(r'<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>');
-final _wordTagSplitRe = RegExp(r'<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>');
+final _stampRe = RegExp(
+  r'\[[ \t]*(\d{1,3}):(\d{1,2})(?::(\d{1,4}))?(?:[.,](\d{1,4}))?[ \t]*\]',
+);
+final _hasStampRe = RegExp(
+  r'\[[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*\]',
+);
+final _wordTagRe = RegExp(
+  r'<[ \t]*(\d{1,3}):(\d{1,2})(?::(\d{1,4}))?(?:[.,](\d{1,4}))?[ \t]*>',
+);
+final _wordTagSplitRe = RegExp(
+  r'<[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*>',
+);
 final _offsetRe = RegExp(
   r'^\[offset:\s*([+-]?\d+)\s*\]',
   caseSensitive: false,
@@ -42,20 +51,40 @@ final _metadataRe = RegExp(
   r'^\[(ar|ti|al|au|by|offset|re|ve|length|created|tool|version|application):',
   caseSensitive: false,
 );
-final _instrumentalRe = RegExp(
-  r'^[(\[]?(instrumental|interlude|outro|intro|solo|break|bridge|build.?up|fade[.\s]?out|fade[.\s]?in|prelude|postlude|reprise)[)\]]?$',
+final _instrumentalWordRe = RegExp(
+  r'^(?:'
+  r'instrumental|inst\.?|interlude|intermission|outro|intro|solo|break|bridge|'
+  r'build[\s._-]?up|fade[\s._-]?(?:out|in)|prelude|postlude|reprise|'
+  r'silence|soundcheck|music'
+  r')$',
   caseSensitive: false,
 );
-final _symbolsOnlyRe = RegExp(r'^[\s♪♫♩♬🎵🎶…~～·.\-—–]+$');
+final _instrumentalPhraseRe = RegExp(
+  r'^(?:'
+  r'(?:instrumental|inst\.?|music)[\s._-]+(?:break|solo|section|pass|part|interlude|intro|outro)|'
+  r'(?:guitar|piano|string|sax|synth|drum|flute|violin|cello|trumpet|organ)[\s._-]*solo|'
+  r'no\s+lyrics?|end\s+of\s+song'
+  r')$',
+  caseSensitive: false,
+);
+final _symbolsOnlyRe = RegExp(r'^[\s\p{P}\p{S}]+$', unicode: true);
+final _wrapOpenRe = RegExp(r'^[[({<【（\s]*');
+final _wrapCloseRe = RegExp(r'[\s:;,.·…~～\-–—_)\]}>）】]*$');
 final _wsRe = RegExp(r'\s+');
+const _lastLineGraceSecs = 10.0;
 final _ttmlRootRe = RegExp(r'<(?:ttml|tt)(?=[\s>/])', caseSensitive: false);
 
 double _seconds(RegExpMatch m) {
-  final min = int.parse(m.group(1)!);
-  final sec = int.parse(m.group(2)!);
-  final frac = m.group(3);
-  final ms = frac == null ? 0.0 : double.parse(frac.padRight(3, '0')) / 1000;
-  return (min * 60 + sec + ms).toDouble();
+  final a = int.parse(m.group(1)!);
+  final b = int.parse(m.group(2)!);
+  final third = m.group(3);
+  final frac = m.group(4);
+  final f = frac == null ? 0.0 : double.parse('0.$frac');
+  if (third == null) return (a * 60 + b + f).toDouble();
+  if (third.length <= 2) {
+    return (a * 3600 + b * 60 + int.parse(third) + f).toDouble();
+  }
+  return (a * 60 + b + double.parse('0.$third')).toDouble();
 }
 
 double readOffsetSecs(String text) {
@@ -98,15 +127,22 @@ List<LyricLine> parseLrcText(String text) {
       stamps.add(_seconds(m) + offset);
     }
 
-    final body = raw.replaceAll(_stampRe, '').trim();
+    final body = raw.replaceAll(_stampRe, '').replaceAll(_wsRe, ' ').trim();
     if (stamps.isEmpty) {
-      if (body.isEmpty) continue;
-      out.add(LyricLine(time: -1, text: body));
+      final plain = body
+          .replaceAll(_wordTagRe, '')
+          .replaceAll(_wsRe, ' ')
+          .trim();
+      if (plain.isEmpty) continue;
+      out.add(LyricLine(time: -1, text: plain));
       continue;
     }
 
     final words = _parseEnhancedWords(body, offset);
-    final clean = body.replaceAll(_wordTagRe, '').trim();
+    final clean = body
+        .replaceAll(_wordTagRe, '')
+        .replaceAll(_wsRe, ' ')
+        .trim();
     for (final s in stamps) {
       out.add(LyricLine(time: s, text: clean, words: words));
     }
@@ -150,7 +186,8 @@ final _xmlTagRe = RegExp(
 final _xmlAttrRe = RegExp(
   r"([A-Za-z_][A-Za-z0-9_:.\-]*)\s*=\s*(?:\x22([^\x22]*)\x22|'([^']*)')",
 );
-final _ttmlClockRe = RegExp(r'^(\d+):(\d{1,2})(?:[.:](\d{1,3}))?$');
+final _ttmlClockRe =
+    RegExp(r'^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?$');
 final _ttmlSuffixRe = RegExp(r's$', caseSensitive: false);
 final _ttmlRomanRe = RegExp(r'translation|romanization|romaji|translit');
 final _ttmlBgRe = RegExp(r'(^|[-_])bg$|background');
@@ -183,14 +220,15 @@ double _ttmlClock(String raw) {
   final value = raw.trim();
   final m = _ttmlClockRe.firstMatch(value);
   if (m != null) {
-    final minutes = double.tryParse(m.group(1)!);
-    final seconds = double.tryParse(m.group(2)!);
+    final hours = double.tryParse(m.group(1) ?? '0') ?? 0;
+    final minutes = double.tryParse(m.group(2)!);
+    final seconds = double.tryParse(m.group(3)!);
     if (minutes != null && seconds != null) {
-      final frac = m.group(3);
+      final frac = m.group(4);
       final ms = frac == null || frac.isEmpty
           ? 0.0
-          : (double.tryParse(frac.padRight(3, '0')) ?? 0) / 1000;
-      return minutes * 60 + seconds + ms;
+          : double.tryParse('0.$frac') ?? 0;
+      return hours * 3600 + minutes * 60 + seconds + ms;
     }
   }
   final plain = double.tryParse(value.replaceAll(_ttmlSuffixRe, ''));
@@ -363,19 +401,35 @@ List<LyricLine> parseTtmlText(String text) {
 
 final _linesCache = Expando<List<LyricLine>>('vynl.lyricLines');
 
+List<LyricLine> _parsePlainText(String text) {
+  final out = <LyricLine>[];
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final line = raw
+        .replaceAll(_stampRe, '')
+        .replaceAll(_wordTagRe, '')
+        .replaceAll(_wsRe, ' ')
+        .trim();
+    if (line.isNotEmpty) out.add(LyricLine(time: -1, text: line));
+  }
+  return out;
+}
+
 List<LyricLine> toLyricLines(LyricsResult result) {
   final cached = _linesCache[result];
   if (cached != null) return cached;
   final lines = switch (result.kind) {
     LyricsKind.lrc => parseLrcText(result.text),
     LyricsKind.ttml => parseTtmlText(result.text),
-    LyricsKind.text => result.text
-        .split(RegExp(r'\r?\n'))
-        .map((line) => LyricLine(time: -1, text: line))
-        .toList(),
+    LyricsKind.text => _lrcFromText(result.text) ?? _parsePlainText(result.text),
   };
   _linesCache[result] = lines;
   return lines;
+}
+
+List<LyricLine>? _lrcFromText(String text) {
+  if (!_hasStampRe.hasMatch(text)) return null;
+  final lines = parseLrcText(text);
+  return lines.any((l) => l.time >= 0) ? lines : null;
 }
 
 final _remoteCache = <String, LyricsResult>{};
@@ -420,6 +474,10 @@ int activeLineIndex(List<LyricLine> lines, Duration position) {
     } else {
       break;
     }
+  }
+  if (idx == lines.length - 1 &&
+      t - lines[idx].time > _lastLineGraceSecs) {
+    return -1;
   }
   return idx;
 }
@@ -479,7 +537,14 @@ bool isInstrumental(String text) {
   final t = text.trim();
   if (t.isEmpty) return true;
   if (_symbolsOnlyRe.hasMatch(t)) return true;
-  return _instrumentalRe.hasMatch(t);
+  final unwrapped = t
+      .replaceAll(_wrapOpenRe, '')
+      .replaceAll(_wrapCloseRe, '')
+      .trim();
+  if (unwrapped.isEmpty) return true;
+  if (_symbolsOnlyRe.hasMatch(unwrapped)) return true;
+  return _instrumentalWordRe.hasMatch(unwrapped) ||
+      _instrumentalPhraseRe.hasMatch(unwrapped);
 }
 
 final _stanzaCache = <String, List<List<String>>>{};
@@ -489,15 +554,20 @@ List<List<String>> stanzasOf(String text) {
   if (cached != null) return cached;
   final stanzas = <List<String>>[];
   var current = <String>[];
-  for (final line in text.split(RegExp(r'\r?\n'))) {
-    if (line.trim().isEmpty) {
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final line = raw
+        .replaceAll(_stampRe, '')
+        .replaceAll(_wordTagRe, '')
+        .replaceAll(_wsRe, ' ')
+        .trim();
+    if (line.isEmpty) {
       if (current.isNotEmpty) {
         stanzas.add(current);
         current = <String>[];
       }
       continue;
     }
-    current.add(line.trim());
+    current.add(line);
   }
   if (current.isNotEmpty) stanzas.add(current);
   _stanzaCache[text] = stanzas;

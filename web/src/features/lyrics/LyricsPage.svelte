@@ -46,7 +46,9 @@ import { toggleLyrics } from "@state/player.svelte";
   let didInitialScroll = false;
   let userScrolling = $state(false);
   let scrollAnim: number | null = null;
+  let scrollAim: number | null = null;
   let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
   const prefersReducedMotion = () =>
     typeof matchMedia === "function" &&
@@ -57,19 +59,54 @@ import { toggleLyrics } from "@state/player.svelte";
       cancelAnimationFrame(scrollAnim);
       scrollAnim = null;
     }
+    scrollAim = null;
   }
 
-  const ACTIVE_LINE_RATIO = 0.2;
-  const BOTTOM_FADE_PX = 64;
+  const TOP_FADE_PX = 56;
+  const TOP_GAP_PX = 28;
+  const ACTIVE_SCALE = 1.04;
 
-  function scrollTarget(c: HTMLElement, el: HTMLElement): number {
-    const anchor = c.clientHeight * ACTIVE_LINE_RATIO;
-    const max = c.scrollHeight - c.clientHeight;
-    const centered = el.offsetTop - anchor + el.clientHeight / 2;
-    return Math.max(0, Math.min(centered, max - BOTTOM_FADE_PX));
+  let lastActiveIndex = -1;
+  let collapsingLine: HTMLElement | null = null;
+
+  function romanExtra(line: HTMLElement): number {
+    const roman = line.querySelector(".lyr-roman");
+    if (!roman) return 0;
+    return roman.getBoundingClientRect().height + (parseFloat(getComputedStyle(roman).marginTop) || 0);
+  }
+
+  function scrollTarget(c: HTMLElement, activeIndex: number): number | null {
+    const el = lineEls[activeIndex];
+    if (!el) return null;
+    if (activeIndex !== lastActiveIndex) {
+      collapsingLine = lastActiveIndex >= 0 ? (lineEls[lastActiveIndex] ?? null) : null;
+      lastActiveIndex = activeIndex;
+    }
+    const lines = getLyricsLines();
+    const base =
+      el.offsetParent === c
+        ? el.offsetTop
+        : el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop;
+    let above = base;
+    for (let i = 0; i < lineEls.length; i++) {
+      const line = lineEls[i];
+      const item = lines[i];
+      if (!line || !item || i === activeIndex) continue;
+      if (!isInstrumental(item.text) || line.offsetTop >= base) continue;
+      above -= line.offsetHeight + (parseFloat(getComputedStyle(line).marginBottom) || 0);
+    }
+    if (collapsingLine && collapsingLine !== el && collapsingLine.offsetTop < base) {
+      const extra = romanExtra(collapsingLine);
+      if (extra > 0.5) above -= extra;
+      else collapsingLine = null;
+    }
+    const offset = above - (el.offsetHeight * (ACTIVE_SCALE - 1)) / 2;
+    const max = Math.max(0, c.scrollHeight - c.clientHeight);
+    return Math.max(0, Math.min(offset - (TOP_FADE_PX + TOP_GAP_PX), max));
   }
 
   function animateScroll(c: HTMLElement, to: number): void {
+    if (scrollAnim !== null && scrollAim !== null && Math.abs(scrollAim - to) <= 1.5) return;
     cancelScrollAnim();
     const from = c.scrollTop;
     const delta = to - from;
@@ -81,13 +118,19 @@ import { toggleLyrics } from "@state/player.svelte";
       c.scrollTop = to;
       return;
     }
+    scrollAim = to;
     const duration = Math.min(620, 200 + Math.abs(delta) * 0.32);
     const start = performance.now();
     const step = (now: number): void => {
       const p = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3);
       c.scrollTop = from + delta * eased;
-      scrollAnim = p < 1 ? requestAnimationFrame(step) : null;
+      if (p < 1) {
+        scrollAnim = requestAnimationFrame(step);
+        return;
+      }
+      scrollAnim = null;
+      scrollAim = null;
     };
     scrollAnim = requestAnimationFrame(step);
   }
@@ -163,22 +206,91 @@ import { toggleLyrics } from "@state/player.svelte";
     return () => stopClock();
   });
 
-  $effect(() => {
-    if (!autoScroll || userScrolling) return;
+  function activeScrollTarget(): number | null {
+    if (!autoScroll || userScrolling) return null;
     const activeIndex = getLyricsActiveIndex();
-    if (activeIndex < 0) return;
-    const el = lineEls[activeIndex];
+    if (activeIndex < 0) return null;
     const c = container;
-    if (!el || !c) return;
-    const target = scrollTarget(c, el);
+    if (!c) return null;
+    return scrollTarget(c, activeIndex);
+  }
+
+  let scrollContent: unknown = null;
+
+  $effect(() => {
+    const content = getLyricsResult();
+    const c = container;
+    if (content !== scrollContent) {
+      scrollContent = content;
+      didInitialScroll = false;
+      lastActiveIndex = -1;
+      collapsingLine = null;
+      cancelScrollAnim();
+      if (c) c.scrollTop = 0;
+    }
+    const target = activeScrollTarget();
+    if (target === null || !c) return;
     if (Math.abs(c.scrollTop - target) <= 2) return;
     if (didInitialScroll) {
       animateScroll(c, target);
+      scheduleSettle();
       return;
     }
     didInitialScroll = true;
     cancelScrollAnim();
     c.scrollTop = target;
+    scheduleSettle();
+  });
+
+  function retargetScroll(): void {
+    const c = container;
+    const target = activeScrollTarget();
+    if (!c || target === null) return;
+    if (Math.abs(c.scrollTop - target) <= 1) return;
+    animateScroll(c, target);
+  }
+
+  function scheduleSettle(): void {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+    const deadline = performance.now() + 1600;
+    const tick = (): void => {
+      retargetScroll();
+      if (performance.now() < deadline) {
+        settleTimer = setTimeout(tick, 120);
+        return;
+      }
+      settleTimer = null;
+    };
+    settleTimer = setTimeout(tick, 120);
+  }
+
+  $effect(() => () => {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+  });
+
+  $effect(() => {
+    const c = container;
+    const els = lineEls;
+    if (!c || typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(() => {
+      retargetScroll();
+      scheduleSettle();
+    });
+    ro.observe(c);
+    for (const el of els) if (el) ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  $effect(() => {
+    const c = container;
+    if (!c) return;
+    const onTransitionEnd = (e: TransitionEvent): void => {
+      if (e.target !== c || e.propertyName !== "grid-template-rows") return;
+      retargetScroll();
+      scheduleSettle();
+    };
+    c.addEventListener("transitionend", onTransitionEnd);
+    return () => c.removeEventListener("transitionend", onTransitionEnd);
   });
 
   $effect(() => {
@@ -407,6 +519,7 @@ import { toggleLyrics } from "@state/player.svelte";
       class="lyrics-scroll"
       role="presentation"
       class:paused={!getIsTrackPlaying()}
+      class:synced={getLyricsSynced()}
       bind:this={container}
       onpointerdown={clearSelectionOnBackground}
     >
@@ -426,7 +539,7 @@ import { toggleLyrics } from "@state/player.svelte";
         {#each getLyricsLines() as line, i (i)}
           {@const activeIndex = getLyricsActiveIndex()}
           {@const synced = getLyricsSynced()}
-          {@const instrumental = synced && isInstrumental(line.text)}
+          {@const instrumental = isInstrumental(line.text)}
           {@const active = i === activeIndex}
           <button
             type="button"
@@ -436,6 +549,7 @@ import { toggleLyrics } from "@state/player.svelte";
             class:selected={selected.includes(i)}
             class:seekable={synced && line.time >= 0}
             class:hidden-line={instrumental && !active}
+            inert={instrumental && !active}
             class:bg={!!line.bg}
             class:duet-left={line.agent === "v1"}
             class:duet-right={line.agent === "v2"}
@@ -443,20 +557,22 @@ import { toggleLyrics } from "@state/player.svelte";
             onclick={(e) => onLineClick(e, i)}
             oncontextmenu={(e) => onLineContextMenu(e, i)}
           >
-            {#if instrumental}
-              {#if active}
-                <span class="lyr-dots">
+            <span class="lyr-inner">
+              {#if instrumental}
+                <span class="lyr-dots" aria-hidden="true">
                   <span></span><span></span><span></span>
                 </span>
+              {:else if active && line.words?.length}
+                <KaraokeWords words={line.words} lineEnd={line.end} />
+              {:else}
+                <span class="lyr-text">{line.text || "\u00A0"}</span>
               {/if}
-            {:else if active && line.words?.length}
-              <KaraokeWords words={line.words} lineEnd={line.end} />
-            {:else}
-              <span class="lyr-text">{line.text || "\u00A0"}</span>
-            {/if}
-            {#if active && line.roman}
-              <span class="lyr-roman">{line.roman}</span>
-            {/if}
+              {#if line.roman}
+                <span class="lyr-roman" class:open={active} aria-hidden={!active}>
+                  <span class="lyr-roman-text">{line.roman}</span>
+                </span>
+              {/if}
+            </span>
           </button>
         {/each}
       {/if}
@@ -775,33 +891,39 @@ import { toggleLyrics } from "@state/player.svelte";
   }
 
   .lyrics-scroll {
+    --lyr-fade-top: 56px;
+    --lyr-fade-bottom: 64px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    overflow-anchor: none;
     scrollbar-width: none;
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 8vh 0 14vh;
+    padding: calc(var(--lyr-fade-top) + 28px) 0 14vh;
     mask-image: linear-gradient(
       to bottom,
       transparent 0,
-      black 96px,
-      black calc(100% - 64px),
+      black var(--lyr-fade-top),
+      black calc(100% - var(--lyr-fade-bottom)),
       transparent 100%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0,
-      black 96px,
-      black calc(100% - 64px),
+      black var(--lyr-fade-top),
+      black calc(100% - var(--lyr-fade-bottom)),
       transparent 100%
     );
   }
   .lyrics-scroll::-webkit-scrollbar {
     display: none;
+  }
+
+  .lyrics-scroll.synced {
+    padding-bottom: 80vh;
   }
 
   .lyr-empty {
@@ -822,27 +944,39 @@ import { toggleLyrics } from "@state/player.svelte";
   .lyr-line {
     font-family: var(--font-lyrics);
     font-size: 26px;
-    line-height: 1.5;
+    line-height: 1.6;
     font-weight: 500;
     color: var(--faint);
-    padding: 3px 16px;
+    padding: 0 16px;
     flex-shrink: 0;
     position: relative;
-    display: block;
+    display: grid;
+    grid-template-rows: 1fr;
     width: 100%;
     max-width: 760px;
-    margin: 0 auto;
+    margin: 0 auto 20px;
     text-align: center;
     background: none;
     border: none;
     cursor: pointer;
     overflow-wrap: break-word;
     transform-origin: center center;
-    will-change: transform;
     transition:
+      grid-template-rows 0.35s var(--ease-out),
+      margin-bottom 0.35s var(--ease-out),
       transform 0.6s var(--ease-out),
       color 0.5s var(--ease-out),
-      opacity 0.5s var(--ease-out);
+      opacity 0.35s var(--ease-out);
+  }
+  .lyr-inner {
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+    padding: 6px 0;
+    margin: -6px 0;
+  }
+  .lyr-line:last-child {
+    margin-bottom: 0;
   }
   .lyr-line.seekable {
     cursor: pointer;
@@ -860,15 +994,16 @@ import { toggleLyrics } from "@state/player.svelte";
     color: var(--accent);
   }
   .lyr-line.hidden-line {
-    display: none;
+    grid-template-rows: 0fr;
+    margin-bottom: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .lyr-line.bg {
     font-size: 20px;
   }
   .lyr-line.bg.active {
-    font-size: 25px;
-    transform: scale(1);
     color: var(--dim);
   }
   .lyr-line.duet-left,
@@ -886,8 +1021,26 @@ import { toggleLyrics } from "@state/player.svelte";
   }
 
   .lyr-roman {
-    display: block;
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    opacity: 0;
+    transition:
+      grid-template-rows 0.35s var(--ease-out),
+      margin-top 0.35s var(--ease-out),
+      opacity 0.35s var(--ease-out);
+  }
+  .lyr-roman.open {
+    grid-template-rows: 1fr;
     margin-top: 6px;
+    opacity: 1;
+  }
+  .lyr-roman-text {
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+    padding: 3px 0;
+    margin: -3px 0;
     font-size: 14px;
     font-weight: 400;
     line-height: 1.4;
@@ -899,8 +1052,6 @@ import { toggleLyrics } from "@state/player.svelte";
     display: inline-flex;
     gap: 10px;
     align-items: center;
-    opacity: 1;
-    transform: scale(1);
   }
   .lyr-dots span {
     width: 10px;
@@ -918,6 +1069,10 @@ import { toggleLyrics } from "@state/player.svelte";
   }
   .lyrics-scroll.paused .lyr-dots span {
     animation-play-state: paused;
+  }
+  .lyr-line.hidden-line .lyr-dots span {
+    animation-play-state: paused;
+    will-change: auto;
   }
   @keyframes lyr-dot-wave {
     0%,

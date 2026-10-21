@@ -24,19 +24,34 @@ const _cache = new Map<string, { result: LyricsResult; lines: LyricLine[] }>();
 let _activeId: string | null = null;
 let _loadVersion = 0;
 
+const STAMP_RE =
+  /\[[ \t]*(\d{1,3}):(\d{1,2})(?::(\d{1,4}))?(?:[.,](\d{1,4}))?[ \t]*\]/g;
+const HAS_STAMP_RE =
+  /\[[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*\]/;
+const WORD_TAG_RE =
+  /<[ \t]*(\d{1,3}):(\d{1,2})(?::(\d{1,4}))?(?:[.,](\d{1,4}))?[ \t]*>/g;
+const WORD_TAG_STRIP_RE =
+  /<[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*>/g;
+
+function clockSeconds(m: RegExpExecArray): number {
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  const third = m[3];
+  const frac = m[4] ? Number(`0.${m[4]}`) : 0;
+  if (!third) return a * 60 + b + frac;
+  if (third.length <= 2) return a * 3600 + b * 60 + Number(third) + frac;
+  return a * 60 + b + Number(`0.${third}`);
+}
+
 function parseEnhancedWords(body: string, offset = 0): Word[] | null {
-  const wordTagRe = /<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>/g;
   const wordTimestamps: number[] = [];
   let wm: RegExpExecArray | null;
-  wordTagRe.lastIndex = 0;
-  while ((wm = wordTagRe.exec(body))) {
-    const min = Number(wm[1]);
-    const sec = Number(wm[2]);
-    const frac = wm[3] ? Number(wm[3].padEnd(3, "0")) / 1000 : 0;
-    wordTimestamps.push(min * 60 + sec + frac + offset);
+  WORD_TAG_RE.lastIndex = 0;
+  while ((wm = WORD_TAG_RE.exec(body))) {
+    wordTimestamps.push(clockSeconds(wm) + offset);
   }
   if (wordTimestamps.length === 0) return null;
-  const textSegments = body.split(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/);
+  const textSegments = body.split(WORD_TAG_STRIP_RE);
   const words: Word[] = [];
   for (let i = 0; i < wordTimestamps.length; i++) {
     const text = (textSegments[i + 1] ?? "").trim();
@@ -63,6 +78,7 @@ function readOffsetSecs(text: string): number {
 
 const NOMINAL_LINE_SECS = 4;
 const MIN_WORD_SECS = 0.12;
+const LAST_LINE_GRACE_SECS = 10;
 
 function distributeWords(text: string, start: number, end: number): Word[] {
   const parts = text.split(/\s+/).filter(Boolean);
@@ -88,31 +104,32 @@ function applyEstimatedWords(lines: LyricLine[]): LyricLine[] {
 
 function parseLrc(text: string): LyricLine[] {
   const out: LyricLine[] = [];
-  const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
   const offset = readOffsetSecs(text);
   for (const raw of text.split(/\r?\n/)) {
     if (METADATA_TAG_RE.test(raw.trim())) continue;
 
     const stamps: number[] = [];
     let m: RegExpExecArray | null;
-    re.lastIndex = 0;
-    while ((m = re.exec(raw))) {
-      const min = Number(m[1]);
-      const sec = Number(m[2]);
-      const frac = m[3] ? Number(m[3].padEnd(3, "0")) / 1000 : 0;
-      stamps.push(min * 60 + sec + frac + offset);
+    STAMP_RE.lastIndex = 0;
+    while ((m = STAMP_RE.exec(raw))) {
+      stamps.push(clockSeconds(m) + offset);
     }
-    const body = raw.replace(re, "").trim();
+    const body = raw.replace(STAMP_RE, "").replace(/\s+/g, " ").trim();
 
     if (stamps.length === 0) {
-      if (!body) continue;
-      out.push({ time: -1, text: body });
+      const plain = body
+        .replace(WORD_TAG_STRIP_RE, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!plain) continue;
+      out.push({ time: -1, text: plain });
       continue;
     }
 
     const words = parseEnhancedWords(body, offset);
     const cleanBody = body
-      .replace(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/g, "")
+      .replace(WORD_TAG_STRIP_RE, "")
+      .replace(/\s+/g, " ")
       .trim();
     for (const s of stamps)
       out.push({
@@ -125,12 +142,14 @@ function parseLrc(text: string): LyricLine[] {
 }
 
 function parseClock(value: string): number {
-  const m = /^(\d+):(\d{1,2})(?:[.:](\d{1,3}))?$/.exec(value.trim());
+  const v = value.trim();
+  const m = /^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?$/.exec(v);
   if (m) {
-    const frac = m[3] ? Number(m[3].padEnd(3, "0")) / 1000 : 0;
-    return Number(m[1]) * 60 + Number(m[2]) + frac;
+    const hours = m[1] ? Number(m[1]) : 0;
+    const frac = m[4] ? Number(`0.${m[4]}`) : 0;
+    return hours * 3600 + Number(m[2]) * 60 + Number(m[3]) + frac;
   }
-  const secs = Number(value.trim().replace(/s$/i, ""));
+  const secs = Number(v.replace(/s$/i, ""));
   return Number.isFinite(secs) ? secs : 0;
 }
 
@@ -191,9 +210,8 @@ function collectSpans(
     const beginRaw = attr(el, "begin");
 
     if (el.nodeName === "span" && beginRaw !== null) {
-      const text = decodeEntities(el.textContent ?? "")
-        .replace(/\s+/g, " ")
-        .trim();
+      const raw = decodeEntities(el.textContent ?? "").replace(/\s+/g, " ");
+      const text = raw.trim();
       if (!text) {
         separated = false;
         continue;
@@ -208,7 +226,7 @@ function collectSpans(
         bg: childBg,
         sep: separated,
       });
-      separated = false;
+      separated = / $/.test(raw);
       continue;
     }
 
@@ -297,12 +315,27 @@ function parseTtml(text: string): LyricLine[] {
       text: lineText,
       words: words.length > 0 ? words : undefined,
       ...(end !== null ? { end } : {}),
-      ...(bgRole ? { bg: true } : {}),
+      ...(bgRole.test(role) ? { bg: true } : {}),
       ...(attr(p, "ttm:agent") ? { agent: attr(p, "ttm:agent")! } : {}),
     });
   };
 
   body.querySelectorAll("p").forEach(collect);
+
+  const agents: string[] = [];
+  for (const line of out) {
+    if (line.agent && !agents.includes(line.agent)) agents.push(line.agent);
+  }
+  if (agents.length < 2) {
+    for (const line of out) delete line.agent;
+  } else {
+    const [first, second] = agents;
+    for (const line of out) {
+      if (line.agent === first) line.agent = "v1";
+      else if (line.agent === second) line.agent = "v2";
+      else delete line.agent;
+    }
+  }
 
   if (romans.length > 0 && out.length > 0) {
     for (const r of romans) {
@@ -322,10 +355,27 @@ function parseTtml(text: string): LyricLine[] {
   return out.sort((a, b) => a.time - b.time);
 }
 
+function parsePlainText(text: string): LyricLine[] {
+  const out: LyricLine[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw
+      .replace(STAMP_RE, "")
+      .replace(WORD_TAG_STRIP_RE, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (line) out.push({ time: -1, text: line });
+  }
+  return out;
+}
+
 function toLines(res: LyricsResult): LyricLine[] {
   if (res.kind === "ttml") return parseTtml(res.text);
   if (res.kind === "lrc") return parseLrc(res.text);
-  return res.text.split(/\r?\n/).map((x) => ({ time: -1, text: x }));
+  if (HAS_STAMP_RE.test(res.text)) {
+    const lines = parseLrc(res.text);
+    if (lines.some((l) => l.time >= 0)) return lines;
+  }
+  return parsePlainText(res.text);
 }
 
 function clearLyricsState(): void {
@@ -358,8 +408,18 @@ function tryParseEmbeddedLyrics(res: LyricsResult, t: { path: string }): void {
   if (res.kind === "ttml") return;
   if (_embedded.has(t.path)) return;
   const embedText =
-    res.kind === "lrc"
-      ? res.text.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/gm, "").trim()
+    res.kind === "lrc" || HAS_STAMP_RE.test(res.text)
+      ? res.text
+          .split(/\r?\n/)
+          .map((line) =>
+            line
+              .replace(STAMP_RE, "")
+              .replace(WORD_TAG_STRIP_RE, "")
+              .replace(/\s+/g, " ")
+              .trim(),
+          )
+          .join("\n")
+          .trim()
       : res.text;
   if (!embedText) return;
   _embedded.add(t.path);
@@ -382,7 +442,7 @@ export function loadLyrics(id: string | null): void {
   void (async () => {
     const embeddedLyrics = t.lyrics?.trim() ?? null;
     const embeddedIsLrc = embeddedLyrics
-      ? /\[\d{1,2}:\d{2}/.test(embeddedLyrics)
+      ? HAS_STAMP_RE.test(embeddedLyrics)
       : false;
 
     if (embeddedLyrics && embeddedIsLrc) {
@@ -441,6 +501,9 @@ function findActiveLineIndex(lines: LyricLine[], t: number): number {
     if (lines[i].time >= 0 && lines[i].time <= t) idx = i;
     else if (lines[i].time > t) break;
   }
+  if (idx === lines.length - 1 && t - lines[idx].time > LAST_LINE_GRACE_SECS) {
+    return -1;
+  }
   return idx;
 }
 
@@ -484,7 +547,7 @@ export function wordFill(
   return fill < 0 ? 0 : fill > 1 ? 1 : fill;
 }
 
-const _synced = $derived(_result?.kind === "lrc" || _result?.kind === "ttml");
+const _synced = $derived(_lines.some((l) => l.time >= 0));
 
 const _activeIndex = $derived(
   _synced
@@ -517,13 +580,48 @@ export function getLyricsActiveWordIndex(): number {
   return _activeWordIndex;
 }
 
+const DECORATION_ONLY_RE = /^[\s\p{P}\p{S}]+$/u;
+const WRAP_OPEN_RE = /^[[({<【（\s]*/;
+const WRAP_CLOSE_RE = /[\s:;,.·…~～\-–—_)\]}>）】]*$/;
+const INSTRUMENTAL_WORD_RE = new RegExp(
+  "^(?:" +
+    "instrumental|inst\\.?|interlude|intermission|outro|intro|solo|break|bridge|" +
+    "build[\\s._-]?up|fade[\\s._-]?(?:out|in)|prelude|postlude|reprise|" +
+    "silence|soundcheck|music" +
+    ")$",
+  "i",
+);
+const INSTRUMENTAL_PHRASE_RE = new RegExp(
+  "^(?:" +
+    "(?:instrumental|inst\\.?|music)[\\s._-]+(?:break|solo|section|pass|part|interlude|intro|outro)|" +
+    "(?:guitar|piano|string|sax|synth|drum|flute|violin|cello|trumpet|organ)[\\s._-]*solo|" +
+    "no\\s+lyrics?|end\\s+of\\s+song" +
+    ")$",
+  "i",
+);
+const instrumentalCache = new Map<string, boolean>();
+const INSTRUMENTAL_CACHE_MAX = 500;
+
 export function isInstrumental(text: string): boolean {
-  const t = text.trim();
+  const hit = instrumentalCache.get(text);
+  if (hit !== undefined) return hit;
+
+  let result = computeInstrumental(text);
+  if (instrumentalCache.size >= INSTRUMENTAL_CACHE_MAX) instrumentalCache.clear();
+  instrumentalCache.set(text, result);
+  return result;
+}
+
+function computeInstrumental(text: string): boolean {
+  const raw = text.trim();
+  if (!raw) return true;
+  if (DECORATION_ONLY_RE.test(raw)) return true;
+
+  const t = raw.replace(WRAP_OPEN_RE, "").replace(WRAP_CLOSE_RE, "").trim();
   if (!t) return true;
-  if (/^[\s♪♫♩♬🎵🎶…~～·.\-—–]+$/.test(t)) return true;
-  return /^[(\[]?(instrumental|interlude|outro|intro|solo|break|bridge|build.?up|fade[.\s]?out|fade[.\s]?in|prelude|postlude|reprise)[)\]]?$/i.test(
-    t,
-  );
+  if (DECORATION_ONLY_RE.test(t)) return true;
+
+  return INSTRUMENTAL_WORD_RE.test(t) || INSTRUMENTAL_PHRASE_RE.test(t);
 }
 
 export function setLyricsManual(

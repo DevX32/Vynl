@@ -152,6 +152,9 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 }
 
+const double _lyricsAnchor = 84;
+const double _lyricsTopPad = 34;
+
 class _LyricsOverlay extends StatefulWidget {
   const _LyricsOverlay({required this.player});
 
@@ -266,9 +269,16 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
       if (!mounted || _userScrolling || !_scroll.hasClients) return;
       final ctx = _lineKeys[index]?.currentContext;
       if (ctx == null) return;
+      final box = ctx.findRenderObject();
+      final extent = box is RenderBox && box.hasSize ? box.size.height : 0.0;
+      final viewport = _scroll.position.viewportDimension;
+      final span = viewport - extent;
+      final alignment = span <= 0
+          ? 0.0
+          : (_lyricsAnchor / span).clamp(0.0, 1.0).toDouble();
       Scrollable.ensureVisible(
         ctx,
-        alignment: 0.34,
+        alignment: alignment,
         duration: opening ? Duration.zero : VynlMotion.normal,
         curve: VynlMotion.emphasized,
       );
@@ -281,8 +291,8 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
     }
 
     if (!_scroll.hasClients) return;
-    final viewport = _scroll.position.viewportDimension;
-    final estimate = index * _estimatedExtent - viewport * 0.34;
+    final estimate =
+        index * _estimatedExtent - (_lyricsAnchor - _lyricsTopPad);
     final max = _scroll.position.maxScrollExtent;
     final to = estimate.clamp(0.0, max > 0 ? max : 0.0);
     if ((_scroll.offset - to).abs() < 4) {
@@ -325,7 +335,8 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
       return const SizedBox.shrink();
     }
 
-    final canSync = result.synced;
+    final lines = toLyricLines(result);
+    final canSync = lines.any((l) => l.time >= 0);
 
     final cover = track.localCoverPath;
     final hasArt = cover != null && cover.isNotEmpty;
@@ -343,7 +354,7 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
           canSync
               ? _SyncedLines(
                   player: widget.player,
-                  lines: toLyricLines(result),
+                  lines: lines,
                   scroll: _scroll,
                   keyFor: _keyFor,
                   onActive: _centre,
@@ -445,55 +456,63 @@ class _SyncedLinesState extends State<_SyncedLines> {
           });
         }
 
-        return ListView.builder(
-          controller: widget.scroll,
-          padding: const EdgeInsets.fromLTRB(14, 34, 14, 44),
-          itemCount: lines.length,
-          itemBuilder: (context, i) {
-            final line = lines[i];
-            final isActive = i == active;
-            final instrumental = isInstrumental(line.text);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final tail = (constraints.maxHeight - _lyricsAnchor - 24)
+                .clamp(44.0, double.infinity)
+                .toDouble();
 
-            final TextStyle base = TextStyle(
-              fontFamily: VynlFonts.lyrics,
-              color: isActive
-                  ? VynlColors.text
-                  : (active >= 0 && i < active)
-                      ? VynlColors.faint
-                      : VynlColors.dim,
-              fontSize: isActive ? 22 : 16,
-              height: 1.5,
-              fontVariations: [FontVariation.weight(isActive ? 700 : 520)],
-              letterSpacing: isActive ? -0.4 : -0.15,
-              shadows: const [
-                Shadow(color: Color(0x8A000000), blurRadius: 6),
-                Shadow(color: Color(0x40000000), blurRadius: 1),
-              ],
-            );
+            return ListView.builder(
+              controller: widget.scroll,
+              padding: EdgeInsets.fromLTRB(14, _lyricsTopPad, 14, tail),
+              itemCount: lines.length,
+              itemBuilder: (context, i) {
+                final line = lines[i];
+                final isActive = i == active;
+                final instrumental = isInstrumental(line.text);
 
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: line.time < 0
-                  ? null
-                  : () => widget.player.seek(
-                        Duration(milliseconds: (line.time * 1000).round()),
+                final TextStyle base = TextStyle(
+                  fontFamily: VynlFonts.lyrics,
+                  color: isActive
+                      ? VynlColors.text
+                      : (active >= 0 && i < active)
+                          ? VynlColors.faint
+                          : VynlColors.dim,
+                  fontSize: 16,
+                  height: 1.5,
+                  fontVariations: [FontVariation.weight(isActive ? 700 : 520)],
+                  letterSpacing: isActive ? -0.4 : -0.15,
+                  shadows: const [
+                    Shadow(color: Color(0x8A000000), blurRadius: 6),
+                    Shadow(color: Color(0x40000000), blurRadius: 1),
+                  ],
+                );
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: line.time < 0
+                      ? null
+                      : () => widget.player.seek(
+                            Duration(milliseconds: (line.time * 1000).round()),
+                          ),
+                  child: Padding(
+                    key: widget.keyFor(i),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: AnimatedScale(
+                      duration: VynlMotion.fast,
+                      curve: VynlMotion.emphasized,
+                      scale: isActive ? 1.0 : 0.96,
+                      child: _LineBody(
+                        player: widget.player,
+                        line: line,
+                        style: base,
+                        instrumental: instrumental,
+                        active: isActive,
                       ),
-              child: Padding(
-                key: widget.keyFor(i),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: AnimatedScale(
-                  duration: VynlMotion.fast,
-                  curve: VynlMotion.emphasized,
-                  scale: isActive ? 1.0 : 0.96,
-                  child: _LineBody(
-                    player: widget.player,
-                    line: line,
-                    style: base,
-                    instrumental: instrumental,
-                    active: isActive,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         );

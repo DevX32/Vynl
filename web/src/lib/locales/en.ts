@@ -299,6 +299,7 @@ export const en = {
     updateAvailableTo: "Update available: {version}",
     availableTitle: "Update available",
     downloadingTitle: "Downloading update...",
+    installingTitle: "Installing update, restarting...",
     failedTitle: "Update failed",
     checking: "Checking...",
     retry: "Retry",

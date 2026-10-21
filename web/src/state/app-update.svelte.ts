@@ -6,10 +6,15 @@ import type { UpdateStatus } from "@lib/types";
 let _status = $state<UpdateStatus | null>(null);
 let _checking = $state(false);
 let _installing = $state(false);
+let _restarting = $state(false);
 let _currentVersion = $state<string | null>(null);
 let _unlisten: (() => void) | null = null;
 let _checkedOnce = false;
 let _checkedAt: number | null = null;
+let _restartTimer: ReturnType<typeof setTimeout> | null = null;
+
+const RESTART_DELAY_MS = 900;
+const RESTART_FALLBACK_MS = 10_000;
 
 export function getUpdateCheckedAt(): number | null {
   return _checkedAt;
@@ -25,6 +30,10 @@ export function getUpdateChecking(): boolean {
 
 export function getUpdateInstalling(): boolean {
   return _installing;
+}
+
+export function getUpdateRestarting(): boolean {
+  return _restarting;
 }
 
 export function getCurrentVersion(): string | null {
@@ -44,10 +53,38 @@ function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+function disarmRestart(): void {
+  if (_restartTimer !== null) {
+    clearTimeout(_restartTimer);
+    _restartTimer = null;
+  }
+  _restarting = false;
+}
+
+function armRestart(delay: number): void {
+  if (_restartTimer !== null || _restarting) return;
+  _installing = true;
+  _restartTimer = setTimeout(() => {
+    _restartTimer = null;
+    _restarting = true;
+    void vynl.restartApp().catch((e: unknown) => {
+      disarmRestart();
+      _installing = false;
+      toasts.error(t("update.checkFailed", { error: errText(e) }));
+    });
+  }, delay);
+}
+
 function ensureListener(): void {
   if (_unlisten) return;
   _unlisten = vynl.onUpdateStatus((next) => {
     applyStatus(next);
+    if (next.error) {
+      disarmRestart();
+      _installing = false;
+    } else if (next.ready) {
+      armRestart(RESTART_FALLBACK_MS);
+    }
   });
 }
 
@@ -78,13 +115,13 @@ export async function checkForAppUpdate(force = true, notify = false): Promise<v
 }
 
 export async function installAppUpdate(): Promise<void> {
-  if (_installing) return;
+  if (_installing || _restarting) return;
   _installing = true;
   try {
     await vynl.installAppUpdate();
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    void vynl.restartApp();
   } catch (e) {
+    disarmRestart();
+    _installing = false;
     toasts.error(t("update.checkFailed", { error: errText(e) }));
     if (_status) {
       applyStatus({
@@ -94,9 +131,10 @@ export async function installAppUpdate(): Promise<void> {
         error: errText(e),
       });
     }
-  } finally {
-    _installing = false;
+    return;
   }
+  disarmRestart();
+  armRestart(RESTART_DELAY_MS);
 }
 
 export async function restartAndInstall(): Promise<void> {
