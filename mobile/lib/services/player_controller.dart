@@ -217,6 +217,50 @@ class PlayerController extends ChangeNotifier {
     await playTracks(list, startIndex: idx < 0 ? 0 : idx);
   }
 
+  Future<void> removeTrack(String id) async {
+    final sequence = _sequence;
+    if (sequence == null) return;
+
+    final currentTrack = current;
+    final index = queue.indexWhere((t) => t.id == id);
+    if (index < 0) return;
+
+    if (currentTrack?.id != id) {
+      try {
+        await sequence.removeAt(index);
+        _tracksById.remove(id);
+      } catch (e) {
+        debugPrint('queue remove failed: $e');
+      }
+      notifyListeners();
+      return;
+    }
+
+    final wasPlaying = _player.playing;
+    final remaining = queue.where((t) => t.id != id).toList();
+    final start = index.clamp(0, remaining.length - 1);
+
+    try {
+      await _player.stop();
+      _sequence = null;
+      if (remaining.isEmpty) {
+        _tracksById = {};
+        await _player.setAudioSource(ConcatenatingAudioSource(children: []));
+      } else {
+        _tracksById = {for (final t in remaining) t.id: t};
+        final next = ConcatenatingAudioSource(
+          children: [for (final t in remaining) _sourceFor(t)],
+        );
+        _sequence = next;
+        await _player.setAudioSource(next, initialIndex: start);
+        if (wasPlaying) await _player.play();
+      }
+    } catch (e) {
+      debugPrint('queue remove (current) failed: $e');
+    }
+    notifyListeners();
+  }
+
   AudioSource _sourceFor(CatalogTrack t) {
     final art = t.localCoverPath;
     return AudioSource.file(

@@ -328,6 +328,37 @@ class AppState extends ChangeNotifier {
     await refreshLocal();
   }
 
+  Future<void> removeTrackFromDevice(CatalogTrack track) async {
+    await db.removeDownload(track.id);
+    await refreshLocal();
+  }
+
+  Future<void> downloadTrackToDevice(CatalogTrack track) async {
+    final client = api;
+    if (client == null) {
+      throw StateError('Pair with your desktop first.');
+    }
+
+    SyncManifestEntry? entry;
+    for (final item in await client.syncManifest()) {
+      if (item.id == track.id) {
+        entry = item;
+        break;
+      }
+    }
+    if (entry == null) {
+      throw StateError('This track is no longer on your desktop.');
+    }
+
+    await syncService.downloadTrack(
+      api: client,
+      track: track,
+      size: entry.size,
+    );
+    await db.setExcluded(track.id, false);
+    await refreshLocal();
+  }
+
   CatalogTrack? trackById(String id) => _trackIndex[id];
 
   List<CatalogTrack> tracksForPlaylist(PlaylistDto pl) {

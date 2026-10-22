@@ -11,6 +11,8 @@ class TrackTile extends StatelessWidget {
     super.key,
     required this.track,
     this.onTap,
+    this.onLongPress,
+    this.onMore,
     this.trailing,
     this.subtitle,
     this.active = false,
@@ -20,6 +22,8 @@ class TrackTile extends StatelessWidget {
 
   final CatalogTrack track;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onMore;
   final Widget? trailing;
   final String? subtitle;
   final bool active;
@@ -116,17 +120,31 @@ class TrackTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                showStatus
-                    ? Icon(
-                        track.isDownloaded
-                            ? Icons.download_done_rounded
-                            : Icons.cloud_download_outlined,
-                        size: 15,
-                        color: track.isDownloaded
-                            ? VynlColors.success.withValues(alpha: 0.75)
-                            : VynlColors.faint,
-                      )
-                    : const SizedBox(width: 15, height: 15),
+                if (onMore != null)
+                  SizedBox(
+                    width: 30,
+                    height: 22,
+                    child: IconButton(
+                      onPressed: onMore,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Track options',
+                      icon: const Icon(Icons.more_horiz_rounded, size: 18),
+                      color: VynlColors.faint,
+                    ),
+                  )
+                else if (showStatus)
+                  Icon(
+                    track.isDownloaded
+                        ? Icons.download_done_rounded
+                        : Icons.cloud_download_outlined,
+                    size: 15,
+                    color: track.isDownloaded
+                        ? VynlColors.success.withValues(alpha: 0.75)
+                        : VynlColors.faint,
+                  )
+                else
+                  const SizedBox(width: 15, height: 15),
               ],
             ),
           ],
@@ -134,7 +152,7 @@ class TrackTile extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return body;
+    if (onTap == null && onLongPress == null) return body;
 
     return Material(
       color: Colors.transparent,
@@ -142,6 +160,7 @@ class TrackTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: active
             ? DecoratedBox(
                 decoration: BoxDecoration(

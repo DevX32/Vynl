@@ -5,6 +5,7 @@ import '../services/player_controller.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/track_actions.dart';
 
 class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
@@ -141,13 +142,16 @@ class _LibraryPageState extends State<LibraryPage> {
                     return TrackTile(
                       track: track,
                       active: current?.id == track.id,
+                      onLongPress: () => showTrackActions(context, track),
+                      onMore: () => showTrackActions(context, track),
                       onTap: track.isDownloaded
                           ? () => player.playTrack(track, context: playable)
                           : () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Not downloaded yet — tap Sync on Wi‑Fi.',
+                                    '${track.title} is not on this device — '
+                                    'use ⋯ to download it.',
                                   ),
                                 ),
                               );

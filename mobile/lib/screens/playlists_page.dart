@@ -9,6 +9,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/artwork.dart';
 import '../widgets/common.dart';
+import '../widgets/track_actions.dart';
 
 class PlaylistsPage extends StatelessWidget {
   const PlaylistsPage({super.key});
@@ -327,6 +328,8 @@ class PlaylistDetailPage extends StatelessWidget {
                           track: track,
                           active: current?.id == track.id,
                           showStatus: false,
+                          onLongPress: () => showTrackActions(context, track),
+                          onMore: () => showTrackActions(context, track),
                           onTap: () => player.playTrack(
                             track,
                             context: tracks,

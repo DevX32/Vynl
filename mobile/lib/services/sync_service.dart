@@ -26,6 +26,7 @@ class SyncProgress {
 
   double get fraction => total <= 0 ? 0 : done / total;
 }
+
 const int _downloadConcurrency = 6;
 const Duration _notifyInterval = Duration(milliseconds: 400);
 const Duration _uiInterval = Duration(milliseconds: 120);
@@ -61,11 +62,13 @@ class SyncService {
     final catalogById = {for (final t in catalog) t.id: t};
 
     final local = await db.localSyncState();
+    final excluded = await db.excludedIds();
 
     final needDownload = <CatalogTrack>[];
     for (final entry in manifest) {
       final track = catalogById[entry.id];
       if (track == null) continue;
+      if (excluded.contains(entry.id)) continue;
       final existingPath = local[entry.id]?.audio;
       final localMtime = local[entry.id]?.mtime ?? 0;
       final remoteMtime = mtimeById[entry.id] ?? 0;
@@ -210,6 +213,21 @@ class SyncService {
     );
   }
 
+  Future<void> downloadTrack({
+    required VynlApi api,
+    required CatalogTrack track,
+    int? size,
+    void Function(int received)? onProgress,
+  }) async {
+    final error = await _downloadOne(
+      api: api,
+      track: track,
+      size: size,
+      onBytes: onProgress ?? (_) {},
+    );
+    if (error != null) throw error;
+  }
+
   Future<void> _syncPlaylistCovers({
     required VynlApi api,
     required List<PlaylistDto> playlists,
@@ -226,7 +244,7 @@ class SyncService {
       if (!pl.hasCover) {
         if (hasFile) {
           try {
-            await File(existing!).delete();
+            await File(existing).delete();
           } catch (e) {
             debugPrint('could not remove stale cover for ${pl.name}: $e');
           }
