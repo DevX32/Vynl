@@ -375,23 +375,21 @@ import { toggleLyrics } from "@state/player.svelte";
 
   function copyAllLyrics(): void {
     const lines = getLyricsLines()
-      .map((l) => l.text)
-      .filter(Boolean)
-      .join("\n");
-    if (!lines) return;
-    copyText(lines);
-    showToast(t("lyrics.copiedAll", { n: getLyricsLines().length }));
+      .map((l) => l.text.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return;
+    copyText(lines.join("\n\n"));
+    showToast(t("lyrics.copiedAll", { n: lines.length }));
   }
 
   function copySelectedLyrics(): void {
     const lines = getLyricsLines();
     const joined = selected
-      .map((i) => lines[i]?.text)
-      .filter((line): line is string => !!line)
-      .join("\n");
-    if (!joined) return;
-    copyText(joined);
-    showToast(t("lyrics.copiedN", { n: selected.length }));
+      .map((i) => lines[i]?.text?.trim())
+      .filter((line): line is string => !!line);
+    if (joined.length === 0) return;
+    copyText(joined.join("\n\n"));
+    showToast(t("lyrics.copiedN", { n: joined.length }));
   }
 
   function openSearch(): void {
@@ -902,7 +900,7 @@ import { toggleLyrics } from "@state/player.svelte";
     position: relative;
     display: flex;
     flex-direction: column;
-    padding: calc(var(--lyr-fade-top) + 28px) 0 14vh;
+    padding: calc(var(--lyr-fade-top) + 28px) 20px 8vh;
     mask-image: linear-gradient(
       to bottom,
       transparent 0,
@@ -923,7 +921,7 @@ import { toggleLyrics } from "@state/player.svelte";
   }
 
   .lyrics-scroll.synced {
-    padding-bottom: 80vh;
+    padding-bottom: 10vh;
   }
 
   .lyr-empty {
@@ -944,7 +942,7 @@ import { toggleLyrics } from "@state/player.svelte";
   .lyr-line {
     font-family: var(--font-lyrics);
     font-size: 26px;
-    line-height: 1.6;
+    line-height: 2;
     font-weight: 500;
     color: var(--faint);
     padding: 0 16px;
@@ -972,8 +970,8 @@ import { toggleLyrics } from "@state/player.svelte";
     display: block;
     min-height: 0;
     overflow: hidden;
-    padding: 6px 0;
-    margin: -6px 0;
+    padding: 12px 0;
+    margin: -16px 0;
   }
   .lyr-line:last-child {
     margin-bottom: 0;
@@ -984,7 +982,7 @@ import { toggleLyrics } from "@state/player.svelte";
   .lyr-line.active {
     color: var(--text);
     font-weight: 600;
-    transform: scale(1.04);
+    transform: scale(1.2);
   }
   .lyr-line.before {
     color: color-mix(in srgb, var(--dim) 62%, var(--bg));

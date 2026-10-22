@@ -4,7 +4,14 @@ import { runLyricsProviders } from "@lib/plugins/providers";
 import { getCurrentTrack } from "@state/now-playing.svelte";
 import { getSmoothTime } from "@state/media-clock.svelte";
 
-export type Word = { time: number; text: string; end?: number; bg?: boolean };
+export type Word = {
+  time: number;
+  text: string;
+  end?: number;
+  bg?: boolean;
+  /** Whether the source had whitespace after this word (karaoke spacing). */
+  sep?: boolean;
+};
 export type LyricLine = {
   time: number;
   text: string;
@@ -54,8 +61,12 @@ function parseEnhancedWords(body: string, offset = 0): Word[] | null {
   const textSegments = body.split(WORD_TAG_STRIP_RE);
   const words: Word[] = [];
   for (let i = 0; i < wordTimestamps.length; i++) {
-    const text = (textSegments[i + 1] ?? "").trim();
-    if (text) words.push({ time: wordTimestamps[i], text });
+    const seg = textSegments[i + 1] ?? "";
+    const text = seg.trim();
+    if (!text) continue;
+    const lead = seg.length - seg.trimStart().length;
+    const trailing = seg.slice(lead + text.length);
+    words.push({ time: wordTimestamps[i], text, sep: /\s/.test(trailing) });
   }
   return words.length > 0 ? words : null;
 }

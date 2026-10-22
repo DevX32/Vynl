@@ -44,7 +44,7 @@ import {
       <span
         class="wipe"
         style:--fill-pct={`${Math.round(fill * 1000) / 10}%`}
-      >{word.text}</span></span>{#if i < words.length - 1}{" "}{/if}
+      >{word.text}</span></span>{#if i < words.length - 1 && (word.sep ?? true)}{" "}{/if}
   {/each}
 </span>
 
@@ -68,6 +68,10 @@ import {
   }
 
   .wipe {
+    /* Vertical padding extends the background box past the font's ascent/
+       descent so background-clip:text still colors tall script marks
+       (devanagari matras) that paint outside the em box. */
+    padding: 0.4em 0;
     background-color: var(--wipe-unlit);
     background-repeat: no-repeat;
     background-position: left center;
