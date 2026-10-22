@@ -660,21 +660,39 @@ pub async fn rpc_update(state: Option<RpcPresence>, app: AppHandle) -> Result<()
         crate::services::rpc::update_presence(None);
         return Ok(());
     }
-    let state = match state {
-        Some(mut s) => {
-            let has_public_cover = s
-                .cover
-                .as_deref()
-                .is_some_and(|c| c.starts_with("http://") || c.starts_with("https://"));
-            if !has_public_cover {
-                s.cover = crate::services::artwork::lookup(&s.artist, &s.title).await;
-            }
-            Some(s)
-        }
-        None => None,
+    let Some(mut s) = state else {
+        crate::services::rpc::update_presence(None);
+        return Ok(());
     };
 
-    crate::services::rpc::update_presence(state.as_ref());
+    let has_public_cover = s
+        .cover
+        .as_deref()
+        .is_some_and(crate::services::rpc::is_public_cover);
+
+    if has_public_cover {
+        crate::services::rpc::update_presence(Some(&s));
+        return Ok(());
+    }
+
+    if let Some(cover) = crate::services::artwork::cached(&s.artist, &s.album, &s.title).await {
+        s.cover = cover;
+        crate::services::rpc::update_presence(Some(&s));
+        return Ok(());
+    }
+
+    let artist = s.artist.clone();
+    let album = s.album.clone();
+    let title = s.title.clone();
+    s.cover = None;
+    crate::services::rpc::update_presence(Some(&s));
+
+    tauri::async_runtime::spawn(async move {
+        if let Some(cover) = crate::services::artwork::lookup(&artist, &album, &title).await {
+            crate::services::rpc::patch_cover(&artist, &album, &title, cover);
+        }
+    });
+
     Ok(())
 }
 

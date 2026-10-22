@@ -19,6 +19,43 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+pub fn is_public_cover(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    if parsed.scheme() != "https" {
+        return false;
+    }
+
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return match ip {
+            std::net::IpAddr::V4(ip) => {
+                !(ip.is_private()
+                    || ip.is_loopback()
+                    || ip.is_link_local()
+                    || ip.is_unspecified()
+                    || ip.is_broadcast())
+            }
+            std::net::IpAddr::V6(ip) => {
+                let segments = ip.segments();
+                let unique_local = (segments[0] & 0xfe00) == 0xfc00;
+                let link_local = (segments[0] & 0xffc0) == 0xfe80;
+                !(ip.is_loopback() || ip.is_unspecified() || unique_local || link_local)
+            }
+        };
+    }
+
+    !(host.eq_ignore_ascii_case("localhost")
+        || host.ends_with(".local")
+        || host.ends_with(".localhost")
+        || !host.contains('.'))
+}
+
 fn build_activity(p: &RpcPresence) -> Activity<'static> {
     let title = if p.title.is_empty() {
         "Vynl".to_string()
@@ -55,18 +92,17 @@ fn build_activity(p: &RpcPresence) -> Activity<'static> {
         activity
     };
 
-    let img = match &p.cover {
-        Some(cover) if cover.starts_with("http://") || cover.starts_with("https://") => {
-            cover.clone()
-        }
-        _ => "vynl".to_string(),
-    };
-    let assets = Assets::new().large_image(img);
-    let assets = if !p.album.is_empty() {
-        assets.large_text(p.album.clone())
-    } else {
-        assets
-    };
+    let public_cover = p.cover.as_deref().filter(|cover| is_public_cover(cover));
+    let img = public_cover.unwrap_or("vynl").to_string();
+    let mut assets = Assets::new().large_image(img);
+
+    if public_cover.is_some() {
+        assets = assets.small_image("vynl").small_text("Vynl");
+    }
+    if !p.album.is_empty() {
+        assets = assets.large_text(p.album.clone());
+    }
+
     activity.assets(assets)
 }
 
@@ -170,10 +206,13 @@ pub fn update_presence(presence: Option<&RpcPresence>) {
     }
 }
 
-pub fn patch_cover(artist: &str, title: &str, cover: String) {
+pub fn patch_cover(artist: &str, album: &str, title: &str, cover: String) {
     let next = PENDING.lock().ok().and_then(|p| {
         let current = p.as_ref()?;
-        if current.artist != artist || current.title != title {
+        if current.artist != artist || current.album != album || current.title != title {
+            return None;
+        }
+        if current.cover.as_deref() == Some(cover.as_str()) {
             return None;
         }
         Some(RpcPresence {
