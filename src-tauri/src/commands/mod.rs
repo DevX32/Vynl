@@ -684,11 +684,14 @@ pub async fn rpc_update(state: Option<RpcPresence>, app: AppHandle) -> Result<()
     let artist = s.artist.clone();
     let album = s.album.clone();
     let title = s.title.clone();
+    let duration = s.duration;
     s.cover = None;
     crate::services::rpc::update_presence(Some(&s));
 
     tauri::async_runtime::spawn(async move {
-        if let Some(cover) = crate::services::artwork::lookup(&artist, &album, &title).await {
+        if let Some(cover) =
+            crate::services::artwork::lookup(&artist, &album, &title, duration).await
+        {
             crate::services::rpc::patch_cover(&artist, &album, &title, cover);
         }
     });
