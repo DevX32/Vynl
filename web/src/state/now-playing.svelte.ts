@@ -333,13 +333,6 @@ export function updateTime(time: number, forcePersist = false): void {
 export function updatePlaying(playing: boolean): void {
   if (!_state) return;
   _state = { ..._state, playing };
-  if (
-    !playing &&
-    typeof navigator !== "undefined" &&
-    "mediaSession" in navigator
-  ) {
-    navigator.mediaSession.playbackState = "paused";
-  }
   syncRpc(true);
   persistNowPlaying();
 }

@@ -868,6 +868,14 @@ pub async fn restart_app(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn media_update(
+    state: Option<MediaUpdate>,
+    controller: tauri::State<'_, crate::services::media_controls::MediaController>,
+) {
+    controller.update(state);
+}
+
+#[tauri::command]
 pub async fn player_play(
     path: String,
     seek_to: Option<f64>,

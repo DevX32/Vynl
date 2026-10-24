@@ -3,6 +3,7 @@ import {
   checkpointNowPlaying,
   getCurrentTrack,
   getCurrentTime,
+  getIsTrackPlaying,
   patchNowPlaying,
   removeFromUserQueue,
   removeFromContextQueue,
@@ -40,7 +41,12 @@ import type { LoopMode } from "@state/player.svelte";
 import { vynl } from "@lib/vynl";
 import { clamp01 } from "@lib/pointer";
 import { t } from "@lib/i18n";
-import type { LibraryTrack, PlaybackTick } from "@lib/types";
+import type {
+  LibraryTrack,
+  MediaControlEvent,
+  MediaUpdate,
+  PlaybackTick,
+} from "@lib/types";
 import type { PluginSharedState } from "@lib/plugins/types";
 
 export function isSharedPlayback(): boolean {
@@ -68,14 +74,10 @@ onMuteChange(applyVolume);
 setSeekHandler(seekToTime);
 
 if ("mediaSession" in navigator) {
-  navigator.mediaSession.setActionHandler("play", () => {
-    if (!getCurrentTrack()?.playing) toggle();
-  });
-  navigator.mediaSession.setActionHandler("pause", () => {
-    if (getCurrentTrack()?.playing) toggle();
-  });
-  navigator.mediaSession.setActionHandler("nexttrack", () => next());
-  navigator.mediaSession.setActionHandler("previoustrack", () => prev());
+  navigator.mediaSession.setActionHandler("play", handleMediaPlay);
+  navigator.mediaSession.setActionHandler("pause", handleMediaPause);
+  navigator.mediaSession.setActionHandler("nexttrack", next);
+  navigator.mediaSession.setActionHandler("previoustrack", prev);
 }
 
 function beginPlayReconcile(generation: number): void {
@@ -103,6 +105,7 @@ function handleTick(tick: PlaybackTick): void {
   if (tick.finished) {
     if (np.playing) {
       updatePlaying(false);
+      updateMediaSession();
       if (!isSharedPlayback()) nextAutomatic();
     }
     return;
@@ -209,7 +212,9 @@ function updateMediaSession(): void {
     meta.artwork = [{ src: np.cover }];
   }
   navigator.mediaSession.metadata = new MediaMetadata(meta);
-  navigator.mediaSession.playbackState = "playing";
+  navigator.mediaSession.playbackState = getIsTrackPlaying()
+    ? "playing"
+    : "paused";
 }
 
 function isPlayInterrupt(err: unknown): boolean {
@@ -240,6 +245,7 @@ function handlePlayReject(err: unknown): void {
   if (isPlayInterrupt(err)) return;
   console.error("[vynl] native play failed:", err);
   updatePlaying(false);
+  updateMediaSession();
   setPlayError(t("error.couldNotPlay"));
   const failedId = getCurrentTrack()?.id ?? null;
   scheduleRetry(failedId);
@@ -373,6 +379,7 @@ function playSharedFile(opts: {
     }).then((position) => {
       if (gen !== playGeneration || position === undefined) return;
       updatePlaying(false);
+      updateMediaSession();
       updateTime(Number.isFinite(position) ? position : initialTime, true);
     }).catch((err) => {
       finishPlayReconcile(gen);
@@ -481,6 +488,7 @@ export function stopShared(): void {
   const stopGeneration = ++playGeneration;
   void vynl.playerStop(stopGeneration).catch(() => {});
   updatePlaying(false);
+  updateMediaSession();
 }
 
 export async function resumeOrPlay(
@@ -522,6 +530,7 @@ export function pausePlayback(operationId?: number): void {
     if (generation !== playGeneration) return;
     if (operationId !== undefined && operationId !== _sharedGen) return;
     updatePlaying(false);
+    updateMediaSession();
   };
   void vynl
     .playerPause(generation)
@@ -695,6 +704,7 @@ function requestSeek(time: number): void {
       seekPending = false;
       _seekTarget = null;
       updateTime(target, true);
+      syncMediaNow();
     })
     .catch((error) => {
       if (requestId !== seekRequestId || generation !== playGeneration) return;
@@ -781,4 +791,118 @@ export function reorderQueueTrack(fromPath: string, toPath: string): void {
   } else {
     reorderContextQueue(fromPath, toPath);
   }
+}
+
+type CurrentMedia = ReturnType<typeof getCurrentTrack>;
+
+let lastMediaSignature: string | null = null;
+let lastMediaSentAt = 0;
+
+function mediaSignature(np: CurrentMedia, playing: boolean): string {
+  if (!np) return "";
+  return [
+    np.id,
+    np.title,
+    np.artist,
+    np.album,
+    np.duration,
+    np.cover ?? "",
+    playing ? "1" : "0",
+  ].join("\u001f");
+}
+
+function sendMediaUpdate(
+  np: CurrentMedia,
+  playing: boolean,
+  position: number,
+): void {
+  const payload: MediaUpdate | null = np
+    ? {
+        title: np.title,
+        artist: np.artist,
+        album: np.album,
+        duration: np.duration,
+        cover: np.cover,
+        playing,
+        position,
+      }
+    : null;
+  void vynl.mediaUpdate(payload).catch((error) => {
+    console.warn("[vynl] media update failed:", error);
+  });
+}
+
+function syncMedia(
+  np: CurrentMedia,
+  playing: boolean,
+  position: number,
+  force = false,
+): void {
+  const signature = mediaSignature(np, playing);
+  if (!force && signature === lastMediaSignature) return;
+  lastMediaSignature = signature;
+  lastMediaSentAt = Date.now();
+  sendMediaUpdate(np, playing, position);
+}
+
+function syncMediaNow(): void {
+  syncMedia(getCurrentTrack(), getIsTrackPlaying(), getCurrentTime(), true);
+}
+
+function handleMediaPlay(): void {
+  if (!getIsTrackPlaying()) toggle();
+}
+
+function handleMediaPause(): void {
+  if (getIsTrackPlaying()) toggle();
+}
+
+function handleMediaStop(): void {
+  if (getIsTrackPlaying()) pausePlayback();
+  seekToTime(0);
+}
+
+function handleMediaControl(event: MediaControlEvent): void {
+  switch (event.action) {
+    case "play":
+      handleMediaPlay();
+      break;
+    case "pause":
+      handleMediaPause();
+      break;
+    case "toggle":
+      toggle();
+      break;
+    case "next":
+      next();
+      break;
+    case "previous":
+      prev();
+      break;
+    case "stop":
+      handleMediaStop();
+      break;
+    case "seek":
+      seekToTime(event.position);
+      break;
+    case "seekBy":
+      seekOffset(event.offset);
+      break;
+    case "setVolume":
+      setVolumeAt(clamp01(event.volume));
+      break;
+  }
+}
+
+if (typeof window !== "undefined") {
+  $effect.root(() => {
+    $effect(() => {
+      const np = getCurrentTrack();
+      const playing = getIsTrackPlaying();
+      const position = getCurrentTime();
+      const due = np !== null && Date.now() - lastMediaSentAt >= 2_000;
+      syncMedia(np, playing, position, due);
+    });
+  });
+  vynl.onMediaControl(handleMediaControl);
 }

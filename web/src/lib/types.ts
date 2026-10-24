@@ -278,3 +278,27 @@ export interface RestoredBackup {
   total: number;
   knownSources: number;
 }
+
+export interface MediaUpdate {
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  cover: string | null;
+  playing: boolean;
+  position: number;
+}
+
+export type MediaControlEvent =
+  | {
+      action:
+        | "play"
+        | "pause"
+        | "toggle"
+        | "next"
+        | "previous"
+        | "stop";
+    }
+  | { action: "seek"; position: number }
+  | { action: "seekBy"; offset: number }
+  | { action: "setVolume"; volume: number };

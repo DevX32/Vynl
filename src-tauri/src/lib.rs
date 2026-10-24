@@ -139,6 +139,8 @@ pub fn run() {
             app.manage(commands::AppState::default());
             app.manage(crate::services::update::UpdateState::default());
 
+            app.manage(crate::services::media_controls::start(app.handle().clone()));
+
             {
                 let app_handle = app.handle().clone();
                 let _ = ctrlc::set_handler(move || {
@@ -154,12 +156,11 @@ pub fn run() {
             let user_data = app.path().app_data_dir().unwrap_or_default();
             let settings = crate::services::settings::get_settings(&user_data);
 
-            if let Some(win) = app.get_webview_window("main") {
-                if let Ok(icon) =
+            if let Some(win) = app.get_webview_window("main")
+                && let Ok(icon) =
                     tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico"))
-                {
-                    let _ = win.set_icon(icon);
-                }
+            {
+                let _ = win.set_icon(icon);
             }
 
             crate::services::tools::remove_unused_binaries(&user_data);
@@ -294,6 +295,7 @@ pub fn run() {
             commands::lyrics_embed,
             commands::lyrics_search,
             commands::rpc_update,
+            commands::media_update,
             commands::save_now_playing,
             commands::load_now_playing,
             commands::clear_now_playing,

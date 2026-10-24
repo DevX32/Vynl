@@ -308,6 +308,32 @@ pub struct Playlist {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MediaUpdate {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub duration: f64,
+    pub cover: Option<String>,
+    pub playing: bool,
+    pub position: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "action", rename_all = "camelCase")]
+pub enum MediaControlAction {
+    Play,
+    Pause,
+    Toggle,
+    Next,
+    Previous,
+    Stop,
+    Seek { position: f64 },
+    SeekBy { offset: f64 },
+    SetVolume { volume: f64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrackProgress {
     pub track_id: String,
     pub status: TrackStatus,

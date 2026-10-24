@@ -8,6 +8,7 @@ pub mod history;
 pub mod internal;
 pub mod library;
 pub mod lyrics;
+pub mod media_controls;
 pub mod mobile_sync;
 pub mod opusmux;
 pub mod player;

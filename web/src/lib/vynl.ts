@@ -25,6 +25,8 @@ import type {
   MobileSyncStatus,
   UpdateStatus,
   EqDesign,
+  MediaUpdate,
+  MediaControlEvent,
 } from "../lib/types";
 import type {
   PluginHttpInit,
@@ -129,6 +131,12 @@ export const vynl = {
 
   deleteLibraryTrack: (path: string, id?: string): Promise<void> =>
     cmd("delete_library_track", { path, id }),
+
+  mediaUpdate: (state: MediaUpdate | null): Promise<void> =>
+    cmd("media_update", { state }),
+
+  onMediaControl: (cb: (event: MediaControlEvent) => void): (() => void) =>
+    onEvent<MediaControlEvent>("vynl:media-control", cb),
 
   listPlaylists: (): Promise<PlaylistMeta[]> => cmd("list_playlists"),
 
