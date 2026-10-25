@@ -237,7 +237,7 @@ jobs:
       actions: write
     steps:
       - name: Remove release after a failed build
-        if: needs.build.result != 'success'
+        if: needs.build.result == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
