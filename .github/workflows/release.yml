@@ -12,9 +12,15 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  RELEASE_BODY: |
+    - **Windows** (.exe, Windows 10+) - SmartScreen may warn (unsigned)
+    - **Linux** (.AppImage, .deb, .rpm) - no macOS build
+    - **Android** - APKs by CPU: arm64-v8a (most phones), armeabi-v7a / x86_64 (older/Intel). Allow "install unknown apps", then open. Sideloading only.
+
 jobs:
   verify:
-    name: Tag matches app version
+    name: Verify tag and create release
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.check.outputs.version }}
@@ -46,6 +52,26 @@ jobs:
             exit 1
           fi
           echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+      # Create the release immediately, while the tag still matches main's
+      # workflow files. The Releases API refuses to create a release with the
+      # Actions token if main gains a workflow change after the tag was cut.
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; reusing it."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --verify-tag \
+            --title "Vynl $VERSION" \
+            --notes "$RELEASE_BODY"
 
   build:
     name: Build · ${{ matrix.platform }}
@@ -81,10 +107,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Vynl ${{ needs.verify.outputs.version }}
-          releaseBody: |
-            - **Windows** (.exe, Windows 10+) - SmartScreen may warn (unsigned)
-            - **Linux** (.AppImage, .deb, .rpm) - no macOS build
-            - **Android** - APKs by CPU: arm64-v8a (most phones), armeabi-v7a / x86_64 (older/Intel). Allow "install unknown apps", then open. Sideloading only.
+          releaseBody: ${{ env.RELEASE_BODY }}
           releaseDraft: false
           prerelease: false
 
@@ -205,7 +228,7 @@ jobs:
             gh release delete-asset "$TAG" "$asset" --yes
           done <<< "$sigs"
   publish:
-    name: Publish release
+    name: Finish release
     needs: [build, mobile]
     if: always() && github.event_name == 'push'
     runs-on: ubuntu-24.04
@@ -213,13 +236,19 @@ jobs:
       contents: write
       actions: write
     steps:
-      - name: Publish release
+      - name: Remove release after a failed build
+        if: needs.build.result != 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release delete "$GITHUB_REF_NAME" --yes
+          fi
 
       - name: Rebuild site for the new version
+        if: needs.build.result == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
