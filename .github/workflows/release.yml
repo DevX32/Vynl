@@ -15,7 +15,7 @@ concurrency:
 jobs:
   verify:
     name: Tag matches app version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
@@ -92,7 +92,7 @@ jobs:
     name: Build Android APKs
     needs: build
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -208,7 +208,7 @@ jobs:
     name: Publish release
     needs: [build, mobile]
     if: always() && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       actions: write
