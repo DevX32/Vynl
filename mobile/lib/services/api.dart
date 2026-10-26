@@ -17,6 +17,26 @@ class RemoteLyrics {
   final String source;
 }
 
+enum SyncedLyricsStatus { found, missing, failed }
+
+class SyncedLyricsResponse {
+  const SyncedLyricsResponse._({required this.status, this.lyrics});
+
+  const SyncedLyricsResponse.found(RemoteLyrics lyrics)
+      : this._(status: SyncedLyricsStatus.found, lyrics: lyrics);
+
+  const SyncedLyricsResponse.missing()
+      : this._(status: SyncedLyricsStatus.missing);
+
+  const SyncedLyricsResponse.failed()
+      : this._(status: SyncedLyricsStatus.failed);
+
+  final SyncedLyricsStatus status;
+  final RemoteLyrics? lyrics;
+
+  bool get isFound => status == SyncedLyricsStatus.found;
+}
+
 class ApiException implements Exception {
   ApiException(this.message, {this.statusCode});
   final String message;
@@ -155,22 +175,30 @@ class VynlApi {
     await _downloadFile(path: '/v1/playlists/$playlistId/cover', dest: dest);
   }
 
-  Future<RemoteLyrics?> syncedLyrics(String trackId) async {
+  Future<SyncedLyricsResponse> syncedLyrics(String trackId) async {
+    final http.Response res;
     try {
-      final res = await _client
+      res = await _client
           .get(_uri('/v1/tracks/$trackId/synced-lyrics'), headers: _headers)
           .timeout(const Duration(seconds: 60));
-      if (res.statusCode != 200) return null;
+    } catch (_) {
+      return const SyncedLyricsResponse.failed();
+    }
+    if (res.statusCode == 404) return const SyncedLyricsResponse.missing();
+    if (res.statusCode != 200) return const SyncedLyricsResponse.failed();
+    try {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final text = body['text'] as String? ?? '';
-      if (text.trim().isEmpty) return null;
-      return RemoteLyrics(
-        kind: body['kind'] as String? ?? 'lrc',
-        text: text,
-        source: body['source'] as String? ?? 'remote',
+      if (text.trim().isEmpty) return const SyncedLyricsResponse.missing();
+      return SyncedLyricsResponse.found(
+        RemoteLyrics(
+          kind: body['kind'] as String? ?? 'lrc',
+          text: text,
+          source: body['source'] as String? ?? 'remote',
+        ),
       );
     } catch (_) {
-      return null;
+      return const SyncedLyricsResponse.failed();
     }
   }
 

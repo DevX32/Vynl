@@ -293,6 +293,7 @@ pub fn run() {
             commands::lyrics_local,
             commands::lyrics_fetch,
             commands::lyrics_embed,
+            commands::lyrics_save,
             commands::lyrics_search,
             commands::rpc_update,
             commands::media_update,

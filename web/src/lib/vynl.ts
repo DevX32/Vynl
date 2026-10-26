@@ -188,6 +188,12 @@ export const vynl = {
   lyricsEmbed: (payload: { file: string; text: string }): Promise<void> =>
     cmd("lyrics_embed", payload),
 
+  lyricsSave: (payload: {
+    file: string;
+    kind: LyricsResult["kind"];
+    text: string;
+  }): Promise<void> => cmd("lyrics_save", payload),
+
   lyricsSearch: (opts: {
     query: string;
     trackName?: string;

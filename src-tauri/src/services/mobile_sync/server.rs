@@ -514,6 +514,17 @@ async fn track_synced_lyrics(
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     };
 
+    if let Some(res) = crate::services::lyrics::local_lyrics(&track.path)
+        && let Some(kind) = result_lyrics_kind(&res.kind)
+    {
+        return Json(MobileLyrics {
+            kind: kind.into(),
+            text: res.text,
+            source: "local".into(),
+        })
+        .into_response();
+    }
+
     let embedded = track
         .lyrics
         .as_deref()
@@ -569,13 +580,12 @@ async fn track_synced_lyrics(
 }
 
 fn embedded_lyrics_kind(text: &str) -> Option<&'static str> {
-    if crate::services::lyrics::is_ttml(text) {
-        return Some("ttml");
+    use crate::commands::types::LyricsKind;
+    match crate::services::lyrics::lyrics_kind(text) {
+        LyricsKind::Ttml => Some("ttml"),
+        LyricsKind::Lrc => Some("lrc"),
+        LyricsKind::Txt => None,
     }
-    if crate::services::lyrics::is_lrc(text) {
-        return Some("lrc");
-    }
-    None
 }
 
 fn result_lyrics_kind(kind: &crate::commands::types::LyricsKind) -> Option<&'static str> {

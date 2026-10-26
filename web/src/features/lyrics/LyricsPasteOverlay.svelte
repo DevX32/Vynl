@@ -1,9 +1,7 @@
 <script lang="ts">
   import { t } from "@lib/i18n";
-  import { vynl } from "../../lib/vynl";
-  import { getCurrentTrack } from "@state/now-playing.svelte";
   import type { LyricsResult } from "../../lib/types";
-  import { setLyricsManual, toLyricLines, isTtmlText } from "@state/lyrics.svelte";
+  import { setLyricsManual, toLyricLines, lyricsKindOf } from "@state/lyrics.svelte";
 
   let {
     onClose,
@@ -16,20 +14,13 @@
   function applyPastedLyrics(): void {
     const text = pasteText.trim();
     if (!text) return;
-    let kind: LyricsResult["kind"] = "txt";
-    if (isTtmlText(text)) kind = "ttml";
-    else if (/\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]/.test(text)) kind = "lrc";
-    const result: LyricsResult = { kind, text, source: "local" };
+    const result: LyricsResult = {
+      kind: lyricsKindOf(text),
+      text,
+      source: "local",
+    };
     setLyricsManual(result, toLyricLines(result));
     onClose();
-
-    const track = getCurrentTrack();
-    if (!track?.path) return;
-    if (kind === "ttml") return;
-    const plain = kind === "lrc"
-      ? text.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/gm, "").trim()
-      : text;
-    if (plain) void vynl.lyricsEmbed({ file: track.path, text: plain }).catch(() => {});
   }
 </script>
 

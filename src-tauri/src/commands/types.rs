@@ -369,20 +369,101 @@ pub struct LyricsLookup {
     pub duration: f64,
 }
 
+fn string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+    use std::fmt;
+
+    struct StringOrNumber;
+
+    impl<'de> Visitor<'de> for StringOrNumber {
+        type Value = String;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string or number")
+        }
+
+        fn visit_str<E: de::Error>(self, value: &str) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+
+        fn visit_string<E: de::Error>(self, value: String) -> Result<String, E> {
+            Ok(value)
+        }
+
+        fn visit_i64<E: de::Error>(self, value: i64) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+
+        fn visit_u64<E: de::Error>(self, value: u64) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+
+        fn visit_f64<E: de::Error>(self, value: f64) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+    }
+
+    deserializer.deserialize_any(StringOrNumber)
+}
+
+fn string_or_default<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LrcSearchResult {
+    #[serde(deserialize_with = "string_or_number")]
     pub id: String,
-    #[serde(rename = "trackName")]
+    #[serde(rename = "trackName", default, deserialize_with = "string_or_default")]
     pub track_name: String,
-    #[serde(rename = "artistName")]
+    #[serde(rename = "artistName", default, deserialize_with = "string_or_default")]
     pub artist_name: String,
-    #[serde(rename = "albumName")]
+    #[serde(rename = "albumName", default, deserialize_with = "string_or_default")]
     pub album_name: String,
     pub duration: f64,
     pub instrumental: bool,
     pub plain_lyrics: Option<String>,
     pub synced_lyrics: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LrcSearchResult;
+
+    #[test]
+    fn lrc_search_result_accepts_numeric_id() {
+        let parsed: LrcSearchResult = serde_json::from_str(
+            r#"{"id":123456,"trackName":"Song","artistName":"Artist","albumName":null,"duration":12.5,"instrumental":false,"plainLyrics":null,"syncedLyrics":"[00:01.00]hi"}"#,
+        )
+        .expect("numeric LRCLIB id should deserialize");
+
+        assert_eq!(parsed.id, "123456");
+        assert_eq!(parsed.track_name, "Song");
+        assert_eq!(parsed.artist_name, "Artist");
+        assert_eq!(parsed.album_name, "");
+        assert_eq!(parsed.synced_lyrics.as_deref(), Some("[00:01.00]hi"));
+    }
+
+    #[test]
+    fn lrc_search_result_accepts_string_id_and_missing_names() {
+        let parsed: LrcSearchResult = serde_json::from_str(
+            r#"{"id":"USRC17607839","duration":0.0,"instrumental":false,"plainLyrics":"hi","syncedLyrics":null}"#,
+        )
+        .expect("ISRC string id should deserialize");
+
+        assert_eq!(parsed.id, "USRC17607839");
+        assert_eq!(parsed.track_name, "");
+        assert_eq!(parsed.artist_name, "");
+        assert_eq!(parsed.album_name, "");
+        assert_eq!(parsed.plain_lyrics.as_deref(), Some("hi"));
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

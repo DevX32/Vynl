@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { t } from "@lib/i18n";
   import { vynl } from "../../lib/vynl";
   import type { LyricsResult, LrcSearchResult } from "../../lib/types";
-  import { getCurrentTrack } from "@state/now-playing.svelte";
+  import { getCurrentId, getCurrentTrack } from "@state/now-playing.svelte";
   import {
     setLyricsManual,
-    parseLrcText,
+    lyricsKindOf,
     toLyricLines,
   } from "@state/lyrics.svelte";
 
@@ -20,17 +21,25 @@
   let searchLoading = $state(false);
   let searchError = $state<string | null>(null);
   let searchVersion = 0;
+  let autoQuery = "";
 
   $effect(() => {
-    const track = getCurrentTrack();
-    const next = track ? `${track.title} ${track.artist}` : "";
-    searchQuery = next;
-    searchResults = [];
-    searchError = null;
-    if (next.trim()) void runSearch(next);
+    const id = getCurrentId();
+    untrack(() => {
+      const track = getCurrentTrack();
+      const next = track ? `${track.title} ${track.artist}` : "";
+      autoQuery = next;
+      searchQuery = next;
+      searchResults = [];
+      searchError = null;
+      if (id && next.trim()) void runSearch(next, true);
+    });
   });
 
-  async function runSearch(query = searchQuery): Promise<void> {
+  async function runSearch(
+    query = searchQuery,
+    scoped = query.trim() === autoQuery.trim(),
+  ): Promise<void> {
     const trimmed = query.trim();
     if (!trimmed) return;
     searchLoading = true;
@@ -40,8 +49,9 @@
       const track = getCurrentTrack();
       const results = await vynl.lyricsSearch({
         query: trimmed,
-        trackName: track?.title,
-        artistName: track?.artist,
+        ...(scoped && track
+          ? { trackName: track.title, artistName: track.artist }
+          : {}),
       });
       if (ver === searchVersion) searchResults = results;
     } catch (e) {
@@ -58,22 +68,13 @@
     const text = item.syncedLyrics ?? item.plainLyrics ?? "";
     if (!text) return;
 
-    const synced = !!item.syncedLyrics;
     const result: LyricsResult = {
-      kind: synced ? "lrc" : "txt",
+      kind: lyricsKindOf(text),
       text,
       source: "remote",
     };
-    setLyricsManual(result, synced ? parseLrcText(text) : toLyricLines(result));
+    setLyricsManual(result, toLyricLines(result));
     onClose();
-
-    const track = getCurrentTrack();
-    if (!track?.path) return;
-    const plain = synced
-      ? text.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/gm, "").trim()
-      : text;
-    if (plain)
-      void vynl.lyricsEmbed({ file: track.path, text: plain }).catch(() => {});
   }
 </script>
 

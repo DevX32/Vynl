@@ -941,7 +941,7 @@ async fn process_track(
         }
     };
 
-    let (lyrics_text, lyrics_lrc_text) = process_lyrics_lookup(track, user_data_dir).await;
+    let (lyrics_text, lyrics_sidecar) = process_lyrics_lookup(track, user_data_dir).await;
 
     let mut tagged_file = tmp.join(format!(
         "{}.tagged.{}",
@@ -990,7 +990,9 @@ async fn process_track(
         &tagged_file,
         &final_path,
         track,
-        lyrics_lrc_text.as_deref(),
+        lyrics_sidecar
+            .as_ref()
+            .map(|(ext, text)| (*ext, text.as_str())),
         user_data_dir,
         collection,
         used_url.as_deref(),
@@ -1414,7 +1416,7 @@ fn record_failure(
 async fn process_lyrics_lookup(
     track: &TrackMeta,
     user_data_dir: &Path,
-) -> (Option<String>, Option<String>) {
+) -> (Option<String>, Option<(&'static str, String)>) {
     let lookup = LyricsLookup {
         title: track.title.clone(),
         artist: track.artist.clone(),
@@ -1423,18 +1425,22 @@ async fn process_lyrics_lookup(
     };
     let fetch_result = lyrics::fetch_lyrics_with_cache(&lookup, user_data_dir).await;
     match fetch_result {
-        Some(lr)
-            if lr.kind == crate::commands::types::LyricsKind::Lrc && !lr.text.trim().is_empty() =>
-        {
-            let lrc_text = lr.text.clone();
-            let plain = LRC_META_RE
-                .replace_all(&LRC_TIME_RE.replace_all(&lr.text, ""), "")
-                .trim()
-                .to_string();
-            let embed = if plain.is_empty() { None } else { Some(plain) };
-            (embed, Some(lrc_text))
+        Some(lr) if !lr.text.trim().is_empty() => {
+            let kind = lr.kind;
+            let text = lr.text;
+            match kind {
+                crate::commands::types::LyricsKind::Lrc => {
+                    let plain = LRC_META_RE
+                        .replace_all(&LRC_TIME_RE.replace_all(&text, ""), "")
+                        .trim()
+                        .to_string();
+                    let embed = if plain.is_empty() { None } else { Some(plain) };
+                    (embed, Some(("lrc", text)))
+                }
+                crate::commands::types::LyricsKind::Ttml => (None, Some(("ttml", text))),
+                crate::commands::types::LyricsKind::Txt => (Some(text), None),
+            }
         }
-        Some(lr) if !lr.text.trim().is_empty() => (Some(lr.text), None),
         _ => (None, None),
     }
 }
@@ -1443,7 +1449,7 @@ async fn move_tagged_to_output(
     tagged_file: &Path,
     final_path: &Path,
     track: &TrackMeta,
-    lyrics_lrc_text: Option<&str>,
+    lyrics_sidecar: Option<(&str, &str)>,
     user_data_dir: &Path,
     collection: &Collection,
     used_url: Option<&str>,
@@ -1458,16 +1464,20 @@ async fn move_tagged_to_output(
 
     move_file(tagged_file, final_path)?;
 
-    if let Some(lrc) = lyrics_lrc_text
-        && !lrc.trim().is_empty()
+    if let Some((ext, text)) = lyrics_sidecar
+        && !text.trim().is_empty()
     {
-        let sidecar = lyrics::sidecar_path(&final_path.to_string_lossy(), "lrc");
+        let canonical = final_path.to_string_lossy();
+        let sidecar = lyrics::sidecar_path(&canonical, ext);
         if let Some(parent) = sidecar.parent()
             && let Err(e) = std::fs::create_dir_all(parent)
         {
             eprintln!("lyrics sidecar mkdir failed for {parent:?}: {e}");
         }
-        let _ = std::fs::write(&sidecar, lrc);
+        match std::fs::write(&sidecar, text) {
+            Ok(()) => lyrics::remove_stale_sidecars(&canonical, ext),
+            Err(e) => eprintln!("lyrics sidecar write failed for {sidecar:?}: {e}"),
+        }
     }
 
     let key = history::collection_key(&collection.kind, &collection.id);

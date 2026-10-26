@@ -8,6 +8,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
 import '../models.dart';
+import '../services/api.dart';
 import '../services/lyrics.dart';
 import '../state/app_state.dart';
 import '../services/player_controller.dart';
@@ -22,20 +23,104 @@ class PlayerPage extends StatefulWidget {
   State<PlayerPage> createState() => _PlayerPageState();
 }
 
+enum _LyricsStatus { unknown, available, missing, failed }
+
 class _PlayerPageState extends State<PlayerPage> {
+  static const _lyricsRetryBaseSeconds = 20;
+  static const _lyricsRetryMaxSeconds = 120;
+
   bool _lyricsOn = false;
-  bool _remoteAvailable = false;
-  String? _fetchedFor;
+  String? _lyricsFor;
+  _LyricsStatus _lyricsStatus = _LyricsStatus.unknown;
+  LyricsResult? _remoteLyrics;
+  Timer? _lyricsRetry;
+  int _lyricsRetries = 0;
+  int _lyricsRequest = 0;
 
   void _toggleLyrics() => setState(() => _lyricsOn = !_lyricsOn);
 
-  void _fetchRemoteLyrics(String trackId) {
-    final api = context.read<AppState>().api;
-    if (api == null) return;
-    api.syncedLyrics(trackId).then((res) {
-      if (!mounted || _fetchedFor != trackId) return;
-      if (res != null) setState(() => _remoteAvailable = true);
+  void _trackChanged(CatalogTrack track) {
+    _lyricsFor = track.id;
+    _remoteLyrics = null;
+    _lyricsRetries = 0;
+    _lyricsRetry?.cancel();
+    _lyricsStatus = lyricsFromTrack(track.lyrics) != null
+        ? _LyricsStatus.available
+        : _LyricsStatus.unknown;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _lyricsFor == track.id) {
+        _fetchRemoteLyrics(track.id);
+      }
     });
+  }
+
+  Future<void> _fetchRemoteLyrics(String trackId) async {
+    final api = context.read<AppState>().api;
+    if (api == null) {
+      _markLyricsFailed(trackId);
+      return;
+    }
+
+    final req = ++_lyricsRequest;
+    final res = await api.syncedLyrics(trackId);
+    if (!mounted || _lyricsFor != trackId || req != _lyricsRequest) return;
+
+    if (res.isFound) {
+      final parsed = lyricsFromRemote(trackId, res.lyrics!.text);
+      if (parsed != null) {
+        _lyricsRetries = 0;
+        setState(() {
+          _remoteLyrics = parsed;
+          _lyricsStatus = _LyricsStatus.available;
+        });
+        return;
+      }
+    }
+
+    if (res.status == SyncedLyricsStatus.missing) {
+      _lyricsRetries = 0;
+      if (_lyricsStatus != _LyricsStatus.available) {
+        setState(() => _lyricsStatus = _LyricsStatus.missing);
+      }
+      return;
+    }
+
+    _markLyricsFailed(trackId);
+  }
+
+  void _markLyricsFailed(String trackId) {
+    if (!mounted || _lyricsFor != trackId) return;
+    if (_lyricsStatus == _LyricsStatus.available) return;
+    setState(() => _lyricsStatus = _LyricsStatus.failed);
+    _lyricsRetry?.cancel();
+    _lyricsRetries++;
+    final seconds = math.min(
+      _lyricsRetryBaseSeconds * _lyricsRetries,
+      _lyricsRetryMaxSeconds,
+    );
+    _lyricsRetry = Timer(Duration(seconds: seconds), () {
+      if (!mounted || _lyricsFor != trackId) return;
+      if (_lyricsStatus == _LyricsStatus.available ||
+          _lyricsStatus == _LyricsStatus.missing) {
+        return;
+      }
+      _fetchRemoteLyrics(trackId);
+    });
+  }
+
+  void _retryLyrics() {
+    final track = context.read<PlayerController>().current;
+    if (track == null) return;
+    _lyricsRetry?.cancel();
+    _lyricsRetries = 0;
+    setState(() => _lyricsStatus = _LyricsStatus.unknown);
+    _fetchRemoteLyrics(track.id);
+  }
+
+  @override
+  void dispose() {
+    _lyricsRetry?.cancel();
+    super.dispose();
   }
 
   @override
@@ -54,20 +139,14 @@ class _PlayerPageState extends State<PlayerPage> {
       );
     }
 
-    if (_fetchedFor != track.id) {
-      _fetchedFor = track.id;
-      _remoteAvailable = (track.lyrics ?? '').trim().isNotEmpty;
-      if (!_remoteAvailable) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _fetchedFor == track.id) {
-            _fetchRemoteLyrics(track.id);
-          }
-        });
-      }
+    if (_lyricsFor != track.id) {
+      _trackChanged(track);
     }
 
-    final hasLyrics = (track.lyrics ?? '').trim().isNotEmpty || _remoteAvailable;
-    final lyricsOn = hasLyrics && _lyricsOn;
+    final hasLyrics =
+        lyricsFromTrack(track.lyrics) != null ||
+        _lyricsStatus != _LyricsStatus.missing;
+    final lyricsOn = _lyricsOn;
 
     return ArtBackdrop(
       key: ValueKey('backdrop-${track.id}-${track.localCoverPath ?? ''}'),
@@ -111,7 +190,7 @@ class _PlayerPageState extends State<PlayerPage> {
         body: SafeArea(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onDoubleTap: hasLyrics ? _toggleLyrics : null,
+            onDoubleTap: _toggleLyrics,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -119,6 +198,9 @@ class _PlayerPageState extends State<PlayerPage> {
                   player: player,
                   track: track,
                   lyricsOn: lyricsOn,
+                  remoteLyrics: _remoteLyrics,
+                  lyricsStatus: _lyricsStatus,
+                  onLyricsRetry: _retryLyrics,
                 ),
                 if (hasLyrics)
                   Positioned(
@@ -156,9 +238,17 @@ const double _lyricsAnchor = 84;
 const double _lyricsTopPad = 34;
 
 class _LyricsOverlay extends StatefulWidget {
-  const _LyricsOverlay({required this.player});
+  const _LyricsOverlay({
+    required this.player,
+    required this.remote,
+    required this.status,
+    required this.onRetry,
+  });
 
   final PlayerController player;
+  final LyricsResult? remote;
+  final _LyricsStatus status;
+  final VoidCallback onRetry;
 
   @override
   State<_LyricsOverlay> createState() => _LyricsOverlayState();
@@ -169,72 +259,15 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   final _cardScroll = ScrollController();
   final Map<int, GlobalKey> _lineKeys = {};
 
-  LyricsResult? _remote;
-  String? _shownFor;
-  String? _triedFor;
-  DateTime? _failedAt;
-  int _request = 0;
+  String? _lineTrack;
   bool _userScrolling = false;
-  bool _fetchScheduled = false;
   bool _centred = false;
   Timer? _resume;
-
-  static const _retryAfter = Duration(seconds: 20);
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
-  }
-
-  void _scheduleFetch() {
-    if (_fetchScheduled) return;
-    _fetchScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchScheduled = false;
-      _maybeFetch();
-    });
-  }
-
-  bool _shouldAttempt(String trackId) {
-    if (_triedFor != trackId) return true;
-    final at = _failedAt;
-    if (at == null) return false;
-    return DateTime.now().difference(at) >= _retryAfter;
-  }
-
-  Future<void> _maybeFetch() async {
-    final track = widget.player.current;
-    final api = context.read<AppState>().api;
-    if (track == null || api == null) return;
-
-    if (_shownFor != null && _shownFor != track.id) {
-      _remote = null;
-      _shownFor = null;
-      _lineKeys.clear();
-      _centred = false;
-    }
-
-    if (!_shouldAttempt(track.id)) return;
-    _triedFor = track.id;
-
-    final req = ++_request;
-    final res = await api.syncedLyrics(track.id);
-    if (!mounted || req != _request) return;
-
-    if (res == null) {
-      _failedAt = DateTime.now();
-      return;
-    }
-
-    final parsed = lyricsFromRemote(track.id, res.text);
-    if (parsed != null) {
-      setState(() {
-        _remote = parsed;
-        _shownFor = track.id;
-        _failedAt = null;
-      });
-    }
   }
 
   @override
@@ -326,13 +359,21 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    _scheduleFetch();
-
     final track = widget.player.current;
-    final embedded = lyricsFromTrack(track?.lyrics);
-    final result = _remote ?? embedded;
-    if (track == null || result == null) {
-      return const SizedBox.shrink();
+    if (track == null) return const SizedBox.shrink();
+
+    if (_lineTrack != track.id) {
+      _lineTrack = track.id;
+      _lineKeys.clear();
+      _centred = false;
+      _userScrolling = false;
+      _resume?.cancel();
+    }
+
+    final embedded = lyricsFromTrack(track.lyrics);
+    final result = widget.remote ?? embedded;
+    if (result == null) {
+      return _LyricsPending(status: widget.status, onRetry: widget.onRetry);
     }
 
     final lines = toLyricLines(result);
@@ -366,6 +407,48 @@ class _LyricsOverlayState extends State<_LyricsOverlay> {
   }
 }
 
+class _LyricsPending extends StatelessWidget {
+  const _LyricsPending({required this.status, required this.onRetry});
+
+  final _LyricsStatus status;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = status == _LyricsStatus.failed;
+    final missing = status == _LyricsStatus.missing;
+    final label = missing ? 'No lyrics found' : "Couldn't load lyrics";
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (failed || missing)
+            Text(
+              label,
+              style: const TextStyle(color: VynlColors.dim, fontSize: 14),
+            )
+          else
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(VynlColors.dim),
+              ),
+            ),
+          if (failed || missing) ...[
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _PlainStanzas extends StatelessWidget {
   const _PlainStanzas({required this.result, required this.scroll});
 
@@ -374,7 +457,9 @@ class _PlainStanzas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stanzas = stanzasOf(result.text);
+    final stanzas = stanzasOf(
+      plainLyricsText(result.text, kind: result.kind),
+    );
     if (stanzas.isEmpty) {
       return const Center(
         child: Text(
@@ -570,7 +655,6 @@ class _KaraokeWordsState extends State<_KaraokeWords>
     with SingleTickerProviderStateMixin {
   static const _steps = 120.0;
   static const _feather = 0.35;
-  static const _lift = 3.0;
 
   late final Ticker _ticker;
   StreamSubscription<Duration>? _positions;
@@ -667,49 +751,49 @@ class _KaraokeWordsState extends State<_KaraokeWords>
     final children = <InlineSpan>[];
 
     for (var i = 0; i < words.length; i++) {
+      final word = words[i];
+      final lit = word.bg ? VynlColors.dim : VynlColors.text;
+      final unlit = word.bg ? VynlColors.faint : VynlColors.dim;
+
       if (i == _index) {
         children.add(
           WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
             baseline: TextBaseline.alphabetic,
-            child: Transform.translate(
-              offset: const Offset(0, -_lift),
-              child: ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (Rect bounds) => LinearGradient(
-                  colors: const [
-                    VynlColors.text,
-                    VynlColors.text,
-                    VynlColors.dim,
-                    VynlColors.dim,
-                  ],
-                  stops: [
-                    0,
-                    (_fill - _feather).clamp(0.0, 1.0),
-                    _fill,
-                    1,
-                  ],
-                ).createShader(bounds),
-                child: Text(words[i].text, style: style),
-              ),
+            child: ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (Rect bounds) => LinearGradient(
+                colors: [lit, lit, unlit, unlit],
+                stops: [
+                  0,
+                  (_fill - _feather).clamp(0.0, 1.0),
+                  _fill,
+                  1,
+                ],
+              ).createShader(bounds),
+              child: Text(word.text, style: style),
             ),
           ),
         );
       } else {
         children.add(
           TextSpan(
-            text: words[i].text,
+            text: word.text,
             style: TextStyle(
-              color: i < _index ? VynlColors.text : VynlColors.dim,
+              color: word.bg
+                  ? VynlColors.faint
+                  : (i < _index ? VynlColors.text : VynlColors.dim),
               fontVariations: [
-                FontVariation.weight(i < _index ? 700 : 520),
+                FontVariation.weight(word.bg ? 400 : (i < _index ? 700 : 520)),
               ],
             ),
           ),
         );
       }
 
-      if (i < words.length - 1) children.add(TextSpan(text: ' '));
+      if (i < words.length - 1 && word.sep) {
+        children.add(const TextSpan(text: ' '));
+      }
     }
 
     return Text.rich(
@@ -807,11 +891,17 @@ class _PlayerBody extends StatelessWidget {
     required this.player,
     required this.track,
     required this.lyricsOn,
+    required this.remoteLyrics,
+    required this.lyricsStatus,
+    required this.onLyricsRetry,
   });
 
   final PlayerController player;
   final CatalogTrack track;
   final bool lyricsOn;
+  final LyricsResult? remoteLyrics;
+  final _LyricsStatus lyricsStatus;
+  final VoidCallback onLyricsRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -833,7 +923,12 @@ class _PlayerBody extends StatelessWidget {
                       key: const ValueKey('lyrics'),
                       width: artSize,
                       height: artSize,
-                      child: _LyricsOverlay(player: player),
+                      child: _LyricsOverlay(
+                        player: player,
+                        remote: remoteLyrics,
+                        status: lyricsStatus,
+                        onRetry: onLyricsRetry,
+                      ),
                     )
                   : Center(
                       key: const ValueKey('art'),

@@ -1,8 +1,15 @@
 ﻿class LyricWord {
-  const LyricWord({required this.time, required this.text});
+  const LyricWord({
+    required this.time,
+    required this.text,
+    this.bg = false,
+    this.sep = true,
+  });
 
   final double time;
   final String text;
+  final bool bg;
+  final bool sep;
 }
 
 class LyricLine {
@@ -33,9 +40,6 @@ enum LyricsSource { embedded }
 
 final _stampRe = RegExp(
   r'\[[ \t]*(\d{1,3}):(\d{1,2})(?::(\d{1,4}))?(?:[.,](\d{1,4}))?[ \t]*\]',
-);
-final _hasStampRe = RegExp(
-  r'\[[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*\]',
 );
 final _wordTagRe = RegExp(
   r'<[ \t]*(\d{1,3}):(\d{1,2})(?::(\d{1,4}))?(?:[.,](\d{1,4}))?[ \t]*>',
@@ -81,7 +85,7 @@ double _seconds(RegExpMatch m) {
   final frac = m.group(4);
   final f = frac == null ? 0.0 : double.parse('0.$frac');
   if (third == null) return (a * 60 + b + f).toDouble();
-  if (third.length <= 2) {
+  if (frac != null) {
     return (a * 3600 + b * 60 + int.parse(third) + f).toDouble();
   }
   return (a * 60 + b + double.parse('0.$third')).toDouble();
@@ -98,7 +102,11 @@ double readOffsetSecs(String text) {
   return 0;
 }
 
-List<LyricWord>? _parseEnhancedWords(String body, double offset) {
+List<LyricWord>? _parseEnhancedWords(
+  String body,
+  double offset,
+  double lineStart,
+) {
   final stamps = <double>[];
   for (final m in _wordTagRe.allMatches(body)) {
     stamps.add(_seconds(m) + offset);
@@ -107,11 +115,26 @@ List<LyricWord>? _parseEnhancedWords(String body, double offset) {
 
   final segments = body.split(_wordTagSplitRe);
   final words = <LyricWord>[];
+  final prefix = segments.isEmpty ? '' : segments.first.trim();
+  if (prefix.isNotEmpty) {
+    words.add(LyricWord(time: lineStart, text: prefix, sep: false));
+  }
   for (var i = 0; i < stamps.length; i++) {
-    final text = (i + 1 < segments.length ? segments[i + 1] : '').trim();
-    if (text.isNotEmpty) {
-      words.add(LyricWord(time: stamps[i], text: text));
+    final seg = i + 1 < segments.length ? segments[i + 1] : '';
+    final text = seg.trim();
+    final lead = seg.length - seg.trimLeft().length;
+    final trail = seg.length - seg.trimRight().length;
+    if (lead > 0 && words.isNotEmpty) {
+      final prev = words.last;
+      words[words.length - 1] = LyricWord(
+        time: prev.time,
+        text: prev.text,
+        bg: prev.bg,
+        sep: true,
+      );
     }
+    if (text.isEmpty) continue;
+    words.add(LyricWord(time: stamps[i], text: text, sep: trail > 0));
   }
   return words.isEmpty ? null : words;
 }
@@ -138,7 +161,7 @@ List<LyricLine> parseLrcText(String text) {
       continue;
     }
 
-    final words = _parseEnhancedWords(body, offset);
+    final words = _parseEnhancedWords(body, offset, stamps.first);
     final clean = body
         .replaceAll(_wordTagRe, '')
         .replaceAll(_wsRe, ' ')
@@ -148,8 +171,25 @@ List<LyricLine> parseLrcText(String text) {
     }
   }
 
-  out.sort((a, b) => a.time.compareTo(b.time));
-  return _withEstimatedWords(out);
+  return _finalizeLrc(out);
+}
+
+bool _isChronological(List<LyricLine> lines) {
+  var last = double.negativeInfinity;
+  for (final line in lines) {
+    if (line.time < 0) continue;
+    if (line.time < last) return false;
+    last = line.time;
+  }
+  return true;
+}
+
+List<LyricLine> _finalizeLrc(List<LyricLine> lines) {
+  if (_isChronological(lines)) return _withEstimatedWords(lines);
+  final timed = lines.where((line) => line.time >= 0).toList()
+    ..sort((a, b) => a.time.compareTo(b.time));
+  final untimed = lines.where((line) => line.time < 0).toList();
+  return _withEstimatedWords([...timed, ...untimed]);
 }
 
 bool isTtmlText(String text) => _ttmlRootRe.hasMatch(text);
@@ -173,10 +213,11 @@ class _TtmlNode {
 }
 
 class _TtmlWord {
-  const _TtmlWord(this.time, this.text);
+  const _TtmlWord(this.time, this.text, {this.bg = false});
 
   final double time;
   final String text;
+  final bool bg;
 }
 
 final _xmlCommentRe = RegExp(r'<!--[\s\S]*?-->');
@@ -187,7 +228,8 @@ final _xmlAttrRe = RegExp(
   r"([A-Za-z_][A-Za-z0-9_:.\-]*)\s*=\s*(?:\x22([^\x22]*)\x22|'([^']*)')",
 );
 final _ttmlClockRe =
-    RegExp(r'^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?$');
+    RegExp(r'^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:([.:])(\d{1,3}))?$');
+final _ttmlTickRe = RegExp(r'^([+-]?\d+(?:\.\d+)?)t$');
 final _ttmlSuffixRe = RegExp(r's$', caseSensitive: false);
 final _ttmlRomanRe = RegExp(r'translation|romanization|romaji|translit');
 final _ttmlBgRe = RegExp(r'(^|[-_])bg$|background');
@@ -216,19 +258,32 @@ String? _ttmlAttr(Map<String, String> attrs, String name) {
   return null;
 }
 
-double _ttmlClock(String raw) {
+double _ttmlClock(
+  String raw, {
+  double tickRate = 0.0,
+  double frameRate = 0.0,
+}) {
   final value = raw.trim();
+  final tick = _ttmlTickRe.firstMatch(value);
+  if (tick != null) {
+    final rate = tickRate > 0 ? tickRate : (frameRate > 0 ? frameRate : 1.0);
+    return (double.tryParse(tick.group(1)!) ?? 0.0) / rate;
+  }
+
   final m = _ttmlClockRe.firstMatch(value);
   if (m != null) {
     final hours = double.tryParse(m.group(1) ?? '0') ?? 0;
     final minutes = double.tryParse(m.group(2)!);
     final seconds = double.tryParse(m.group(3)!);
     if (minutes != null && seconds != null) {
-      final frac = m.group(4);
-      final ms = frac == null || frac.isEmpty
+      final separator = m.group(4);
+      final part = m.group(5);
+      final fraction = part == null || part.isEmpty
           ? 0.0
-          : double.tryParse('0.$frac') ?? 0;
-      return hours * 3600 + minutes * 60 + seconds + ms;
+          : separator == ':' && frameRate > 0
+              ? (double.tryParse(part) ?? 0) / frameRate
+              : double.tryParse('0.$part') ?? 0;
+      return hours * 3600 + minutes * 60 + seconds + fraction;
     }
   }
   final plain = double.tryParse(value.replaceAll(_ttmlSuffixRe, ''));
@@ -321,13 +376,18 @@ void _ttmlAddWord(
   bool separated,
   double time,
   String text,
+  bool bg,
 ) {
-  if (words.isNotEmpty && !separated) {
+  if (words.isNotEmpty && !separated && words.last.bg == bg) {
     final last = words.last;
-    words[words.length - 1] = _TtmlWord(last.time, last.text + text);
+    words[words.length - 1] = _TtmlWord(
+      last.time,
+      last.text + text,
+      bg: bg,
+    );
     return;
   }
-  words.add(_TtmlWord(time, text));
+  words.add(_TtmlWord(time, text, bg: bg));
 }
 
 void _ttmlWalk(
@@ -335,10 +395,26 @@ void _ttmlWalk(
   StringBuffer full,
   List<_TtmlWord> words,
   bool inBg,
+  double tickRate,
+  double frameRate,
+  double lineStart,
 ) {
   for (final child in node.children) {
     if (child.isText) {
-      full.write(child.raw);
+      final raw = child.raw!;
+      final text = _ttmlNormalise(raw);
+      if (text.isNotEmpty) {
+        final separated = _ttmlEndsWithSpace(full) ||
+            (raw.isNotEmpty && _ttmlSpaceRe.hasMatch(raw[0]));
+        _ttmlAddWord(
+          words,
+          separated,
+          words.isNotEmpty ? words.last.time : lineStart,
+          text,
+          inBg,
+        );
+      }
+      full.write(raw);
       continue;
     }
     if (child.local == 'br') {
@@ -354,44 +430,69 @@ void _ttmlWalk(
       if (text.isEmpty) continue;
       final separated = _ttmlEndsWithSpace(full);
       full.write(raw);
-      if (!bg) _ttmlAddWord(words, separated, _ttmlClock(beginRaw), text);
+      _ttmlAddWord(
+        words,
+        separated,
+        _ttmlClock(beginRaw, tickRate: tickRate, frameRate: frameRate),
+        text,
+        bg,
+      );
       continue;
     }
 
-    _ttmlWalk(child, full, words, bg);
+    _ttmlWalk(child, full, words, bg, tickRate, frameRate, lineStart);
   }
 }
 
-void _ttmlCollectLine(_TtmlNode p, List<LyricLine> out) {
+void _ttmlCollectLine(
+  _TtmlNode p,
+  List<LyricLine> out,
+  double tickRate,
+  double frameRate,
+) {
   final beginRaw = _ttmlAttr(p.attrs, 'begin');
   if (beginRaw == null) return;
   final role = _ttmlRoleOf(p);
   if (_ttmlRomanRe.hasMatch(role) || _ttmlBgRe.hasMatch(role)) return;
 
   final full = StringBuffer();
+  final start =
+      _ttmlClock(beginRaw, tickRate: tickRate, frameRate: frameRate);
   final raw = <_TtmlWord>[];
-  _ttmlWalk(p, full, raw, false);
+  _ttmlWalk(p, full, raw, false, tickRate, frameRate, start);
 
   final text = _ttmlNormalise(full.toString());
   if (text.isEmpty) return;
 
   out.add(
     LyricLine(
-      time: _ttmlClock(beginRaw),
+      time: start,
       text: text,
       words: raw.isEmpty
           ? null
-          : [for (final w in raw) LyricWord(time: w.time, text: w.text)],
+          : [
+              for (final w in raw)
+                LyricWord(time: w.time, text: w.text, bg: w.bg),
+            ],
     ),
   );
 }
 
 List<LyricLine> parseTtmlText(String text) {
   final root = _ttmlParse(text.replaceAll(_xmlCommentRe, ''));
+  var tickRate = 0.0;
+  var frameRate = 0.0;
+  for (final ittp in _ttmlDescendants(root, 'ittp')) {
+    final tick = double.tryParse(_ttmlAttr(ittp.attrs, 'ttp:tickRate') ?? '');
+    final frame = double.tryParse(_ttmlAttr(ittp.attrs, 'ttp:frameRate') ?? '');
+    if (tick != null && tick > 0) tickRate = tick;
+    if (frame != null && frame > 0) frameRate = frame;
+    break;
+  }
   final out = <LyricLine>[];
   for (final body in _ttmlDescendants(root, 'body')) {
     for (final p in _ttmlDescendants(body, 'p')) {
-      _ttmlCollectLine(p, out);
+      _ttmlCollectLine(p, out, tickRate, frameRate);
     }
   }
   if (out.isEmpty) return const <LyricLine>[];
@@ -401,14 +502,34 @@ List<LyricLine> parseTtmlText(String text) {
 
 final _linesCache = Expando<List<LyricLine>>('vynl.lyricLines');
 
-List<LyricLine> _parsePlainText(String text) {
+String _plainLine(String raw) {
+  return raw
+      .replaceAll(_stampRe, '')
+      .replaceAll(_wordTagRe, '')
+      .replaceAll(_wsRe, ' ')
+      .trim();
+}
+
+String _ttmlPlainText(String text) {
+  final withoutComments = text.replaceAll(_xmlCommentRe, '');
+  final withBreaks = withoutComments
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'</p\s*>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<[^>]+>'), '');
+  return _decodeEntities(withBreaks);
+}
+
+String plainLyricsText(String text, {LyricsKind? kind}) {
+  final source = kind == LyricsKind.ttml || (kind == null && isTtmlText(text))
+      ? _ttmlPlainText(text)
+      : text;
+  return source.split(RegExp(r'\r?\n')).map(_plainLine).join('\n');
+}
+
+List<LyricLine> _parsePlainText(String text, {LyricsKind? kind}) {
   final out = <LyricLine>[];
-  for (final raw in text.split(RegExp(r'\r?\n'))) {
-    final line = raw
-        .replaceAll(_stampRe, '')
-        .replaceAll(_wordTagRe, '')
-        .replaceAll(_wsRe, ' ')
-        .trim();
+  for (final raw in plainLyricsText(text, kind: kind).split('\n')) {
+    final line = raw.trim();
     if (line.isNotEmpty) out.add(LyricLine(time: -1, text: line));
   }
   return out;
@@ -417,33 +538,33 @@ List<LyricLine> _parsePlainText(String text) {
 List<LyricLine> toLyricLines(LyricsResult result) {
   final cached = _linesCache[result];
   if (cached != null) return cached;
-  final lines = switch (result.kind) {
+  final kind =
+      result.kind == LyricsKind.text ? lyricsKindOf(result.text) : result.kind;
+  final parsed = switch (kind) {
     LyricsKind.lrc => parseLrcText(result.text),
     LyricsKind.ttml => parseTtmlText(result.text),
-    LyricsKind.text => _lrcFromText(result.text) ?? _parsePlainText(result.text),
+    LyricsKind.text => _parsePlainText(result.text),
   };
+  final lines = parsed.isNotEmpty
+      ? parsed
+      : _parsePlainText(result.text, kind: result.kind);
   _linesCache[result] = lines;
   return lines;
-}
-
-List<LyricLine>? _lrcFromText(String text) {
-  if (!_hasStampRe.hasMatch(text)) return null;
-  final lines = parseLrcText(text);
-  return lines.any((l) => l.time >= 0) ? lines : null;
 }
 
 final _remoteCache = <String, LyricsResult>{};
 
 LyricsResult? lyricsFromRemote(String trackId, String text) {
   if (trackId.isEmpty || text.trim().isEmpty) return null;
-  final cached = _remoteCache[trackId];
+  final key = '$trackId\u0000$text';
+  final cached = _remoteCache[key];
   if (cached != null) return cached;
   final result = LyricsResult(
     kind: lyricsKindOf(text),
     text: text,
     source: LyricsSource.embedded,
   );
-  _remoteCache[trackId] = result;
+  _remoteCache[key] = result;
   return result;
 }
 
@@ -523,14 +644,19 @@ List<LyricLine> _withEstimatedWords(List<LyricLine> lines) {
           words: _distributeWords(
             lines[i].text,
             lines[i].time,
-            i + 1 < lines.length && lines[i + 1].time > lines[i].time
-                ? lines[i + 1].time
-                : lines[i].time + 4,
+            _nextTimedLine(lines, i, lines[i].time),
           ),
         )
       else
         lines[i],
   ];
+}
+
+double _nextTimedLine(List<LyricLine> lines, int index, double after) {
+  for (var i = index + 1; i < lines.length; i++) {
+    if (lines[i].time > after) return lines[i].time;
+  }
+  return after + 4;
 }
 
 bool isInstrumental(String text) {

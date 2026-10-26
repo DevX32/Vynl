@@ -1,7 +1,7 @@
 import type { LyricsResult } from "@lib/types";
 import { vynl } from "@lib/vynl";
 import { runLyricsProviders } from "@lib/plugins/providers";
-import { getCurrentTrack } from "@state/now-playing.svelte";
+import { getCurrentTrack, getCurrentId } from "@state/now-playing.svelte";
 import { getSmoothTime } from "@state/media-clock.svelte";
 
 export type Word = {
@@ -29,6 +29,7 @@ let _lines = $state<LyricLine[]>([]);
 const MAX_CACHE_SIZE = 500;
 const _cache = new Map<string, { result: LyricsResult; lines: LyricLine[] }>();
 let _activeId: string | null = null;
+let _loadingId: string | null = null;
 let _loadVersion = 0;
 
 const STAMP_RE =
@@ -46,11 +47,11 @@ function clockSeconds(m: RegExpExecArray): number {
   const third = m[3];
   const frac = m[4] ? Number(`0.${m[4]}`) : 0;
   if (!third) return a * 60 + b + frac;
-  if (third.length <= 2) return a * 3600 + b * 60 + Number(third) + frac;
+  if (m[4]) return a * 3600 + b * 60 + Number(third) + frac;
   return a * 60 + b + Number(`0.${third}`);
 }
 
-function parseEnhancedWords(body: string, offset = 0): Word[] | null {
+function parseEnhancedWords(body: string, offset = 0, lineStart = 0): Word[] | null {
   const wordTimestamps: number[] = [];
   let wm: RegExpExecArray | null;
   WORD_TAG_RE.lastIndex = 0;
@@ -60,13 +61,19 @@ function parseEnhancedWords(body: string, offset = 0): Word[] | null {
   if (wordTimestamps.length === 0) return null;
   const textSegments = body.split(WORD_TAG_STRIP_RE);
   const words: Word[] = [];
+  const prefixRaw = textSegments[0] ?? "";
+  const prefix = prefixRaw.trim();
+  if (prefix) words.push({ time: lineStart, text: prefix, sep: false });
   for (let i = 0; i < wordTimestamps.length; i++) {
     const seg = textSegments[i + 1] ?? "";
     const text = seg.trim();
-    if (!text) continue;
     const lead = seg.length - seg.trimStart().length;
-    const trailing = seg.slice(lead + text.length);
-    words.push({ time: wordTimestamps[i], text, sep: /\s/.test(trailing) });
+    const trail = seg.length - seg.trimEnd().length;
+    if (lead > 0 && words.length > 0) {
+      words[words.length - 1] = { ...words[words.length - 1], sep: true };
+    }
+    if (!text) continue;
+    words.push({ time: wordTimestamps[i], text, sep: trail > 0 });
   }
   return words.length > 0 ? words : null;
 }
@@ -105,12 +112,32 @@ function distributeWords(text: string, start: number, end: number): Word[] {
 function applyEstimatedWords(lines: LyricLine[]): LyricLine[] {
   return lines.map((line, i) => {
     if (line.time < 0 || line.words?.length || isInstrumental(line.text)) return line;
-    const next = lines[i + 1];
-    const end =
-      next && next.time > line.time ? next.time : line.time + NOMINAL_LINE_SECS;
+    const next = lines
+      .slice(i + 1)
+      .find((candidate) => candidate.time > line.time);
+    const end = next ? next.time : line.time + NOMINAL_LINE_SECS;
     const words = distributeWords(line.text, line.time, end);
     return words.length > 0 ? { ...line, end, words } : line;
   });
+}
+
+function isChronological(lines: LyricLine[]): boolean {
+  let last = -Infinity;
+  for (const line of lines) {
+    if (line.time < 0) continue;
+    if (line.time < last) return false;
+    last = line.time;
+  }
+  return true;
+}
+
+function finalizeLrcLines(lines: LyricLine[]): LyricLine[] {
+  if (isChronological(lines)) return applyEstimatedWords(lines);
+  const timed = lines
+    .filter((line) => line.time >= 0)
+    .sort((a, b) => a.time - b.time);
+  const untimed = lines.filter((line) => line.time < 0);
+  return applyEstimatedWords([...timed, ...untimed]);
 }
 
 function parseLrc(text: string): LyricLine[] {
@@ -137,7 +164,7 @@ function parseLrc(text: string): LyricLine[] {
       continue;
     }
 
-    const words = parseEnhancedWords(body, offset);
+    const words = parseEnhancedWords(body, offset, stamps[0]);
     const cleanBody = body
       .replace(WORD_TAG_STRIP_RE, "")
       .replace(/\s+/g, " ")
@@ -149,7 +176,7 @@ function parseLrc(text: string): LyricLine[] {
         words: words ?? undefined,
       });
   }
-  return applyEstimatedWords(out.sort((a, b) => a.time - b.time));
+  return finalizeLrcLines(out);
 }
 
 function parseClock(value: string): number {
@@ -162,6 +189,41 @@ function parseClock(value: string): number {
   }
   const secs = Number(v.replace(/s$/i, ""));
   return Number.isFinite(secs) ? secs : 0;
+}
+
+function parseTtmlTime(
+  value: string,
+  offset: number,
+  tickRate: number,
+  frameRate: number,
+): number {
+  const v = value.trim();
+  const tick = /^([+-]?\d+(?:\.\d+)?)t$/.exec(v);
+  if (tick) {
+    const rate = tickRate > 0 ? tickRate : frameRate > 0 ? frameRate : 1;
+    return Number(tick[1]) / rate + offset;
+  }
+
+  const m = /^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:([.:])(\d{1,3}))?$/.exec(v);
+  if (m) {
+    let frac = 0;
+    if (m[5]) {
+      frac =
+        m[4] === ":" && frameRate > 0
+          ? Number(m[5]) / frameRate
+          : Number(`0.${m[5]}`);
+    }
+    return (
+      Number(m[1] ?? 0) * 3600 +
+      Number(m[2]) * 60 +
+      Number(m[3]) +
+      frac +
+      offset
+    );
+  }
+
+  const secs = Number(v.replace(/s$/i, ""));
+  return (Number.isFinite(secs) ? secs : 0) + offset;
 }
 
 function parseOffsetAttr(attr: string): number {
@@ -188,7 +250,7 @@ function decodeEntities(s: string): string {
 }
 
 type RawSpan = {
-  time: number;
+  time: number | null;
   text: string;
   end: number | null;
   bg: boolean;
@@ -200,15 +262,26 @@ function collectSpans(
   out: RawSpan[],
   sep: boolean,
   bg: boolean,
-  offset: number,
+  parseTime: (value: string) => number,
   attr: (el: Element, name: string) => string | null,
   bgRole: RegExp,
-): void {
+): boolean {
   let separated = sep;
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === 3) {
-      const text = child.textContent ?? "";
-      if (text.length > 0) separated = /\s$/.test(text);
+      const raw = child.textContent ?? "";
+      if (!raw) continue;
+      const text = raw.replace(/\s+/g, " ").trim();
+      if (text) {
+        out.push({
+          time: null,
+          text,
+          end: null,
+          bg,
+          sep: separated || /^\s/.test(raw),
+        });
+      }
+      separated = /\s$/.test(raw);
       continue;
     }
     const el = child as Element;
@@ -227,23 +300,23 @@ function collectSpans(
         separated = false;
         continue;
       }
-      const time = parseClock(beginRaw) + offset;
+      const time = parseTime(beginRaw);
       const endRaw = attr(el, "end");
-      const endNum = endRaw !== null ? parseClock(endRaw) + offset : null;
+      const endNum = endRaw !== null ? parseTime(endRaw) : null;
       out.push({
         time,
         text,
         end: endNum !== null && endNum > time ? endNum : null,
         bg: childBg,
-        sep: separated,
+        sep: separated || /^\s/.test(raw),
       });
       separated = / $/.test(raw);
       continue;
     }
 
-    collectSpans(el, out, separated, childBg, offset, attr, bgRole);
-    separated = false;
+    separated = collectSpans(el, out, separated, childBg, parseTime, attr, bgRole);
   }
+  return separated;
 }
 
 function parseTtml(text: string): LyricLine[] {
@@ -254,17 +327,21 @@ function parseTtml(text: string): LyricLine[] {
   if (!body) return [];
 
   let offset = 0;
+  let frameRate = 0;
+  let tickRate = 0;
   const ittp = doc.querySelector("head > ittp, head > metadata > ittp");
   if (ittp) {
-    const frameRate = Number(ittp.getAttribute("ttp:frameRate"));
-    const tickRate = Number(ittp.getAttribute("ttp:tickRate"));
-    if (Number.isFinite(tickRate) && tickRate > 0 && Number.isFinite(frameRate) && frameRate > 0) {
-      offset -= frameRate / tickRate;
-    }
+    const frame = Number(ittp.getAttribute("ttp:frameRate"));
+    const tick = Number(ittp.getAttribute("ttp:tickRate"));
+    if (Number.isFinite(frame) && frame > 0) frameRate = frame;
+    if (Number.isFinite(tick) && tick > 0) tickRate = tick;
   }
 
   const timing = body.getAttribute("itunes:timing");
   if (timing) offset += parseOffsetAttr(`offset="${timing}"`);
+
+  const parseTime = (raw: string): number =>
+    parseTtmlTime(raw, offset, tickRate, frameRate);
 
   const out: LyricLine[] = [];
   const romans: Array<{ time: number; text: string }> = [];
@@ -277,9 +354,9 @@ function parseTtml(text: string): LyricLine[] {
   const collect = (p: Element): void => {
     const beginRaw = attr(p, "begin");
     if (beginRaw === null) return;
-    const start = parseClock(beginRaw) + offset;
+    const start = parseTime(beginRaw);
     const endRaw = attr(p, "end");
-    const endRawNum = endRaw !== null ? parseClock(endRaw) + offset : null;
+    const endRawNum = endRaw !== null ? parseTime(endRaw) : null;
     const end = endRawNum !== null && endRawNum > start ? endRawNum : null;
 
     const role = roleOf(p);
@@ -287,18 +364,22 @@ function parseTtml(text: string): LyricLine[] {
     const bgRole = /(^|[-_])bg$|background/;
 
     const spans: RawSpan[] = [];
-    collectSpans(p, spans, false, false, offset, attr, bgRole);
-
-    let full = "";
-    for (let i = 0; i < spans.length; i++) {
-      full += (i > 0 && spans[i].sep ? " " : "") + spans[i].text;
-    }
+    collectSpans(p, spans, false, false, parseTime, attr, bgRole);
 
     const words: Word[] = [];
     for (const span of spans) {
-      if (span.bg) continue;
       const last = words[words.length - 1];
-      if (last && !span.sep) {
+      const time = span.time ?? (last ? last.end ?? last.time : start);
+      if (span.bg) {
+        words.push({
+          time,
+          text: span.text,
+          ...(span.end !== null ? { end: span.end } : {}),
+          bg: true,
+        });
+        continue;
+      }
+      if (last && !last.bg && !span.sep) {
         words[words.length - 1] = {
           ...last,
           text: last.text + span.text,
@@ -307,13 +388,19 @@ function parseTtml(text: string): LyricLine[] {
         continue;
       }
       words.push({
-        time: span.time,
+        time,
         text: span.text,
         ...(span.end !== null ? { end: span.end } : {}),
       });
     }
 
-    const lineText = full || decodeEntities(p.textContent ?? "").replace(/\s+/g, " ").trim();
+    const lineNode = p.cloneNode(true) as Element;
+    lineNode.querySelectorAll("br").forEach((br) => {
+      br.replaceWith(doc.createTextNode(" "));
+    });
+    const lineText = decodeEntities(lineNode.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!lineText) return;
 
     if (romanRole) {
@@ -366,26 +453,27 @@ function parseTtml(text: string): LyricLine[] {
   return out.sort((a, b) => a.time - b.time);
 }
 
+function plainLine(line: string): string {
+  return line
+    .replace(STAMP_RE, "")
+    .replace(WORD_TAG_STRIP_RE, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parsePlainText(text: string): LyricLine[] {
   const out: LyricLine[] = [];
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw
-      .replace(STAMP_RE, "")
-      .replace(WORD_TAG_STRIP_RE, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    const line = plainLine(raw);
     if (line) out.push({ time: -1, text: line });
   }
   return out;
 }
 
 function toLines(res: LyricsResult): LyricLine[] {
-  if (res.kind === "ttml") return parseTtml(res.text);
-  if (res.kind === "lrc") return parseLrc(res.text);
-  if (HAS_STAMP_RE.test(res.text)) {
-    const lines = parseLrc(res.text);
-    if (lines.some((l) => l.time >= 0)) return lines;
-  }
+  const kind = res.kind === "txt" ? lyricsKindOf(res.text) : res.kind;
+  if (kind === "ttml") return parseTtml(res.text);
+  if (kind === "lrc") return parseLrc(res.text);
   return parsePlainText(res.text);
 }
 
@@ -440,69 +528,106 @@ function tryParseEmbeddedLyrics(res: LyricsResult, t: { path: string }): void {
 }
 
 export function loadLyrics(id: string | null): void {
-  if (_activeId === id) return;
-  _activeId = id;
-  const version = ++_loadVersion;
+  if (!id) {
+    _loadVersion++;
+    _activeId = null;
+    _loadingId = null;
+    clearLyricsState();
+    return;
+  }
 
-  if (!id) { clearLyricsState(); return; }
   const t = getCurrentTrack();
-  if (!t) { clearLyricsState(); return; }
-  if (checkCache(t)) return;
+  if (!t) {
+    _loadVersion++;
+    _activeId = null;
+    _loadingId = null;
+    clearLyricsState();
+    return;
+  }
+
+  if (_loadingId === id) return;
+  if (_activeId === id && _result) return;
+
+  const version = ++_loadVersion;
+  _activeId = id;
+  _loadingId = id;
+  _result = null;
+  _lines = [];
+
+  if (checkCache(t)) {
+    _loadingId = null;
+    return;
+  }
 
   _loading = true;
   void (async () => {
-    const embeddedLyrics = t.lyrics?.trim() ?? null;
-    const embeddedIsLrc = embeddedLyrics
-      ? HAS_STAMP_RE.test(embeddedLyrics)
-      : false;
+    try {
+      const embeddedLyrics = t.lyrics?.trim() ?? null;
+      const embeddedKind = embeddedLyrics ? lyricsKindOf(embeddedLyrics) : null;
 
-    if (embeddedLyrics && embeddedIsLrc) {
-      const res: LyricsResult = { kind: "lrc", text: embeddedLyrics, source: "local" };
+      let res: LyricsResult | null = await vynl.lyricsLocal(t.path);
       if (version !== _loadVersion) return;
-      _loading = false;
+
+      if (!res && embeddedLyrics && embeddedKind && embeddedKind !== "txt") {
+        res = { kind: embeddedKind, text: embeddedLyrics, source: "local" };
+      }
+
+      if (!res) {
+        const viaPlugin = await runLyricsProviders({
+          title: t.title,
+          artist: t.artist,
+          album: t.album,
+          duration: t.duration,
+        });
+        if (version !== _loadVersion) return;
+        if (viaPlugin) {
+          res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
+          tryParseEmbeddedLyrics(res, t);
+        }
+      }
+
+      if (!res) {
+        res = await vynl.lyricsFetch({
+          title: t.title,
+          artist: t.artist,
+          album: t.album,
+          duration: t.duration,
+        });
+        if (version !== _loadVersion) return;
+        if (res) tryParseEmbeddedLyrics(res, t);
+      }
+
+      if (!res && embeddedLyrics) {
+        res = { kind: "txt", text: embeddedLyrics, source: "local" };
+      }
+
       _result = res;
-      _lines = toLines(res);
-      storeInCache(t.path, res, _lines);
-      return;
-    }
-
-    let res: LyricsResult | null = null;
-
-    res = await vynl.lyricsLocal(t.path);
-    if (version !== _loadVersion) return;
-
-    if (!res) {
-      const viaPlugin = await runLyricsProviders({
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        duration: t.duration,
-      });
+      _lines = res ? toLines(res) : [];
+      if (res) {
+        storeInCache(t.path, res, _lines);
+      } else {
+        _activeId = null;
+      }
+    } catch (error) {
+      console.warn("Failed to load lyrics", error);
       if (version !== _loadVersion) return;
-      if (viaPlugin) {
-        res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
-        tryParseEmbeddedLyrics(res, t);
+      const embeddedLyrics = t.lyrics?.trim() ?? "";
+      const res: LyricsResult | null = embeddedLyrics
+        ? { kind: lyricsKindOf(embeddedLyrics), text: embeddedLyrics, source: "local" }
+        : null;
+      _result = res;
+      _lines = res ? toLines(res) : [];
+      if (res) {
+        storeInCache(t.path, res, _lines);
+      } else {
+        _activeId = null;
+      }
+    } finally {
+      if (version === _loadVersion) {
+        _loading = false;
+        if (_loadingId === id) _loadingId = null;
       }
     }
-
-    if (!res) {
-      res = await vynl.lyricsFetch({
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        duration: t.duration,
-      });
-      if (res) tryParseEmbeddedLyrics(res, t);
-    }
-
-    if (version !== _loadVersion) return;
-    if (!res && embeddedLyrics) {
-      res = { kind: "txt", text: embeddedLyrics, source: "local" };
-    }
-    _loading = false;
-    _result = res;
-    _lines = res ? toLines(res) : [];
-    if (res) storeInCache(t.path, res, _lines);
   })();
 }
 
@@ -635,14 +760,53 @@ function computeInstrumental(text: string): boolean {
   return INSTRUMENTAL_WORD_RE.test(t) || INSTRUMENTAL_PHRASE_RE.test(t);
 }
 
+function plainLyricsForEmbed(result: LyricsResult): string {
+  if (result.kind === "ttml") return "";
+  return result.text
+    .split(/\r?\n/)
+    .map(plainLine)
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function persistManualLyrics(
+  path: string,
+  result: LyricsResult,
+): Promise<void> {
+  try {
+    await vynl.lyricsSave({
+      file: path,
+      kind: result.kind,
+      text: result.text,
+    });
+  } catch (error) {
+    console.warn("Failed to save lyrics sidecar", error);
+  }
+
+  if (result.kind === "ttml") return;
+  const plain = plainLyricsForEmbed(result);
+  if (!plain) return;
+  try {
+    await vynl.lyricsEmbed({ file: path, text: plain });
+  } catch (error) {
+    console.warn("Failed to embed lyrics", error);
+  }
+}
+
 export function setLyricsManual(
   result: LyricsResult,
   parsedLines: LyricLine[],
 ): void {
+  _loadVersion++;
+  _loading = false;
+  _loadingId = null;
   _result = result;
   _lines = parsedLines;
   const t = getCurrentTrack();
-  if (t) _cache.set(t.path, { result, lines: parsedLines });
+  if (!t) return;
+  _activeId = getCurrentId();
+  _cache.set(t.path, { result, lines: parsedLines });
+  void persistManualLyrics(t.path, result);
 }
 
 export function parseLrcText(text: string): LyricLine[] {
@@ -654,7 +818,13 @@ export function parseTtmlText(text: string): LyricLine[] {
 }
 
 export function isTtmlText(text: string): boolean {
-  return /<tt[\s>]/i.test(text) || /<ttml/i.test(text);
+  return /<(?:ttml|tt)(?=[\s>/])/i.test(text);
+}
+
+export function lyricsKindOf(text: string): LyricsResult["kind"] {
+  if (isTtmlText(text)) return "ttml";
+  if (HAS_STAMP_RE.test(text)) return "lrc";
+  return "txt";
 }
 
 export function toLyricLines(res: LyricsResult): LyricLine[] {

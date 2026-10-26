@@ -1,4 +1,6 @@
-use crate::commands::types::{LyricsLookup, LyricsResult};
+use crate::commands::types::{LyricsKind, LyricsLookup, LyricsResult};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,6 +11,10 @@ const FAIL_CACHE_MAX: usize = 500;
 const DISK_CACHE_MAX: usize = 1000;
 const REMOTE_CACHE_MAX: usize = 500;
 const DISK_CACHE_FILE: &str = "lyrics-cache.json";
+const NEGATIVE_CACHE_TTL_MS: u64 = 6 * 60 * 60 * 1000;
+const LRC_TIMESTAMP_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[ \t]*\[[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*\]").unwrap()
+});
 
 static REMOTE_CACHE: OnceLock<tokio::sync::RwLock<HashMap<String, Option<LyricsResult>>>> =
     OnceLock::new();
@@ -17,9 +23,9 @@ fn remote_cache() -> &'static tokio::sync::RwLock<HashMap<String, Option<LyricsR
     REMOTE_CACHE.get_or_init(|| tokio::sync::RwLock::new(HashMap::new()))
 }
 
-static FAIL_CACHE: OnceLock<tokio::sync::RwLock<HashMap<String, ()>>> = OnceLock::new();
+static FAIL_CACHE: OnceLock<tokio::sync::RwLock<HashMap<String, u64>>> = OnceLock::new();
 
-fn fail_cache() -> &'static tokio::sync::RwLock<HashMap<String, ()>> {
+fn fail_cache() -> &'static tokio::sync::RwLock<HashMap<String, u64>> {
     FAIL_CACHE.get_or_init(|| tokio::sync::RwLock::new(HashMap::new()))
 }
 
@@ -77,7 +83,18 @@ pub fn is_ttml(text: &str) -> bool {
 }
 
 pub fn is_lrc(text: &str) -> bool {
-    text.contains('[') && text.contains(':')
+    text.lines()
+        .any(|line| LRC_TIMESTAMP_RE.is_match(line.trim_start()))
+}
+
+pub fn lyrics_kind(text: &str) -> LyricsKind {
+    if is_ttml(text) {
+        LyricsKind::Ttml
+    } else if is_lrc(text) {
+        LyricsKind::Lrc
+    } else {
+        LyricsKind::Txt
+    }
 }
 
 pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
@@ -104,12 +121,48 @@ pub fn local_lyrics(file: &str) -> Option<LyricsResult> {
     None
 }
 
+pub fn remove_stale_sidecars(file: &str, ext: &str) {
+    for other in ["ttml", "lrc", "txt"] {
+        if other == ext {
+            continue;
+        }
+        let _ = fs::remove_file(sidecar_path(file, other));
+        let _ = fs::remove_file(legacy_sidecar_path(file, other));
+    }
+    let _ = fs::remove_file(legacy_sidecar_path(file, ext));
+}
+
+pub fn save_manual_lyrics(file: &str, kind: LyricsKind, text: &str) -> Result<(), String> {
+    let ext = match kind {
+        LyricsKind::Lrc => "lrc",
+        LyricsKind::Ttml => "ttml",
+        LyricsKind::Txt => "txt",
+    };
+
+    let path = sidecar_path(file, ext);
+    let Some(parent) = path.parent() else {
+        return Err("Could not resolve lyrics directory".into());
+    };
+    fs::create_dir_all(parent).map_err(|e| format!("Could not create lyrics directory: {e}"))?;
+
+    let temp = path.with_extension(format!("{ext}.{}.tmp", std::process::id()));
+    fs::write(&temp, text).map_err(|e| format!("Could not save lyrics: {e}"))?;
+    if let Err(err) = fs::rename(&temp, &path) {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Could not save lyrics: {err}"));
+    }
+
+    remove_stale_sidecars(file, ext);
+
+    Ok(())
+}
+
 pub fn embed_lyrics(file: &str, text: &str) -> Result<(), String> {
     super::audio::embed_lyrics(Path::new(file), text)
 }
 
 fn cache_key(lookup: &LyricsLookup) -> String {
-    format!("v3:{}", serde_json::to_string(lookup).unwrap_or_default())
+    format!("v4:{}", serde_json::to_string(lookup).unwrap_or_default())
 }
 
 fn now_millis() -> u64 {
@@ -175,26 +228,40 @@ pub async fn fetch_lyrics_with_cache(
     }
 
     {
-        let fails = fail_cache().read().await;
-        if fails.contains_key(&key) {
-            return None;
+        let mut fails = fail_cache().write().await;
+        if let Some(at) = fails.get(&key) {
+            if now_millis().saturating_sub(*at) < NEGATIVE_CACHE_TTL_MS {
+                return None;
+            }
+            fails.remove(&key);
         }
     }
 
+    let now = now_millis();
     let (mut disk, disk_loaded_mtime) = load_disk_cache(user_data_dir);
-    if let Some(entry) = disk.get(&key) {
-        let hit = entry.result.clone();
-        let mut mem_cache = remote_cache().write().await;
-        mem_cache.insert(key, hit.clone());
-        return hit;
+    if let Some(entry) = disk.get(&key).cloned() {
+        if let Some(hit) = entry.result {
+            if let Some(current) = disk.get_mut(&key) {
+                current.accessed_at = now;
+            }
+            save_disk_cache(user_data_dir, &disk);
+            let mut mem_cache = remote_cache().write().await;
+            mem_cache.insert(key, Some(hit.clone()));
+            return Some(hit);
+        }
+        if now.saturating_sub(entry.accessed_at) < NEGATIVE_CACHE_TTL_MS {
+            return None;
+        }
+        disk.remove(&key);
+        save_disk_cache(user_data_dir, &disk);
     }
 
     let result = do_fetch(lookup).await;
 
     {
         let mut cache = remote_cache().write().await;
-        if result.is_some() {
-            cache.insert(key.clone(), result.clone());
+        if let Some(hit) = &result {
+            cache.insert(key.clone(), Some(hit.clone()));
             if cache.len() > REMOTE_CACHE_MAX {
                 let keys_to_remove: Vec<String> = cache
                     .keys()
@@ -210,7 +277,7 @@ pub async fn fetch_lyrics_with_cache(
             if fails.len() >= FAIL_CACHE_MAX {
                 fails.clear();
             }
-            fails.insert(key.clone(), ());
+            fails.insert(key.clone(), now_millis());
         }
     }
 
@@ -233,14 +300,26 @@ pub async fn fetch_lyrics_with_cache(
 const LRCLIB_BASE: &str = "https://lrclib.net";
 const LRCRED_BASE: &str = "https://lrc.red";
 
+fn is_synced_kind(kind: &crate::commands::types::LyricsKind) -> bool {
+    matches!(
+        kind,
+        crate::commands::types::LyricsKind::Lrc | crate::commands::types::LyricsKind::Ttml
+    )
+}
+
 async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    if let Some(hit) = do_fetch_lrclib(lookup).await {
-        return Some(hit);
+    let lrclib = do_fetch_lrclib(lookup).await;
+    if lrclib.as_ref().is_some_and(|hit| is_synced_kind(&hit.kind)) {
+        return lrclib;
     }
     if let Some(hit) = do_fetch_lrcred(lookup).await {
         return Some(hit);
     }
-    do_fetch_betterlyrics(lookup).await
+    let better = do_fetch_betterlyrics(lookup).await;
+    if better.as_ref().is_some_and(|hit| is_synced_kind(&hit.kind)) {
+        return better;
+    }
+    lrclib.or(better)
 }
 
 const BETTERLYRICS_BASE: &str = "https://lyrics-api.boidu.dev";
@@ -309,7 +388,6 @@ async fn do_fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
 const DURATION_EXACT_SECS: f64 = 2.0;
 const DURATION_TOLERANCE_SECS: f64 = 5.0;
 const DURATION_HARD_REJECT_SECS: f64 = 8.0;
-const SYNCED_BONUS: i32 = 100;
 
 struct Hit {
     title: String,
@@ -407,13 +485,17 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
     let url = format!("https://lrclib.net/api/get?{}", query);
     let client = http_client();
 
+    let mut fallback: Option<LyricsResult> = None;
     match client.get(&url).send().await {
         Ok(resp) if resp.status().as_u16() == 200 => {
             if let Ok(data) = resp.json::<serde_json::Value>().await
                 && duration_acceptable(&data, lookup)
                 && let Some(r) = parse_lrclib_response(Some(&data))
             {
-                return Some(r);
+                if is_synced_kind(&r.kind) {
+                    return Some(r);
+                }
+                fallback = Some(r);
             }
         }
         _ => {}
@@ -437,8 +519,8 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
     match client.get(&search_url).send().await {
         Ok(resp) if resp.status().as_u16() == 200 => {
             let items: Vec<serde_json::Value> = resp.json().await.unwrap_or_default();
-            let mut best: Option<LyricsResult> = None;
-            let mut best_score: i32 = i32::MIN;
+            let mut best_synced: Option<(i32, LyricsResult)> = None;
+            let mut best_plain: Option<(i32, LyricsResult)> = None;
             for item in &items {
                 if !duration_acceptable(item, lookup) {
                     continue;
@@ -446,31 +528,49 @@ async fn do_fetch_lrclib(lookup: &LyricsLookup) -> Option<LyricsResult> {
                 let Some(result) = parse_lrclib_response(Some(item)) else {
                     continue;
                 };
-                let mut score = score_hit(&lrclib_hit(item), lookup);
-                if result.kind == crate::commands::types::LyricsKind::Lrc {
-                    score += SYNCED_BONUS;
-                }
-                if score > best_score {
-                    best_score = score;
-                    best = Some(result);
+                let score = score_hit(&lrclib_hit(item), lookup);
+                let slot = if is_synced_kind(&result.kind) {
+                    &mut best_synced
+                } else {
+                    &mut best_plain
+                };
+                if slot.as_ref().is_none_or(|(best, _)| score > *best) {
+                    *slot = Some((score, result));
                 }
             }
-            best
+            if let Some((_, hit)) = best_synced {
+                return Some(hit);
+            }
+            if let Some((_, hit)) = best_plain {
+                fallback.get_or_insert(hit);
+            }
+            fallback
         }
-        _ => None,
+        _ => fallback,
     }
 }
 
-fn lrc_is_synced(text: &str) -> bool {
-    text.lines().any(|line| {
-        let trimmed = line.trim_start();
-        if !trimmed.starts_with('[') {
-            return false;
-        }
-        let rest = &trimmed[1..];
-        let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-        (1..=2).contains(&digits.len()) && rest[digits.len()..].starts_with(':')
-    })
+fn search_result_key(result: &crate::commands::types::LrcSearchResult) -> (String, String) {
+    (
+        result.track_name.to_lowercase(),
+        result.artist_name.to_lowercase(),
+    )
+}
+
+fn push_search_result(
+    results: &mut Vec<crate::commands::types::LrcSearchResult>,
+    seen: &mut HashMap<(String, String), bool>,
+    result: crate::commands::types::LrcSearchResult,
+) {
+    let key = search_result_key(&result);
+    let synced = result.synced_lyrics.is_some();
+    match seen.get(&key) {
+        Some(true) => return,
+        Some(false) if !synced => return,
+        _ => {}
+    }
+    seen.insert(key, synced);
+    results.push(result);
 }
 
 async fn do_fetch_lrcred(lookup: &LyricsLookup) -> Option<LyricsResult> {
@@ -491,9 +591,12 @@ async fn do_fetch_lrcred(lookup: &LyricsLookup) -> Option<LyricsResult> {
         if !duration_acceptable(item, lookup) {
             continue;
         }
+        let Some(isrc) = item["isrc"].as_str() else {
+            continue;
+        };
         let score = score_hit(&lrcred_hit(item), lookup);
         if best.as_ref().is_none_or(|(s, _)| score > *s) {
-            best = item["isrc"].as_str().map(|i| (score, i.to_string()));
+            best = Some((score, isrc.to_string()));
         }
     }
 
@@ -581,23 +684,29 @@ pub async fn search_lyrics(
     let client = http_client();
 
     let mut results = match client.get(&url).send().await {
-        Ok(resp) if resp.status().as_u16() == 200 => resp
-            .json::<Vec<crate::commands::types::LrcSearchResult>>()
-            .await
-            .unwrap_or_default(),
+        Ok(resp) if resp.status().as_u16() == 200 => {
+            match resp
+                .json::<Vec<crate::commands::types::LrcSearchResult>>()
+                .await
+            {
+                Ok(results) => results,
+                Err(err) => {
+                    eprintln!("LRCLIB search response could not be parsed: {err}");
+                    Vec::new()
+                }
+            }
+        }
         _ => vec![],
     };
 
-    let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    let mut seen: HashMap<(String, String), bool> = HashMap::new();
     for r in results.iter() {
-        seen.insert((r.track_name.to_lowercase(), r.artist_name.to_lowercase()));
+        let entry = seen.entry(search_result_key(r)).or_insert(false);
+        *entry |= r.synced_lyrics.is_some();
     }
 
     for r in search_lrcred(query, track_name, artist_name).await {
-        let key = (r.track_name.to_lowercase(), r.artist_name.to_lowercase());
-        if seen.insert(key) {
-            results.push(r);
-        }
+        push_search_result(&mut results, &mut seen, r);
     }
     results
 }
@@ -646,22 +755,28 @@ async fn search_lrcred(
 
     let mut fetched = futures_util::future::join_all(top.iter().map(|item| async move {
         let isrc = item["isrc"].as_str()?;
-        let lrc_url = format!("{LRCRED_BASE}/s/{}.lrc", urlencoding::encode(isrc));
-        let text = match http_client().get(&lrc_url).send().await {
-            Ok(resp) if resp.status().as_u16() == 200 => resp.text().await.ok()?,
-            _ => return None,
-        };
-        if text.trim().is_empty() {
-            return None;
+        for ext in ["ttml", "lrc"] {
+            let url = format!("{LRCRED_BASE}/s/{}.{ext}", urlencoding::encode(isrc));
+            let resp = match http_client().get(&url).send().await {
+                Ok(resp) if resp.status().as_u16() == 200 => resp,
+                _ => continue,
+            };
+            let text = match resp.text().await {
+                Ok(text) if !text.trim().is_empty() => text,
+                _ => continue,
+            };
+            return Some((text, isrc.to_string(), ext == "ttml"));
         }
-        Some((text, isrc.to_string()))
+        None
     }))
     .await;
 
     let mut out = Vec::new();
     for (item, pair) in top.iter().zip(fetched.drain(..)) {
-        let Some((text, isrc)) = pair else { continue };
-        let synced = lrc_is_synced(&text);
+        let Some((text, isrc, is_ttml)) = pair else {
+            continue;
+        };
+        let synced = is_ttml || is_lrc(&text);
         out.push(crate::commands::types::LrcSearchResult {
             id: isrc,
             track_name: item["title"].as_str().unwrap_or("").to_string(),
@@ -674,4 +789,107 @@ async fn search_lrcred(
         });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_lrc, lyrics_kind, push_search_result, search_result_key};
+    use crate::commands::types::{LrcSearchResult, LyricsKind};
+    use std::collections::HashMap;
+
+    fn search_result(track: &str, artist: &str, synced: bool) -> LrcSearchResult {
+        LrcSearchResult {
+            id: format!("{track}-{artist}"),
+            track_name: track.to_string(),
+            artist_name: artist.to_string(),
+            album_name: String::new(),
+            duration: 0.0,
+            instrumental: false,
+            plain_lyrics: if synced {
+                None
+            } else {
+                Some("plain".to_string())
+            },
+            synced_lyrics: if synced {
+                Some("[00:01.00]hi".to_string())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn seed(results: &[LrcSearchResult]) -> HashMap<(String, String), bool> {
+        let mut seen = HashMap::new();
+        for result in results {
+            seen.insert(search_result_key(result), result.synced_lyrics.is_some());
+        }
+        seen
+    }
+
+    #[test]
+    fn detects_timestamped_lrc() {
+        assert!(is_lrc("[00:12.34]hello"));
+        assert!(is_lrc("[00:12:34]hello"));
+        assert!(is_lrc("intro\n[1:02.500]line"));
+    }
+
+    #[test]
+    fn rejects_metadata_and_inline_brackets() {
+        assert!(!is_lrc("[ar:Artist]\n[ti:Title]\n[al:Album]"));
+        assert!(!is_lrc("plain text [00:12]"));
+        assert!(!is_lrc(""));
+    }
+
+    #[test]
+    fn classifies_lyrics_text() {
+        assert_eq!(
+            lyrics_kind(r#"<tt xmlns="http://www.w3.org/ns/ttml"><body/></tt>"#),
+            LyricsKind::Ttml
+        );
+        assert_eq!(lyrics_kind("[00:12.34]hello"), LyricsKind::Lrc);
+        assert_eq!(lyrics_kind("plain words"), LyricsKind::Txt);
+    }
+
+    #[test]
+    fn keeps_synced_search_hit_when_plain_duplicate_exists() {
+        let mut results = vec![search_result("Song", "Artist", false)];
+        let mut seen = seed(&results);
+
+        push_search_result(
+            &mut results,
+            &mut seen,
+            search_result("song", "artist", true),
+        );
+
+        assert_eq!(results.len(), 2);
+        assert!(results[1].synced_lyrics.is_some());
+    }
+
+    #[test]
+    fn drops_search_hit_when_synced_duplicate_exists() {
+        let mut results = vec![search_result("Song", "Artist", true)];
+        let mut seen = seed(&results);
+
+        push_search_result(
+            &mut results,
+            &mut seen,
+            search_result("song", "artist", true),
+        );
+
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn drops_plain_search_hit_when_plain_duplicate_exists() {
+        let mut results = vec![search_result("Song", "Artist", false)];
+        let mut seen = seed(&results);
+
+        push_search_result(
+            &mut results,
+            &mut seen,
+            search_result("song", "artist", false),
+        );
+
+        assert_eq!(results.len(), 1);
+    }
 }

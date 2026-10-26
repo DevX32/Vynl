@@ -34,7 +34,8 @@
 
   onMount(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") close();
+      if (e.key !== "Escape" || e.defaultPrevented || e.repeat) return;
+      close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

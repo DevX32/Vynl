@@ -421,7 +421,7 @@ pub async fn delete_library_track(
 
     fs::remove_file(&canonical_path).map_err(|e| format!("Failed to delete file: {e}"))?;
 
-    for sidecar_ext in &["lrc", "txt"] {
+    for sidecar_ext in &["ttml", "lrc", "txt"] {
         let sidecar = crate::services::lyrics::sidecar_path(&canonical_str, sidecar_ext);
         let _ = fs::remove_file(sidecar);
         let legacy = crate::services::lyrics::legacy_sidecar_path(&canonical_str, sidecar_ext);
@@ -630,6 +630,21 @@ pub async fn lyrics_embed(file: String, text: String, app: AppHandle) -> Result<
     let validated = require_path_in_output(&file, &app)?;
     tokio::task::spawn_blocking(move || {
         crate::services::lyrics::embed_lyrics(&validated.to_string_lossy(), &text)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn lyrics_save(
+    file: String,
+    kind: LyricsKind,
+    text: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let validated = require_path_in_output(&file, &app)?;
+    tokio::task::spawn_blocking(move || {
+        crate::services::lyrics::save_manual_lyrics(&validated.to_string_lossy(), kind, &text)
     })
     .await
     .map_err(|e| e.to_string())?
