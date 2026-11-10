@@ -685,6 +685,27 @@ pub async fn catalogue_seek_stream(
 }
 
 #[tauri::command]
+pub async fn catalogue_save_to_playlist(
+    track: CatalogueTrack,
+    playlist_id: Option<String>,
+    playlist_name: Option<String>,
+    app: AppHandle,
+) -> Result<Playlist, String> {
+    let output = crate::commands::output_dir_from_settings(&app)?;
+    let id = match playlist_id {
+        Some(id) if !id.trim().is_empty() => id.trim().to_string(),
+        _ => {
+            let name = playlist_name
+                .map(|name| name.trim().to_string())
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| "Liked Songs".to_string());
+            playlists::create_playlist(&output, &name)?.id
+        }
+    };
+    playlists::add_stream_to_playlist(&output, &id, &track)
+}
+
+#[tauri::command]
 pub async fn catalogue_add_to_playlist(
     track: CatalogueTrack,
     playlist_id: Option<String>,

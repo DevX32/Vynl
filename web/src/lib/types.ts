@@ -241,6 +241,7 @@ export interface Playlist {
   id: string;
   name: string;
   paths: string[];
+  streams: CatalogueTrack[];
   cover: string | null;
   createdAt: number;
   updatedAt: number;

@@ -14,7 +14,10 @@
     getIsTrackPlaying,
   } from "@state/now-playing.svelte";
   import { toggle } from "@lib/player.svelte";
-  import { getCurrentPlaylists } from "@state/playlists.svelte";
+  import {
+    getCurrentPlaylists,
+    saveStreamToPlaylist,
+  } from "@state/playlists.svelte";
   import {
     cataloguePath,
     refreshAfterCatalogueSave,
@@ -53,6 +56,8 @@
   let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(null);
   let pickerTarget = $state<CatalogueTrack | null>(null);
   let pickerBusy = $state(false);
+  let streamTarget = $state<CatalogueTrack | null>(null);
+  let streamBusy = $state(false);
 
   function rowAction(track: CatalogueTrack): void {
     if (nowPlaying?.id === track.id) {
@@ -88,6 +93,14 @@
         icon: ListPlus,
         action: () => addToQueue(cataloguePath(track.id)),
       },
+      {
+        label: t("catalogue.addToPlaylist"),
+        icon: ListPlus,
+        action: () => {
+          streamTarget = track;
+        },
+      },
+      { type: "separator" },
       {
         label: t("catalogue.downloadToPlaylist"),
         icon: ListMusic,
@@ -164,6 +177,46 @@
     } finally {
       pickerBusy = false;
       pickerTarget = null;
+    }
+  }
+
+  async function addToExistingMix(mixId: string): Promise<void> {
+    const target = streamTarget;
+    if (!target || streamBusy) return;
+    streamBusy = true;
+    try {
+      await saveStreamToPlaylist(target, mixId);
+      const name =
+        playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
+      toasts.success(
+        t("catalogue.savedToPlaylist", { name: toPascalCase(name) }),
+      );
+    } catch (error) {
+      console.warn("catalogue save to playlist failed:", error);
+      toasts.error(t("catalogue.saveFailed"));
+    } finally {
+      streamBusy = false;
+      streamTarget = null;
+    }
+  }
+
+  async function createAndAddMix(name: string): Promise<void> {
+    const target = streamTarget;
+    if (!target || streamBusy) return;
+    streamBusy = true;
+    try {
+      const playlist = await saveStreamToPlaylist(target, null, name);
+      toasts.success(
+        t("catalogue.savedToPlaylist", {
+          name: toPascalCase(playlist.name),
+        }),
+      );
+    } catch (error) {
+      console.warn("catalogue create playlist failed:", error);
+      toasts.error(t("catalogue.saveFailed"));
+    } finally {
+      streamBusy = false;
+      streamTarget = null;
     }
   }
 </script>
@@ -265,6 +318,21 @@
     onAddExisting={(id) => void addToSelectedPlaylist(id)}
     onCreate={(name) => void createAndAddPlaylist(name)}
     onSkip={closePicker}
+  />
+{/if}
+
+{#if streamTarget}
+  <PlaylistPicker
+    suggestedName={streamTarget.album?.name ?? streamTarget.title}
+    trackCount={1}
+    {playlists}
+    busy={streamBusy}
+    onAddExisting={(id) => void addToExistingMix(id)}
+    onCreate={(name) => void createAndAddMix(name)}
+    onSkip={() => {
+      if (streamBusy) return;
+      streamTarget = null;
+    }}
   />
 {/if}
 

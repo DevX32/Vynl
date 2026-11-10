@@ -18,6 +18,7 @@
   } from "@state/now-playing.svelte";
   import { getLibrary } from "@state/library.svelte";
   import { setShuffle } from "@state/player.svelte";
+  import { registerCatalogueTracks } from "@state/catalogue.svelte";
   import {
     fmtTotalDuration,
     fmtTime,
@@ -64,6 +65,7 @@
   $effect(() => {
     void pl?.id;
     q = "";
+    if (pl && pl.streams.length > 0) registerCatalogueTracks(pl.streams);
   });
 
   const currentTracks = $derived(pl ? tracksOf(pl) : []);

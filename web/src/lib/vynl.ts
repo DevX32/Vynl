@@ -375,6 +375,17 @@ export const vynl = {
       playlistName: playlistName ?? null,
     }),
 
+  catalogueSaveToPlaylist: (
+    track: CatalogueTrack,
+    playlistId?: string | null,
+    playlistName?: string | null,
+  ): Promise<Playlist> =>
+    cmd("catalogue_save_to_playlist", {
+      track,
+      playlistId: playlistId ?? null,
+      playlistName: playlistName ?? null,
+    }),
+
   clearAudioCache: (): Promise<void> => cmd("clear_audio_cache"),
 
   pluginsList: (): Promise<import("./plugins/types").PluginEntry[]> =>

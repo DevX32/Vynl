@@ -277,6 +277,7 @@ pub fn run() {
             crate::services::catalogue::catalogue_crossfade_stream,
             crate::services::catalogue::catalogue_seek_stream,
             crate::services::catalogue::catalogue_add_to_playlist,
+            crate::services::catalogue::catalogue_save_to_playlist,
             commands::downloaded_paths,
             commands::start_download,
             commands::cancel_download,

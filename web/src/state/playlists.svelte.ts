@@ -1,4 +1,4 @@
-import type { LibraryTrack, Playlist, PlaylistMeta } from "@lib/types";
+import type { CatalogueTrack, LibraryTrack, Playlist, PlaylistMeta } from "@lib/types";
 import { getLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
@@ -166,8 +166,51 @@ export async function setPlaylistCover(
   _meta = await vynl.listPlaylists();
 }
 
+export async function saveStreamToPlaylist(
+  track: CatalogueTrack,
+  playlistId?: string | null,
+  playlistName?: string | null,
+): Promise<Playlist> {
+  const pl = await vynl.catalogueSaveToPlaylist(
+    track,
+    playlistId ?? null,
+    playlistName ?? null,
+  );
+  syncAfterMutation(pl);
+  _meta = await vynl.listPlaylists();
+  return pl;
+}
+
 let _pathSource: LibraryTrack[] | null = null;
 let _pathMap = new Map<string, LibraryTrack>();
+
+export function isCataloguePath(path: string): boolean {
+  return path.startsWith("ytm:");
+}
+
+export function catalogueIdOf(path: string): string | null {
+  if (!path.startsWith("ytm:")) return null;
+  const id = path.slice(4);
+  return id.length > 0 ? id : null;
+}
+
+function streamTrackOf(track: CatalogueTrack): LibraryTrack {
+  return {
+    id: track.id,
+    path: `ytm:${track.id}`,
+    title: track.title,
+    artist: track.artist,
+    album: track.album?.name ?? "",
+    year: null,
+    duration: track.duration ?? 0,
+    cover: track.cover,
+    trackNumber: null,
+    lyrics: null,
+    ext: "webm",
+    mtime: null,
+    addedAt: null,
+  };
+}
 
 export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
@@ -177,9 +220,19 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
     _pathSource = library;
     _pathMap = next;
   }
-  return pl.paths
-    .map((p) => _pathMap.get(p))
-    .filter((t): t is LibraryTrack => !!t);
+  const streams = new Map(pl.streams.map((track) => [track.id, track]));
+  const result: LibraryTrack[] = [];
+  for (const path of pl.paths) {
+    if (isCataloguePath(path)) {
+      const id = catalogueIdOf(path);
+      const track = id ? streams.get(id) : undefined;
+      if (track) result.push(streamTrackOf(track));
+      continue;
+    }
+    const track = _pathMap.get(path);
+    if (track) result.push(track);
+  }
+  return result;
 }
 
 let _failedCovers = $state<Set<string>>(new Set());

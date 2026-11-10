@@ -2,10 +2,12 @@ use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::commands::types::{Playlist, PlaylistMeta};
+use crate::commands::types::{CatalogueTrack, Playlist, PlaylistMeta};
 use crate::services::util;
 
 crate::declare_file_mutex!();
+
+const CATALOGUE_PREFIX: &str = "ytm:";
 
 fn playlists_dir(output_dir: &Path) -> std::path::PathBuf {
     output_dir.join("playlists")
@@ -80,6 +82,9 @@ fn read_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
     let mut seen_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
     pl.paths
         .retain(|p| !p.is_empty() && seen_paths.insert(p.clone()));
+    pl.streams.retain(|track| {
+        seen_paths.contains(&format!("{CATALOGUE_PREFIX}{}", track.id))
+    });
     let now = util::now_ms();
     if pl.created_at == 0 {
         pl.created_at = now;
@@ -209,6 +214,7 @@ pub fn create_playlist(output_dir: &Path, name: &str) -> Result<Playlist, String
             name.trim().into()
         },
         paths: Vec::new(),
+        streams: Vec::new(),
         cover: None,
         created_at: now,
         updated_at: now,
@@ -291,6 +297,33 @@ pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<
     Ok(pl)
 }
 
+pub fn add_stream_to_playlist(
+    output_dir: &Path,
+    id: &str,
+    track: &CatalogueTrack,
+) -> Result<Playlist, String> {
+    if !validate_id(id) {
+        return Err("invalid playlist id".into());
+    }
+    let video_id = track.id.trim();
+    if video_id.is_empty() {
+        return Err("This track has no video id.".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
+    let path = format!("{CATALOGUE_PREFIX}{video_id}");
+    if !pl.paths.contains(&path) {
+        pl.paths.push(path);
+    }
+    match pl.streams.iter_mut().find(|t| t.id == video_id) {
+        Some(existing) => *existing = track.clone(),
+        None => pl.streams.push(track.clone()),
+    }
+    touch(&mut pl);
+    write_playlist(output_dir, &pl)?;
+    Ok(pl)
+}
+
 pub fn remove_from_playlist(
     output_dir: &Path,
     id: &str,
@@ -302,6 +335,9 @@ pub fn remove_from_playlist(
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
     pl.paths.retain(|p| p != track_path);
+    if let Some(video_id) = track_path.strip_prefix(CATALOGUE_PREFIX) {
+        pl.streams.retain(|t| t.id != video_id);
+    }
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
     Ok(pl)

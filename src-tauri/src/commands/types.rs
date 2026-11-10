@@ -301,6 +301,8 @@ pub struct Playlist {
     pub id: String,
     pub name: String,
     pub paths: Vec<String>,
+    #[serde(default)]
+    pub streams: Vec<CatalogueTrack>,
     pub cover: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
