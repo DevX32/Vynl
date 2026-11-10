@@ -4,6 +4,7 @@
   import CatalogueAlbumPage from "./CatalogueAlbumPage.svelte";
   import CatalogueArtistPage from "./CatalogueArtistPage.svelte";
   import CataloguePlaylistPage from "./CataloguePlaylistPage.svelte";
+  import CatalogueLikedPage from "./CatalogueLikedPage.svelte";
 
   let {
     route,
@@ -16,6 +17,8 @@
 
 {#if route.view === "search"}
   <CatalogueSearchPage {onNavigate} />
+{:else if route.view === "liked"}
+  <CatalogueLikedPage {onNavigate} />
 {:else if route.view === "album"}
   {#key route.id}
     <CatalogueAlbumPage id={route.id} {onNavigate} />

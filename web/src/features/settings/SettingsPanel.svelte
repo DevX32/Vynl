@@ -11,6 +11,7 @@
   import { openPluginsUi } from "@state/plugins.svelte";
   import MobileSyncSettings from "./MobileSyncSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
+  import TasteSettings from "./TasteSettings.svelte";
 
   const settings = $derived(getCurrentSettings());
 
@@ -72,6 +73,8 @@
       </Button>
     </div>
   </div>
+
+  <TasteSettings />
 
   <div class="group">
     <SettingRow

@@ -29,6 +29,18 @@ export const en = {
     searchTitle: "Browse",
     searchPlaceholder: "Songs, albums, playlists...",
     searchHint: "Find something to stream right now.",
+    madeForYou: "Made for you",
+    likedSongs: "Liked songs",
+    playlist: "Playlist",
+    likedEmptyTitle: "No liked songs yet",
+    likedEmptyHint: "Like songs from Browse to build this playlist.",
+    freshTitle: "Start your own mix",
+    freshHint:
+      "Search for something you love and like it. Vynl learns from your likes and plays, right here on this device.",
+    buildingMix: "Building your mix...",
+    mixFailed: "Could not build your mix",
+    likeTrack: "Like song",
+    unlikeTrack: "Unlike song",
     songs: "Songs",
     albums: "Albums",
     playlists: "Playlists",
@@ -258,6 +270,12 @@ export const en = {
     nicknameHint:
       "Your name across Vynl. Leave blank for a random nickname.",
     nicknameRoll: "Roll nickname",
+    taste: "Your Taste",
+    tasteHint:
+      "{liked} liked · {played} played. Vynl builds your mixes from this, only on this device.",
+    tasteEmpty:
+      "Like a song or play a few tracks and Vynl will start building your mix.",
+    tasteReset: "Reset taste",
     mobileSync: "Mobile Sync",
     mobileSyncHint:
       "Share your library with the Vynl Android app over your local Wi‑Fi.",

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import {
     Search,
     Play,
@@ -12,15 +13,26 @@
     getCatalogueQuery,
     getCatalogueResults,
     getCatalogueSearchError,
+    getCatalogueTaste,
+    getCatalogueTasteError,
     isCatalogueSearching,
+    isCatalogueTasteLoading,
+    loadCatalogueTaste,
     searchCatalogue,
   } from "@state/catalogue.svelte";
+  import {
+    getTasteProfileKey,
+    getTasteSeeds,
+    getTasteSummary,
+  } from "@state/taste.svelte";
   import { requestPlay } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
   import { t } from "@lib/i18n";
   import { friendlyError } from "@lib/errors";
   import SearchInput from "@components/SearchInput.svelte";
   import CatalogueTrackList from "./CatalogueTrackList.svelte";
+  import CatalogueSongCard from "./CatalogueSongCard.svelte";
+  import CatalogueSongMenu from "./CatalogueSongMenu.svelte";
 
   let {
     onNavigate,
@@ -31,12 +43,51 @@
   let query = $state(getCatalogueQuery());
   let requested = $state(getCatalogueQuery());
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let songMenu: CatalogueSongMenu;
+  let mixGrid: HTMLDivElement | undefined = $state();
+  let mixColumns = $state(1);
 
   const results = $derived(getCatalogueResults());
   const searching = $derived(isCatalogueSearching());
   const error = $derived(getCatalogueSearchError());
 
-  const playableSongs = $derived(requested.trim() ? (results?.songs ?? []) : []);
+  const taste = $derived(getCatalogueTaste());
+  const tasteLoading = $derived(isCatalogueTasteLoading());
+  const tasteError = $derived(getCatalogueTasteError());
+  const summary = $derived(getTasteSummary());
+  const profileKey = $derived(getTasteProfileKey());
+
+  $effect(() => {
+    const key = profileKey;
+    if (!key) return;
+    const current = untrack(() => getTasteSeeds(6));
+    if (current.length === 0) return;
+    void loadCatalogueTaste(current);
+  });
+
+  const playableSongs = $derived(
+    requested.trim() ? (results?.songs ?? []) : taste,
+  );
+
+  const mixTracks = $derived(
+    mixColumns > 0
+      ? taste.slice(0, Math.floor(taste.length / mixColumns) * mixColumns)
+      : taste,
+  );
+
+  $effect(() => {
+    const grid = mixGrid;
+    if (!grid) return;
+    const measure = (): void => {
+      const template = getComputedStyle(grid).gridTemplateColumns;
+      const columns = template && template !== "none" ? template.split(" ").length : 1;
+      mixColumns = Math.max(1, columns);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  });
 
   $effect(() => {
     const value = query;
@@ -75,6 +126,10 @@
 
   function retry(): void {
     void searchCatalogue(query);
+  }
+
+  function retryTaste(): void {
+    void loadCatalogueTaste(untrack(() => getTasteSeeds(6)), true);
   }
 </script>
 
@@ -125,11 +180,40 @@
         <span class="state-sub mono">{t("common.loading")}</span>
       </div>
     {:else if !requested.trim()}
-      <div class="state">
-        <Search size={32} stroke-width={1.1} />
-        <span class="state-title display">{t("catalogue.searchTitle")}</span>
-        <span class="state-sub">{t("catalogue.searchHint")}</span>
-      </div>
+      {#if summary.liked === 0 && summary.played === 0}
+        <section class="fresh">
+          <span class="state-title display">{t("catalogue.freshTitle")}</span>
+          <span class="state-sub">{t("catalogue.freshHint")}</span>
+        </section>
+      {:else}
+        {#if tasteError}
+          <div class="mix-note" role="alert">
+            <AlertCircle size={15} stroke-width={1.4} />
+            <span>{t("catalogue.mixFailed")}</span>
+            <button class="retry-btn" onclick={retryTaste}>
+              {t("common.retry")}
+            </button>
+          </div>
+        {:else if taste.length > 0}
+          <section class="section">
+            <div class="section-label mono">{t("catalogue.madeForYou")}</div>
+            <div class="card-grid" bind:this={mixGrid}>
+              {#each mixTracks as track (track.id)}
+                <CatalogueSongCard
+                  {track}
+                  onplay={() => playTrack(track, taste)}
+                  onmenu={(e, item) => songMenu.open(e, item)}
+                />
+              {/each}
+            </div>
+          </section>
+        {:else if tasteLoading}
+          <div class="mix-note">
+            <span class="spin"><Loader size={14} stroke-width={1.4} /></span>
+            <span>{t("catalogue.buildingMix")}</span>
+          </div>
+        {/if}
+      {/if}
     {:else if results}
       {#if results.songs.length > 0}
         <section class="section">
@@ -154,6 +238,12 @@
     {/if}
   </div>
 </div>
+
+<CatalogueSongMenu
+  bind:this={songMenu}
+  onNavigateAlbum={(id) => onNavigate(`catalogue:album:${id}`)}
+  onNavigateArtist={(id) => onNavigate(`catalogue:artist:${id}`)}
+/>
 
 <style>
   .cat-page {
@@ -229,6 +319,43 @@
     margin-bottom: 26px;
   }
 
+  .section-label {
+    font-size: 13px;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+
+  .fresh {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 320px;
+    margin-top: 6px;
+    padding: 42px 20px;
+    text-align: center;
+    color: var(--faint);
+  }
+
+  .mix-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--faint);
+    font-size: 11.5px;
+  }
+
+  .mix-note .retry-btn {
+    margin-left: auto;
+    margin-top: 0;
+  }
+
   .play-btn {
     width: 36px;
     height: 36px;
@@ -294,6 +421,12 @@
   .shuffle-btn:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 158px));
+    gap: 10px;
   }
 
   .state {

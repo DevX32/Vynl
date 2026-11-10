@@ -233,6 +233,67 @@ export function clearCatalogueSearch(): void {
   _searchError = null;
 }
 
+let _taste = $state<CatalogueTrack[]>([]);
+let _tasteKey = $state("");
+let _tasteLoading = $state(false);
+let _tasteError = $state<string | null>(null);
+let _tasteGeneration = 0;
+
+export function getCatalogueTaste(): readonly CatalogueTrack[] {
+  return _taste;
+}
+
+export function isCatalogueTasteLoading(): boolean {
+  return _tasteLoading;
+}
+
+export function getCatalogueTasteError(): string | null {
+  return _tasteError;
+}
+
+export function resetCatalogueTaste(): void {
+  _tasteGeneration += 1;
+  _taste = [];
+  _tasteKey = "";
+  _tasteLoading = false;
+  _tasteError = null;
+}
+
+export async function loadCatalogueTaste(
+  seeds: readonly string[],
+  force = false,
+): Promise<void> {
+  const key = seeds.join("|");
+  if (!key) {
+    _tasteGeneration += 1;
+    _taste = [];
+    _tasteKey = "";
+    _tasteLoading = false;
+    _tasteError = null;
+    return;
+  }
+  if (!force && key === _tasteKey && (_taste.length > 0 || _tasteLoading)) {
+    return;
+  }
+
+  const generation = ++_tasteGeneration;
+  _tasteKey = key;
+  _tasteLoading = true;
+  _tasteError = null;
+  try {
+    const tracks = await vynl.catalogueTaste([...seeds]);
+    if (generation !== _tasteGeneration) return;
+    _taste = tracks;
+    registerCatalogueTracks(tracks);
+  } catch (error) {
+    if (generation !== _tasteGeneration) return;
+    _tasteError = error instanceof Error ? error.message : String(error);
+    console.warn("catalogue taste failed:", error);
+  } finally {
+    if (generation === _tasteGeneration) _tasteLoading = false;
+  }
+}
+
 const albumCache = new Map<string, CatalogueAlbumDetail>();
 const artistCache = new Map<string, CatalogueArtist>();
 const playlistCache = new Map<string, CataloguePlaylistDetail>();

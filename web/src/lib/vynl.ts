@@ -298,6 +298,9 @@ export const vynl = {
   catalogueSearch: (query: string): Promise<CatalogueSearchResults> =>
     cmd("catalogue_search", { query }),
 
+  catalogueTaste: (seeds: string[]): Promise<CatalogueTrack[]> =>
+    cmd("catalogue_taste", { seeds }),
+
   cacheCover: (url: string): Promise<string> => cmd("catalogue_cover", { url }),
 
   catalogueAlbum: (id: string): Promise<CatalogueAlbumDetail> =>

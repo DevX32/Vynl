@@ -1,10 +1,23 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
-  import { Volume2, VolumeOff, Expand, Shrink, SlidersHorizontal } from "lucide-svelte";
+  import {
+    Volume2,
+    VolumeOff,
+    Expand,
+    Shrink,
+    SlidersHorizontal,
+    Heart,
+  } from "lucide-svelte";
   import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
   import { getCurrentMuted, getCurrentVolume, toggleMute } from "@state/player.svelte";
   import { applyVolume } from "@lib/player.svelte";
+  import { catalogueIdFromPath } from "@state/catalogue.svelte";
+  import {
+    getTasteLikedIds,
+    toggleTasteLike,
+  } from "@state/taste.svelte";
+  import type { CatalogueTrack } from "@lib/types";
   import { blobSrc, fmtTime } from "../../lib/format";
   import { t } from "@lib/i18n";
   import SeekSlider from "./SeekSlider.svelte";
@@ -25,6 +38,29 @@
 
   let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
 
+  const likedTracks = $derived(getTasteLikedIds());
+  const current = $derived(getCurrentTrack());
+  const currentCatalogueId = $derived(catalogueIdFromPath(current?.path));
+  const currentLiked = $derived(
+    currentCatalogueId ? likedTracks.has(currentCatalogueId) : false,
+  );
+
+  function toggleCurrentLike(): void {
+    const track = current;
+    const id = currentCatalogueId;
+    if (!track || !id) return;
+    toggleTasteLike({
+      id,
+      title: track.title,
+      artist: track.artist,
+      artists: [{ name: track.artist, id: null }],
+      album: track.album ? { name: track.album, id: null } : null,
+      duration: track.duration > 0 ? track.duration : null,
+      cover: track.cover,
+      explicit: false,
+    } satisfies CatalogueTrack);
+  }
+
   function toggleFullscreen(): void {
     onToggleFullscreen();
   }
@@ -35,48 +71,70 @@
 </script>
 
 <div class="player-bar" class:empty={!getCurrentTrack()}>
-  <button
-    class="now-mini"
-    onclick={onOpenPlayer}
-    aria-label={t("player.openPlayer")}
-  >
-    <div class="mini-cover-wrap">
-      {#if getCurrentTrack()?.cover}
-        {#key getCurrentTrack()!.id}
-          <img
-            class="mini-cover"
-            use:blobSrc={getCurrentTrack()!.cover}
-            alt=""
-            draggable="false"
-            transition:fade={{ duration: 300 }}
-          />
-        {/key}
-      {:else}
-        <div class="mini-cover placeholder" class:empty={!getCurrentTrack()}>
-          {getCurrentTrack()
-            ? getCurrentTrack()!.title.charAt(0).toUpperCase()
-            : "·"}
-        </div>
-      {/if}
-    </div>
-    <div class="mini-meta">
-      <span class="mini-title display">
-        {getCurrentTrack()?.title ?? t("player.nothingPlaying")}</span
-      >
-      <span class="mini-artist mono">
-        {#if getCurrentTrack()?.artist}
-          {#each getCurrentTrack()!.artist.split(", ") as artistName, i}
-            {#if i > 0}
-              <span class="artist-sep">, </span>
-            {/if}
-            <span class="artist-link">{artistName}</span>
-          {/each}
+  <div class="now-group">
+    <button
+      class="now-mini"
+      onclick={onOpenPlayer}
+      aria-label={t("player.openPlayer")}
+    >
+      <div class="mini-cover-wrap">
+        {#if getCurrentTrack()?.cover}
+          {#key getCurrentTrack()!.id}
+            <img
+              class="mini-cover"
+              use:blobSrc={getCurrentTrack()!.cover}
+              alt=""
+              draggable="false"
+              transition:fade={{ duration: 300 }}
+            />
+          {/key}
         {:else}
-          <span>{t("player.unknownArtist")}</span>
+          <div class="mini-cover placeholder" class:empty={!getCurrentTrack()}>
+            {getCurrentTrack()
+              ? getCurrentTrack()!.title.charAt(0).toUpperCase()
+              : "·"}
+          </div>
         {/if}
-      </span>
-    </div>
-  </button>
+      </div>
+      <div class="mini-meta">
+        <span class="mini-title display">
+          {getCurrentTrack()?.title ?? t("player.nothingPlaying")}</span
+        >
+        <span class="mini-artist mono">
+          {#if getCurrentTrack()?.artist}
+            {#each getCurrentTrack()!.artist.split(", ") as artistName, i}
+              {#if i > 0}
+                <span class="artist-sep">, </span>
+              {/if}
+              <span class="artist-link">{artistName}</span>
+            {/each}
+          {:else}
+            <span>{t("player.unknownArtist")}</span>
+          {/if}
+        </span>
+      </div>
+    </button>
+
+    {#if currentCatalogueId}
+      <button
+        class="now-like"
+        class:liked={currentLiked}
+        onclick={toggleCurrentLike}
+        aria-label={currentLiked
+          ? t("catalogue.unlikeTrack")
+          : t("catalogue.likeTrack")}
+        title={currentLiked
+          ? t("catalogue.unlikeTrack")
+          : t("catalogue.likeTrack")}
+      >
+        <Heart
+          size={14}
+          stroke-width={1.6}
+          fill={currentLiked ? "currentColor" : "none"}
+        />
+      </button>
+    {/if}
+  </div>
 
   <div class="center-stack">
     <div class="transport">
@@ -164,8 +222,41 @@
     opacity: 0.4;
   }
 
+  .now-group {
+    width: auto;
+    max-width: 100%;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .now-like {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--faint);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .now-like:hover {
+    color: var(--text);
+  }
+
+  .now-like.liked {
+    color: var(--accent);
+  }
+
   .now-mini {
-    width: 100%;
+    flex: 0 1 300px;
+    width: auto;
     min-width: 0;
     justify-self: start;
     display: flex;
@@ -378,8 +469,12 @@
       padding: 14px 16px;
     }
 
+    .now-group {
+      max-width: 320px;
+    }
+
     .now-mini {
-      max-width: 280px;
+      flex: 0 1 240px;
     }
 
     .mini-cover-wrap {
@@ -404,10 +499,10 @@
       row-gap: 10px;
     }
 
-    .now-mini {
+    .now-group {
       grid-column: 1;
       grid-row: 1;
-      max-width: none;
+      max-width: 100%;
     }
 
     .bar-right {

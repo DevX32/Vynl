@@ -11,6 +11,7 @@
     Home,
     Compass,
     Puzzle,
+    Heart,
   } from "lucide-svelte";
   import { blobSrc, toPascalCase } from "../lib/format";
   import { t } from "@lib/i18n";
@@ -19,6 +20,7 @@
   import { getCurrentSettings } from "@state/settings.svelte";
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import { useDragList } from "@lib/drag-list.svelte";
+  import { getLikedTracks } from "@state/taste.svelte";
   import type { Page, PlaylistMeta } from "@lib/types";
 
   let {
@@ -39,6 +41,7 @@
     onShowCtx,
     onShowRailCtx,
     onReorderPlaylists,
+    onOpenLikedSongs,
   }: {
     page: Page;
     sidebarOpen: boolean;
@@ -57,13 +60,20 @@
     onShowCtx: (e: MouseEvent, id: string, name: string) => void;
     onShowRailCtx: (e: MouseEvent) => void;
     onReorderPlaylists: (fromId: string, toId: string) => void;
+    onOpenLikedSongs: () => void;
   } = $props();
 
   const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (_section, idx) => playlists[idx]?.id,
     onReorder: (fromId, toId) => onReorderPlaylists(fromId, toId),
-    rowSelector: () => ".rail-item",
+    rowSelector: () => ".rail-item[data-playlist]",
   });
+
+  const likedTracks = $derived(getLikedTracks());
+  const catalogueActive = $derived(
+    page === "catalogue" ||
+      (page.startsWith("catalogue:") && page !== "catalogue:liked"),
+  );
 
   function onRailPointerDown(e: PointerEvent, idx: number): void {
     const p = playlists[idx];
@@ -83,7 +93,7 @@
     </button>
     <button
       class="nav-link"
-      class:active={page === "catalogue" || page.startsWith("catalogue:")}
+      class:active={catalogueActive}
       onclick={onCatalogue}
     >
       <span class="nav-icon"><Compass size={15} stroke-width={1.5} /></span>
@@ -130,10 +140,38 @@
       oncontextmenu={onShowRailCtx}
       bind:this={drag.rowsEl}
     >
+      {#if likedTracks.length > 0 || page === "catalogue:liked"}
+        <button
+          class="rail-item rail-liked"
+          class:active={page === "catalogue:liked"}
+          onclick={onOpenLikedSongs}
+          title={sidebarOpen ? undefined : t("catalogue.likedSongs")}
+          aria-label={sidebarOpen ? undefined : t("catalogue.likedSongs")}
+        >
+          <div class="rail-cover liked-cover">
+            <Heart size={15} stroke-width={1} />
+          </div>
+
+          {#if sidebarOpen}
+            <span class="rail-meta">
+              <span class="rail-name display">{t("catalogue.likedSongs")}</span>
+              <span class="rail-desc mono">
+                {`${t("catalogue.playlist")} · ${likedTracks.length} ${
+                  likedTracks.length === 1
+                    ? t("library.song")
+                    : t("library.songsPlural")
+                }`}
+              </span>
+            </span>
+          {/if}
+        </button>
+      {/if}
+
       {#each playlists as p, i (p.id)}
         {@const covers = getPlaylistCovers(p.id).slice(0, 4)}
         <button
           class="rail-item"
+          data-playlist={p.id}
           class:active={page === "playlist" && selectedId === p.id}
           class:dragging={drag.dragging && drag.grabIdx === i}
           class:drag-over={drag.dragging && drag.overIdx === i && drag.grabIdx !== i}
@@ -407,6 +445,37 @@
     color: var(--faint);
     border: 1px solid var(--line);
     background: var(--placeholder-gradient);
+  }
+
+  .rail-cover.liked-cover {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    border: 1px solid var(--line);
+    background: var(--bg-raise);
+  }
+
+  .rail-cover.liked-cover::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(
+        circle at 50% 50%,
+        color-mix(in srgb, var(--accent) 52%, transparent) 0%,
+        transparent 62%
+      );
+    filter: blur(10px);
+    opacity: 0.85;
+  }
+
+  .rail-cover.liked-cover :global(svg) {
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
   }
 
   .rail-cover-grid {

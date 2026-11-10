@@ -1,6 +1,6 @@
 pub mod stream;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -18,6 +18,8 @@ const CACHE_TAG: &str = "stream-cache";
 const PREPARED_LIMIT: usize = 4;
 const PREPARED_TTL: Duration = Duration::from_secs(120);
 const SEARCH_LIMIT: usize = 20;
+const TASTE_LIMIT: usize = 60;
+const TASTE_SEEDS: usize = 6;
 
 pub(super) fn sanitize_error(message: &str) -> String {
     let mut out = String::with_capacity(message.len());
@@ -173,6 +175,67 @@ impl CatalogueService {
             albums: artist.albums.iter().map(album_dto).collect(),
             singles: artist.singles.iter().map(album_dto).collect(),
         })
+    }
+
+    async fn taste(&self, seeds: &[String]) -> Result<Vec<CatalogueTrack>, String> {
+        let mut seen_seeds = HashSet::new();
+        let seeds: Vec<String> = seeds
+            .iter()
+            .map(|seed| seed.trim().to_string())
+            .filter(|seed| !seed.is_empty() && seen_seeds.insert(seed.clone()))
+            .take(TASTE_SEEDS)
+            .collect();
+        if seeds.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tasks = Vec::new();
+        for seed in &seeds {
+            let client = self.ytmusic.clone();
+            let seed = seed.clone();
+            tasks.push(tokio::spawn(async move { client.track_radio(&seed).await }));
+        }
+
+        let mut lists: Vec<Vec<Track>> = Vec::new();
+        for task in tasks {
+            match task.await {
+                Ok(Ok(tracks)) => lists.push(tracks),
+                Ok(Err(error)) => eprintln!("taste radio failed: {error:#}"),
+                Err(error) => eprintln!("taste radio task failed: {error}"),
+            }
+        }
+        if lists.is_empty() {
+            return Err("could not build your mix".into());
+        }
+
+        let seed_ids: HashSet<&str> = seeds.iter().map(String::as_str).collect();
+        let mut seen = HashSet::new();
+        let mut songs = Vec::new();
+        let longest = lists.iter().map(Vec::len).max().unwrap_or(0);
+        'outer: for index in 0..longest {
+            for list in &lists {
+                let Some(track) = list.get(index) else {
+                    continue;
+                };
+                let Some(video_id) = track.video_id.as_deref() else {
+                    continue;
+                };
+                if seed_ids.contains(video_id) || !seen.insert(video_id.to_string()) {
+                    continue;
+                }
+                if let Some(dto) = track_dto(track) {
+                    songs.push(dto);
+                    if songs.len() >= TASTE_LIMIT {
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        if songs.is_empty() {
+            return Err("could not build your mix".into());
+        }
+        Ok(songs)
     }
 
     async fn playlist(&self, playlist_id: &str) -> Result<CataloguePlaylistDetail, String> {
@@ -682,6 +745,11 @@ pub async fn catalogue_seek_stream(
             )
         }
     }
+}
+
+#[tauri::command]
+pub async fn catalogue_taste(seeds: Vec<String>) -> Result<Vec<CatalogueTrack>, String> {
+    service()?.taste(&seeds).await
 }
 
 #[tauri::command]

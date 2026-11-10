@@ -229,6 +229,10 @@
     navigate("catalogue");
   }
 
+  function openLikedSongs(): void {
+    navigate("catalogue:liked");
+  }
+
   function openHome(): void {
     navigate("home");
   }
@@ -354,6 +358,7 @@
       onPluginPage={(id) => navigate(`plugin:${id}`)}
       onNewPlaylist={newPlaylist}
       onOpenPlaylist={(id) => void openPlaylist(id)}
+      onOpenLikedSongs={openLikedSongs}
       onShowCtx={showCtx}
       onShowRailCtx={showRailCtx}
       onReorderPlaylists={(fromId, toId) => void reorderPlaylists(fromId, toId)}

@@ -175,10 +175,12 @@ export interface CatalogueAddResult {
 
 export type CataloguePageRoute =
   | { view: "search" }
+  | { view: "liked" }
   | { view: "album" | "artist" | "playlist"; id: string };
 
 export function catalogueRoute(page: Page): CataloguePageRoute | null {
   if (page === "catalogue") return { view: "search" };
+  if (page === "catalogue:liked") return { view: "liked" };
   const match = /^catalogue:(album|artist|playlist):(.+)$/.exec(page);
   if (!match) return null;
   return { view: match[1] as "album" | "artist" | "playlist", id: match[2] };
@@ -220,6 +222,7 @@ export type Page =
   | "vault"
   | "settings"
   | "catalogue"
+  | "catalogue:liked"
   | `catalogue:album:${string}`
   | `catalogue:artist:${string}`
   | `catalogue:playlist:${string}`

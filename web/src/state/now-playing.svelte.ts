@@ -4,10 +4,12 @@ import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
 import { getLibrary, whenLibraryLoaded, onLibraryChanged } from "./library.svelte";
 import {
+  catalogueIdFromPath,
   getCatalogueRevision,
   getCatalogueTrack,
   getCatalogueTracks,
 } from "./catalogue.svelte";
+import { recordTastePlay } from "./taste.svelte";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -316,6 +318,21 @@ export function setNowPlaying(t: NowPlaying): void {
   _state = t;
   _currentTime = t.time;
   _playToken += 1;
+  if (t.time < 1) {
+    const catalogueId = catalogueIdFromPath(t.path);
+    if (catalogueId) {
+      recordTastePlay({
+        id: catalogueId,
+        title: t.title,
+        artist: t.artist,
+        artists: [{ name: t.artist, id: null }],
+        album: t.album ? { name: t.album, id: null } : null,
+        duration: t.duration > 0 ? t.duration : null,
+        cover: t.cover,
+        explicit: false,
+      });
+    }
+  }
   syncRpc(true);
   persistNowPlaying();
 }
