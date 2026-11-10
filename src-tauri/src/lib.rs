@@ -165,6 +165,11 @@ pub fn run() {
 
             crate::services::tools::remove_unused_binaries(&user_data);
 
+            let catalogued = crate::services::catalogue::init(&user_data);
+            if let Err(error) = &catalogued {
+                eprintln!("catalogue unavailable: {error}");
+            }
+
             sync_launch_at_startup(settings.launch_at_startup);
             crate::services::player::set_app_handle(app.handle());
             crate::services::player::set_eq(settings.eq_enabled, &settings.eq_bands);
@@ -260,6 +265,18 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::resolve,
             commands::search_spotify,
+            crate::services::catalogue::catalogue_search,
+            crate::services::catalogue::catalogue_cover,
+            crate::services::catalogue::catalogue_album,
+            crate::services::catalogue::catalogue_artist,
+            crate::services::catalogue::catalogue_playlist,
+            crate::services::catalogue::catalogue_playlist_page,
+            crate::services::catalogue::catalogue_prebuffer,
+            crate::services::catalogue::catalogue_discard_prebuffer,
+            crate::services::catalogue::catalogue_stream,
+            crate::services::catalogue::catalogue_crossfade_stream,
+            crate::services::catalogue::catalogue_seek_stream,
+            crate::services::catalogue::catalogue_add_to_playlist,
             commands::downloaded_paths,
             commands::start_download,
             commands::cancel_download,

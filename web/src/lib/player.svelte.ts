@@ -1,4 +1,3 @@
-import { getLibrary } from "@state/library.svelte";
 import {
   checkpointNowPlaying,
   getCurrentTrack,
@@ -23,6 +22,8 @@ import {
   getContextIndex,
   recordShuffleTrack,
   nowPlayingFromTrack,
+  findTrackById,
+  peekNextId,
   isSeekDragging,
   setSeekDragging,
   setDragTime,
@@ -42,6 +43,7 @@ import { vynl } from "@lib/vynl";
 import { clamp01 } from "@lib/pointer";
 import { t } from "@lib/i18n";
 import type {
+  CatalogueStreamInfo,
   LibraryTrack,
   MediaControlEvent,
   MediaUpdate,
@@ -68,6 +70,65 @@ let lastPositionCheckpoint = Date.now();
 let reconcilePending = false;
 
 let pauseIntent = 0;
+
+const CATALOGUE_PREFIX = "ytm:";
+
+function catalogueIdOf(path: string | null | undefined): string | null {
+  if (!path || !path.startsWith(CATALOGUE_PREFIX)) return null;
+  const id = path.slice(CATALOGUE_PREFIX.length);
+  return id.length > 0 ? id : null;
+}
+
+interface PrebufferEntry {
+  status: "pending" | "ready" | "failed";
+  at: number;
+}
+
+const prebufferState = new Map<string, PrebufferEntry>();
+const PREBUFFER_REFRESH_MS = 45_000;
+const PREBUFFER_CHECK_MS = 15_000;
+let lastPrebufferCheck = 0;
+let prebufferCandidate: string | null = null;
+
+function scheduleNextPrebuffer(force = false): void {
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  const nextId = peekNextId(
+    getUserQueuePaths(),
+    getContextQueuePaths(),
+    getContextIndex(),
+    getCurrentTrack()?.id ?? null,
+    getCurrentShuffle(),
+    getCurrentLoop(),
+  );
+  const nextTrack = findTrackById(nextId);
+  const videoId = catalogueIdOf(nextTrack?.path);
+
+  if (prebufferCandidate && prebufferCandidate !== videoId) {
+    const stale = prebufferCandidate;
+    prebufferState.delete(stale);
+    void vynl.catalogueDiscardPrebuffer(stale).catch(() => {});
+  }
+  prebufferCandidate = videoId;
+
+  if (!videoId) return;
+  const entry = prebufferState.get(videoId);
+  if (!force && entry && now - entry.at < PREBUFFER_REFRESH_MS) return;
+  if (entry?.status === "pending") return;
+
+  prebufferState.set(videoId, { status: "pending", at: now });
+  void vynl
+    .cataloguePrebuffer(videoId, nextTrack?.duration)
+    .then(() => {
+      if (prebufferCandidate !== videoId) return;
+      prebufferState.set(videoId, { status: "ready", at: Date.now() });
+    })
+    .catch((error) => {
+      if (prebufferCandidate !== videoId) return;
+      prebufferState.set(videoId, { status: "failed", at: Date.now() });
+      console.warn("[vynl] prebuffer failed:", error);
+    });
+}
 
 onMuteChange(applyVolume);
 
@@ -145,6 +206,16 @@ function handleTick(tick: PlaybackTick): void {
   if (tick.playing && Date.now() - lastPositionCheckpoint >= 5_000) {
     lastPositionCheckpoint = Date.now();
     checkpointNowPlaying();
+  }
+
+  if (
+    tick.playing &&
+    !seekPending &&
+    !isSeekDragging() &&
+    Date.now() - lastPrebufferCheck >= PREBUFFER_CHECK_MS
+  ) {
+    lastPrebufferCheck = Date.now();
+    scheduleNextPrebuffer();
   }
 }
 
@@ -260,11 +331,23 @@ async function playNative(
   path: string,
   seekTo: number | undefined,
   generation: number,
-): Promise<void> {
+): Promise<CatalogueStreamInfo | null> {
   if (seekTo !== undefined && (!Number.isFinite(seekTo) || seekTo < 0)) {
     throw new Error("invalid seek time");
   }
   const normalizedSeek = seekTo !== undefined && seekTo > 0 ? seekTo : undefined;
+  const videoId = catalogueIdOf(path);
+  if (videoId) {
+    const np = getCurrentTrack();
+    const info = await vynl.catalogueStream(
+      videoId,
+      normalizedSeek,
+      np?.duration,
+      generation,
+    );
+    if (normalizedSeek === undefined) prebufferState.delete(videoId);
+    return info;
+  }
   try {
     await vynl.playerPlay(path, normalizedSeek, generation);
   } catch (error) {
@@ -277,6 +360,7 @@ async function playNative(
     }
     await vynl.playerPlay(path, undefined, generation);
   }
+  return null;
 }
 
 function loadAndPlayNative(
@@ -285,11 +369,18 @@ function loadAndPlayNative(
   seekTo?: number,
 ): void {
   beginPlayReconcile(gen);
-  void playNative(path, seekTo, gen).then(() => {
+  void playNative(path, seekTo, gen).then((info) => {
     finishPlayReconcile(gen);
     if (gen !== playGeneration) return;
+    if (info?.duration && info.duration > 0) {
+      const np = getCurrentTrack();
+      if (np && !(np.duration > 0)) {
+        patchNowPlaying({ duration: info.duration });
+      }
+    }
     updatePlaying(true);
     updateMediaSession();
+    scheduleNextPrebuffer();
   }).catch((err) => {
     finishPlayReconcile(gen);
     if (gen !== playGeneration) return;
@@ -303,8 +394,7 @@ export function playTrack(
   seekTo?: number,
 ): void {
   invalidateSharedPlayback();
-  const library = getLibrary();
-  const track = library.find((x) => x.id === id);
+  const track = findTrackById(id);
   if (!track) return;
   clearRetry();
 
@@ -564,20 +654,24 @@ function advanceNext(automatic: boolean): void {
   startTrack(nextTrack);
 }
 
-function resolveNextTrack(automatic: boolean): LibraryTrack | null {
+function resolveNextTrack(
+  automatic: boolean,
+  peek = false,
+): LibraryTrack | null {
   const np = getCurrentTrack();
   const selected = getCurrentLoop();
   const loop: LoopMode = !automatic && selected === "one" ? "off" : selected;
-  const nextId = pickNextId(
+  const args = [
     getUserQueuePaths(),
     getContextQueuePaths(),
     getContextIndex(),
     np?.id ?? null,
     getCurrentShuffle(),
     loop,
-  );
+  ] as const;
+  const nextId = peek ? peekNextId(...args) : pickNextId(...args);
   if (!nextId) return null;
-  return getLibrary().find((t) => t.id === nextId) ?? null;
+  return findTrackById(nextId);
 }
 
 function consumeNextTrack(nextTrack: LibraryTrack): void {
@@ -610,18 +704,32 @@ function maybeStartCrossfade(position: number): boolean {
   const remaining = np.duration - position;
   if (remaining <= 0 || remaining > fade + CROSSFADE_TAIL) return false;
 
-  const nextTrack = resolveNextTrack(true);
+  const nextTrack = resolveNextTrack(true, true);
   if (!nextTrack || nextTrack.path === np.path) return false;
   if (nextTrack.duration > 0 && nextTrack.duration < fade) return false;
+
+  const nextVideoId = catalogueIdOf(nextTrack.path);
+  if (nextVideoId) {
+    if (prebufferState.get(nextVideoId)?.status !== "ready") return false;
+  }
 
   crossfadeTried = true;
 
   const generation = playGeneration + 1;
-  void vynl
-    .playerCrossfade(nextTrack.path, generation, fade)
+  const crossfade = nextVideoId
+    ? vynl.catalogueCrossfadeStream(
+        nextVideoId,
+        nextTrack.duration,
+        generation,
+        fade,
+      )
+    : vynl.playerCrossfade(nextTrack.path, generation, fade);
+
+  void crossfade
     .then(() => {
       if (generation !== playGeneration + 1) return;
       playGeneration = generation;
+      if (nextVideoId) prebufferState.delete(nextVideoId);
       consumeNextTrack(nextTrack);
       setNowPlaying({
         ...nowPlayingFromTrack(nextTrack),
@@ -629,6 +737,7 @@ function maybeStartCrossfade(position: number): boolean {
       });
       updateMediaSession();
       resetCrossfade();
+      scheduleNextPrebuffer();
     })
     .catch((error) => {
       console.warn("[vynl] crossfade failed:", error);
@@ -663,7 +772,7 @@ export function prev(): void {
   );
   if (!prevId) return;
 
-  const prevTrack = getLibrary().find((t) => t.id === prevId);
+  const prevTrack = findTrackById(prevId);
   if (!prevTrack) return;
 
   invalidateSharedPlayback();
@@ -696,9 +805,21 @@ function requestSeek(time: number): void {
   seekPending = true;
   const requestId = ++seekRequestId;
   const generation = playGeneration;
+  const np = getCurrentTrack();
+  const videoId = catalogueIdOf(np?.path);
 
-  void vynl
-    .playerSeek(target, generation)
+  const seek = videoId
+    ? vynl.catalogueSeekStream(
+        videoId,
+        target,
+        np?.duration,
+        generation,
+        getIsTrackPlaying(),
+        requestId,
+      )
+    : vynl.playerSeek(target, generation);
+
+  void seek
     .then(() => {
       if (requestId !== seekRequestId || generation !== playGeneration) return;
       seekPending = false;

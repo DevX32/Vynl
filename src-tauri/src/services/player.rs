@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::time::{Duration, Instant};
@@ -8,6 +9,8 @@ use rodio::source::SeekError;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
+
+use crate::services::catalogue::stream::{PreparedAudio, StreamSession, StreamSource};
 
 static VOLUME: AtomicU32 = AtomicU32::new(75);
 static PAUSED: AtomicBool = AtomicBool::new(false);
@@ -32,14 +35,16 @@ pub struct PlaybackTick {
 
 type TickKey = (u64, bool, bool);
 
-fn reported_pos(sink: Option<&Sink>, floor: Option<Duration>) -> f64 {
-    let pos = sink.map(|s| s.get_pos()).unwrap_or_default();
+fn reported_pos(sink: Option<&TrackSink>, floor: Option<Duration>) -> f64 {
+    let pos = sink
+        .map(|s| s.sink.get_pos() + s.position_offset)
+        .unwrap_or_default();
     pos.max(floor.unwrap_or_default()).as_secs_f64()
 }
 
 fn emit_playback_tick(
     generation: u64,
-    sink: Option<&Sink>,
+    sink: Option<&TrackSink>,
     seek_floor: Option<Duration>,
     duration_secs: Option<f64>,
     last_key: &mut Option<TickKey>,
@@ -49,7 +54,7 @@ fn emit_playback_tick(
     }
 
     let has_sink = sink.is_some();
-    let empty = sink.map(|s| s.empty()).unwrap_or(false);
+    let empty = sink.map(|s| s.sink.empty()).unwrap_or(false);
     let paused = PAUSED.load(Ordering::Relaxed);
     let playing = has_sink && !empty && !paused;
     let finished = has_sink && empty && !paused;
@@ -679,23 +684,51 @@ where
     }
 }
 
+enum TrackInput {
+    File(PathBuf),
+    Stream(Arc<StreamSession>),
+}
+
+impl TrackInput {
+    fn is_stream(&self) -> bool {
+        matches!(self, Self::Stream(_))
+    }
+}
+
 struct TrackSink {
     sink: Sink,
     fade: FadeControl,
     sample_rate: u32,
+    position_offset: Duration,
+    _session: Option<Arc<StreamSession>>,
 }
 
 impl TrackSink {
     fn open(
         handle: &OutputStreamHandle,
-        path: &str,
+        input: TrackInput,
         fade_secs: f64,
+        position_offset: Duration,
     ) -> Result<(Self, Option<f64>), String> {
-        let file = File::open(path).map_err(|e| format!("open: {e}"))?;
-        let decoder = Decoder::new(BufReader::new(file)).map_err(|e| format!("decode: {e}"))?;
-        let total = decoder.total_duration().map(|d| d.as_secs_f64());
-        let samples = decoder.convert_samples::<f32>();
-        let sample_rate = samples.sample_rate().max(1);
+        let (source, total, session): (
+            Box<dyn Source<Item = f32> + Send>,
+            Option<f64>,
+            Option<Arc<StreamSession>>,
+        ) = match input {
+            TrackInput::File(path) => {
+                let file = File::open(&path).map_err(|e| format!("open: {e}"))?;
+                let decoder =
+                    Decoder::new(BufReader::new(file)).map_err(|e| format!("decode: {e}"))?;
+                let total = decoder.total_duration().map(|d| d.as_secs_f64());
+                (Box::new(decoder.convert_samples::<f32>()), total, None)
+            }
+            TrackInput::Stream(session) => {
+                let source = StreamSource::new(&session);
+                let total = source.total_duration().map(|d| d.as_secs_f64());
+                (Box::new(source), total, Some(session))
+            }
+        };
+        let sample_rate = source.sample_rate().max(1);
         let fade_secs = if fade_secs.is_finite() {
             fade_secs
         } else {
@@ -707,7 +740,7 @@ impl TrackSink {
         }
         let sink = Sink::try_new(handle).map_err(|e| format!("sink: {e}"))?;
         sink.append(FadeSource::new(
-            EqualizerSource::new(samples),
+            EqualizerSource::new(source),
             control.clone(),
         ));
         Ok((
@@ -715,6 +748,8 @@ impl TrackSink {
                 sink,
                 fade: control,
                 sample_rate,
+                position_offset,
+                _session: session,
             },
             total,
         ))
@@ -727,7 +762,22 @@ fn open_track(
     fade_secs: f64,
 ) -> Result<(TrackSink, Option<f64>), String> {
     let handle = handle.ok_or_else(|| "No audio output device".to_string())?;
-    TrackSink::open(handle, path, fade_secs)
+    TrackSink::open(
+        handle,
+        TrackInput::File(PathBuf::from(path)),
+        fade_secs,
+        Duration::ZERO,
+    )
+}
+
+fn open_input(
+    handle: Option<&OutputStreamHandle>,
+    input: TrackInput,
+    fade_secs: f64,
+    position_offset: Duration,
+) -> Result<(TrackSink, Option<f64>), String> {
+    let handle = handle.ok_or_else(|| "No audio output device".to_string())?;
+    TrackSink::open(handle, input, fade_secs, position_offset)
 }
 
 fn seek_sink(sink: &Sink, time: f64) -> Result<(), String> {
@@ -738,9 +788,25 @@ fn seek_sink(sink: &Sink, time: f64) -> Result<(), String> {
         .map_err(|e| format!("seek: {e}"))
 }
 
+struct PlayStreamRequest {
+    path: String,
+    input: TrackInput,
+    start: f64,
+    generation: u64,
+    preserve_pause: bool,
+}
+
 enum PlayerCmd {
     Play(String, Option<f64>, u64),
+    PlayStream(PlayStreamRequest),
     Crossfade(String, u64, f64),
+    CrossfadeStream {
+        path: String,
+        input: TrackInput,
+        start: f64,
+        generation: u64,
+        fade_secs: f64,
+    },
     Stop(u64),
     Pause(u64),
     Resume(u64),
@@ -829,7 +895,8 @@ fn begin_crossfade(
     handle: &Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
-    path: &str,
+    input: TrackInput,
+    start: f64,
     generation: u64,
     fade_secs: f64,
 ) -> Result<Option<f64>, String> {
@@ -845,13 +912,26 @@ fn begin_crossfade(
     if PAUSED.load(Ordering::Relaxed) {
         return Err("player is paused".into());
     }
-    let start = match sink.as_ref().map(|t| &t.sink) {
+    let fade_start = match sink.as_ref().map(|t| &t.sink) {
         Some(s) if !s.empty() => s.get_pos(),
         _ => return Err("nothing playing".into()),
     };
 
     let fade_secs = fade_secs.min(MAX_CROSSFADE_SECS);
-    let (incoming, total) = TrackSink::open(handle, path, fade_secs)?;
+    let stream = input.is_stream();
+    let seek_file = !stream && start > 0.0;
+    let offset = if stream {
+        Duration::from_secs_f64(start.max(0.0))
+    } else {
+        Duration::ZERO
+    };
+    let (incoming, total) = open_input(Some(handle), input, fade_secs, offset)?;
+    if seek_file
+        && let Err(e) = seek_sink(&incoming.sink, start)
+    {
+        incoming.sink.stop();
+        return Err(e);
+    }
     let volume = scale_volume(VOLUME.load(Ordering::Relaxed));
     incoming.sink.set_volume(volume);
     let outgoing = sink.replace(incoming).ok_or("nothing playing")?;
@@ -860,9 +940,52 @@ fn begin_crossfade(
     stop_fading_out(fading);
     *fading = Some(FadingOut {
         track: outgoing,
-        until: start + Duration::from_secs_f64(fade_secs),
+        until: fade_start + Duration::from_secs_f64(fade_secs),
     });
 
+    Ok(total)
+}
+
+fn install_source(
+    handle: &Option<OutputStreamHandle>,
+    sink: &mut Option<TrackSink>,
+    fading: &mut Option<FadingOut>,
+    input: TrackInput,
+    start: f64,
+    preserve_pause: bool,
+) -> Result<Option<f64>, String> {
+    let handle = handle
+        .as_ref()
+        .ok_or_else(|| "No audio output device".to_string())?;
+    let paused_before = PAUSED.load(Ordering::Relaxed);
+    let stream = input.is_stream();
+    let seek_file = !stream && start > 0.0;
+    let offset = if stream {
+        Duration::from_secs_f64(start.max(0.0))
+    } else {
+        Duration::ZERO
+    };
+    let (track, total) = TrackSink::open(handle, input, 0.0, offset)?;
+    track
+        .sink
+        .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
+    if seek_file
+        && let Err(e) = seek_sink(&track.sink, start)
+    {
+        track.sink.stop();
+        return Err(e);
+    }
+    stop_fading_out(fading);
+    if let Some(old) = sink.take() {
+        old.sink.stop();
+    }
+    if preserve_pause && paused_before {
+        track.sink.pause();
+        PAUSED.store(true, Ordering::Relaxed);
+    } else {
+        PAUSED.store(false, Ordering::Relaxed);
+    }
+    *sink = Some(track);
     Ok(total)
 }
 
@@ -876,9 +999,8 @@ fn reopen_output(
 ) {
     let resume_pos = sink
         .as_ref()
-        .map(|t| &t.sink)
-        .filter(|s| !s.empty() && !PAUSED.load(Ordering::Relaxed))
-        .map(|s| reported_pos(Some(s), *seek_floor));
+        .filter(|t| !t.sink.empty() && !PAUSED.load(Ordering::Relaxed))
+        .map(|t| reported_pos(Some(t), *seek_floor));
     if let Some(t) = sink.take() {
         t.sink.stop();
     }
@@ -900,16 +1022,46 @@ fn reopen_output(
         return;
     };
 
-    match open_track(handle.as_ref(), &path, 0.0) {
+    let mut stream_source = false;
+    let (input, seek_to) = if let Some(video_id) = path.strip_prefix("ytm:") {
+        match crate::services::catalogue::prepare_blocking(video_id, pos, None) {
+            Ok(prepared) => match prepared.audio {
+                PreparedAudio::Stream(session) => {
+                    stream_source = true;
+                    (TrackInput::Stream(session), None)
+                }
+                PreparedAudio::File(file) => (TrackInput::File(file), Some(pos)),
+            },
+            Err(e) => {
+                eprintln!("device change: could not re-resolve {path}: {e}");
+                return;
+            }
+        }
+    } else {
+        (TrackInput::File(PathBuf::from(&path)), Some(pos))
+    };
+
+    match open_input(
+        handle.as_ref(),
+        input,
+        0.0,
+        if stream_source {
+            Duration::from_secs_f64(pos)
+        } else {
+            Duration::ZERO
+        },
+    ) {
         Ok((track, _)) => {
             track
                 .sink
                 .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
-            if let Err(e) = seek_sink(&track.sink, pos) {
-                eprintln!("device change: could not resume {path}: {e}");
-            } else {
-                *seek_floor = seek_floor_for(pos);
+            if let Some(time) = seek_to {
+                if let Err(e) = seek_sink(&track.sink, time) {
+                    eprintln!("device change: could not resume {path}: {e}");
+                    return;
+                }
             }
+            *seek_floor = seek_floor_for(pos);
             *sink = Some(track);
         }
         Err(e) => eprintln!("device change: could not reopen {path}: {e}"),
@@ -1007,6 +1159,42 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             }
                         }
                     }
+                    PlayerCmd::PlayStream(request) => {
+                        if request.generation < playback_generation {
+                            PlayerResp::Ok
+                        } else {
+                            playback_generation = request.generation;
+                            if handle.is_none()
+                                && let Ok((o, h)) = OutputStream::try_default()
+                            {
+                                output = Some(o);
+                                handle = Some(h);
+                            }
+                            if handle.is_none() {
+                                let _ = reply_tx
+                                    .send(PlayerResp::Err("No audio output device".to_string()));
+                                continue;
+                            }
+                            pending_seek = None;
+                            match install_source(
+                                &handle,
+                                &mut sink,
+                                &mut fading,
+                                request.input,
+                                request.start,
+                                request.preserve_pause,
+                            ) {
+                                Ok(total) => {
+                                    active_generation = request.generation;
+                                    seek_floor = seek_floor_for(request.start);
+                                    current_path = Some(request.path);
+                                    duration_secs = total;
+                                    PlayerResp::Ok
+                                }
+                                Err(e) => PlayerResp::Err(e),
+                            }
+                        }
+                    }
                     PlayerCmd::Crossfade(path, generation, fade_secs) => {
                         if generation <= playback_generation {
                             let _ = reply_tx.send(PlayerResp::Err("stale generation".to_string()));
@@ -1016,7 +1204,8 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             &handle,
                             &mut sink,
                             &mut fading,
-                            &path,
+                            TrackInput::File(PathBuf::from(&path)),
+                            0.0,
                             generation,
                             fade_secs,
                         ) {
@@ -1025,6 +1214,39 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                 active_generation = generation;
                                 pending_seek = None;
                                 seek_floor = None;
+                                current_path = Some(path);
+                                duration_secs = total;
+                                PAUSED.store(false, Ordering::Relaxed);
+                                PlayerResp::Ok
+                            }
+                            Err(e) => PlayerResp::Err(e),
+                        }
+                    }
+                    PlayerCmd::CrossfadeStream {
+                        path,
+                        input,
+                        start,
+                        generation,
+                        fade_secs,
+                    } => {
+                        if generation <= playback_generation {
+                            let _ = reply_tx.send(PlayerResp::Err("stale generation".to_string()));
+                            continue;
+                        }
+                        match begin_crossfade(
+                            &handle,
+                            &mut sink,
+                            &mut fading,
+                            input,
+                            start,
+                            generation,
+                            fade_secs,
+                        ) {
+                            Ok(total) => {
+                                playback_generation = generation;
+                                active_generation = generation;
+                                pending_seek = None;
+                                seek_floor = seek_floor_for(start);
                                 current_path = Some(path);
                                 duration_secs = total;
                                 PAUSED.store(false, Ordering::Relaxed);
@@ -1118,7 +1340,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                     }
                     PlayerCmd::GetPosition(generation) => {
                         let pos = if generation == active_generation {
-                            reported_pos(sink.as_ref().map(|t| &t.sink), seek_floor)
+                            reported_pos(sink.as_ref(), seek_floor)
                         } else {
                             0.0
                         };
@@ -1160,7 +1382,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
         }
         emit_playback_tick(
             active_generation,
-            sink.as_ref().map(|t| &t.sink),
+            sink.as_ref(),
             seek_floor,
             duration_secs,
             &mut last_tick_key,
@@ -1181,6 +1403,100 @@ pub fn crossfade(path: &str, generation: u64, fade_secs: f64) -> Result<(), Stri
         generation,
         fade_secs,
     )))
+}
+
+pub fn play_stream(
+    path: String,
+    session: Arc<StreamSession>,
+    start: f64,
+    generation: u64,
+) -> Result<(), String> {
+    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
+        path,
+        input: TrackInput::Stream(session),
+        start,
+        generation,
+        preserve_pause: false,
+    })))
+}
+
+pub fn play_cached_stream(
+    path: String,
+    file: String,
+    start: Option<f64>,
+    generation: u64,
+) -> Result<(), String> {
+    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
+        path,
+        input: TrackInput::File(PathBuf::from(file)),
+        start: start.unwrap_or(0.0),
+        generation,
+        preserve_pause: false,
+    })))
+}
+
+pub fn seek_stream_source(
+    path: String,
+    session: Arc<StreamSession>,
+    start: f64,
+    generation: u64,
+    playing: bool,
+) -> Result<(), String> {
+    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
+        path,
+        input: TrackInput::Stream(session),
+        start,
+        generation,
+        preserve_pause: !playing,
+    })))
+}
+
+pub fn seek_cached_stream_source(
+    path: String,
+    file: String,
+    start: f64,
+    generation: u64,
+    playing: bool,
+) -> Result<(), String> {
+    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
+        path,
+        input: TrackInput::File(PathBuf::from(file)),
+        start,
+        generation,
+        preserve_pause: !playing,
+    })))
+}
+
+pub fn crossfade_stream(
+    path: String,
+    session: Arc<StreamSession>,
+    start: f64,
+    generation: u64,
+    fade_secs: f64,
+) -> Result<(), String> {
+    to_result(send(PlayerCmd::CrossfadeStream {
+        path,
+        input: TrackInput::Stream(session),
+        start,
+        generation,
+        fade_secs,
+    }))
+}
+
+pub fn crossfade_cached_stream(
+    path: String,
+    file: String,
+    start: f64,
+    generation: u64,
+    fade_secs: f64,
+) -> Result<(), String> {
+    to_result(send(PlayerCmd::CrossfadeStream {
+        path,
+        input: TrackInput::File(PathBuf::from(file)),
+        start,
+        generation,
+        fade_secs,
+    }))
 }
 
 pub fn stop(generation: u64) -> Result<(), String> {

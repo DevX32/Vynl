@@ -610,10 +610,15 @@ pub async fn save_playlist_cover(
 
 #[tauri::command]
 pub async fn lyrics_local(file: String, app: AppHandle) -> Result<Option<LyricsResult>, String> {
-    let validated = require_path_in_output(&file, &app)?;
-    Ok(crate::services::lyrics::local_lyrics(
-        &validated.to_string_lossy(),
-    ))
+    match require_path_in_output(&file, &app) {
+        Ok(validated) => Ok(crate::services::lyrics::local_lyrics(
+            &validated.to_string_lossy(),
+        )),
+        Err(_) => {
+            let user_data = user_data_dir(&app)?;
+            Ok(crate::services::lyrics::path_lyrics(&user_data, &file))
+        }
+    }
 }
 
 #[tauri::command]
@@ -627,7 +632,9 @@ pub async fn lyrics_fetch(
 
 #[tauri::command]
 pub async fn lyrics_embed(file: String, text: String, app: AppHandle) -> Result<(), String> {
-    let validated = require_path_in_output(&file, &app)?;
+    let Ok(validated) = require_path_in_output(&file, &app) else {
+        return Ok(());
+    };
     tokio::task::spawn_blocking(move || {
         crate::services::lyrics::embed_lyrics(&validated.to_string_lossy(), &text)
     })
@@ -642,12 +649,24 @@ pub async fn lyrics_save(
     text: String,
     app: AppHandle,
 ) -> Result<(), String> {
-    let validated = require_path_in_output(&file, &app)?;
-    tokio::task::spawn_blocking(move || {
-        crate::services::lyrics::save_manual_lyrics(&validated.to_string_lossy(), kind, &text)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    match require_path_in_output(&file, &app) {
+        Ok(validated) => {
+            tokio::task::spawn_blocking(move || {
+                crate::services::lyrics::save_manual_lyrics(
+                    &validated.to_string_lossy(),
+                    kind,
+                    &text,
+                )
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+        Err(_) => {
+            let user_data = user_data_dir(&app)?;
+            crate::services::lyrics::save_path_lyrics(&user_data, &file, &text, kind);
+            Ok(())
+        }
+    }
 }
 
 #[tauri::command]

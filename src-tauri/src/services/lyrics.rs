@@ -297,6 +297,40 @@ pub async fn fetch_lyrics_with_cache(
     result
 }
 
+fn path_cache_key(path: &str) -> String {
+    format!("path:{path}")
+}
+
+pub fn save_path_lyrics(user_data_dir: &Path, path: &str, text: &str, kind: LyricsKind) {
+    let key = path_cache_key(path);
+    let now = now_millis();
+    let (mut disk, _) = load_disk_cache(user_data_dir);
+    disk.insert(
+        key.clone(),
+        DiskCacheEntry {
+            key,
+            result: Some(LyricsResult {
+                kind,
+                text: text.to_string(),
+                source: crate::commands::types::LyricsSource::Local,
+                file: Some(path.to_string()),
+            }),
+            accessed_at: now,
+        },
+    );
+    save_disk_cache(user_data_dir, &disk);
+}
+
+pub fn path_lyrics(user_data_dir: &Path, path: &str) -> Option<LyricsResult> {
+    let key = path_cache_key(path);
+    let (mut disk, _) = load_disk_cache(user_data_dir);
+    let entry = disk.get_mut(&key)?;
+    entry.accessed_at = now_millis();
+    let result = entry.result.clone();
+    save_disk_cache(user_data_dir, &disk);
+    result
+}
+
 const LRCLIB_BASE: &str = "https://lrclib.net";
 const LRCRED_BASE: &str = "https://lrc.red";
 

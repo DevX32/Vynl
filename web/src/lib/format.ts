@@ -1,22 +1,53 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { t } from "@lib/i18n";
+import { vynl } from "@lib/vynl";
 
-function assetUrl(path: string | null | undefined): string {
-  if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
-  return convertFileSrc(path);
+const remote = new Map<string, Promise<string>>();
+const resolved = new Map<string, string>();
+
+function cacheRemote(url: string): Promise<string> {
+  let pending = remote.get(url);
+  if (!pending) {
+    pending = vynl.cacheCover(url).catch((error) => {
+      remote.delete(url);
+      throw error;
+    });
+    remote.set(url, pending);
+  }
+  return pending;
 }
 
 export function blobSrc(
   node: HTMLImageElement,
   path: string | null | undefined,
 ): { update: (newPath: string | null | undefined) => void; destroy: () => void } {
+  let token = 0;
+
   function load(p: string | null | undefined): void {
+    ++token;
     if (!p) {
       node.removeAttribute("src");
       return;
     }
-    node.src = assetUrl(p);
+    if (/^https?:\/\//i.test(p)) {
+      const known = resolved.get(p);
+      if (known) {
+        node.src = convertFileSrc(known);
+        return;
+      }
+      // The image CDN rejects requests carrying a Referer, so load the cover
+      // straight from the network instead of proxying it through the backend.
+      node.referrerPolicy = "no-referrer";
+      node.src = p;
+      void cacheRemote(p).then(
+        (local) => {
+          resolved.set(p, local);
+        },
+        () => {},
+      );
+      return;
+    }
+    node.src = convertFileSrc(p);
   }
 
   load(path);
@@ -26,6 +57,7 @@ export function blobSrc(
       load(newPath);
     },
     destroy() {
+      token++;
       const src = node.getAttribute("src");
       if (src && src.startsWith("blob:")) {
         URL.revokeObjectURL(src);

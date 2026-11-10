@@ -27,6 +27,14 @@ import type {
   EqDesign,
   MediaUpdate,
   MediaControlEvent,
+  CatalogueAddResult,
+  CatalogueAlbumDetail,
+  CatalogueArtist,
+  CataloguePlaylistDetail,
+  CataloguePlaylistPage,
+  CatalogueSearchResults,
+  CatalogueStreamInfo,
+  CatalogueTrack,
 } from "../lib/types";
 import type {
   PluginHttpInit,
@@ -286,6 +294,86 @@ export const vynl = {
 
   cacheRemoteAudio: (url: string, key: string): Promise<string> =>
     cmd("cache_remote_audio", { url, key }),
+
+  catalogueSearch: (query: string): Promise<CatalogueSearchResults> =>
+    cmd("catalogue_search", { query }),
+
+  cacheCover: (url: string): Promise<string> => cmd("catalogue_cover", { url }),
+
+  catalogueAlbum: (id: string): Promise<CatalogueAlbumDetail> =>
+    cmd("catalogue_album", { id }),
+
+  catalogueArtist: (id: string): Promise<CatalogueArtist> =>
+    cmd("catalogue_artist", { id }),
+
+  cataloguePlaylist: (id: string): Promise<CataloguePlaylistDetail> =>
+    cmd("catalogue_playlist", { id }),
+
+  cataloguePlaylistPage: (token: string): Promise<CataloguePlaylistPage> =>
+    cmd("catalogue_playlist_page", { token }),
+
+  cataloguePrebuffer: (
+    videoId: string,
+    duration?: number | null,
+  ): Promise<CatalogueStreamInfo> =>
+    cmd("catalogue_prebuffer", { videoId, duration: duration ?? null }),
+
+  catalogueDiscardPrebuffer: (videoId: string): Promise<void> =>
+    cmd("catalogue_discard_prebuffer", { videoId }),
+
+  catalogueStream: (
+    videoId: string,
+    start: number | undefined,
+    duration: number | null | undefined,
+    generation: number,
+  ): Promise<CatalogueStreamInfo> =>
+    cmd("catalogue_stream", {
+      videoId,
+      start: start ?? null,
+      duration: duration ?? null,
+      generation,
+    }),
+
+  catalogueCrossfadeStream: (
+    videoId: string,
+    duration: number | null | undefined,
+    generation: number,
+    fadeSecs: number,
+  ): Promise<void> =>
+    cmd("catalogue_crossfade_stream", {
+      videoId,
+      duration: duration ?? null,
+      generation,
+      fadeSecs,
+    }),
+
+  catalogueSeekStream: (
+    videoId: string,
+    time: number,
+    duration: number | null | undefined,
+    generation: number,
+    playing: boolean,
+    requestId: number,
+  ): Promise<void> =>
+    cmd("catalogue_seek_stream", {
+      videoId,
+      time,
+      duration: duration ?? null,
+      generation,
+      playing,
+      requestId,
+    }),
+
+  catalogueAddToPlaylist: (
+    track: CatalogueTrack,
+    playlistId?: string | null,
+    playlistName?: string | null,
+  ): Promise<CatalogueAddResult> =>
+    cmd("catalogue_add_to_playlist", {
+      track,
+      playlistId: playlistId ?? null,
+      playlistName: playlistName ?? null,
+    }),
 
   clearAudioCache: (): Promise<void> => cmd("clear_audio_cache"),
 

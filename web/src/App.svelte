@@ -41,10 +41,11 @@
   import PluginsModal from "./features/plugins/PluginsModal.svelte";
   import VaultPage from "./features/vault/VaultPage.svelte";
   import HomePage from "./features/home/HomePage.svelte";
+  import CataloguePage from "./features/catalogue/CataloguePage.svelte";
   import PluginPageHost from "./features/plugins/PluginPageHost.svelte";
   import TitleBar from "./components/TitleBar.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
-  import { isPluginPage, type Page } from "@lib/types";
+  import { catalogueRoute, isPluginPage, type Page } from "@lib/types";
   import { ImageOff, Pencil, Trash2 } from "lucide-svelte";
 
   let page = $state<Page>("home");
@@ -106,6 +107,7 @@
   });
 
   const playlists = $derived(getCurrentPlaylists());
+  const catalogue = $derived(catalogueRoute(page));
 
   function setSidebarOpen(open: boolean): void {
     sidebarOpen = open;
@@ -221,6 +223,10 @@
   function openLibrary(): void {
     navigate("library");
     void selectPlaylist(null);
+  }
+
+  function openCatalogue(): void {
+    navigate("catalogue");
   }
 
   function openHome(): void {
@@ -341,6 +347,7 @@
       onSetSidebarOpen={setSidebarOpen}
       onHome={openHome}
       onLibrary={openLibrary}
+      onCatalogue={openCatalogue}
       onPlayer={openPlayer}
       onVault={openVault}
       onSettings={openSettings}
@@ -361,6 +368,10 @@
         {:else if page === "library"}
           <div class="page-inner">
             <LibraryPage active={true} />
+          </div>
+        {:else if catalogue}
+          <div class="page-inner">
+            <CataloguePage route={catalogue} onNavigate={(p) => navigate(p)} />
           </div>
         {:else if page === "playlist"}
           <div class="page-inner">

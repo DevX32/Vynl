@@ -3,6 +3,11 @@ import { RPC_THROTTLE } from "@lib/constants";
 import { moveItem } from "@lib/reorder";
 import { vynl } from "@lib/vynl";
 import { getLibrary, whenLibraryLoaded, onLibraryChanged } from "./library.svelte";
+import {
+  getCatalogueRevision,
+  getCatalogueTrack,
+  getCatalogueTracks,
+} from "./catalogue.svelte";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -80,16 +85,36 @@ export function getCurrentTime(): number {
 
 let _pathSource: LibraryTrack[] | null = null;
 let _pathMap = new Map<string, LibraryTrack>();
+let _idMap = new Map<string, LibraryTrack>();
+let _registryRevision = -1;
 
 function libraryByPath(): Map<string, LibraryTrack> {
   const library = getLibrary();
-  if (_pathSource !== library) {
+  const catalogueRevision = getCatalogueRevision();
+  if (_pathSource !== library || _registryRevision !== catalogueRevision) {
     const next = new Map<string, LibraryTrack>();
     for (const track of library) next.set(track.path, track);
+    for (const track of getCatalogueTracks()) next.set(track.path, track);
     _pathSource = library;
+    _registryRevision = catalogueRevision;
     _pathMap = next;
+    _idMap = new Map([...next.values()].map((track) => [track.id, track]));
   }
   return _pathMap;
+}
+
+export function findTrackById(id: string | null | undefined): LibraryTrack | null {
+  if (!id) return null;
+  libraryByPath();
+  return _idMap.get(id) ?? null;
+}
+
+export function findTrackByPath(path: string | null | undefined): LibraryTrack | null {
+  if (!path) return null;
+  const track = libraryByPath().get(path);
+  if (track) return track;
+  const catalogueId = path.startsWith("ytm:") ? path.slice(4) : null;
+  return catalogueId ? getCatalogueTrack(catalogueId) : null;
 }
 
 function tracksForPaths(
@@ -369,10 +394,9 @@ export function requestPlay(id: string, queue?: string[]): void {
 }
 
 export function refreshQueues(): void {
-  const library = getLibrary();
-  if (library.length === 0) return;
-
   const byPath = libraryByPath();
+  if (byPath.size === 0) return;
+
   let changed = false;
 
   const userQueue = _userQueue.filter((path) => byPath.has(path));
@@ -519,9 +543,8 @@ export function pickNextId(
   shuffle: boolean,
   loop: LoopMode,
 ): string | null {
-  const library = getLibrary();
-  const trackAt = (path: string): LibraryTrack | undefined =>
-    library.find((track) => track.path === path);
+  const byPath = libraryByPath();
+  const trackAt = (path: string): LibraryTrack | undefined => byPath.get(path);
 
   if (loop === "one" && currentId) {
     return currentId;
@@ -541,8 +564,7 @@ export function pickNextId(
 
     let path = takeShufflePath();
     if (!path && loop === "all") {
-      const currentPath =
-        library.find((track) => track.id === currentId)?.path ?? null;
+      const currentPath = findTrackById(currentId)?.path ?? null;
       refillShuffleSession(currentPath);
       path = takeShufflePath();
     }
@@ -559,10 +581,72 @@ export function pickNextId(
   const total = scope.length;
   if (total === 0) return null;
 
-  const currentPath = library.find((t) => t.id === currentId)?.path ?? null;
+  const currentPath = findTrackById(currentId)?.path ?? null;
 
   if (contextQueue.length === 0) {
     if (loop !== "all") return null;
+    for (const path of scope) {
+      if (path === currentPath && total > 1) continue;
+      const track = trackAt(path);
+      if (track) return track.id;
+    }
+    return null;
+  }
+
+  const start = Math.min(Math.max(0, contextIndex), total - 1);
+  const stop = loop === "all" ? start + total : total;
+  for (let i = start + 1; i < stop; i += 1) {
+    const idx = i % total;
+    if (idx === start && total > 1) continue;
+    const track = trackAt(scope[idx]);
+    if (track) return track.id;
+  }
+  return null;
+}
+
+export function peekNextId(
+  userQueue: readonly string[],
+  contextQueue: readonly string[],
+  contextIndex: number,
+  currentId: string | null,
+  shuffle: boolean,
+  loop: LoopMode,
+): string | null {
+  const byPath = libraryByPath();
+  const trackAt = (path: string): LibraryTrack | undefined => byPath.get(path);
+
+  if (loop === "one" && currentId) return currentId;
+
+  if (shuffle) {
+    const queued = userQueue.find((path) => trackAt(path) !== undefined);
+    if (queued) return trackAt(queued)?.id ?? null;
+    const redo = _shuffleRedo.find((path) => trackAt(path) !== undefined);
+    if (redo) return trackAt(redo)?.id ?? null;
+    const upcoming = _shuffleUpcoming.find(
+      (path) => trackAt(path) !== undefined,
+    );
+    if (upcoming) return trackAt(upcoming)?.id ?? null;
+    if (loop !== "all") return null;
+    const scope = _contextQueue.length > 0 ? _contextQueue : _shuffleScope;
+    const currentPath = findTrackById(currentId)?.path ?? null;
+    for (const path of scope) {
+      if (path === currentPath) continue;
+      const track = trackAt(path);
+      if (track) return track.id;
+    }
+    return null;
+  }
+
+  const queued = userQueue.find((path) => trackAt(path) !== undefined);
+  if (queued) return trackAt(queued)?.id ?? null;
+
+  const scope = contextQueue.length > 0 ? contextQueue : fallbackScope();
+  const total = scope.length;
+  if (total === 0) return null;
+
+  if (contextQueue.length === 0) {
+    if (loop !== "all") return null;
+    const currentPath = findTrackById(currentId)?.path ?? null;
     for (const path of scope) {
       if (path === currentPath && total > 1) continue;
       const track = trackAt(path);
@@ -589,12 +673,11 @@ export function pickPrevId(
   shuffle: boolean,
   loop: LoopMode,
 ): string | null {
-  const library = getLibrary();
-  const trackAt = (path: string): LibraryTrack | undefined =>
-    library.find((track) => track.path === path);
+  const byPath = libraryByPath();
+  const trackAt = (path: string): LibraryTrack | undefined => byPath.get(path);
 
   if (shuffle) {
-    const currentPath = library.find((track) => track.id === currentId)?.path;
+    const currentPath = findTrackById(currentId)?.path;
     if (!currentPath) return null;
     _shuffleHistory = _shuffleHistory.filter((path) => trackAt(path) !== undefined);
     if (_shuffleHistory[_shuffleHistory.length - 1] !== currentPath) {
@@ -628,8 +711,7 @@ export function pickPrevId(
 }
 
 export function advanceContextIndex(newTrackId: string): void {
-  const library = getLibrary();
-  const track = library.find((t) => t.id === newTrackId);
+  const track = findTrackById(newTrackId);
   if (!track) return;
   const idx = _contextQueue.indexOf(track.path);
   if (idx >= 0) {
@@ -652,10 +734,12 @@ export async function restoreNowPlaying(): Promise<{
     whenLibraryLoaded(),
   ]);
   if (!saved) return null;
-  const library = getLibrary();
-  const track = library.find((t) => t.id === saved.id);
+  const track =
+    findTrackById(saved.id) ?? findTrackByPath(saved.path);
   if (!track) {
-    if (library.length > 0) void vynl.clearNowPlaying();
+    if (getLibrary().length > 0 || getCatalogueTracks().length > 0) {
+      void vynl.clearNowPlaying();
+    }
     return null;
   }
   setSeekDragging(false);

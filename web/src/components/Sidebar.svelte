@@ -9,6 +9,7 @@
     Link2,
     Plus,
     Home,
+    Compass,
     Puzzle,
   } from "lucide-svelte";
   import { blobSrc, toPascalCase } from "../lib/format";
@@ -28,6 +29,7 @@
     onSetSidebarOpen,
     onHome,
     onLibrary,
+    onCatalogue,
     onPlayer,
     onVault,
     onSettings,
@@ -45,6 +47,7 @@
     onSetSidebarOpen: (open: boolean) => void;
     onHome: () => void;
     onLibrary: () => void;
+    onCatalogue: () => void;
     onPlayer: () => void;
     onVault: () => void;
     onSettings: () => void;
@@ -77,6 +80,14 @@
     <button class="nav-link" class:active={page === "library"} onclick={onLibrary}>
       <span class="nav-icon"><Library size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("nav.library")}</span>
+    </button>
+    <button
+      class="nav-link"
+      class:active={page === "catalogue" || page.startsWith("catalogue:")}
+      onclick={onCatalogue}
+    >
+      <span class="nav-icon"><Compass size={15} stroke-width={1.5} /></span>
+      <span class="nav-label">{t("nav.catalogue")}</span>
     </button>
     <button class="nav-link" class:active={page === "player"} onclick={onPlayer}>
       <span class="nav-icon"><Music2 size={15} stroke-width={1.5} /></span>

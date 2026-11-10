@@ -53,7 +53,7 @@
   }
 
   .search-field {
-    width: 160px;
+    width: 200px;
     background: none;
     border: none;
     outline: none;

@@ -85,6 +85,105 @@ export interface SearchResult {
   url: string;
 }
 
+export interface CatalogueArtistRef {
+  name: string;
+  id: string | null;
+}
+
+export interface CatalogueAlbumRef {
+  name: string;
+  id: string | null;
+}
+
+export interface CatalogueTrack {
+  id: string;
+  title: string;
+  artist: string;
+  artists: CatalogueArtistRef[];
+  album: CatalogueAlbumRef | null;
+  duration: number | null;
+  cover: string | null;
+  explicit: boolean;
+}
+
+export interface CatalogueAlbum {
+  id: string;
+  playlistId: string | null;
+  title: string;
+  artist: string;
+  artists: CatalogueArtistRef[];
+  kind: string;
+  year: number | null;
+  trackCount: number | null;
+  cover: string | null;
+}
+
+export interface CatalogueAlbumDetail {
+  album: CatalogueAlbum;
+  description: string | null;
+  durationText: string | null;
+  tracks: CatalogueTrack[];
+}
+
+export interface CatalogueArtist {
+  id: string;
+  name: string;
+  description: string | null;
+  subscribers: string | null;
+  cover: string | null;
+  topTracks: CatalogueTrack[];
+  albums: CatalogueAlbum[];
+  singles: CatalogueAlbum[];
+}
+
+export interface CataloguePlaylist {
+  id: string;
+  title: string;
+  author: string | null;
+  trackCount: number | null;
+  cover: string | null;
+}
+
+export interface CataloguePlaylistDetail {
+  playlist: CataloguePlaylist;
+  tracks: CatalogueTrack[];
+  continuation: string | null;
+}
+
+export interface CataloguePlaylistPage {
+  tracks: CatalogueTrack[];
+  continuation: string | null;
+}
+
+export interface CatalogueSearchResults {
+  songs: CatalogueTrack[];
+  albums: CatalogueAlbum[];
+  playlists: CataloguePlaylist[];
+}
+
+export interface CatalogueStreamInfo {
+  videoId: string;
+  duration: number | null;
+  cached: boolean;
+}
+
+export interface CatalogueAddResult {
+  path: string;
+  downloaded: boolean;
+  playlist: Playlist | null;
+}
+
+export type CataloguePageRoute =
+  | { view: "search" }
+  | { view: "album" | "artist" | "playlist"; id: string };
+
+export function catalogueRoute(page: Page): CataloguePageRoute | null {
+  if (page === "catalogue") return { view: "search" };
+  const match = /^catalogue:(album|artist|playlist):(.+)$/.exec(page);
+  if (!match) return null;
+  return { view: match[1] as "album" | "artist" | "playlist", id: match[2] };
+}
+
 export interface RpcPresence {
   title: string;
   artist: string;
@@ -120,6 +219,10 @@ export type Page =
   | "player"
   | "vault"
   | "settings"
+  | "catalogue"
+  | `catalogue:album:${string}`
+  | `catalogue:artist:${string}`
+  | `catalogue:playlist:${string}`
   | `plugin:${string}`;
 
 export function isPluginPage(page: Page): page is `plugin:${string}` {

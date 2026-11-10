@@ -14,7 +14,7 @@ use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
-fn codec_registry() -> &'static CodecRegistry {
+pub(crate) fn codec_registry() -> &'static CodecRegistry {
     static REGISTRY: std::sync::OnceLock<CodecRegistry> = std::sync::OnceLock::new();
     REGISTRY.get_or_init(|| {
         let mut registry = CodecRegistry::new();
