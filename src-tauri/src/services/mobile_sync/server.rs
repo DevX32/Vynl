@@ -43,13 +43,14 @@ pub struct Attempt {
     pub lockouts: u32,
 }
 
-type SharedState = Arc<AppStateInner>;
+pub(crate) type SharedState = Arc<AppStateInner>;
 
 const MAX_PAIR_FAILURES: u32 = 5;
 const LOCKOUT_SECS: u64 = 30;
 const LOCKOUT_MAX_SECS: u64 = 900;
 const SNAPSHOT_TTL: Duration = Duration::from_secs(10);
 const STREAM_CHUNK: usize = 128 * 1024;
+const CATALOGUE_PATH_PREFIX: &str = "ytm:";
 
 pub struct TrackSnapshot {
     tracks: Arc<Vec<LibraryTrack>>,
@@ -208,10 +209,22 @@ pub struct MobileCatalogTrack {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MobileStreamedTrack {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: Option<String>,
+    pub duration: Option<f64>,
+    pub cover: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MobilePlaylistDto {
     pub id: String,
     pub name: String,
     pub track_ids: Vec<String>,
+    pub streamed: Vec<MobileStreamedTrack>,
     pub has_cover: bool,
     pub created_at: i64,
     pub updated_at: i64,
@@ -261,6 +274,7 @@ pub async fn serve(
         .route("/v1/tracks/{id}/audio", get(track_audio))
         .route("/v1/tracks/{id}/cover", get(track_cover))
         .route("/v1/tracks/{id}/synced-lyrics", get(track_synced_lyrics))
+        .merge(crate::services::mobile_sync::phone::router())
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"ok": true})) }),
@@ -429,11 +443,13 @@ async fn playlists_handler(State(state): State<SharedState>) -> Json<Vec<MobileP
                     .iter()
                     .filter_map(|p| map.get(p).cloned())
                     .collect();
+                let streamed = streamed_entries(&pl);
                 let has_cover = pl.cover.is_some();
                 MobilePlaylistDto {
                     id: pl.id,
                     name: pl.name,
                     track_ids,
+                    streamed,
                     has_cover,
                     created_at: pl.created_at,
                     updated_at: pl.updated_at,
@@ -444,6 +460,27 @@ async fn playlists_handler(State(state): State<SharedState>) -> Json<Vec<MobileP
     })
     .await
     .unwrap_or_else(|_| Json(Vec::new()))
+}
+
+fn streamed_entries(playlist: &crate::commands::types::Playlist) -> Vec<MobileStreamedTrack> {
+    let mut out = Vec::new();
+    for path in &playlist.paths {
+        let Some(video_id) = path.strip_prefix(CATALOGUE_PATH_PREFIX) else {
+            continue;
+        };
+        let Some(track) = playlist.streams.iter().find(|t| t.id == video_id) else {
+            continue;
+        };
+        out.push(MobileStreamedTrack {
+            id: track.id.clone(),
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            album: track.album.as_ref().map(|a| a.name.clone()),
+            duration: track.duration,
+            cover: track.cover.clone(),
+        });
+    }
+    out
 }
 
 async fn sync_manifest(State(state): State<SharedState>) -> Json<Vec<MobileSyncManifestEntry>> {
@@ -664,7 +701,11 @@ impl Stream for FileStream {
     }
 }
 
-async fn serve_file_with_range(path: PathBuf, headers: HeaderMap, content_type: &str) -> Response {
+pub(crate) async fn serve_file_with_range(
+    path: PathBuf,
+    headers: HeaderMap,
+    content_type: &str,
+) -> Response {
     let meta = match tokio::fs::metadata(&path).await {
         Ok(m) => m,
         Err(_) => return (StatusCode::NOT_FOUND, "file missing").into_response(),

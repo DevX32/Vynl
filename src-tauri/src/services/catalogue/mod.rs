@@ -481,6 +481,15 @@ pub fn get() -> Option<Arc<CatalogueService>> {
     SERVICE.get().cloned()
 }
 
+pub async fn fetch_to_cache(video_id: &str) -> Result<PathBuf, String> {
+    let service = service()?;
+    let video_id = video_id.trim();
+    if video_id.is_empty() {
+        return Err("This track has no video id.".into());
+    }
+    stream::fetch_complete_file(&service.cache, &service.resolver, video_id).await
+}
+
 fn service() -> Result<Arc<CatalogueService>, String> {
     get().ok_or_else(|| "The catalogue is not ready yet.".to_string())
 }

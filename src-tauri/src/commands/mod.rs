@@ -389,6 +389,13 @@ pub async fn rotate_mobile_sync_pin(
 }
 
 #[tauri::command]
+pub async fn mobile_sync_set_now_playing(
+    state: crate::services::mobile_sync::phone::MobileNowPlaying,
+) {
+    crate::services::mobile_sync::phone::set_now_playing(state).await;
+}
+
+#[tauri::command]
 pub async fn get_tools(app: AppHandle) -> Result<Vec<ToolStatus>, String> {
     let user_data = user_data_dir(&app)?;
     Ok(crate::services::tools::check_tools(&user_data, &app).await)

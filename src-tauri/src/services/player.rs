@@ -24,6 +24,10 @@ pub fn set_app_handle(app: &AppHandle) {
     let _ = APP.set(app.clone());
 }
 
+pub fn app_handle() -> Option<AppHandle> {
+    APP.get().cloned()
+}
+
 #[derive(Clone, Serialize)]
 pub struct PlaybackTick {
     pub generation: u64,
@@ -814,6 +818,7 @@ enum PlayerCmd {
     Volume(u32),
     GetPosition(u64),
     IsPlaying(u64),
+    Status,
 }
 
 #[derive(Clone)]
@@ -822,6 +827,18 @@ enum PlayerResp {
     F64(f64),
     Bool(bool),
     Err(String),
+    Status(Box<PlayerStatus>),
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerStatus {
+    pub generation: u64,
+    pub path: Option<String>,
+    pub playing: bool,
+    pub position: f64,
+    pub duration: Option<f64>,
+    pub volume: u32,
 }
 
 struct PlayerRequest {
@@ -1351,6 +1368,20 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             && sink.as_ref().is_some_and(|t| !t.sink.empty())
                             && !PAUSED.load(Ordering::Relaxed),
                     ),
+                    PlayerCmd::Status => {
+                        let playing = active_generation > 0
+                            && sink.as_ref().is_some_and(|t| !t.sink.empty())
+                            && !PAUSED.load(Ordering::Relaxed);
+                        let duration = duration_secs;
+                        PlayerResp::Status(Box::new(PlayerStatus {
+                            generation: active_generation,
+                            path: current_path.clone(),
+                            playing,
+                            position: reported_pos(sink.as_ref(), seek_floor),
+                            duration,
+                            volume: VOLUME.load(Ordering::Relaxed),
+                        }))
+                    }
                 };
 
                 let _ = reply_tx.send(resp);
@@ -1536,6 +1567,15 @@ pub fn get_position(generation: u64) -> Result<f64, String> {
 pub fn is_playing(generation: u64) -> Result<bool, String> {
     match send(PlayerCmd::IsPlaying(generation)) {
         Ok(PlayerResp::Bool(v)) => Ok(v),
+        Ok(PlayerResp::Err(e)) => Err(e),
+        Ok(_) => Err("unexpected".into()),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn status() -> Result<PlayerStatus, String> {
+    match send(PlayerCmd::Status) {
+        Ok(PlayerResp::Status(status)) => Ok(*status),
         Ok(PlayerResp::Err(e)) => Err(e),
         Ok(_) => Err("unexpected".into()),
         Err(e) => Err(e),

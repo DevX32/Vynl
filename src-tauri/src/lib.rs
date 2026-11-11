@@ -293,6 +293,7 @@ pub fn run() {
             commands::get_mobile_sync_status,
             commands::set_mobile_sync_enabled,
             commands::rotate_mobile_sync_pin,
+            commands::mobile_sync_set_now_playing,
             commands::get_tools,
             commands::check_tool_updates,
             commands::install_tool,

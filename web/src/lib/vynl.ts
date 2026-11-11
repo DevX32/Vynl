@@ -27,6 +27,7 @@ import type {
   EqDesign,
   MediaUpdate,
   MediaControlEvent,
+  MobileNowPlaying,
   CatalogueAddResult,
   CatalogueAlbumDetail,
   CatalogueArtist,
@@ -291,6 +292,9 @@ export const vynl = {
 
   onPlaybackTick: (cb: (tick: PlaybackTick) => void): (() => void) =>
     onEvent<PlaybackTick>("vynl:player:tick", cb),
+
+  mobileSyncSetNowPlaying: (state: MobileNowPlaying): Promise<void> =>
+    cmd("mobile_sync_set_now_playing", { state }),
 
   cacheRemoteAudio: (url: string, key: string): Promise<string> =>
     cmd("cache_remote_audio", { url, key }),

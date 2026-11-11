@@ -15,6 +15,7 @@ use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::Time;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use ytmusic::{AudioFormat as YtAudioFormat, Client, YtMusic};
 
 use crate::services::audio;
@@ -51,6 +52,111 @@ fn ext_for(format: &YtAudioFormat) -> &'static str {
     } else {
         "webm"
     }
+}
+
+pub async fn fetch_complete_file(
+    cache: &Arc<StreamCache>,
+    resolver: &Arc<UrlResolver>,
+    video_id: &str,
+) -> Result<PathBuf, String> {
+    if let Some(path) = cache.lookup_complete(video_id) {
+        return Ok(path);
+    }
+
+    let mut format = resolver.resolve(video_id, None).await?;
+    let total = format
+        .content_length
+        .ok_or_else(|| "this stream has no known length".to_string())?;
+    if total == 0 {
+        return Err("this stream is empty".into());
+    }
+
+    let ext = ext_for(&format);
+    let (path, file_name) = cache.begin(video_id, ext, total)?;
+
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .await
+        .map_err(|e| format!("could not open the stream cache: {e}"))?;
+
+    let mut at = 0u64;
+    let mut refreshes = 0u32;
+    while at < total {
+        let end = (at + FETCH_CHUNK).min(total);
+        match download_range(resolver, &format, &mut file, at, end).await {
+            Ok(()) => at = end,
+            Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
+                refreshes += 1;
+                format = resolver.resolve(video_id, Some(format.itag)).await?;
+            }
+            Err(error) => {
+                let _ = std::fs::remove_file(&path);
+                return Err(format!("stream download failed: {error}"));
+            }
+        }
+    }
+
+    cache.mark_complete(video_id, &file_name, total);
+    Ok(path)
+}
+
+async fn download_range(
+    resolver: &Arc<UrlResolver>,
+    format: &YtAudioFormat,
+    file: &mut tokio::fs::File,
+    start: u64,
+    end: u64,
+) -> Result<(), FetchError> {
+    let mut response = resolver
+        .http
+        .get(&format.url)
+        .header(RANGE, format!("bytes={start}-{}", end - 1))
+        .header(USER_AGENT, format.user_agent)
+        .header(ACCEPT, "*/*")
+        .send()
+        .await
+        .map_err(|e| FetchError::Other(format!("range request: {e}")))?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::FORBIDDEN
+        || status == reqwest::StatusCode::UNAUTHORIZED
+        || status == reqwest::StatusCode::GONE
+        || status == reqwest::StatusCode::NOT_FOUND
+    {
+        return Err(FetchError::Auth);
+    }
+    if status != reqwest::StatusCode::PARTIAL_CONTENT {
+        return Err(FetchError::Other(format!(
+            "range request returned {status}"
+        )));
+    }
+
+    let mut at = start;
+    while at < end {
+        let chunk = tokio::time::timeout(FETCH_STALL, response.chunk())
+            .await
+            .map_err(|_| FetchError::Other("the stream stalled".into()))?
+            .map_err(|e| FetchError::Other(format!("range body: {e}")))?;
+        let Some(bytes) = chunk else {
+            break;
+        };
+        if bytes.is_empty() {
+            continue;
+        }
+        let take = bytes.len().min((end - at) as usize);
+        file.seek(SeekFrom::Start(at))
+            .await
+            .map_err(|e| FetchError::Other(format!("cache seek: {e}")))?;
+        file.write_all(&bytes[..take])
+            .await
+            .map_err(|e| FetchError::Other(format!("cache write: {e}")))?;
+        at += take as u64;
+    }
+    if at < end {
+        return Err(FetchError::Other("the stream ended early".into()));
+    }
+    Ok(())
 }
 
 pub struct UrlResolver {

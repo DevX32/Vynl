@@ -360,6 +360,20 @@ export interface PlaybackTick {
   duration: number | null;
 }
 
+export interface MobileTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  duration: number | null;
+  cover: string | null;
+}
+
+export interface MobileNowPlaying {
+  track: MobileTrack | null;
+  queue: MobileTrack[];
+}
+
 export interface UpdateStatus {
   available: boolean;
   version?: string;
