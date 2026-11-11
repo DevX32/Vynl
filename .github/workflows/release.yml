@@ -132,6 +132,37 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build the shared catalogue library
+        working-directory: crates/vynl-catalogue-ffi
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 build --release
+
+      - name: Collect the catalogue library
+        run: |
+          set -euo pipefail
+          for pair in "arm64-v8a aarch64-linux-android" \
+                      "armeabi-v7a armv7-linux-androideabi" \
+                      "x86_64 x86_64-linux-android"; do
+            set -- $pair
+            mkdir -p "mobile/android/app/src/main/jniLibs/$1"
+            cp "crates/vynl-catalogue-ffi/target/$2/release/libvynl_catalogue.so" \
+               "mobile/android/app/src/main/jniLibs/$1/"
+          done
+
       - name: Write android/local.properties
         working-directory: mobile
         run: |

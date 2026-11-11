@@ -7,6 +7,7 @@ import '../models.dart';
 import '../services/api.dart';
 import '../services/auth_store.dart';
 import '../services/library_db.dart';
+import '../services/local_catalogue.dart';
 import '../services/notifications.dart';
 import '../services/sync_service.dart';
 import '../theme.dart';
@@ -32,6 +33,7 @@ class AppState extends ChangeNotifier {
   final LibraryDb db;
   final SyncNotifications notifications;
   final SyncService syncService;
+  final LocalCatalogue localCatalogue = LocalCatalogue();
 
   final Map<String, CatalogTrack> _trackIndex = {};
 
@@ -429,17 +431,11 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final client = api;
-    if (client == null) {
-      browseError = 'Pair with your desktop first.';
-      notifyListeners();
-      return;
-    }
     browseSearching = true;
     browseError = null;
     notifyListeners();
     try {
-      browseResults = await client.catalogueSearch(trimmed);
+      browseResults = await _catalogueSearch(trimmed);
     } catch (e) {
       browseResults = null;
       browseError = e.toString();
@@ -447,6 +443,52 @@ class AppState extends ChangeNotifier {
       browseSearching = false;
       notifyListeners();
     }
+  }
+
+  /// The catalogue that runs inside the app answers first. The desktop is
+  /// the fallback, so a phone that has the library still works.
+  Future<CatalogueSearchResults> _catalogueSearch(String query) async {
+    if (await localCatalogue.ensureAvailable()) {
+      return localCatalogue.search(query);
+    }
+    final client = api;
+    if (client == null) {
+      throw StateError('The catalogue is not ready yet.');
+    }
+    return client.catalogueSearch(query);
+  }
+
+  Future<CatalogueAlbumDetail> openAlbum(String id) async {
+    if (await localCatalogue.ensureAvailable()) {
+      return localCatalogue.album(id);
+    }
+    final client = api;
+    if (client == null) {
+      throw StateError('The catalogue is not ready yet.');
+    }
+    return client.catalogueAlbum(id);
+  }
+
+  Future<CatalogueArtist> openArtist(String id) async {
+    if (await localCatalogue.ensureAvailable()) {
+      return localCatalogue.artist(id);
+    }
+    final client = api;
+    if (client == null) {
+      throw StateError('The catalogue is not ready yet.');
+    }
+    return client.catalogueArtist(id);
+  }
+
+  Future<CataloguePlaylistDetail> openPlaylist(String id) async {
+    if (await localCatalogue.ensureAvailable()) {
+      return localCatalogue.playlist(id);
+    }
+    final client = api;
+    if (client == null) {
+      throw StateError('The catalogue is not ready yet.');
+    }
+    return client.cataloguePlaylist(id);
   }
 
   List<CatalogTrack> streamTracks(List<StreamTrack> tracks) {

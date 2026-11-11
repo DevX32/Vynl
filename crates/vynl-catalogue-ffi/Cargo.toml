@@ -1,0 +1,16 @@
+[package]
+name = "vynl-catalogue-ffi"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "JNI bridge for the shared Vynl catalogue"
+
+[lib]
+name = "vynl_catalogue"
+crate-type = ["cdylib"]
+
+[dependencies]
+vynl-catalogue = { path = "../vynl-catalogue" }
+jni = "0.21"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }

@@ -174,10 +174,8 @@ class _BrowsePageState extends State<BrowsePage> {
 
   Future<void> _openAlbum(BuildContext context, String id) async {
     final app = context.read<AppState>();
-    final client = app.api;
-    if (client == null) return;
     try {
-      final detail = await client.catalogueAlbum(id);
+      final detail = await app.openAlbum(id);
       if (!context.mounted) return;
       await showModalBottomSheet<void>(
         context: context,
@@ -200,10 +198,8 @@ class _BrowsePageState extends State<BrowsePage> {
 
   Future<void> _openPlaylist(BuildContext context, String id) async {
     final app = context.read<AppState>();
-    final client = app.api;
-    if (client == null) return;
     try {
-      final detail = await client.cataloguePlaylist(id);
+      final detail = await app.openPlaylist(id);
       if (!context.mounted) return;
       await showModalBottomSheet<void>(
         context: context,
