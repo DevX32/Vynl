@@ -13,6 +13,13 @@ pub const SEARCH_LIMIT: usize = 20;
 pub const TASTE_LIMIT: usize = 60;
 pub const TASTE_SEEDS: usize = 6;
 
+/// Where a track's audio can be fetched from.
+#[derive(Debug, Clone)]
+pub struct CatalogueStream {
+    pub url: String,
+    pub mime: String,
+}
+
 pub fn catalogue_error(context: &str, error: impl std::fmt::Display) -> String {
     let detail = error.to_string();
     let detail = detail
@@ -120,6 +127,20 @@ impl CatalogueClient {
         Ok(CataloguePlaylistPage {
             tracks: page.tracks.iter().filter_map(track_dto).collect(),
             continuation: page.continuation,
+        })
+    }
+
+    /// The audio address for a track. The guest client hands out urls that
+    /// need no deciphering, so this works without a javascript runtime.
+    pub async fn stream(&self, video_id: &str) -> Result<CatalogueStream, String> {
+        let format = self
+            .ytmusic
+            .best_audio(video_id)
+            .await
+            .map_err(|e| catalogue_error("stream lookup", e))?;
+        Ok(CatalogueStream {
+            url: format.url,
+            mime: format.mime,
         })
     }
 

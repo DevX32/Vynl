@@ -1784,7 +1784,7 @@ dependencies = [
 [[package]]
 name = "ytmusic"
 version = "0.1.0"
-source = "git+https://github.com/DevX32/vynl-ytmusic?branch=main#98aabee871312e611655cf81c96c3efbea347253"
+source = "git+https://github.com/DevX32/vynl-ytmusic?branch=main#c0e9783e5490ca95cf8948ce70bff960fffd0ec6"
 dependencies = [
  "anyhow",
  "async-trait",

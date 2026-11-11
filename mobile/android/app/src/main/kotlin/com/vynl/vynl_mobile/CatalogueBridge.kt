@@ -48,5 +48,8 @@ class CatalogueBridge {
 
         @JvmStatic
         external fun nativePlaylist(id: String): String
+
+        @JvmStatic
+        external fun nativeStream(id: String): String
     }
 }

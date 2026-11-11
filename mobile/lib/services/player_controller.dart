@@ -273,6 +273,9 @@ class PlayerController extends ChangeNotifier {
           ? null
           : Duration(milliseconds: (t.duration * 1000).round()),
     );
+    if (t.isDownloaded) {
+      return AudioSource.file(t.localAudioPath!, tag: tag);
+    }
     if (t.isStream) {
       return AudioSource.uri(
         t.streamUrl!,
@@ -280,7 +283,7 @@ class PlayerController extends ChangeNotifier {
         tag: tag,
       );
     }
-    return AudioSource.file(t.localAudioPath!, tag: tag);
+    return AudioSource.file(t.localAudioPath ?? '', tag: tag);
   }
 
   Future<void> _extractAccent(CatalogTrack track) async {

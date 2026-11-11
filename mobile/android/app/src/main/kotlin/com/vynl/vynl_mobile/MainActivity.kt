@@ -26,6 +26,7 @@ class MainActivity : AudioServiceFragmentActivity() {
                     "album" -> respond(result) { CatalogueBridge.nativeAlbum(call.argument<String>("value") ?: "") }
                     "artist" -> respond(result) { CatalogueBridge.nativeArtist(call.argument<String>("value") ?: "") }
                     "playlist" -> respond(result) { CatalogueBridge.nativePlaylist(call.argument<String>("value") ?: "") }
+                    "stream" -> respond(result) { CatalogueBridge.nativeStream(call.argument<String>("value") ?: "") }
                     else -> result.notImplemented()
                 }
             }

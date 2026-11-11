@@ -196,7 +196,6 @@ class StreamTrack {
     );
   }
 }
-
 class CatalogueAlbum {
   CatalogueAlbum({
     required this.id,
@@ -250,6 +249,13 @@ class CataloguePlaylist {
       cover: json['cover'] as String?,
     );
   }
+}
+
+class CatalogueStream {
+  const CatalogueStream({required this.url, required this.mime});
+
+  final String url;
+  final String mime;
 }
 
 class CatalogueSearchResults {

@@ -103,11 +103,7 @@ class _BrowsePageState extends State<BrowsePage> {
                           for (final song in results.songs)
                             TrackTile(
                               track: _playable(app, song),
-                              onTap: () {
-                                final list = app.streamTracks(results.songs);
-                                if (list.isEmpty) return;
-                                player.playTracks(list);
-                              },
+                              onTap: () => _playSongs(app, player, results.songs),
                             ),
                         ],
                         if (results.albums.isNotEmpty) ...[
@@ -170,6 +166,16 @@ class _BrowsePageState extends State<BrowsePage> {
             coverUrl: song.cover,
           )
         : list.first;
+  }
+
+  Future<void> _playSongs(
+    AppState app,
+    PlayerController player,
+    List<StreamTrack> songs,
+  ) async {
+    final list = await app.playableStreamTracks(songs);
+    if (list.isEmpty) return;
+    await player.playTracks(list);
   }
 
   Future<void> _openAlbum(BuildContext context, String id) async {
@@ -239,6 +245,16 @@ class _CatalogueSheet extends StatefulWidget {
 }
 
 class _CatalogueSheetState extends State<_CatalogueSheet> {
+  Future<void> _playAll(
+    AppState app,
+    PlayerController player,
+    int startIndex,
+  ) async {
+    final list = await app.playableStreamTracks(widget.tracks);
+    if (list.isEmpty) return;
+    await player.playTracks(list, startIndex: startIndex);
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
@@ -295,7 +311,7 @@ class _CatalogueSheetState extends State<_CatalogueSheet> {
           for (var i = 0; i < playable.length; i++)
             TrackTile(
               track: playable[i],
-              onTap: () => player.playTracks(playable, startIndex: i),
+              onTap: () => _playAll(app, player, i),
             ),
           if (playable.isEmpty)
             const Padding(

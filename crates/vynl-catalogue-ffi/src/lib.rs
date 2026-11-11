@@ -107,3 +107,24 @@ pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativePlaylist(
         result.map(|value| serde_json::to_value(value).unwrap_or_default()),
     )
 }
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativeStream(
+    mut env: JNIEnv,
+    _class: JClass,
+    id: JString,
+) -> jstring {
+    let id = read_string(&mut env, &id);
+    let client = client();
+    let result = runtime().block_on(async move { client.stream(&id).await });
+    match result {
+        Ok(stream) => finish(
+            &mut env,
+            Ok(serde_json::json!({
+                "url": stream.url,
+                "mime": stream.mime,
+            })),
+        ),
+        Err(message) => finish(&mut env, Err(message)),
+    }
+}

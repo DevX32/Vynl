@@ -491,6 +491,32 @@ class AppState extends ChangeNotifier {
     return client.cataloguePlaylist(id);
   }
 
+  /// Resolves the audio addresses of catalogue tracks so they can play
+  /// without the desktop. The catalogue that runs inside the app does the
+  /// looking up; the desktop is the fallback.
+  Future<List<CatalogTrack>> playableStreamTracks(
+    List<StreamTrack> songs,
+  ) async {
+    final client = api;
+    final local = await localCatalogue.ensureAvailable();
+    final resolved = await Future.wait(
+      songs.map((song) async {
+        try {
+          if (local) {
+            final stream = await localCatalogue.stream(song.id);
+            return song.toCatalogTrack(streamUrl: Uri.parse(stream.url));
+          }
+          if (client == null) return null;
+          return client.streamTrack(song);
+        } catch (e) {
+          debugPrint('stream lookup failed for ${song.id}: $e');
+          return null;
+        }
+      }),
+    );
+    return resolved.whereType<CatalogTrack>().toList();
+  }
+
   List<CatalogTrack> streamTracks(List<StreamTrack> tracks) {
     final client = api;
     if (client == null) return const [];

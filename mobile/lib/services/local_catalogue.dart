@@ -71,4 +71,14 @@ class LocalCatalogue {
     final body = await _call('playlist', id);
     return CataloguePlaylistDetail.fromJson(body);
   }
+
+  /// The audio address for a track, resolved by the catalogue that runs
+  /// inside the app.
+  Future<CatalogueStream> stream(String id) async {
+    final body = await _call('stream', id);
+    return CatalogueStream(
+      url: (body['url'] as String?) ?? '',
+      mime: (body['mime'] as String?) ?? '',
+    );
+  }
 }
