@@ -10,6 +10,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../platform_setup.dart';
+
 const _manifestUrl =
     'https://github.com/DevX32/Vynl/releases/latest/download/latest-mobile.json';
 const _desktopManifestUrl =
@@ -290,8 +292,10 @@ class AppUpdate extends ChangeNotifier {
       final url = _apks[abi] ??
           'https://github.com/DevX32/Vynl/releases/download/v$version/'
               'Vynl-mobile-$version-$abi.apk';
-      final dir = await getTemporaryDirectory();
-      final dest = File('${dir.path}/Vynl-mobile-$version-$abi.apk');
+      final dir = await getApplicationSupportDirectory();
+      final dest = File(
+        '${dir.path}/Vynl-mobile-${version.replaceAll('+', '-')}-$abi.apk',
+      );
 
       await _download(url, dest);
       if (!await _isUsableApk(dest)) {
@@ -311,9 +315,16 @@ class AppUpdate extends ChangeNotifier {
   Future<void> install() async {
     final path = _apkPath;
     if (path == null) return;
+    _needsPermission = false;
     if (!await _isUsableApk(File(path))) {
       _error = 'The downloaded update is incomplete. Download it again.';
       _apkPath = null;
+      notifyListeners();
+      return;
+    }
+    if (!await canRequestPackageInstalls()) {
+      _needsPermission = true;
+      _error = 'Allow Vynl to install apps, then try again.';
       notifyListeners();
       return;
     }
@@ -323,12 +334,16 @@ class AppUpdate extends ChangeNotifier {
         type: 'application/vnd.android.package-archive',
       );
       if (result.type == ResultType.done) return;
-      _needsPermission = result.type == ResultType.permissionDenied;
+      final denied = result.type == ResultType.permissionDenied ||
+          result.message.toLowerCase().contains('permission denied');
+      _needsPermission = denied;
       _error = switch (result.type) {
         ResultType.noAppToOpen => 'No installer available on this device.',
-        ResultType.permissionDenied => 'Vynl needs permission to install apps.',
+        ResultType.permissionDenied => 'Allow Vynl to install apps, then try again.',
         ResultType.fileNotFound => 'The downloaded update went missing.',
-        _ => 'Could not open the installer.',
+        _ => denied
+            ? 'Allow Vynl to install apps, then try again.'
+            : 'Could not open the installer.',
       };
       notifyListeners();
     } catch (e) {
