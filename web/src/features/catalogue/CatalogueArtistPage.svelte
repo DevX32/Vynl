@@ -380,6 +380,11 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 8px 0;
+    background: var(--bg);
   }
 
   .section-label {

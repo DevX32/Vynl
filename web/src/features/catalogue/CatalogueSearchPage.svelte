@@ -75,6 +75,15 @@
       : taste,
   );
 
+  const showMixHeading = $derived(
+    !error &&
+    !requested.trim() &&
+    !(searching && !results) &&
+    !(summary.liked === 0 && summary.played === 0) &&
+    !tasteError &&
+    taste.length > 0,
+  );
+
   $effect(() => {
     const grid = mixGrid;
     if (!grid) return;
@@ -166,6 +175,10 @@
     </div>
   </header>
 
+  {#if showMixHeading}
+    <div class="mix-heading mono">{t("catalogue.madeForYou")}</div>
+  {/if}
+
   <div class="page-scroll">
     {#if error}
       <div class="state" role="alert">
@@ -196,7 +209,6 @@
           </div>
         {:else if taste.length > 0}
           <section class="section">
-            <div class="section-label mono">{t("catalogue.madeForYou")}</div>
             <div class="card-grid" bind:this={mixGrid}>
               {#each mixTracks as track (track.id)}
                 <CatalogueSongCard
@@ -319,10 +331,11 @@
     margin-bottom: 26px;
   }
 
-  .section-label {
+  .mix-heading {
+    flex-shrink: 0;
     font-size: 13px;
     color: var(--dim);
-    margin-bottom: 10px;
+    padding: 0 0 10px;
   }
 
   .fresh {
