@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde_json::{Value, json};
 use sha1::Sha1;
 
@@ -196,6 +196,23 @@ fn extract_client_version(html: &str) -> String {
     "1.2.52.0".to_string()
 }
 
+fn token_failure_message(status: StatusCode, body: &str) -> String {
+    let lower = body.to_ascii_lowercase();
+    if lower.contains("not permitted") || lower.contains("developer terms") {
+        return "This service blocked the request.".to_string();
+    }
+    if status == StatusCode::TOO_MANY_REQUESTS {
+        return "Too many sign-in attempts. Try again in a moment.".to_string();
+    }
+    if status.is_client_error() {
+        return "The service rejected the sign-in request.".to_string();
+    }
+    format!(
+        "The service could not be reached (HTTP {}).",
+        status.as_u16()
+    )
+}
+
 async fn get_access_token(
     client: &Client,
 ) -> Result<(String, String, std::collections::HashMap<String, String>), String> {
@@ -251,12 +268,12 @@ async fn get_access_token(
         }
 
         let body = resp.text().await.unwrap_or_default();
-        last_err = format!("TOTP offset {offset}: HTTP {status}, body: {body}");
-        eprintln!("[Vynl] {last_err}");
+        eprintln!("[Vynl] TOTP offset {offset}: HTTP {status}, body: {body}");
+        last_err = token_failure_message(status, &body);
         tokio::time::sleep(Duration::from_millis(800)).await;
     }
 
-    Err(format!("All TOTP windows failed: {last_err}"))
+    Err(last_err)
 }
 
 async fn get_client_token(
@@ -293,7 +310,8 @@ async fn get_client_token(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!("Client token HTTP {status}: {body}"));
+        eprintln!("[Vynl] Client token HTTP {status}: {body}");
+        return Err(token_failure_message(status, &body));
     }
 
     let data: Value = resp
@@ -932,4 +950,36 @@ pub async fn search_spotify(
 
     results.truncate(limit as usize);
     Ok(results)
+}
+#[cfg(test)]
+mod tests {
+    use super::token_failure_message;
+    use reqwest::StatusCode;
+
+    #[test]
+    fn blocked_sign_in_reports_without_service_detail() {
+        let body = r#"{"error":{"code":400,"message":"Unauthorized request","extra":{"notes":"Usage of this endpoint is not permitted under the Spotify Developer Terms and Developer Policy, law"},"trace":"eyJoY2lBIjoiMzcxMjgifQ=="}}"#;
+        let message = token_failure_message(StatusCode::BAD_REQUEST, body);
+        assert_eq!(message, "This service blocked the request.");
+        assert!(!message.contains("Spotify"));
+        assert!(!message.contains("trace"));
+    }
+
+    #[test]
+    fn rate_limit_is_reported_plainly() {
+        let message = token_failure_message(StatusCode::TOO_MANY_REQUESTS, "slow down");
+        assert_eq!(message, "Too many sign-in attempts. Try again in a moment.");
+    }
+
+    #[test]
+    fn client_error_is_reported_plainly() {
+        let message = token_failure_message(StatusCode::FORBIDDEN, "nope");
+        assert_eq!(message, "The service rejected the sign-in request.");
+    }
+
+    #[test]
+    fn server_error_reports_the_status_only() {
+        let message = token_failure_message(StatusCode::BAD_GATEWAY, "");
+        assert_eq!(message, "The service could not be reached (HTTP 502).");
+    }
 }

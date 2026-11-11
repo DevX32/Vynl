@@ -140,6 +140,7 @@ export const en = {
     downloadPartial: "{done} downloaded · {failed} failed",
     downloadCancelled: "Download cancelled",
     couldNotSearch: "Could not search for matches",
+    resolveFailed: "Could not open that link",
     downloadFailed: "Download failed",
     retryFailedError: "Retry failed",
     queued: "Queued",

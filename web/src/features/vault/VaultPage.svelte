@@ -14,6 +14,7 @@
   import { getCurrentSettings } from "@state/settings.svelte";
   import { blobSrc, fmtDuration, totalSeconds } from "../../lib/format";
   import { toasts } from "@lib/toast";
+  import { friendlyVaultError } from "@lib/errors";
   import { t } from "@lib/i18n";
   import {
     getCurrentPlaylists,
@@ -172,7 +173,7 @@
       addedTrackIds = new Set(c.tracks.map((t) => t.id));
       await refreshDone({ force: true });
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = friendlyVaultError(e, t("vault.resolveFailed"));
     } finally {
       resolving = false;
     }
@@ -191,7 +192,7 @@
       searchResults = results;
     } catch (e) {
       if (gen !== searchGen) return;
-      searchError = e instanceof Error ? e.message : String(e);
+      searchError = friendlyVaultError(e, t("vault.couldNotSearch"));
       searchResults = [];
     } finally {
       if (gen === searchGen) searching = false;
@@ -282,7 +283,7 @@
       reviewing = true;
       page = 0;
     } catch (e) {
-      error = e instanceof Error ? e.message : t("vault.couldNotSearch");
+      error = friendlyVaultError(e, t("vault.couldNotSearch"));
       matches = {};
       reviewing = false;
     } finally {
@@ -355,7 +356,7 @@
       await postDownload(dlCollection);
     } catch (e) {
       if (gen !== dlGeneration) return;
-      error = e instanceof Error ? e.message : t("vault.downloadFailed");
+      error = friendlyVaultError(e, t("vault.downloadFailed"));
     } finally {
       if (gen === dlGeneration) running = false;
     }
@@ -511,7 +512,7 @@
       });
     } catch (e) {
       if (gen !== dlGeneration) return;
-      error = e instanceof Error ? e.message : t("vault.retryFailedError");
+      error = friendlyVaultError(e, t("vault.retryFailedError"));
       progress = markQueuedAsError(progress, sub.tracks, error);
     } finally {
       if (gen === dlGeneration) running = false;

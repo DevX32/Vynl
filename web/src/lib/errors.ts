@@ -40,6 +40,39 @@ function stripUrls(message: string): string {
     .trim();
 }
 
+const RAW_BODY_PATTERN = /\{[\s\S]*?\}/g;
+const LONG_TOKEN_PATTERN = /\b[A-Za-z0-9_-]{48,}\b/g;
+
+export function friendlyVaultError(error: unknown, fallback = ""): string {
+  if (error == null) return fallback;
+  const raw = typeof error === "string" ? error : String(error);
+  const cleaned = stripUrls(raw)
+    .replace(RAW_BODY_PATTERN, " ")
+    .replace(LONG_TOKEN_PATTERN, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return fallback;
+
+  if (/not permitted|developer terms|blocked the request/i.test(cleaned)) {
+    return "This service blocked the request.";
+  }
+  if (/totp|sign[- ]?in|unauthorized|forbidden|\b401\b|\b403\b/i.test(cleaned)) {
+    return "Could not sign in to the music service.";
+  }
+  if (/429|too many requests|rate.?limit/i.test(cleaned)) {
+    return "Too many requests. Try again shortly.";
+  }
+  if (
+    /dns|no such host|failed to lookup|connection refused|connection reset|connection closed|network is unreachable|timed out/i.test(
+      cleaned,
+    )
+  ) {
+    return "Could not reach the music service.";
+  }
+  if (cleaned.length > 140) return `${cleaned.slice(0, 137).trimEnd()}...`;
+  return cleaned;
+}
+
 export function friendlyError(error: unknown, fallback = ""): string {
   if (error == null) return fallback;
   const raw = typeof error === "string" ? error : String(error);
