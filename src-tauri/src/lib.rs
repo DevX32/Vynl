@@ -294,6 +294,8 @@ pub fn run() {
             commands::set_mobile_sync_enabled,
             commands::rotate_mobile_sync_pin,
             commands::mobile_sync_set_now_playing,
+            commands::taste_load,
+            commands::taste_save,
             commands::get_tools,
             commands::check_tool_updates,
             commands::install_tool,

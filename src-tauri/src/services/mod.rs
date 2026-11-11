@@ -21,6 +21,7 @@ pub mod process;
 pub mod queue;
 pub mod rpc;
 pub mod settings;
+pub mod taste;
 pub mod tools;
 pub mod update;
 pub mod util;

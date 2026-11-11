@@ -90,6 +90,13 @@ fn clean(message: String) -> String {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MobileTaste {
+    pub liked: Vec<MobileTrack>,
+    pub summary: crate::services::taste::TasteSummary,
+}
+
 pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/v1/catalogue/search", get(catalogue_search))
@@ -99,6 +106,34 @@ pub fn router() -> Router<SharedState> {
         .route("/v1/stream/{id}/audio", get(stream_audio))
         .route("/v1/player", get(player_state))
         .route("/v1/player/action", post(player_action))
+        .route("/v1/taste", get(taste_state))
+}
+
+async fn taste_state(State(state): State<SharedState>) -> Response {
+    let user_data = state.user_data.clone();
+    let entries = tokio::task::spawn_blocking(move || {
+        crate::services::taste::load(&user_data)
+    })
+    .await
+    .unwrap_or_default();
+
+    let liked = crate::services::taste::liked(&entries)
+        .into_iter()
+        .map(|entry| MobileTrack {
+            id: entry.track.id.clone(),
+            title: entry.track.title.clone(),
+            artist: entry.track.artist.clone(),
+            album: entry.track.album.as_ref().map(|a| a.name.clone()),
+            duration: entry.track.duration,
+            cover: entry.track.cover.clone(),
+        })
+        .collect();
+
+    Json(MobileTaste {
+        liked,
+        summary: crate::services::taste::summary(&entries),
+    })
+    .into_response()
 }
 
 #[derive(Deserialize)]

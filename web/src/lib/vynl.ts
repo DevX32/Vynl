@@ -28,6 +28,7 @@ import type {
   MediaUpdate,
   MediaControlEvent,
   MobileNowPlaying,
+  TasteEntry,
   CatalogueAddResult,
   CatalogueAlbumDetail,
   CatalogueArtist,
@@ -295,6 +296,11 @@ export const vynl = {
 
   mobileSyncSetNowPlaying: (state: MobileNowPlaying): Promise<void> =>
     cmd("mobile_sync_set_now_playing", { state }),
+
+  tasteLoad: (): Promise<TasteEntry[]> => cmd("taste_load"),
+
+  tasteSave: (entries: TasteEntry[]): Promise<void> =>
+    cmd("taste_save", { entries }),
 
   cacheRemoteAudio: (url: string, key: string): Promise<string> =>
     cmd("cache_remote_audio", { url, key }),

@@ -396,6 +396,23 @@ pub async fn mobile_sync_set_now_playing(
 }
 
 #[tauri::command]
+pub async fn taste_load(
+    app: AppHandle,
+) -> Result<Vec<crate::services::taste::TasteEntry>, String> {
+    let user_data = user_data_dir(&app)?;
+    Ok(crate::services::taste::load(&user_data))
+}
+
+#[tauri::command]
+pub async fn taste_save(
+    entries: Vec<crate::services::taste::TasteEntry>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let user_data = user_data_dir(&app)?;
+    crate::services::taste::save(&user_data, &entries)
+}
+
+#[tauri::command]
 pub async fn get_tools(app: AppHandle) -> Result<Vec<ToolStatus>, String> {
     let user_data = user_data_dir(&app)?;
     Ok(crate::services::tools::check_tools(&user_data, &app).await)

@@ -1,15 +1,8 @@
-import type { CatalogueTrack } from "@lib/types";
+import type { CatalogueTrack, TasteEntry } from "@lib/types";
+import { vynl } from "@lib/vynl";
 
 const TASTE_KEY = "vynl.taste.v1";
 const MAX_ENTRIES = 160;
-
-interface TasteEntry {
-  track: CatalogueTrack;
-  plays: number;
-  lastPlayed: number;
-  liked: boolean;
-  likedAt: number | null;
-}
 
 function isArtistRef(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
@@ -79,11 +72,30 @@ function persist(): void {
   } catch (error) {
     console.warn("taste profile save failed:", error);
   }
+  void vynl.tasteSave(_entries).catch((error) => {
+    console.warn("taste profile sync failed:", error);
+  });
 }
 
 function commit(next: TasteEntry[]): void {
   _entries = next;
   persist();
+}
+
+export async function hydrateTaste(): Promise<void> {
+  try {
+    const stored = await vynl.tasteLoad();
+    if (stored.length > 0) {
+      _entries = stored;
+      persist();
+      return;
+    }
+    if (_entries.length > 0) {
+      await vynl.tasteSave(_entries);
+    }
+  } catch (error) {
+    console.warn("taste profile hydrate failed:", error);
+  }
 }
 
 function mergeTrack(current: CatalogueTrack, patch: CatalogueTrack): CatalogueTrack {

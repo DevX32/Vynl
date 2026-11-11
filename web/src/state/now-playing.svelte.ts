@@ -9,7 +9,7 @@ import {
   getCatalogueTrack,
   getCatalogueTracks,
 } from "./catalogue.svelte";
-import { recordTastePlay } from "./taste.svelte";
+import { hydrateTaste, recordTastePlay } from "./taste.svelte";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -750,6 +750,7 @@ export async function restoreNowPlaying(): Promise<{
     vynl.loadNowPlaying(),
     whenLibraryLoaded(),
   ]);
+  void hydrateTaste();
   if (!saved) return null;
   const track =
     findTrackById(saved.id) ?? findTrackByPath(saved.path);

@@ -374,6 +374,14 @@ export interface MobileNowPlaying {
   queue: MobileTrack[];
 }
 
+export interface TasteEntry {
+  track: CatalogueTrack;
+  plays: number;
+  lastPlayed: number;
+  liked: boolean;
+  likedAt: number | null;
+}
+
 export interface UpdateStatus {
   available: boolean;
   version?: string;
