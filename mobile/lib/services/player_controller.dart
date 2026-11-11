@@ -190,7 +190,7 @@ class PlayerController extends ChangeNotifier {
     int startIndex = 0,
   }) async {
     await _ensureInit();
-    final playable = tracks.where((t) => t.isDownloaded).toList();
+    final playable = tracks.where((t) => t.isPlayable).toList();
     if (playable.isEmpty) return;
     final start = startIndex.clamp(0, playable.length - 1);
     _tracksById = {for (final t in playable) t.id: t};
@@ -211,7 +211,7 @@ class PlayerController extends ChangeNotifier {
     CatalogTrack track, {
     List<CatalogTrack>? context,
   }) async {
-    final list = (context ?? [track]).where((t) => t.isDownloaded).toList();
+    final list = (context ?? [track]).where((t) => t.isPlayable).toList();
     if (list.isEmpty) return;
     final idx = list.indexWhere((t) => t.id == track.id);
     await playTracks(list, startIndex: idx < 0 ? 0 : idx);
@@ -263,19 +263,24 @@ class PlayerController extends ChangeNotifier {
 
   AudioSource _sourceFor(CatalogTrack t) {
     final art = t.localCoverPath;
-    return AudioSource.file(
-      t.localAudioPath!,
-      tag: MediaItem(
-        id: t.id,
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        artUri: art == null || art.isEmpty ? null : Uri.file(art),
-        duration: t.duration <= 0
-            ? null
-            : Duration(milliseconds: (t.duration * 1000).round()),
-      ),
+    final tag = MediaItem(
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      artUri: art == null || art.isEmpty ? null : Uri.file(art),
+      duration: t.duration <= 0
+          ? null
+          : Duration(milliseconds: (t.duration * 1000).round()),
     );
+    if (t.isStream) {
+      return AudioSource.uri(
+        t.streamUrl!,
+        headers: t.streamHeaders.isEmpty ? null : t.streamHeaders,
+        tag: tag,
+      );
+    }
+    return AudioSource.file(t.localAudioPath!, tag: tag);
   }
 
   Future<void> _extractAccent(CatalogTrack track) async {

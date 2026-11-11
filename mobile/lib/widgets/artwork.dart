@@ -120,6 +120,7 @@ class ArtTile extends StatelessWidget {
   const ArtTile({
     super.key,
     required this.coverPath,
+    this.coverUrl,
     this.size = 56,
     this.radius = VynlRadius.thumb,
     this.icon = Icons.music_note_rounded,
@@ -127,6 +128,7 @@ class ArtTile extends StatelessWidget {
   });
 
   final String? coverPath;
+  final String? coverUrl;
   final double size;
   final double radius;
   final IconData icon;
@@ -135,7 +137,9 @@ class ArtTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = coverPath;
+    final url = coverUrl;
     final hasArt = path != null && path.isNotEmpty;
+    final hasRemote = url != null && url.isNotEmpty;
     final ratio = MediaQuery.devicePixelRatioOf(context);
 
     return ClipRRect(
@@ -148,10 +152,22 @@ class ArtTile extends StatelessWidget {
                 File(path),
                 fit: BoxFit.cover,
                 cacheWidth: (size * ratio).round(),
-                errorBuilder: (_, __, ___) => _fallback(),
+                errorBuilder: (_, __, ___) =>
+                    hasRemote ? _remote(url, ratio) : _fallback(),
               )
-            : _fallback(),
+            : hasRemote
+                ? _remote(url, ratio)
+                : _fallback(),
       ),
+    );
+  }
+
+  Widget _remote(String url, double ratio) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      cacheWidth: (size * ratio).round(),
+      errorBuilder: (_, __, ___) => _fallback(),
     );
   }
 

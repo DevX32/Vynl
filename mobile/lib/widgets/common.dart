@@ -42,6 +42,7 @@ class TrackTile extends StatelessWidget {
             children: [
               ArtTile(
                 coverPath: track.localCoverPath,
+                coverUrl: track.coverUrl,
                 size: 56,
                 accent: scheme.primary,
               ),

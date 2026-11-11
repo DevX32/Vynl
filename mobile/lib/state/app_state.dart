@@ -22,6 +22,7 @@ class AppState extends ChangeNotifier {
   static const tabHome = 0;
   static const tabLibrary = 1;
   static const tabPlaylists = 2;
+  static const tabBrowse = 3;
 
   static const _displayNameKey = 'vynl.display_name';
   static const _nicknameKey = 'vynl.nickname';
@@ -49,6 +50,13 @@ class AppState extends ChangeNotifier {
   int tabIndex = tabHome;
   String displayName = '';
   String nickname = randomNickname();
+
+  MobilePlayerState? remotePlayer;
+  MobileTaste? remoteTaste;
+  String browseQuery = '';
+  CatalogueSearchResults? browseResults;
+  bool browseSearching = false;
+  String? browseError;
 
   void setTab(int index) {
     if (tabIndex == index) return;
@@ -362,11 +370,12 @@ class AppState extends ChangeNotifier {
   CatalogTrack? trackById(String id) => _trackIndex[id];
 
   List<CatalogTrack> tracksForPlaylist(PlaylistDto pl) {
-    return pl.trackIds
+    final local = pl.trackIds
         .map(trackById)
         .whereType<CatalogTrack>()
         .where((t) => t.isDownloaded)
         .toList();
+    return [...local, ...streamTracks(pl.streamed)];
   }
 
   ({int total, int downloaded}) playlistStats(PlaylistDto pl) {
@@ -375,6 +384,74 @@ class AppState extends ChangeNotifier {
       final t = _trackIndex[id];
       if (t != null && t.isDownloaded) downloaded += 1;
     }
-    return (total: pl.trackIds.length, downloaded: downloaded);
+    final total = pl.trackIds.length + pl.streamed.length;
+    return (total: total, downloaded: downloaded);
+  }
+
+  Future<void> refreshRemote() async {
+    final client = api;
+    if (client == null) return;
+    try {
+      final player = await client.playerState();
+      final taste = await client.taste();
+      final changed = remotePlayer?.track?.id != player.track?.id ||
+          remotePlayer?.playing != player.playing ||
+          remoteTaste?.likedCount != taste.likedCount;
+      remotePlayer = player;
+      remoteTaste = taste;
+      if (changed) notifyListeners();
+    } catch (e) {
+      debugPrint('remote refresh failed: $e');
+    }
+  }
+
+  Future<void> remoteAction(
+    String action, {
+    double? time,
+    int? volume,
+  }) async {
+    final client = api;
+    if (client == null) return;
+    try {
+      await client.playerAction(action, time: time, volume: volume);
+    } catch (e) {
+      debugPrint('remote action failed: $e');
+    }
+    await refreshRemote();
+  }
+
+  Future<void> browse(String query) async {
+    final trimmed = query.trim();
+    browseQuery = trimmed;
+    if (trimmed.isEmpty) {
+      browseResults = null;
+      browseError = null;
+      notifyListeners();
+      return;
+    }
+    final client = api;
+    if (client == null) {
+      browseError = 'Pair with your desktop first.';
+      notifyListeners();
+      return;
+    }
+    browseSearching = true;
+    browseError = null;
+    notifyListeners();
+    try {
+      browseResults = await client.catalogueSearch(trimmed);
+    } catch (e) {
+      browseResults = null;
+      browseError = e.toString();
+    } finally {
+      browseSearching = false;
+      notifyListeners();
+    }
+  }
+
+  List<CatalogTrack> streamTracks(List<StreamTrack> tracks) {
+    final client = api;
+    if (client == null) return const [];
+    return tracks.map(client.streamTrack).toList();
   }
 }

@@ -12,6 +12,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/artwork.dart';
 import '../widgets/common.dart';
+import '../widgets/remote_control.dart';
 
 const _quotes = <String>[
   'where words fail, music speaks',
@@ -43,16 +44,22 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   Timer? _midnight;
+  Timer? _remote;
 
   @override
   void initState() {
     super.initState();
     _scheduleMidnight();
+    _remote = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      unawaited(context.read<AppState>().refreshRemote());
+    });
   }
 
   @override
   void dispose() {
     _midnight?.cancel();
+    _remote?.cancel();
     super.dispose();
   }
 
@@ -134,6 +141,10 @@ class _HomePageState extends State<HomePage> {
                   child: header,
                 ),
                 Expanded(child: _emptyView(app)),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, 28),
+                  child: RemotePanel(),
+                ),
               ],
             )
           : ListView(
@@ -193,6 +204,7 @@ class _HomePageState extends State<HomePage> {
                     onTap: (track) => _play(track, pool),
                   ),
                 ],
+                const RemotePanel(),
               ],
             ),
     );

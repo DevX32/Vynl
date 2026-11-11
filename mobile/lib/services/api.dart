@@ -136,6 +136,100 @@ class VynlApi {
         .toList();
   }
 
+  Future<CatalogueSearchResults> catalogueSearch(String query) async {
+    final res = await _client
+        .get(
+          _uri('/v1/catalogue/search').replace(
+            queryParameters: {'q': query},
+          ),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 45));
+    _ensureOk(res);
+    return CatalogueSearchResults.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CatalogueAlbumDetail> catalogueAlbum(String id) async {
+    final res = await _client
+        .get(_uri('/v1/catalogue/album/$id'), headers: _headers)
+        .timeout(const Duration(seconds: 45));
+    _ensureOk(res);
+    return CatalogueAlbumDetail.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CatalogueArtist> catalogueArtist(String id) async {
+    final res = await _client
+        .get(_uri('/v1/catalogue/artist/$id'), headers: _headers)
+        .timeout(const Duration(seconds: 45));
+    _ensureOk(res);
+    return CatalogueArtist.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CataloguePlaylistDetail> cataloguePlaylist(String id) async {
+    final res = await _client
+        .get(_uri('/v1/catalogue/playlist/$id'), headers: _headers)
+        .timeout(const Duration(seconds: 45));
+    _ensureOk(res);
+    return CataloguePlaylistDetail.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  Uri streamUri(String videoId) => _uri('/v1/stream/$videoId/audio');
+
+  Map<String, String> get streamHeaders => {
+        'Authorization': 'Bearer $token',
+      };
+
+  CatalogTrack streamTrack(StreamTrack track) {
+    return track.toCatalogTrack(
+      streamUrl: streamUri(track.id),
+      streamHeaders: streamHeaders,
+    );
+  }
+
+  Future<MobilePlayerState> playerState() async {
+    final res = await _client
+        .get(_uri('/v1/player'), headers: _headers)
+        .timeout(const Duration(seconds: 15));
+    _ensureOk(res);
+    return MobilePlayerState.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> playerAction(
+    String action, {
+    double? time,
+    int? volume,
+  }) async {
+    final body = <String, dynamic>{'action': action};
+    if (time != null) body['time'] = time;
+    if (volume != null) body['volume'] = volume;
+    final res = await _client
+        .post(
+          _uri('/v1/player/action'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
+    _ensureOk(res);
+  }
+
+  Future<MobileTaste> taste() async {
+    final res = await _client
+        .get(_uri('/v1/taste'), headers: _headers)
+        .timeout(const Duration(seconds: 20));
+    _ensureOk(res);
+    return MobileTaste.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
   void dispose() => _client.close();
 
   Future<bool> ping() async {
