@@ -52,6 +52,9 @@ jobs:
       - name: Analyze
         working-directory: mobile
         run: flutter analyze
+      - name: Test
+        working-directory: mobile
+        run: flutter test
 
   rust:
     name: Rust · ${{ matrix.os }}

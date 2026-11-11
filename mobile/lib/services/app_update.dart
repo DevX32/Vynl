@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _manifestUrl =
+    'https://github.com/DevX32/Vynl/releases/latest/download/latest-mobile.json';
+const _desktopManifestUrl =
     'https://github.com/DevX32/Vynl/releases/latest/download/latest.json';
 const _dismissedKey = 'vynl.update.dismissed';
 
@@ -35,12 +37,25 @@ class ReleaseNote {
   final String notes;
 }
 
+class _Manifest {
+  const _Manifest({
+    required this.version,
+    required this.notes,
+    required this.apks,
+  });
+
+  final String version;
+  final String notes;
+  final Map<String, String> apks;
+}
+
 class AppUpdate extends ChangeNotifier {
   AppUpdate() {
     unawaited(_restore());
   }
 
   ReleaseNote? _available;
+  Map<String, String> _apks = const {};
   bool _downloading = false;
   double _progress = 0;
   String? _error;
@@ -79,7 +94,9 @@ class AppUpdate extends ChangeNotifier {
 
   Future<String> _installedVersion() async {
     final info = await PackageInfo.fromPlatform();
-    return info.version;
+    final build = info.buildNumber.trim();
+    if (build.isEmpty) return info.version;
+    return '${info.version}+$build';
   }
 
   static String? abiFor(String raw) {
@@ -101,7 +118,7 @@ class AppUpdate extends ChangeNotifier {
   static int compare(String a, String b) {
     final pa = a.split(RegExp(r'[.+-]'));
     final pb = b.split(RegExp(r'[.+-]'));
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       final na = i < pa.length ? int.tryParse(pa[i]) ?? 0 : 0;
       final nb = i < pb.length ? int.tryParse(pb[i]) ?? 0 : 0;
       if (na != nb) return na.compareTo(nb);
@@ -193,17 +210,17 @@ class AppUpdate extends ChangeNotifier {
     _error = null;
     _available = null;
     try {
-      final text = await _fetchText(_manifestUrl);
-      final body = jsonDecode(text) as Map<String, dynamic>;
-      final latest = body['version'] as String? ?? '';
+      final manifest = await _loadManifest();
+      final latest = manifest.version;
       if (latest.isEmpty) throw const FormatException('no version');
       final current = await _installedVersion();
       _current = current;
       final dismissed = !force && latest == _dismissedVersion;
       if (compare(latest, current) > 0 && !dismissed) {
+        _apks = manifest.apks;
         _available = ReleaseNote(
           version: latest,
-          notes: body['notes'] as String? ?? '',
+          notes: manifest.notes,
         );
       }
       _error = null;
@@ -214,6 +231,36 @@ class AppUpdate extends ChangeNotifier {
     _busy = false;
     _checked = true;
     notifyListeners();
+  }
+
+  Future<_Manifest> _loadManifest() async {
+    try {
+      final text = await _fetchText(_manifestUrl);
+      final body = jsonDecode(text) as Map<String, dynamic>;
+      final raw = body['apks'];
+      final apks = <String, String>{};
+      if (raw is Map<String, dynamic>) {
+        for (final entry in raw.entries) {
+          final url = entry.value;
+          if (url is String && url.isNotEmpty) apks[entry.key] = url;
+        }
+      }
+      return _Manifest(
+        version: (body['version'] as String?) ?? '',
+        notes: (body['notes'] as String?) ?? '',
+        apks: apks,
+      );
+    } catch (e) {
+      debugPrint('mobile manifest unavailable, falling back: $e');
+    }
+
+    final text = await _fetchText(_desktopManifestUrl);
+    final body = jsonDecode(text) as Map<String, dynamic>;
+    return _Manifest(
+      version: (body['version'] as String?) ?? '',
+      notes: (body['notes'] as String?) ?? '',
+      apks: const {},
+    );
   }
 
   Future<void> dismiss() async {
@@ -240,8 +287,9 @@ class AppUpdate extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final url = 'https://github.com/DevX32/Vynl/releases/download/v$version/'
-          'Vynl-mobile-$version-$abi.apk';
+      final url = _apks[abi] ??
+          'https://github.com/DevX32/Vynl/releases/download/v$version/'
+              'Vynl-mobile-$version-$abi.apk';
       final dir = await getTemporaryDirectory();
       final dest = File('${dir.path}/Vynl-mobile-$version-$abi.apk');
 

@@ -210,6 +210,36 @@ jobs:
           done
           echo "APKs attached to $TAG"
 
+      - name: Publish the mobile update manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: *\(.*\)$/\1/p' mobile/pubspec.yaml | tr -d '[:space:]')"
+          build="$(printf '%s' "$version" | sed -n 's/.*+\([0-9]*\)$/\1/p')"
+          short="${version%%+*}"
+          base="https://github.com/$GH_REPO/releases/download/$TAG"
+          jq -n \
+            --arg version "$version" \
+            --arg build "${build:-0}" \
+            --arg notes "$RELEASE_BODY" \
+            --arg base "$base" \
+            --arg short "$short" \
+            '{
+              version: $version,
+              build: $build,
+              notes: $notes,
+              apks: {
+                "arm64-v8a": "\($base)/Vynl-mobile-\($short)-arm64-v8a.apk",
+                "armeabi-v7a": "\($base)/Vynl-mobile-\($short)-armeabi-v7a.apk",
+                "x86_64": "\($base)/Vynl-mobile-\($short)-x86_64.apk"
+              }
+            }' > "$RUNNER_TEMP/latest-mobile.json"
+          cat "$RUNNER_TEMP/latest-mobile.json"
+          gh release upload "$TAG" "$RUNNER_TEMP/latest-mobile.json" --clobber
+
       - name: Remove updater signature assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
