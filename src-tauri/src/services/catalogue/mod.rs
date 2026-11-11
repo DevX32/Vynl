@@ -269,14 +269,7 @@ impl CatalogueService {
         start: f64,
         duration_hint: Option<f64>,
     ) -> Result<PreparedStream, String> {
-        stream::prepare(
-            &self.cache,
-            &self.resolver,
-            video_id,
-            start,
-            duration_hint,
-        )
-        .await
+        stream::prepare(&self.cache, &self.resolver, video_id, start, duration_hint).await
     }
 
     fn prepare_blocking(
@@ -285,7 +278,8 @@ impl CatalogueService {
         start: f64,
         duration_hint: Option<f64>,
     ) -> Result<PreparedStream, String> {
-        self.runtime.block_on(self.prepare(video_id, start, duration_hint))
+        self.runtime
+            .block_on(self.prepare(video_id, start, duration_hint))
     }
 
     fn stash(&self, prepared: PreparedStream) {
@@ -314,7 +308,8 @@ impl CatalogueService {
         let now = Instant::now();
         map.retain(|_, entry| now.duration_since(entry.stored) < PREPARED_TTL);
         let entry = map.get(video_id)?;
-        if (entry.stream.start - start).abs() > 0.01 || entry.stream.session().is_some_and(|s| s.is_finished())
+        if (entry.stream.start - start).abs() > 0.01
+            || entry.stream.session().is_some_and(|s| s.is_finished())
         {
             map.remove(video_id);
             return None;
@@ -372,7 +367,11 @@ impl CatalogueService {
         }
 
         let url = format!("https://music.youtube.com/watch?v={video_id}");
-        let album = track.album.as_ref().map(|a| a.name.clone()).unwrap_or_default();
+        let album = track
+            .album
+            .as_ref()
+            .map(|a| a.name.clone())
+            .unwrap_or_default();
         let meta = TrackMeta {
             id: video_id.to_string(),
             title: track.title.clone(),
@@ -449,8 +448,7 @@ impl CatalogueService {
                     .map(|name| name.trim().to_string())
                     .filter(|name| !name.is_empty())
                     .unwrap_or_else(|| "Liked Songs".to_string());
-                let playlist =
-                    playlists::create_playlist(Path::new(&settings.output_dir), &name)?;
+                let playlist = playlists::create_playlist(Path::new(&settings.output_dir), &name)?;
                 let playlist = playlists::add_to_playlist(
                     Path::new(&settings.output_dir),
                     &playlist.id,
@@ -658,7 +656,9 @@ pub async fn catalogue_stream(
     duration: Option<f64>,
     generation: u64,
 ) -> Result<CatalogueStreamInfo, String> {
-    let start = start.filter(|time| time.is_finite() && *time > 0.0).unwrap_or(0.0);
+    let start = start
+        .filter(|time| time.is_finite() && *time > 0.0)
+        .unwrap_or(0.0);
     let prepared = prepare_for_playback(&video_id, start, duration).await?;
     let path = format!("ytm:{video_id}");
     let prepared_duration = prepared.duration.or(duration);
@@ -692,8 +692,8 @@ pub async fn catalogue_crossfade_stream(
     generation: u64,
     fade_secs: f64,
 ) -> Result<(), String> {
-    let prepared = take_prebuffered(&video_id)
-        .ok_or_else(|| "the stream is not prebuffered".to_string())?;
+    let prepared =
+        take_prebuffered(&video_id).ok_or_else(|| "the stream is not prebuffered".to_string())?;
     let path = format!("ytm:{video_id}");
     match prepared.audio.clone() {
         PreparedAudio::Stream(session) => crate::services::player::crossfade_stream(
@@ -796,7 +796,14 @@ pub async fn catalogue_add_to_playlist(
         .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
     let settings = crate::services::settings::get_settings(&user_data);
     service
-        .add_to_playlist(&track, playlist_id, playlist_name, &settings, &user_data, &app)
+        .add_to_playlist(
+            &track,
+            playlist_id,
+            playlist_name,
+            &settings,
+            &user_data,
+            &app,
+        )
         .await
 }
 

@@ -943,9 +943,7 @@ fn begin_crossfade(
         Duration::ZERO
     };
     let (incoming, total) = open_input(Some(handle), input, fade_secs, offset)?;
-    if seek_file
-        && let Err(e) = seek_sink(&incoming.sink, start)
-    {
+    if seek_file && let Err(e) = seek_sink(&incoming.sink, start) {
         incoming.sink.stop();
         return Err(e);
     }
@@ -986,9 +984,7 @@ fn install_source(
     track
         .sink
         .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
-    if seek_file
-        && let Err(e) = seek_sink(&track.sink, start)
-    {
+    if seek_file && let Err(e) = seek_sink(&track.sink, start) {
         track.sink.stop();
         return Err(e);
     }

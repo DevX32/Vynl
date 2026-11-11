@@ -80,8 +80,7 @@ pub fn save(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    std::fs::write(&path, body)
-        .map_err(|e| format!("could not write the taste profile: {e}"))
+    std::fs::write(&path, body).map_err(|e| format!("could not write the taste profile: {e}"))
 }
 
 pub fn summary(entries: &[TasteEntry]) -> TasteSummary {

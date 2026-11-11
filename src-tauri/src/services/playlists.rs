@@ -82,9 +82,8 @@ fn read_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
     let mut seen_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
     pl.paths
         .retain(|p| !p.is_empty() && seen_paths.insert(p.clone()));
-    pl.streams.retain(|track| {
-        seen_paths.contains(&format!("{CATALOGUE_PREFIX}{}", track.id))
-    });
+    pl.streams
+        .retain(|track| seen_paths.contains(&format!("{CATALOGUE_PREFIX}{}", track.id)));
     let now = util::now_ms();
     if pl.created_at == 0 {
         pl.created_at = now;

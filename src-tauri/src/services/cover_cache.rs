@@ -58,10 +58,7 @@ fn ytimg_fallback(url: &str) -> Option<String> {
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
     HTTP.get(url)
         .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(
-            ACCEPT,
-            "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        )
+        .header(ACCEPT, "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
         .send()
         .await
         .map_err(|e| format!("cover download failed: {e}"))

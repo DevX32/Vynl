@@ -1,4 +1,5 @@
-use axum::extract::{Path as AxumPath, Query, State};use axum::http::{HeaderMap, StatusCode};
+use axum::extract::{Path as AxumPath, Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -11,8 +12,8 @@ use crate::commands::types::{
     MediaControlAction,
 };
 use crate::services::catalogue;
-use crate::services::player;
 use crate::services::mobile_sync::server::SharedState;
+use crate::services::player;
 
 const CATALOGUE_PREFIX: &str = "ytm:";
 
@@ -45,11 +46,7 @@ pub async fn set_now_playing(state: MobileNowPlaying) {
 }
 
 pub async fn now_playing() -> MobileNowPlaying {
-    NOW_PLAYING
-        .read()
-        .await
-        .clone()
-        .unwrap_or_default()
+    NOW_PLAYING.read().await.clone().unwrap_or_default()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,7 +75,13 @@ pub struct MobileError {
 }
 
 fn error(status: StatusCode, message: impl Into<String>) -> Response {
-    (status, Json(MobileError { error: message.into() })).into_response()
+    (
+        status,
+        Json(MobileError {
+            error: message.into(),
+        }),
+    )
+        .into_response()
 }
 
 fn clean(message: String) -> String {
@@ -111,11 +114,9 @@ pub fn router() -> Router<SharedState> {
 
 async fn taste_state(State(state): State<SharedState>) -> Response {
     let user_data = state.user_data.clone();
-    let entries = tokio::task::spawn_blocking(move || {
-        crate::services::taste::load(&user_data)
-    })
-    .await
-    .unwrap_or_default();
+    let entries = tokio::task::spawn_blocking(move || crate::services::taste::load(&user_data))
+        .await
+        .unwrap_or_default();
 
     let liked = crate::services::taste::liked(&entries)
         .into_iter()
@@ -141,7 +142,10 @@ struct SearchQuery {
     q: String,
 }
 
-async fn catalogue_search(State(_state): State<SharedState>, Query(query): Query<SearchQuery>) -> Response {
+async fn catalogue_search(
+    State(_state): State<SharedState>,
+    Query(query): Query<SearchQuery>,
+) -> Response {
     let trimmed = query.q.trim();
     if trimmed.is_empty() {
         return error(StatusCode::BAD_REQUEST, "Enter something to search for.");

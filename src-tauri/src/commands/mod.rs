@@ -396,9 +396,7 @@ pub async fn mobile_sync_set_now_playing(
 }
 
 #[tauri::command]
-pub async fn taste_load(
-    app: AppHandle,
-) -> Result<Vec<crate::services::taste::TasteEntry>, String> {
+pub async fn taste_load(app: AppHandle) -> Result<Vec<crate::services::taste::TasteEntry>, String> {
     let user_data = user_data_dir(&app)?;
     Ok(crate::services::taste::load(&user_data))
 }
@@ -674,17 +672,11 @@ pub async fn lyrics_save(
     app: AppHandle,
 ) -> Result<(), String> {
     match require_path_in_output(&file, &app) {
-        Ok(validated) => {
-            tokio::task::spawn_blocking(move || {
-                crate::services::lyrics::save_manual_lyrics(
-                    &validated.to_string_lossy(),
-                    kind,
-                    &text,
-                )
-            })
-            .await
-            .map_err(|e| e.to_string())?
-        }
+        Ok(validated) => tokio::task::spawn_blocking(move || {
+            crate::services::lyrics::save_manual_lyrics(&validated.to_string_lossy(), kind, &text)
+        })
+        .await
+        .map_err(|e| e.to_string())?,
         Err(_) => {
             let user_data = user_data_dir(&app)?;
             crate::services::lyrics::save_path_lyrics(&user_data, &file, &text, kind);

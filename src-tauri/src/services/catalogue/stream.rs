@@ -44,7 +44,10 @@ fn ext_for(format: &YtAudioFormat) -> &'static str {
     let mime = format.mime.to_ascii_lowercase();
     if mime.contains("webm") {
         "webm"
-    } else if mime.contains("mp4") || mime.contains("m4a") || format.itag == 140 || format.itag == 139
+    } else if mime.contains("mp4")
+        || mime.contains("m4a")
+        || format.itag == 140
+        || format.itag == 139
     {
         "m4a"
     } else if mime.contains("mpeg") {
@@ -180,11 +183,12 @@ impl UrlResolver {
                 }
                 return Ok(format);
             }
-            let format = self
-                .ytmusic
-                .best_audio(video_id)
-                .await
-                .map_err(|e| format!("stream url refresh failed: {}", super::sanitize_error(&e.to_string())))?;
+            let format = self.ytmusic.best_audio(video_id).await.map_err(|e| {
+                format!(
+                    "stream url refresh failed: {}",
+                    super::sanitize_error(&e.to_string())
+                )
+            })?;
             if format.itag != itag {
                 return Err("YouTube changed the stream format for this track".into());
             }
@@ -223,9 +227,8 @@ impl UrlResolver {
         let ytdlp = crate::services::downloader::resolve_tool("yt-dlp", &self.data_dir)
             .ok_or_else(|| "yt-dlp is required to stream this track.".to_string())?;
         let watch_url = format!("https://music.youtube.com/watch?v={video_id}");
-        let mut command = crate::services::process::hidden_tokio(tokio::process::Command::new(
-            &ytdlp,
-        ));
+        let mut command =
+            crate::services::process::hidden_tokio(tokio::process::Command::new(&ytdlp));
         command
             .args([
                 "--no-playlist",
@@ -305,7 +308,12 @@ async fn webm_format(ytmusic: &YtMusic, video_id: &str) -> Result<YtAudioFormat,
     let response = ytmusic
         .player_response(video_id, Client::VisionOs)
         .await
-        .map_err(|e| format!("player response failed: {}", super::sanitize_error(&e.to_string())))?;
+        .map_err(|e| {
+            format!(
+                "player response failed: {}",
+                super::sanitize_error(&e.to_string())
+            )
+        })?;
     let formats = response
         .pointer("/streamingData/adaptiveFormats")
         .and_then(Value::as_array)
@@ -536,7 +544,12 @@ impl StreamCache {
         Some(path)
     }
 
-    pub fn begin(&self, video_id: &str, ext: &str, total: u64) -> Result<(PathBuf, String), String> {
+    pub fn begin(
+        &self,
+        video_id: &str,
+        ext: &str,
+        total: u64,
+    ) -> Result<(PathBuf, String), String> {
         let serial = FILE_SERIAL.fetch_add(1, Ordering::Relaxed);
         let file_name = format!("{}-{}-{}.{}", video_id, now_secs(), serial, ext);
         let path = self.dir.join(&file_name);
@@ -689,18 +702,13 @@ impl RangeStore {
     }
 
     fn covered(state: &RangeState, start: u64, end: u64) -> bool {
-        state
-            .coverage
-            .iter()
-            .any(|&(a, b)| a <= start && end <= b)
+        state.coverage.iter().any(|&(a, b)| a <= start && end <= b)
     }
 
     fn mark(&self, start: u64, end: u64) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         mark_range(&mut state.coverage, start, end);
-        if !self.control.complete.load(Ordering::Relaxed)
-            && Self::covered(&state, 0, state.total)
-        {
+        if !self.control.complete.load(Ordering::Relaxed) && Self::covered(&state, 0, state.total) {
             self.control.complete.store(true, Ordering::SeqCst);
         }
         self.cv.notify_all();
@@ -747,11 +755,7 @@ impl RangeStore {
             if state.demand_gen != last_gen
                 && !Self::covered(&state, state.demand_start, state.demand_end)
             {
-                return Some((
-                    state.demand_start,
-                    state.demand_end,
-                    state.demand_gen,
-                ));
+                return Some((state.demand_start, state.demand_end, state.demand_gen));
             }
             let (guard, _) = self
                 .cv
@@ -865,10 +869,9 @@ fn fetch_loop(
             Err(FetchError::Cancelled) => return,
             Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
                 refreshes += 1;
-                match resolver.resolve_blocking(
-            &video_id,
-            (format.itag != 0).then_some(format.itag),
-        ) {
+                match resolver
+                    .resolve_blocking(&video_id, (format.itag != 0).then_some(format.itag))
+                {
                     Ok(next) => format = next,
                     Err(error) => {
                         store.fail(format!("the stream url expired: {error}"));
@@ -940,7 +943,9 @@ fn run_fetch(
             return Err(FetchError::Auth);
         }
         if status != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(FetchError::Other(format!("range request returned {status}")));
+            return Err(FetchError::Other(format!(
+                "range request returned {status}"
+            )));
         }
 
         let mut response = response;
@@ -977,9 +982,7 @@ fn run_fetch(
         Ok(())
     };
 
-    match runtime.block_on(async move {
-        tokio::time::timeout(FETCH_STALL, request).await
-    }) {
+    match runtime.block_on(async move { tokio::time::timeout(FETCH_STALL, request).await }) {
         Ok(Ok(())) => Ok(()),
         Ok(Err(error)) => Err(error),
         Err(_) => Err(FetchError::Other("the range request timed out".into())),
@@ -1052,7 +1055,8 @@ impl StreamBuffer {
         Self {
             state: Mutex::new(BufferState {
                 queue: VecDeque::new(),
-                capacity: (MAX_BUFFER_SECS * DEFAULT_RATE as f64 * DEFAULT_CHANNELS as f64) as usize,
+                capacity: (MAX_BUFFER_SECS * DEFAULT_RATE as f64 * DEFAULT_CHANNELS as f64)
+                    as usize,
                 closed: false,
                 error: None,
                 format: None,
@@ -1065,8 +1069,7 @@ impl StreamBuffer {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.format.is_none() {
             state.format = Some((rate.max(1), channels.max(1)));
-            state.capacity =
-                (MAX_BUFFER_SECS * rate as f64 * channels as f64).max(4096.0) as usize;
+            state.capacity = (MAX_BUFFER_SECS * rate as f64 * channels as f64).max(4096.0) as usize;
         }
         self.cv.notify_all();
     }
@@ -1127,10 +1130,7 @@ impl StreamBuffer {
     }
 
     fn format(&self) -> Option<(u32, u16)> {
-        self.state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .format
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).format
     }
 
     fn error(&self) -> Option<String> {
@@ -1142,10 +1142,7 @@ impl StreamBuffer {
     }
 
     fn is_closed(&self) -> bool {
-        self.state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .closed
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).closed
     }
 }
 
@@ -1274,8 +1271,8 @@ impl StreamSession {
             .write(true)
             .open(&path)
             .map_err(|e| format!("could not open the stream cache: {e}"))?;
-        let read_file = File::open(&path)
-            .map_err(|e| format!("could not open the stream cache: {e}"))?;
+        let read_file =
+            File::open(&path).map_err(|e| format!("could not open the stream cache: {e}"))?;
 
         let control = Arc::new(SessionControl::default());
         let buffer = Arc::new(StreamBuffer::new());
@@ -1406,10 +1403,7 @@ fn decode_loop(
         }
     };
 
-    let track = match format_reader
-        .default_track(TrackType::Audio)
-        .cloned()
-    {
+    let track = match format_reader.default_track(TrackType::Audio).cloned() {
         Some(track) => track,
         None => {
             buffer.fail("this track has no audio".into());
