@@ -425,7 +425,7 @@
 
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(128px, 158px));
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
     gap: 10px;
   }
 
