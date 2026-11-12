@@ -186,7 +186,7 @@ jobs:
       - name: Build release APKs
         working-directory: mobile-android
         env:
-          ANDROID_NDK_HOME: $ANDROID_HOME/ndk/28.2.13676358
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Attach APKs to the release

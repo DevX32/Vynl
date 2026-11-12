@@ -7,12 +7,15 @@ use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::codecs::registry::CodecRegistry;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, TrackType};
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
+use symphonia::core::units::Time;
+
+use std::time::Duration;
 
 pub(crate) fn codec_registry() -> &'static CodecRegistry {
     static REGISTRY: std::sync::OnceLock<CodecRegistry> = std::sync::OnceLock::new();
@@ -22,6 +25,140 @@ pub(crate) fn codec_registry() -> &'static CodecRegistry {
         registry.register_audio_decoder::<symphonia_adapter_libopus::OpusDecoder>();
         registry
     })
+}
+
+pub struct FileSource {
+    format_reader: Box<dyn FormatReader>,
+    decoder: Box<dyn AudioDecoder>,
+    track_id: u32,
+    channels: u16,
+    sample_rate: u32,
+    duration: Option<Duration>,
+    samples: Vec<f32>,
+    cursor: usize,
+}
+
+impl FileSource {
+    pub fn open(path: &Path) -> Result<Self, String> {
+        let file = File::open(path).map_err(|e| format!("open: {e}"))?;
+        let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+        let source = MediaSourceStream::new(Box::new(file), Default::default());
+        let format_reader = symphonia::default::get_probe()
+            .probe(
+                &Hint::new().with_extension(ext),
+                source,
+                FormatOptions::default(),
+                MetadataOptions::default(),
+            )
+            .map_err(|e| format!("decode: {e}"))?;
+        let track = format_reader
+            .default_track(TrackType::Audio)
+            .cloned()
+            .ok_or_else(|| "this track has no audio".to_string())?;
+        let params = track
+            .codec_params
+            .as_ref()
+            .and_then(|params| params.audio())
+            .cloned()
+            .ok_or_else(|| "this track has no audio parameters".to_string())?;
+        let decoder = codec_registry()
+            .make_audio_decoder(&params, &AudioDecoderOptions::default())
+            .map_err(|e| format!("decode: {e}"))?;
+        let duration = match (track.num_frames, params.sample_rate) {
+            (Some(frames), Some(rate)) if rate > 0 => {
+                Some(Duration::from_secs_f64(frames as f64 / rate as f64))
+            }
+            _ => None,
+        };
+        let sample_rate = params.sample_rate.unwrap_or(44100).max(1);
+        let channels = params
+            .channels
+            .as_ref()
+            .map(|channels| channels.count() as u16)
+            .unwrap_or(2)
+            .max(1);
+        Ok(Self {
+            format_reader,
+            decoder,
+            track_id: track.id,
+            channels,
+            sample_rate,
+            duration,
+            samples: Vec::new(),
+            cursor: 0,
+        })
+    }
+}
+
+impl Iterator for FileSource {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        loop {
+            if self.cursor < self.samples.len() {
+                let sample = self.samples[self.cursor];
+                self.cursor += 1;
+                return Some(sample);
+            }
+            self.samples.clear();
+            self.cursor = 0;
+            let packet = match self.format_reader.next_packet() {
+                Ok(Some(packet)) => packet,
+                Ok(None) => return None,
+                Err(_) => return None,
+            };
+            if packet.track_id != self.track_id {
+                continue;
+            }
+            if let Ok(audio) = self.decoder.decode(&packet) {
+                let samples = audio.samples_interleaved();
+                let mut buffer = vec![0.0f32; samples];
+                audio.copy_to_slice_interleaved(&mut buffer);
+                self.samples.extend_from_slice(&buffer);
+            }
+        }
+    }
+}
+
+impl rodio::Source for FileSource {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.duration
+    }
+
+    fn try_seek(&mut self, to: Duration) -> Result<(), rodio::source::SeekError> {
+        let time = Time::try_from_secs_f64(to.as_secs_f64()).ok_or(
+            rodio::source::SeekError::NotSupported {
+                underlying_source: "Vynl file",
+            },
+        )?;
+        self.format_reader
+            .seek(
+                SeekMode::Accurate,
+                SeekTo::Time {
+                    time,
+                    track_id: Some(self.track_id),
+                },
+            )
+            .map_err(|_| rodio::source::SeekError::NotSupported {
+                underlying_source: "Vynl file",
+            })?;
+        self.decoder.reset();
+        self.samples.clear();
+        self.cursor = 0;
+        Ok(())
+    }
 }
 
 pub fn duration_secs(path: &Path) -> Option<f64> {

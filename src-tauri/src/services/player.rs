@@ -690,6 +690,7 @@ where
 
 enum TrackInput {
     File(PathBuf),
+    CatalogueFile(PathBuf),
     Stream(Arc<StreamSession>),
 }
 
@@ -725,6 +726,11 @@ impl TrackSink {
                     Decoder::new(BufReader::new(file)).map_err(|e| format!("decode: {e}"))?;
                 let total = decoder.total_duration().map(|d| d.as_secs_f64());
                 (Box::new(decoder.convert_samples::<f32>()), total, None)
+            }
+            TrackInput::CatalogueFile(path) => {
+                let source = crate::services::audio::FileSource::open(&path)?;
+                let total = source.total_duration().map(|d| d.as_secs_f64());
+                (Box::new(source), total, None)
             }
             TrackInput::Stream(session) => {
                 let source = StreamSource::new(&session);
@@ -1043,7 +1049,7 @@ fn reopen_output(
                     stream_source = true;
                     (TrackInput::Stream(session), None)
                 }
-                PreparedAudio::File(file) => (TrackInput::File(file), Some(pos)),
+                PreparedAudio::File(file) => (TrackInput::CatalogueFile(file), Some(pos)),
             },
             Err(e) => {
                 eprintln!("device change: could not re-resolve {path}: {e}");
@@ -1455,7 +1461,7 @@ pub fn play_cached_stream(
 ) -> Result<(), String> {
     to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
         path,
-        input: TrackInput::File(PathBuf::from(file)),
+        input: TrackInput::CatalogueFile(PathBuf::from(file)),
         start: start.unwrap_or(0.0),
         generation,
         preserve_pause: false,
@@ -1487,7 +1493,7 @@ pub fn seek_cached_stream_source(
 ) -> Result<(), String> {
     to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
         path,
-        input: TrackInput::File(PathBuf::from(file)),
+        input: TrackInput::CatalogueFile(PathBuf::from(file)),
         start,
         generation,
         preserve_pause: !playing,
@@ -1519,7 +1525,7 @@ pub fn crossfade_cached_stream(
 ) -> Result<(), String> {
     to_result(send(PlayerCmd::CrossfadeStream {
         path,
-        input: TrackInput::File(PathBuf::from(file)),
+        input: TrackInput::CatalogueFile(PathBuf::from(file)),
         start,
         generation,
         fade_secs,
