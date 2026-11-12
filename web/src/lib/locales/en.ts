@@ -414,10 +414,12 @@ export const en = {
     emptyRip: "Empty -- rip something first",
     noMatchesQuery: 'Nothing matches "{query}"',
     searchLibrary: "Search library...",
-    removeTrackTitle: "Remove from playlist",
+    removeTrackTitle: "Delete song",
     removeTrackBody:
-      '"{title}" will be removed from this playlist. The track stays in your library. This action cannot be undone.',
-    removeTrackConfirm: "Remove",
+      '"{title}" will be removed from this playlist and deleted from disk. This action cannot be undone.',
+    removeStreamBody:
+      '"{title}" will be removed from this playlist. It is not stored on your computer, so nothing is deleted. This action cannot be undone.',
+    removeTrackConfirm: "Delete",
     removeTrackFailed: "Failed to remove track",
     removedTrack: 'Removed "{title}" from {name}',
     changeCover: "Change cover",

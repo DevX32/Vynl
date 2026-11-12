@@ -43,6 +43,7 @@
   import {
     addToPlaylist,
     getCurrentPlaylist,
+    isCataloguePath,
     isPlaylistLoading,
     markCoverFailed,
     moveInPlaylist,
@@ -431,9 +432,14 @@
     <Dialog
       open
       title={t("playlist.removeTrackTitle")}
-      description={t("playlist.removeTrackBody", {
-        title: removeTarget.title,
-      })}
+      description={t(
+        isCataloguePath(removeTarget.path)
+          ? "playlist.removeStreamBody"
+          : "playlist.removeTrackBody",
+        {
+          title: removeTarget.title,
+        },
+      )}
       confirmLabel={t("playlist.removeTrackConfirm")}
       danger
       onconfirm={() => void confirmRemoveTrack()}

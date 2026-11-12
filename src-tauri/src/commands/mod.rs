@@ -635,7 +635,31 @@ pub async fn remove_from_playlist(
     app: AppHandle,
 ) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
-    crate::services::playlists::remove_from_playlist(&output, &id, &track_path)
+    let user_data = user_data_dir(&app)?;
+    if track_path.starts_with("ytm:") {
+        return crate::services::playlists::remove_from_playlist(&output, &id, &track_path);
+    }
+
+    let canonical = validate_path_in_output(&track_path, &app).ok();
+    let exists = canonical.as_ref().is_some_and(|path| path.exists());
+    if exists {
+        let canonical = canonical.as_ref().expect("canonical checked");
+        if !delete_track_file(&user_data, &track_path, &canonical) {
+            return Err(
+                "Could not delete the file, it may be in use. Stop playback and try again.".into(),
+            );
+        }
+    }
+    let mut stale = vec![track_path.clone()];
+    if let Some(canonical) = canonical {
+        let canonical_str = canonical.to_string_lossy().to_string();
+        if canonical_str != track_path {
+            stale.push(canonical_str);
+        }
+    }
+    crate::services::playlists::remove_paths_from_all(&output, &stale);
+    crate::services::playlists::get_playlist(&output, &id)
+        .ok_or_else(|| "playlist not found".into())
 }
 
 #[tauri::command]

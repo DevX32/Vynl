@@ -5,7 +5,7 @@ import type {
   Playlist,
   PlaylistMeta,
 } from "@lib/types";
-import { getLibrary } from "./library.svelte";
+import { getLibrary, refreshLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
 import { isSameSong } from "@lib/format";
 import { vynl } from "@lib/vynl";
@@ -163,6 +163,11 @@ export async function removeFromPlaylist(
 ): Promise<void> {
   const pl = await vynl.removeFromPlaylist(id, trackPath);
   syncAfterMutation(pl);
+  if (trackPath.startsWith("ytm:")) {
+    _meta = await vynl.listPlaylists();
+    return;
+  }
+  await refreshLibrary();
   _meta = await vynl.listPlaylists();
 }
 
