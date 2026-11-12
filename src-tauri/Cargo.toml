@@ -1,6 +1,6 @@
 [package]
 name = "vynl"
-version = "0.4.7"
+version = "0.4.8"
 description = "Music Player"
 authors = ["Vynl"]
 edition = "2024"
@@ -59,3 +59,4 @@ souvlaki = { version = "0.8.3", default-features = false, features = ["use_zbus"
 lto = true
 codegen-units = 1
 strip = true
+

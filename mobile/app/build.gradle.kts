@@ -18,8 +18,8 @@ android {
         applicationId = "com.vynl.vynl_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2029
-        versionName = "0.4.7"
+        versionCode = 2030
+        versionName = "0.4.8"
     }
 
     signingConfigs {
@@ -189,3 +189,4 @@ tasks.matching { it.name.startsWith("merge") && it.name.contains("JniLibFolders"
 tasks.matching { it.name.startsWith("merge") && it.name.contains("Assets") }.configureEach {
     dependsOn(buildCatalogueLibrary)
 }
+
