@@ -48,83 +48,106 @@ fn finish(env: &mut JNIEnv, result: Result<serde_json::Value, String>) -> jstrin
     to_jstring(env, &text)
 }
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativeSearch(
-    mut env: JNIEnv,
-    _class: JClass,
-    query: JString,
-) -> jstring {
-    let query = read_string(&mut env, &query);
-    let client = client();
-    let result = runtime().block_on(async move { client.search(&query).await });
-    finish(
-        &mut env,
-        result.map(|value| serde_json::to_value(value).unwrap_or_default()),
-    )
+/// The kind of answer a call wants back.
+enum Ask {
+    Search,
+    Album,
+    Artist,
+    Playlist,
+    Stream,
+    Taste,
 }
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativeAlbum(
-    mut env: JNIEnv,
-    _class: JClass,
-    id: JString,
-) -> jstring {
-    let id = read_string(&mut env, &id);
+fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
     let client = client();
-    let result = runtime().block_on(async move { client.album(&id).await });
-    finish(
-        &mut env,
-        result.map(|value| serde_json::to_value(value).unwrap_or_default()),
-    )
+    let query = query.to_string();
+    let result = runtime().block_on(async move {
+        match kind {
+            Ask::Search => client
+                .search(&query)
+                .await
+                .map(|value| serde_json::to_value(value).unwrap_or_default()),
+            Ask::Album => client
+                .album(&query)
+                .await
+                .map(|value| serde_json::to_value(value).unwrap_or_default()),
+            Ask::Artist => client
+                .artist(&query)
+                .await
+                .map(|value| serde_json::to_value(value).unwrap_or_default()),
+            Ask::Playlist => client
+                .playlist(&query)
+                .await
+                .map(|value| serde_json::to_value(value).unwrap_or_default()),
+            Ask::Stream => client.stream(&query).await.map(|stream| {
+                serde_json::json!({
+                    "url": stream.url,
+                    "mime": stream.mime,
+                })
+            }),
+            Ask::Taste => {
+                let seeds: Vec<String> = serde_json::from_str(&query).unwrap_or_default();
+                client
+                    .taste(&seeds)
+                    .await
+                    .map(|tracks| serde_json::json!({ "tracks": tracks }))
+            }
+        }
+    });
+    finish(env, result)
 }
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativeArtist(
-    mut env: JNIEnv,
-    _class: JClass,
-    id: JString,
-) -> jstring {
-    let id = read_string(&mut env, &id);
-    let client = client();
-    let result = runtime().block_on(async move { client.artist(&id).await });
-    finish(
-        &mut env,
-        result.map(|value| serde_json::to_value(value).unwrap_or_default()),
-    )
+// The jni name of a class turns every character that is not a letter or a
+// digit into its code, so the underscore in `vynl_mobile` becomes `_1`.
+// Without that the phone cannot find the method at all.
+macro_rules! bridge {
+    ($short:ident, $long:ident, $kind:expr) => {
+        #[unsafe(no_mangle)]
+        pub extern "system" fn $short(mut env: JNIEnv, _class: JClass, query: JString) -> jstring {
+            let query = read_string(&mut env, &query);
+            ask(&mut env, &query, $kind)
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "system" fn $long(mut env: JNIEnv, _class: JClass, query: JString) -> jstring {
+            let query = read_string(&mut env, &query);
+            ask(&mut env, &query, $kind)
+        }
+    };
 }
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativePlaylist(
-    mut env: JNIEnv,
-    _class: JClass,
-    id: JString,
-) -> jstring {
-    let id = read_string(&mut env, &id);
-    let client = client();
-    let result = runtime().block_on(async move { client.playlist(&id).await });
-    finish(
-        &mut env,
-        result.map(|value| serde_json::to_value(value).unwrap_or_default()),
-    )
-}
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeSearch,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeSearch__Ljava_lang_String_2,
+    Ask::Search
+);
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_vynl_vynl_mobile_CatalogueBridge_nativeStream(
-    mut env: JNIEnv,
-    _class: JClass,
-    id: JString,
-) -> jstring {
-    let id = read_string(&mut env, &id);
-    let client = client();
-    let result = runtime().block_on(async move { client.stream(&id).await });
-    match result {
-        Ok(stream) => finish(
-            &mut env,
-            Ok(serde_json::json!({
-                "url": stream.url,
-                "mime": stream.mime,
-            })),
-        ),
-        Err(message) => finish(&mut env, Err(message)),
-    }
-}
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeAlbum,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeAlbum__Ljava_lang_String_2,
+    Ask::Album
+);
+
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeArtist,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeArtist__Ljava_lang_String_2,
+    Ask::Artist
+);
+
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativePlaylist,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativePlaylist__Ljava_lang_String_2,
+    Ask::Playlist
+);
+
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeStream,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeStream__Ljava_lang_String_2,
+    Ask::Stream
+);
+
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeTaste,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeTaste__Ljava_lang_String_2,
+    Ask::Taste
+);
