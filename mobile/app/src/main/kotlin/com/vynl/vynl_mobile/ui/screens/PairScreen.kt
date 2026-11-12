@@ -46,7 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -131,42 +131,68 @@ fun PairScreen(
         }
     }
 
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val cameraProviderFuture = remember {
+        runCatching { ProcessCameraProvider.getInstance(context) }.getOrNull()
+    }
     val preview = remember {
-        Preview.Builder()
-            .setResolutionSelector(
-                ResolutionSelector.Builder()
-                    .build(),
-            )
-            .build()
+        runCatching {
+            Preview.Builder()
+                .setResolutionSelector(
+                    ResolutionSelector.Builder()
+                        .build(),
+                )
+                .build()
+        }.getOrNull()
     }
     val analyzer = remember {
-        ImageAnalysis.Builder()
-            .setTargetResolution(android.util.Size(1280, 720))
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
+        runCatching {
+            ImageAnalysis.Builder()
+                .setTargetResolution(android.util.Size(1280, 720))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+        }.getOrNull()
     }
     val executor = remember { ContextCompat.getMainExecutor(context) }
     var scanned by remember { mutableStateOf(false) }
 
     val scanner = remember {
-        com.google.mlkit.vision.barcode.BarcodeScanning.getClient(
-            com.google.mlkit.vision.barcode.BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
-                .build(),
-        )
+        runCatching {
+            com.google.mlkit.vision.barcode.BarcodeScanning.getClient(
+                com.google.mlkit.vision.barcode.BarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+                    .build(),
+            )
+        }.getOrNull()
+    }
+
+    LaunchedEffect(Unit) {
+        if (scanner == null) {
+            error = "The scanner couldn't start on this phone."
+        }
     }
 
     LaunchedEffect(cameraGranted, cameraProviderFuture, preview, analyzer) {
         if (!cameraGranted) return@LaunchedEffect
+        val boundPreview = preview ?: run {
+            error = "Camera didn't open."
+            return@LaunchedEffect
+        }
+        val boundAnalyzer = analyzer ?: run {
+            error = "Camera didn't open."
+            return@LaunchedEffect
+        }
+        val future = cameraProviderFuture ?: run {
+            error = "Camera didn't open."
+            return@LaunchedEffect
+        }
         runCatching {
-            val provider = cameraProviderFuture.await()
+            val provider = future.await()
             provider.unbindAll()
             provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                analyzer,
+                boundPreview,
+                boundAnalyzer,
             )
             viewfinderReady = true
         }.onFailure {
@@ -175,56 +201,70 @@ fun PairScreen(
     }
 
     DisposableEffect(analyzer) {
-        analyzer.setAnalyzer(executor) { image ->
-            if (!scanned) {
-                val mediaImage = image.image
-                if (mediaImage == null) {
-                    image.close()
-                    return@setAnalyzer
-                }
-                val inputImage = com.google.mlkit.vision.common.InputImage.fromMediaImage(
-                    mediaImage,
-                    image.imageInfo.rotationDegrees,
-                )
-                scanner.process(inputImage)
-                    .addOnSuccessListener { barcodes ->
-                        for (barcode in barcodes) {
-                            val text = barcode.rawValue ?: continue
-                            if (text.isBlank()) continue
-                            val payload = parsePairingPayload(text)
-                            if (payload == null) {
-                                error = "That isn't a Vynl pairing code."
-                                continue
-                            }
-                            if (scanned) return@addOnSuccessListener
-                            scanned = true
-                            if (!busy) {
-                                busy = true
-                                scope.launch(Dispatchers.IO) {
-                                    val failure = viewModel.pairDesktop(
-                                        address = payload.host,
-                                        pin = payload.pin,
-                                        alts = payload.alts,
-                                        autoSync = true,
-                                    )
-                                    busy = false
-                                    if (failure == null) onPaired() else error = failure
-                                }
-                            }
-                            break
+        analyzer?.let { activeAnalyzer ->
+            activeAnalyzer.setAnalyzer(executor) { image ->
+                try {
+                    if (!scanned) {
+                        val mediaImage = image.image
+                        if (mediaImage == null) {
+                            image.close()
+                            return@setAnalyzer
                         }
+                        val activeScanner = scanner ?: run {
+                            image.close()
+                            error = "The scanner couldn't start on this phone."
+                            return@setAnalyzer
+                        }
+                        val inputImage = com.google.mlkit.vision.common.InputImage.fromMediaImage(
+                            mediaImage,
+                            image.imageInfo.rotationDegrees,
+                        )
+                        activeScanner.process(inputImage)
+                            .addOnSuccessListener { barcodes ->
+                                for (barcode in barcodes) {
+                                    val text = barcode.rawValue ?: continue
+                                    if (text.isBlank()) continue
+                                    val payload = parsePairingPayload(text)
+                                    if (payload == null) {
+                                        error = "That isn't a Vynl pairing code."
+                                        continue
+                                    }
+                                    if (scanned) return@addOnSuccessListener
+                                    scanned = true
+                                    if (!busy) {
+                                        busy = true
+                                        scope.launch(Dispatchers.IO) {
+                                            val failure = runCatching {
+                                                viewModel.pairDesktop(
+                                                    address = payload.host,
+                                                    pin = payload.pin,
+                                                    alts = payload.alts,
+                                                    autoSync = true,
+                                                )
+                                            }.getOrElse { "Pairing failed." }
+                                            busy = false
+                                            if (failure == null) onPaired() else error = failure
+                                        }
+                                    }
+                                    break
+                                }
+                                image.close()
+                            }
+                            .addOnFailureListener {
+                                image.close()
+                            }
+                    } else {
                         image.close()
                     }
-                    .addOnFailureListener {
-                        image.close()
-                    }
-            } else {
-                image.close()
+                } catch (e: Throwable) {
+                    runCatching { image.close() }
+                    error = "The scanner hit a problem."
+                }
             }
         }
         onDispose {
-            analyzer.clearAnalyzer()
-            scanner.close()
+            analyzer?.clearAnalyzer()
+            scanner?.close()
         }
     }
 
@@ -236,7 +276,7 @@ fun PairScreen(
                 factory = { ctx ->
                     PreviewView(ctx).apply {
                         scaleType = PreviewView.ScaleType.FILL_CENTER
-                        preview.setSurfaceProvider(this.surfaceProvider)
+                        runCatching { preview?.setSurfaceProvider(this.surfaceProvider) }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
