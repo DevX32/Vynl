@@ -16,6 +16,7 @@
   import {
     getCurrentTrack,
     getIsTrackPlaying,
+    matchesCurrentSong,
     requestPlay,
     addToQueue,
     addToQueueFront,
@@ -89,6 +90,11 @@
       matchesQuery(needle, `${t.title} ${t.artist} ${t.album}`.toLowerCase()),
     );
   });
+
+  function isCurrent(track: (typeof hits)[number]): boolean {
+    if (track.id === nowPlaying?.id) return true;
+    return matchesCurrentSong(track.title, track.artist, track.duration);
+  }
 
   $effect(() => {
     const q = query;
@@ -354,12 +360,12 @@
           <button
             type="button"
             class="row"
-            class:playing={trk.id === nowPlaying?.id}
+            class:playing={isCurrent(trk)}
             onclick={() => rowAction(trk)}
             oncontextmenu={(e) => onRowContext(e, trk)}
           >
             <span class="c-num mono">
-              {#if trk.id === nowPlaying?.id}
+              {#if isCurrent(trk)}
                 <EqualizerBars />
               {:else}
                 {String(i + 1).padStart(2, "0")}
@@ -369,7 +375,7 @@
               <TrackCover src={trk.cover} />
             </div>
             <div class="c-meta">
-              <span class="c-title" class:accent={trk.id === nowPlaying?.id}>
+              <span class="c-title" class:accent={isCurrent(trk)}>
                 {trk.title}
               </span>
               {#if trk.album}

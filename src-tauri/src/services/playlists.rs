@@ -279,6 +279,32 @@ pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {
     }
 }
 
+pub fn find_playlist_by_name(output_dir: &Path, name: &str) -> Option<Playlist> {
+    let wanted = name.trim();
+    if wanted.is_empty() {
+        return None;
+    }
+    let dir = playlists_dir(output_dir);
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return None;
+    };
+    let mut files: Vec<String> = entries
+        .flatten()
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_string))
+        .filter(|name| name.ends_with(".json") && name != ORDER_FILE)
+        .collect();
+    files.sort();
+    for file in files {
+        let id = &file[..file.len() - 5];
+        if let Some(pl) = read_playlist(output_dir, id)
+            && pl.name.trim().eq_ignore_ascii_case(wanted)
+        {
+            return Some(pl);
+        }
+    }
+    None
+}
+
 pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<Playlist, String> {
     if !validate_id(id) {
         return Err("invalid playlist id".into());
@@ -296,10 +322,33 @@ pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<
     Ok(pl)
 }
 
+pub fn add_local_replacing_stream(
+    output_dir: &Path,
+    id: &str,
+    path: &str,
+    video_id: &str,
+) -> Result<Playlist, String> {
+    if !validate_id(id) {
+        return Err("invalid playlist id".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
+    let stream_path = format!("{CATALOGUE_PREFIX}{video_id}");
+    pl.paths.retain(|p| p != &stream_path);
+    pl.streams.retain(|t| t.id != video_id);
+    if !pl.paths.iter().any(|p| p == path) {
+        pl.paths.push(path.to_string());
+    }
+    touch(&mut pl);
+    write_playlist(output_dir, &pl)?;
+    Ok(pl)
+}
+
 pub fn add_stream_to_playlist(
     output_dir: &Path,
     id: &str,
     track: &CatalogueTrack,
+    local_path: Option<&str>,
 ) -> Result<Playlist, String> {
     if !validate_id(id) {
         return Err("invalid playlist id".into());
@@ -311,6 +360,15 @@ pub fn add_stream_to_playlist(
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
     let path = format!("{CATALOGUE_PREFIX}{video_id}");
+    if let Some(local) = local_path
+        && pl.paths.iter().any(|p| p == local)
+    {
+        pl.paths.retain(|p| p != &path);
+        pl.streams.retain(|t| t.id != video_id);
+        touch(&mut pl);
+        write_playlist(output_dir, &pl)?;
+        return Ok(pl);
+    }
     if !pl.paths.contains(&path) {
         pl.paths.push(path);
     }

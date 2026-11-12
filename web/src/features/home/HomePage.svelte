@@ -1,7 +1,11 @@
 <script lang="ts">
   import { Play, Shuffle, Link2, Music2, Library } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
-  import { requestPlay, getCurrentId } from "@state/now-playing.svelte";
+  import {
+    requestPlay,
+    getCurrentId,
+    matchesCurrentSong,
+  } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
   import { getPluginHomeSections } from "@state/plugins.svelte";
   import { vynl } from "@lib/vynl";
@@ -20,6 +24,16 @@
   const library = $derived(getLibrary());
   const pluginSections = $derived(getPluginHomeSections());
   const currentId = $derived(getCurrentId());
+
+  function isCurrent(track: {
+    id: string;
+    title: string;
+    artist: string;
+    duration: number;
+  }): boolean {
+    if (track.id === currentId) return true;
+    return matchesCurrentSong(track.title, track.artist, track.duration);
+  }
 
   let _tick = $state(0);
 
@@ -173,7 +187,7 @@
                     </div>
                   {/if}
                 </div>
-                <span class="recent-title" class:playing={track.id === currentId}
+                <span class="recent-title" class:playing={isCurrent(track)}
                   >{track.title}</span
                 >
                 <span class="recent-artist">{track.artist}</span>

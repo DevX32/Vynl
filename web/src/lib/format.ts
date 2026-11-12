@@ -105,6 +105,30 @@ export function matchesQuery(query: string, text: string): boolean {
   return query.split(/\s+/).every((w) => text.includes(w));
 }
 
+function normalizeSongPart(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function songKey(title: string, artist: string): string {
+  return `${normalizeSongPart(title)}|${normalizeSongPart(artist)}`;
+}
+
+const SONG_MATCH_TOLERANCE = 3;
+
+export function isSameSong(
+  a: { title: string; artist: string; duration: number },
+  b: { title: string; artist: string; duration: number },
+): boolean {
+  if (a.duration <= 0 || b.duration <= 0) return false;
+  if (Math.abs(a.duration - b.duration) > SONG_MATCH_TOLERANCE) return false;
+  return songKey(a.title, a.artist) === songKey(b.title, b.artist);
+}
+
 const SUFFIX_PATTERNS = ["io", "os", "js", "ts", "ai", "ui", "vr", "ar", "tv", "fm", "hq", "x", "y", "z"].sort(
   (a, b) => b.length - a.length,
 );

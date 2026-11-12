@@ -19,6 +19,7 @@
     addToQueue,
     addToQueueFront,
     getCurrentTrack,
+    matchesCurrentSong,
     requestPlay,
   } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
@@ -65,6 +66,15 @@
         )
       : tracks,
   );
+
+  function isCurrent(track: CatalogueTrack): boolean {
+    if (track.id === currentTrackId) return true;
+    return matchesCurrentSong(
+      track.title,
+      track.artist,
+      track.duration ?? 0,
+    );
+  }
 
   function playAll(shuffle = false): void {
     if (tracks.length === 0) return;
@@ -264,7 +274,7 @@
       {#each hits as track, i (track.id)}
         <div
           class="row"
-          class:playing={track.id === currentTrackId}
+          class:playing={isCurrent(track)}
           role="button"
           tabindex="0"
           aria-label={`${track.title} — ${track.artist}`}
@@ -278,7 +288,7 @@
           oncontextmenu={(e) => showCtx(e, track)}
         >
           <span class="c-num mono">
-            {#if track.id === currentTrackId}
+            {#if isCurrent(track)}
               <EqualizerBars />
             {:else}
               {String(i + 1).padStart(2, "0")}

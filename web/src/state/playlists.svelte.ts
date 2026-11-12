@@ -1,6 +1,7 @@
 import type { CatalogueTrack, LibraryTrack, Playlist, PlaylistMeta } from "@lib/types";
 import { getLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
+import { isSameSong } from "@lib/format";
 import { vynl } from "@lib/vynl";
 
 let _meta = $state<PlaylistMeta[]>([]);
@@ -221,12 +222,21 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
     _pathMap = next;
   }
   const streams = new Map(pl.streams.map((track) => [track.id, track]));
+  const localTracks: LibraryTrack[] = [];
+  for (const path of pl.paths) {
+    if (isCataloguePath(path)) continue;
+    const track = _pathMap.get(path);
+    if (track) localTracks.push(track);
+  }
   const result: LibraryTrack[] = [];
   for (const path of pl.paths) {
     if (isCataloguePath(path)) {
       const id = catalogueIdOf(path);
       const track = id ? streams.get(id) : undefined;
-      if (track) result.push(streamTrackOf(track));
+      if (!track) continue;
+      const stream = streamTrackOf(track);
+      if (localTracks.some((local) => isSameSong(local, stream))) continue;
+      result.push(stream);
       continue;
     }
     const track = _pathMap.get(path);

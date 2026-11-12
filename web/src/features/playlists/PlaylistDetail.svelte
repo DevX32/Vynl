@@ -13,6 +13,7 @@
   } from "lucide-svelte";
   import {
     getCurrentTrack,
+    matchesCurrentSong,
     requestPlay,
     addToQueue,
   } from "@state/now-playing.svelte";
@@ -83,6 +84,16 @@
   );
 
   const currentTrackId = $derived(getCurrentTrack()?.id);
+
+  function isCurrent(track: {
+    id: string;
+    title: string;
+    artist: string;
+    duration: number;
+  }): boolean {
+    if (track.id === currentTrackId) return true;
+    return matchesCurrentSong(track.title, track.artist, track.duration);
+  }
 
   const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (_section, idx) => plHits[idx]?.path,
@@ -336,7 +347,7 @@
         {#snippet row(trk: (typeof plHits)[number], i: number)}
           <div
             class="row"
-            class:playing={trk.id === currentTrackId}
+            class:playing={isCurrent(trk)}
             class:drag-over={drag.dragging &&
               drag.overIdx === i &&
               drag.grabIdx !== i}
@@ -363,7 +374,7 @@
             }}
           >
             <span class="c-num mono">
-              {#if trk.id === currentTrackId}
+              {#if isCurrent(trk)}
                 <EqualizerBars />
               {:else}
                 {String(i + 1).padStart(2, "0")}
@@ -373,7 +384,7 @@
               <TrackCover src={trk.cover} shadow="var(--shadow-sm)" />
             </div>
             <div class="c-title-col">
-              <span class="c-title" class:accent={trk.id === currentTrackId}>
+              <span class="c-title" class:accent={isCurrent(trk)}>
                 {trk.title}
               </span>
               {#if trk.album}
