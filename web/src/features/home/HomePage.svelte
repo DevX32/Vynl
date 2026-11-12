@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Play, Shuffle, Link2, Music2, Library } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
+  import { getRecentlyPlayedTracks } from "@state/taste.svelte";
+  import { getPlaylistStreamTracks } from "@state/playlists.svelte";
+  import type { LibraryTrack } from "@lib/types";
   import {
     requestPlay,
     getCurrentId,
@@ -9,7 +12,7 @@
   import { setShuffle } from "@state/player.svelte";
   import { getPluginHomeSections } from "@state/plugins.svelte";
   import { vynl } from "@lib/vynl";
-  import { blobSrc } from "../../lib/format";
+  import { blobSrc, isSameSong } from "../../lib/format";
   import { QUOTES } from "@lib/constants";
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import { t } from "@lib/i18n";
@@ -22,6 +25,8 @@
   } = $props();
 
   const library = $derived(getLibrary());
+  const recentlyPlayed = $derived(getRecentlyPlayedTracks());
+  const playlistStreams = $derived(getPlaylistStreamTracks());
   const pluginSections = $derived(getPluginHomeSections());
   const currentId = $derived(getCurrentId());
 
@@ -67,8 +72,18 @@
     return () => clearTimeout(timer);
   });
 
+  const allTracks = $derived.by(() => {
+    const seen: LibraryTrack[] = [];
+    for (const track of [...library, ...recentlyPlayed, ...playlistStreams]) {
+      if (seen.some((known) => known.id === track.id || isSameSong(known, track)))
+        continue;
+      seen.push(track);
+    }
+    return seen;
+  });
+
   const recentTracks = $derived(
-    [...library]
+    [...allTracks]
       .sort((a, b) => {
         const aAdded = a.addedAt ?? a.mtime ?? 0;
         const bAdded = b.addedAt ?? b.mtime ?? 0;
@@ -82,25 +97,25 @@
   );
 
   const featuredTrack = $derived.by(() => {
-    if (library.length === 0) return null;
+    if (allTracks.length === 0) return null;
     const now = new Date();
-    return library[(now.getDate() * 31 + now.getMonth()) % library.length];
+    return allTracks[(now.getDate() * 31 + now.getMonth()) % allTracks.length];
   });
 
   function shuffleAll(): void {
-    if (library.length === 0) return;
+    if (allTracks.length === 0) return;
     setShuffle(true);
-    const first = library[Math.floor(Math.random() * library.length)];
+    const first = allTracks[Math.floor(Math.random() * allTracks.length)];
     requestPlay(
       first.id,
-      library.map((track) => track.path),
+      allTracks.map((track) => track.path),
     );
   }
 
   function playTrack(id: string): void {
     requestPlay(
       id,
-      library.map((track) => track.path),
+      allTracks.map((track) => track.path),
     );
   }
 </script>
@@ -113,7 +128,7 @@
       <span class="quote">{quote}</span>
     </header>
 
-    {#if library.length > 0}
+    {#if allTracks.length > 0}
       {#if featuredTrack}
         <button
           class="featured"

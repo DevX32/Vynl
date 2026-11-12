@@ -213,6 +213,19 @@ function streamTrackOf(track: CatalogueTrack): LibraryTrack {
   };
 }
 
+export function getPlaylistStreamTracks(): LibraryTrack[] {
+  const seen = new Map<string, LibraryTrack>();
+  for (const pl of Object.values(_all)) {
+    const at = pl.updatedAt || pl.createdAt;
+    for (const track of pl.streams) {
+      const known = seen.get(track.id);
+      if (known && (known.addedAt ?? 0) >= at) continue;
+      seen.set(track.id, { ...streamTrackOf(track), addedAt: at });
+    }
+  }
+  return [...seen.values()];
+}
+
 export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
   if (_pathSource !== library) {
