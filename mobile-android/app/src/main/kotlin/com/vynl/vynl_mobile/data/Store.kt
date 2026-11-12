@@ -77,6 +77,16 @@ class Store(context: Context) {
         )
     }
 
+    /** Forgets where the downloaded files were, they are gone from the phone. */
+    fun clearAudio() {
+        helper.writableDatabase.update(
+            "tracks",
+            ContentValues().apply { put("audio_path", "") },
+            null,
+            null,
+        )
+    }
+
     fun setCoverPath(trackId: String, path: String) {
         helper.writableDatabase.update(
             "tracks",

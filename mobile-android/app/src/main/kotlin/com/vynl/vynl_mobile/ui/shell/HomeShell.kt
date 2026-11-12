@@ -38,6 +38,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,6 +62,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.ArtTile
+import com.vynl.vynl_mobile.data.Lyrics
+import com.vynl.vynl_mobile.ui.components.LyricsOverlay
 import com.vynl.vynl_mobile.ui.components.PlaylistPickerSheet
 import com.vynl.vynl_mobile.ui.components.TrackActions
 import com.vynl.vynl_mobile.ui.components.TrackActionsSheet
@@ -80,11 +86,28 @@ private val tabTitles = listOf("Home", "Library", "Playlists", "Browse")
 fun HomeShell(viewModel: AppViewModel = viewModel()) {
     var playerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
+    LaunchedEffect(viewModel.notice) {
+        val message = viewModel.notice ?: return@LaunchedEffect
+        snackbar.showSnackbar(message)
+        viewModel.dismissNotice()
+    }
+
     Scaffold(
         containerColor = VynlColors.bg,
+        snackbarHost = {
+            SnackbarHost(snackbar) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = VynlColors.surfaceRaised,
+                    contentColor = VynlColors.text,
+                    shape = RoundedCornerShape(VynlRadius.tile),
+                )
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -188,11 +211,26 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
     ) {
         PlayerScreen(
             playback = playback,
+            accent = VynlColors.accent,
             onClose = { playerOpen = false },
             onToggle = { viewModel.player.toggle() },
             onNext = { viewModel.player.next() },
             onPrevious = { viewModel.player.previous() },
             onSeek = { viewModel.player.seekTo(it) },
+            onOpenLyrics = {
+                val track = playback.track
+                if (track != null) viewModel.openLyrics(track)
+            },
+        )
+    }
+
+    val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+    if (viewModel.lyricsOpen) {
+        LyricsOverlay(
+            lyrics = lyrics ?: Lyrics("", "", emptyList()),
+            positionMs = playback.positionMs,
+            accent = VynlColors.accent,
+            onClose = { viewModel.closeLyrics() },
         )
     }
 
@@ -201,7 +239,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
         enter = fadeIn(),
         exit = fadeOut(),
     ) {
-        SettingsScreen(onClose = { settingsOpen = false })
+        SettingsScreen(viewModel = viewModel, onClose = { settingsOpen = false })
     }
 
     val actionsTrack = viewModel.actionsTrack

@@ -19,22 +19,31 @@ android {
         targetSdk = 36
         versionCode = 2028
         versionName = "0.4.6"
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
     }
 
     signingConfigs {
         create("release") {
             val keystoreProps = Properties()
-            val keystorePropsFile = rootProject.file("key.properties")
-            if (keystorePropsFile.exists()) {
+            val keystorePropsFile = listOf(
+                rootProject.file("key.properties"),
+                rootProject.file("../mobile/android/key.properties"),
+            ).firstOrNull { it.exists() }
+            if (keystorePropsFile != null) {
                 keystorePropsFile.inputStream().use { keystoreProps.load(it) }
                 storeFile = File(keystoreProps.getProperty("storeFile"))
                 storePassword = keystoreProps.getProperty("storePassword")
                 keyAlias = keystoreProps.getProperty("keyAlias")
                 keyPassword = keystoreProps.getProperty("keyPassword")
             }
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
         }
     }
 

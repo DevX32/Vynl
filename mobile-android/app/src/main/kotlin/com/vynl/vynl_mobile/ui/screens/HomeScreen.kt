@@ -1,6 +1,9 @@
 package com.vynl.vynl_mobile.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,26 +11,42 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vynl.vynl_mobile.ui.AppViewModel
+import com.vynl.vynl_mobile.ui.components.ArtTile
 import com.vynl.vynl_mobile.ui.components.EmptyState
 import com.vynl.vynl_mobile.ui.components.SectionHeader
 import com.vynl.vynl_mobile.ui.components.TrackTile
+import com.vynl.vynl_mobile.ui.components.VynlControl
+import com.vynl.vynl_mobile.ui.components.VynlControlStyle
 import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
+import com.vynl.vynl_mobile.ui.theme.VynlRadius
+import kotlinx.coroutines.delay
 
 private val quotes = listOf(
     "where words fail, music speaks",
@@ -50,7 +69,15 @@ private fun greetingFor(hour: Int): String = when {
 fun HomeScreen(viewModel: AppViewModel) {
     val mix by viewModel.mix.collectAsStateWithLifecycle()
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
+    val remote by viewModel.remote.collectAsStateWithLifecycle()
     val now = java.util.Calendar.getInstance()
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            viewModel.refreshRemote()
+            delay(5000)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -72,6 +99,21 @@ fun HomeScreen(viewModel: AppViewModel) {
                     color = VynlColors.dim,
                     fontSize = 13.sp,
                     fontFamily = VynlFonts.display,
+                )
+            }
+        }
+
+        val desktop = remote?.track
+        if (desktop != null) {
+            item {
+                RemoteCard(
+                    title = desktop.title,
+                    artist = desktop.artist,
+                    cover = desktop.cover,
+                    playing = remote?.playing == true,
+                    onToggle = { viewModel.remoteAction("toggle") },
+                    onNext = { viewModel.remoteAction("next") },
+                    onPrevious = { viewModel.remoteAction("previous") },
                 )
             }
         }
@@ -114,23 +156,76 @@ fun HomeScreen(viewModel: AppViewModel) {
                 )
             }
         }
+    }
+}
 
-        item {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Search the catalogue in the Browse tab to find albums, artists and playlists.",
-                    color = VynlColors.faint,
-                    fontSize = 12.5.sp,
-                    lineHeight = 18.sp,
-                    fontFamily = VynlFonts.display,
-                )
-            }
+/** What the desktop is playing, with the controls for it. */
+@Composable
+private fun RemoteCard(
+    title: String,
+    artist: String,
+    cover: String?,
+    playing: Boolean,
+    onToggle: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .clip(RoundedCornerShape(VynlRadius.card))
+            .background(VynlColors.surfaceRaised)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ArtTile(coverUrl = cover, size = 46.dp, radius = VynlRadius.thumb)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = VynlColors.text,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.W700,
+                fontFamily = VynlFonts.display,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "On the desktop · $artist",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = VynlColors.dim,
+                fontSize = 12.sp,
+                fontFamily = VynlFonts.display,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            VynlControl(
+                onTap = onPrevious,
+                icon = Icons.Rounded.SkipPrevious,
+                style = VynlControlStyle.plain,
+                size = 28.dp,
+                iconSize = 20.dp,
+            )
+            Spacer(Modifier.width(8.dp))
+            VynlControl(
+                onTap = onToggle,
+                icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                style = VynlControlStyle.accent,
+                color = VynlColors.accent,
+                size = 34.dp,
+                iconSize = 20.dp,
+            )
+            Spacer(Modifier.width(8.dp))
+            VynlControl(
+                onTap = onNext,
+                icon = Icons.Rounded.SkipNext,
+                style = VynlControlStyle.plain,
+                size = 28.dp,
+                iconSize = 20.dp,
+            )
         }
     }
 }

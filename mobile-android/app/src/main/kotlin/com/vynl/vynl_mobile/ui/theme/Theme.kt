@@ -3,6 +3,8 @@ package com.vynl.vynl_mobile.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -26,9 +28,38 @@ object VynlColors {
     val warning = Color(0xFFD9A15C)
     val success = Color(0xFF8FD694)
 
-    val accent = Color(0xFFA894E8)
+    val accentDefault = Color(0xFFA894E8)
     val accentOn = Color(0xFF161128)
     val accentSoft = Color(0x1CB9A7FF)
+
+    /** The accent in use, read from the one place that holds it. */
+    val accent: Color get() = Accent.color
+
+    val presets = listOf(
+        accentDefault,
+        Color(0xFF7AA2F7),
+        Color(0xFF8FD694),
+        Color(0xFFE8C86A),
+        Color(0xFFE8945C),
+        Color(0xFFFF6B61),
+        Color(0xFFF06BA8),
+    )
+}
+
+/** The accent the app uses, kept in one place so every screen follows it. */
+object Accent {
+    var color: Color by androidx.compose.runtime.mutableStateOf(VynlColors.accentDefault)
+        private set
+
+    fun set(value: Color) {
+        color = value
+    }
+
+    /** The text that sits on the accent, dark on a light accent. */
+    fun on(): Color {
+        val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
+        return if (luminance > 0.55f) VynlColors.accentOn else VynlColors.text
+    }
 }
 
 object VynlRadius {
@@ -79,9 +110,9 @@ object VynlFonts {
     )
 }
 
-private val VynlColorScheme = darkColorScheme(
-    primary = VynlColors.accent,
-    onPrimary = VynlColors.accentOn,
+private fun VynlColorScheme(accent: Color) = darkColorScheme(
+    primary = accent,
+    onPrimary = Accent.on(),
     secondary = VynlColors.warm,
     onSecondary = Color(0xFF161128),
     background = VynlColors.bg,
@@ -99,8 +130,9 @@ private val VynlColorScheme = darkColorScheme(
 
 @Composable
 fun VynlTheme(content: @Composable () -> Unit) {
+    val accent = Accent.color
     MaterialTheme(
-        colorScheme = VynlColorScheme,
+        colorScheme = VynlColorScheme(accent),
         content = content,
     )
 }

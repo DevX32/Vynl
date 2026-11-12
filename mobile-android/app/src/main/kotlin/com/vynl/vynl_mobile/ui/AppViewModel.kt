@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.graphics.toArgb
+import com.vynl.vynl_mobile.data.SettingsStore
 import com.vynl.vynl_mobile.data.CatalogueAlbumDetail
 import com.vynl.vynl_mobile.data.CatalogueArtistDetail
 import com.vynl.vynl_mobile.data.CataloguePlaylistDetail
@@ -14,9 +16,15 @@ import com.vynl.vynl_mobile.data.CatalogueResults
 import com.vynl.vynl_mobile.data.CatalogueTrack
 import com.vynl.vynl_mobile.data.Downloader
 import com.vynl.vynl_mobile.data.LocalPlaylist
+import com.vynl.vynl_mobile.data.Lyrics
 import com.vynl.vynl_mobile.data.LocalTrack
 import com.vynl.vynl_mobile.data.Store
 import com.vynl.vynl_mobile.playback.PlayerController
+import com.vynl.vynl_mobile.remote.Desktop
+import com.vynl.vynl_mobile.remote.DesktopPlayer
+import com.vynl.vynl_mobile.ui.theme.Accent
+import com.vynl.vynl_mobile.update.AppUpdate
+import com.vynl.vynl_mobile.update.Update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -96,10 +104,225 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var openPlaylistId by mutableStateOf<String?>(null)
         private set
 
+    var lyricsOpen by mutableStateOf(false)
+        private set
+
+    private val _lyrics = MutableStateFlow<Lyrics?>(null)
+    val lyrics: StateFlow<Lyrics?> = _lyrics.asStateFlow()
+
+    var lyricsLoading by mutableStateOf(false)
+        private set
+
+    private var lyricsTrackId: String? = null
+
+    private val settings = SettingsStore(application)
+    private val updater = AppUpdate(application)
+    val desktop = Desktop(application)
+
+    private val _update = MutableStateFlow<Update?>(null)
+    val update: StateFlow<Update?> = _update.asStateFlow()
+
+    var updateBusy by mutableStateOf(false)
+        private set
+
+    var updateProgress by mutableStateOf(0f)
+        private set
+
+    var updateDownloaded by mutableStateOf(false)
+        private set
+
+    private var updateFile: java.io.File? = null
+
+    private val _installedVersion = MutableStateFlow("")
+    val installedVersion: StateFlow<String> = _installedVersion.asStateFlow()
+
+    private val _downloadedSize = MutableStateFlow("0 MB")
+    val downloadedSize: StateFlow<String> = _downloadedSize.asStateFlow()
+
+    private val _remote = MutableStateFlow<DesktopPlayer?>(null)
+    val remote: StateFlow<DesktopPlayer?> = _remote.asStateFlow()
+
+    var pairing by mutableStateOf(false)
+        private set
+
     init {
         viewModelScope.launch { player.connect() }
+        if (settings.accentSet) {
+            Accent.set(androidx.compose.ui.graphics.Color(settings.accent))
+        }
+        val (name, build) = updater.installedVersion()
+        _installedVersion.value = name.ifEmpty { "$build" }
+        measureDownloads()
         loadMix()
         refreshStore()
+    }
+
+    /** Pairs the phone with the desktop, using the pin it shows. */
+    fun pairDesktop(address: String, pin: String) {
+        if (pairing) return
+        viewModelScope.launch {
+            pairing = true
+            try {
+                desktop.address = address
+                if (desktop.pair(pin)) {
+                    notice = "Paired with the desktop"
+                    refreshRemote()
+                } else {
+                    notice = "That pin was not accepted"
+                }
+            } catch (error: Exception) {
+                notice = friendly(error)
+            } finally {
+                pairing = false
+            }
+        }
+    }
+
+    /** Asks the desktop what it is playing. */
+    fun refreshRemote() {
+        if (!desktop.paired) return
+        viewModelScope.launch {
+            _remote.value = desktop.player()
+        }
+    }
+
+    /** Sends a command to the desktop. */
+    fun remoteAction(name: String) {
+        if (!desktop.paired) return
+        viewModelScope.launch {
+            desktop.action(name)
+            refreshRemote()
+        }
+    }
+
+    /** Pulls the songs the desktop holds into the phone. */
+    fun syncLibrary() {
+        if (!desktop.paired) return
+        viewModelScope.launch {
+            pairing = true
+            try {
+                val tracks = desktop.catalog()
+                withContext(Dispatchers.IO) {
+                    tracks.forEach { track ->
+                        store.addTrack(
+                            CatalogueTrack(
+                                id = track.id,
+                                title = track.title,
+                                artist = track.artist,
+                                album = track.album,
+                                duration = track.duration,
+                                cover = track.cover,
+                                explicit = false,
+                            ),
+                        )
+                    }
+                }
+                refreshStore()
+                notice = "${tracks.size} songs came over"
+            } catch (error: Exception) {
+                notice = friendly(error)
+            } finally {
+                pairing = false
+            }
+        }
+    }
+    /** The colour the app wears. */
+    fun setAccent(color: androidx.compose.ui.graphics.Color) {
+        Accent.set(color)
+        settings.accent = color.toArgb()
+        settings.accentSet = true
+    }
+
+    private fun measureDownloads() {
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                val folder = java.io.File(getApplication<Application>().filesDir, "music/audio")
+                folder.listFiles()?.sumOf { it.length() } ?: 0L
+            }
+            val megabytes = bytes / (1024.0 * 1024.0)
+            _downloadedSize.value = if (bytes > 1024L * 1024L) {
+                String.format("%.1f MB", megabytes)
+            } else {
+                "${bytes / 1024} KB"
+            }
+        }
+    }
+
+    fun clearDownloads() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                java.io.File(getApplication<Application>().filesDir, "music/audio")
+                    .listFiles()
+                    ?.forEach { it.delete() }
+            }
+            withContext(Dispatchers.IO) {
+                store.clearAudio()
+            }
+            measureDownloads()
+            refreshStore()
+            notice = "The downloads are gone"
+        }
+    }
+
+    fun checkForUpdate() {
+        if (updateBusy) return
+        viewModelScope.launch {
+            updateBusy = true
+            try {
+                val (name, build) = updater.installedVersion()
+                _installedVersion.value = name.ifEmpty { "$build" }
+                val found = updater.check()
+                if (found == null) {
+                    notice = "Could not reach the releases"
+                } else if (!AppUpdate.isNewer(name, build, found)) {
+                    notice = "You are on the latest build"
+                    _update.value = null
+                } else {
+                    _update.value = found
+                }
+            } catch (error: Exception) {
+                notice = friendly(error)
+            } finally {
+                updateBusy = false
+            }
+        }
+    }
+
+    fun downloadUpdate() {
+        val found = _update.value ?: return
+        if (updateBusy) return
+        viewModelScope.launch {
+            updateBusy = true
+            try {
+                val url = updater.urlFor(found)
+                if (url == null) {
+                    notice = "There is no build for this phone"
+                    return@launch
+                }
+                updateFile = updater.download(url) { value -> updateProgress = value }
+                updateDownloaded = true
+            } catch (error: Exception) {
+                notice = friendly(error)
+            } finally {
+                updateBusy = false
+                updateProgress = 0f
+            }
+        }
+    }
+
+    fun installUpdate() {
+        val file = updateFile ?: return
+        if (!updater.canInstall()) {
+            updater.installSettingsIntent().addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                .let { intent ->
+                    getApplication<Application>().startActivity(intent)
+                }
+            notice = "Allow Vynl to install apps, then try again."
+            return
+        }
+        if (!updater.install(file)) {
+            notice = "Could not open the installer."
+        }
     }
 
     fun selectTab(index: Int) {
@@ -108,6 +331,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissNotice() {
         notice = null
+    }
+
+    fun openLyrics(track: CatalogueTrack) {
+        lyricsOpen = true
+        if (lyricsTrackId == track.id && _lyrics.value != null) return
+        lyricsTrackId = track.id
+        _lyrics.value = null
+        lyricsLoading = true
+        viewModelScope.launch {
+            try {
+                _lyrics.value = repository.lyrics(track)
+            } catch (error: Exception) {
+                notice = friendly(error)
+            } finally {
+                lyricsLoading = false
+            }
+        }
+    }
+
+    fun closeLyrics() {
+        lyricsOpen = false
     }
 
     private fun loadMix() {
