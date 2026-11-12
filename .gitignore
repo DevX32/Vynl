@@ -12,6 +12,7 @@ src-tauri/gen
 
 # Shared crates
 crates/*/target
+mobile-android/rust/target
 
 # The phone catalogue library is built, not committed
 mobile/android/app/src/main/jniLibs

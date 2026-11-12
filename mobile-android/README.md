@@ -16,11 +16,16 @@ app/src/main/kotlin/com/vynl/vynl_mobile/
   ui/components/          the shared widgets
   ui/screens/             the screens
   ui/shell/               the tabs and the mini player
+
+rust/                     the catalogue, in rust, inside the app
+  src/client.rs           search, album, artist, playlist, stream and the mix
+  src/types.rs            the data the phone reads
+  src/lib.rs              the bridge the kotlin side calls
 ```
 
-The catalogue lives in `crates/vynl-catalogue` and is shared with the desktop.
-It is compiled for android by `cargo-ndk` inside the gradle build, so the phone
-can search, browse and stream on its own, without the desktop running.
+The catalogue is rust and it belongs to the app: `rust/` holds the code, and
+`cargo-ndk` builds it for android inside the gradle build, so the phone can
+search, browse and stream on its own, without the desktop running.
 
 The audio is played by Media3, in a `MediaSessionService`, so it keeps playing
 when the app is closed and the lock screen and the notification work the way

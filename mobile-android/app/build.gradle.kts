@@ -101,7 +101,7 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
-// The catalogue client is Rust, shared with the desktop. It is built with
+// The catalogue client is Rust, written inside the app. It is built with
 // cargo-ndk and copied into the jniLibs folder the apk packs.
 val catalogueTargets = mapOf(
     "arm64-v8a" to "aarch64-linux-android",
@@ -109,7 +109,7 @@ val catalogueTargets = mapOf(
     "x86_64" to "x86_64-linux-android",
 )
 
-val catalogueRoot = file("../../crates/vynl-catalogue-ffi")
+val catalogueRoot = file("../rust")
 val jniLibsDir = file("src/main/jniLibs")
 
 val buildCatalogueLibrary by tasks.registering(Exec::class) {
@@ -132,8 +132,7 @@ val buildCatalogueLibrary by tasks.registering(Exec::class) {
         "build",
         "--release",
     )
-    inputs.dir(file("../../crates/vynl-catalogue/src"))
-    inputs.dir(file("../../crates/vynl-catalogue-ffi/src"))
+    inputs.dir(file("../rust/src"))
     outputs.dir(jniLibsDir)
     doLast {
         catalogueTargets.forEach { (abi, target) ->
