@@ -64,4 +64,15 @@ class CatalogueRepository {
         val body = JSONObject(CatalogueBridge.nativeTaste(JSONArray(seeds).toString()))
         parseTracks(body.optJSONArray("tracks"))
     }
+
+    suspend fun lyrics(track: CatalogueTrack): Lyrics = withContext(Dispatchers.IO) {
+        val lookup = JSONObject().apply {
+            put("title", track.title)
+            put("artist", track.artist)
+            put("album", track.album ?: "")
+            put("duration", track.duration)
+        }
+        val body = JSONObject(CatalogueBridge.nativeLyrics(lookup.toString()))
+        Lyrics.parse(body.optString("kind", ""), body.optString("text", ""))
+    }
 }

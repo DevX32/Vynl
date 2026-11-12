@@ -54,5 +54,8 @@ class CatalogueBridge {
 
         @JvmStatic
         external fun nativeTaste(seeds: String): String
+
+        @JvmStatic
+        external fun nativeLyrics(lookup: String): String
     }
 }

@@ -1,13 +1,17 @@
 package com.vynl.vynl_mobile.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,52 +26,62 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.vynl.vynl_mobile.playback.PlaybackState
-import com.vynl.vynl_mobile.ui.components.ArtTile
 import com.vynl.vynl_mobile.ui.components.VynlControl
 import com.vynl.vynl_mobile.ui.components.VynlControlStyle
+import com.vynl.vynl_mobile.ui.components.VynlSeekBar
 import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 
+/**
+ * The player: the art, the song, the seek bar and the transport, over the
+ * cover as a backdrop.
+ */
 @Composable
 fun PlayerScreen(
     playback: PlaybackState,
+    accent: Color,
     onClose: () -> Unit,
     onToggle: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
+    onOpenLyrics: () -> Unit,
 ) {
     val track = playback.track
-    var dragging by remember { mutableStateOf(false) }
-    var dragValue by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(VynlColors.bg),
     ) {
+        ArtBackdrop(
+            coverUrl = track?.cover,
+            modifier = Modifier.fillMaxSize(),
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(
@@ -97,15 +111,17 @@ fun PlayerScreen(
                 Spacer(Modifier.width(48.dp))
             }
 
-            Spacer(Modifier.weight(0.6f))
+            Spacer(Modifier.weight(0.7f))
 
-            ArtTile(
-                coverUrl = track?.cover,
-                size = 300.dp,
-                radius = VynlRadius.hero,
+            AsyncImage(
+                model = track?.cover,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(300.dp)
-                    .clip(RoundedCornerShape(VynlRadius.hero)),
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(VynlRadius.hero))
+                    .graphicsLayer { shadowElevation = 24.dp.toPx() },
             )
 
             Spacer(Modifier.height(28.dp))
@@ -132,47 +148,21 @@ fun PlayerScreen(
                 fontFamily = VynlFonts.display,
             )
 
-            Spacer(Modifier.height(20.dp))
-
-            val duration = playback.durationMs.coerceAtLeast(1L)
-            val position = if (dragging) dragValue.toLong() else playback.positionMs
-            Slider(
-                value = position.toFloat().coerceIn(0f, duration.toFloat()),
-                onValueChange = {
-                    dragging = true
-                    dragValue = it
-                },
-                onValueChangeFinished = {
-                    dragging = false
-                    onSeek(dragValue.toLong())
-                },
-                colors = SliderDefaults.colors(
-                    thumbColor = VynlColors.text,
-                    activeTrackColor = VynlColors.text,
-                    inactiveTrackColor = VynlColors.line,
-                ),
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = formatClock(position),
-                    color = VynlColors.faint,
-                    fontSize = 11.5.sp,
-                    fontFamily = VynlFonts.display,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = formatClock(playback.durationMs),
-                    color = VynlColors.faint,
-                    fontSize = 11.5.sp,
-                    fontFamily = VynlFonts.display,
-                )
-            }
-
             Spacer(Modifier.height(18.dp))
+
+            VynlSeekBar(
+                positionMs = playback.positionMs,
+                durationMs = playback.durationMs,
+                bufferedMs = playback.bufferedMs,
+                accent = accent,
+                onSeek = onSeek,
+            )
+
+            Spacer(Modifier.height(16.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(22.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 VynlControl(
                     onTap = onPrevious,
@@ -185,7 +175,7 @@ fun PlayerScreen(
                     onTap = onToggle,
                     icon = if (playback.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     style = VynlControlStyle.accent,
-                    color = VynlColors.accent,
+                    color = accent,
                     size = 62.dp,
                     iconSize = 34.dp,
                 )
@@ -198,15 +188,15 @@ fun PlayerScreen(
                 )
             }
 
-            Spacer(Modifier.weight(0.6f))
+            Spacer(Modifier.weight(0.7f))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                horizontalArrangement = Arrangement.Center,
             ) {
-                IconButton(onClick = { }) {
+                IconButton(onClick = onOpenLyrics) {
                     Icon(
                         Icons.Rounded.Lyrics,
                         contentDescription = "Lyrics",
@@ -219,9 +209,30 @@ fun PlayerScreen(
     }
 }
 
-private fun formatClock(milliseconds: Long): String {
-    val total = (milliseconds / 1000).coerceAtLeast(0)
-    val minutes = (total / 60) % 60
-    val seconds = total % 60
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
+/** The cover, blown up and dimmed, behind the player. */
+@Composable
+private fun ArtBackdrop(coverUrl: String?, modifier: Modifier = Modifier) {
+    Box(modifier = modifier) {
+        if (!coverUrl.isNullOrEmpty()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { scaleX = 1.35f; scaleY = 1.35f }
+                    .then(
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            Modifier.blur(72.dp)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Color(0xFF0E0E10).copy(alpha = 0.72f))
+                    },
+            )
+        }
+    }
 }

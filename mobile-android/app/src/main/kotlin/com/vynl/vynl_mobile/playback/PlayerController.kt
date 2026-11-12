@@ -33,6 +33,7 @@ data class PlaybackState(
     val playing: Boolean = false,
     val positionMs: Long = 0,
     val durationMs: Long = 0,
+    val bufferedMs: Long = 0,
     val buffering: Boolean = false,
     val error: String? = null,
 )
@@ -219,6 +220,7 @@ class PlayerController(
             track = track,
             positionMs = player.currentPosition.coerceAtLeast(0),
             durationMs = duration,
+            bufferedMs = player.bufferedPosition.coerceAtLeast(0),
             buffering = player.playbackState == Player.STATE_BUFFERING,
             playing = player.isPlaying,
         )

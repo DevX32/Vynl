@@ -5,6 +5,7 @@
 //! The desktop keeps its own copy of the same client.
 
 pub mod client;
+pub mod lyrics;
 pub mod types;
 
 use std::sync::OnceLock;
@@ -66,6 +67,7 @@ enum Ask {
     Playlist,
     Stream,
     Taste,
+    Lyrics,
 }
 
 fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
@@ -101,6 +103,22 @@ fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
                     .taste(&seeds)
                     .await
                     .map(|tracks| serde_json::json!({ "tracks": tracks }))
+            }
+            Ask::Lyrics => {
+                let lookup: lyrics::LyricsLookup =
+                    serde_json::from_str(&query).unwrap_or(lyrics::LyricsLookup {
+                        title: String::new(),
+                        artist: String::new(),
+                        album: String::new(),
+                        duration: 0.0,
+                    });
+                Ok(match lyrics::fetch(&lookup).await {
+                    Some(result) => serde_json::json!({
+                        "kind": result.kind,
+                        "text": result.text,
+                    }),
+                    None => serde_json::json!({ "kind": "", "text": "" }),
+                })
             }
         }
     });
@@ -160,4 +178,10 @@ bridge!(
     Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeTaste,
     Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeTaste__Ljava_lang_String_2,
     Ask::Taste
+);
+
+bridge!(
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeLyrics,
+    Java_com_vynl_vynl_1mobile_CatalogueBridge_nativeLyrics__Ljava_lang_String_2,
+    Ask::Lyrics
 );
