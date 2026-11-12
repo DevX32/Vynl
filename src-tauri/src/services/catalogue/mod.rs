@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use crate::catalogue::CatalogueClient;
 use tauri::{AppHandle, Manager};
-use vynl_catalogue::client::CatalogueClient;
 use ytmusic::YtMusic;
 
 use crate::commands::types::*;

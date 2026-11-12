@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ytmusic::{Album, AlbumKind, Playlist as YtPlaylist, Track, YtMusic};
 
-use crate::types::{
+use crate::catalogue::types::{
     CatalogueAlbum, CatalogueAlbumDetail, CatalogueAlbumRef, CatalogueArtist, CatalogueArtistRef,
     CataloguePlaylist, CataloguePlaylistDetail, CataloguePlaylistPage, CatalogueSearchResults,
     CatalogueTrack,

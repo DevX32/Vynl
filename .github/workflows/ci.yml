@@ -109,10 +109,5 @@ jobs:
             librsvg2-dev libxdo-dev libssl-dev libasound2-dev
       - name: rustfmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-      - name: rustfmt (shared catalogue)
-        run: cargo fmt --manifest-path crates/vynl-catalogue/Cargo.toml -- --check
       - run: cargo check
         working-directory: src-tauri
-      - name: cargo check (shared catalogue, without the javascript runtime)
-        working-directory: crates/vynl-catalogue
-        run: cargo check --no-default-features

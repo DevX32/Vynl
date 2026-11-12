@@ -1,3 +1,4 @@
+pub mod catalogue;
 mod commands;
 pub mod services;
 

@@ -480,7 +480,7 @@ pub struct SpotifySearchResult {
     pub url: String,
 }
 
-pub use vynl_catalogue::types::*;
+pub use crate::catalogue::types::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
