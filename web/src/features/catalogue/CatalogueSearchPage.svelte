@@ -16,6 +16,7 @@
     getCatalogueTaste,
     getCatalogueTasteError,
     isCatalogueSearching,
+    isCatalogueTasteLoading,
     loadCatalogueTaste,
     searchCatalogue,
   } from "@state/catalogue.svelte";
@@ -51,6 +52,7 @@
   const error = $derived(getCatalogueSearchError());
 
   const taste = $derived(getCatalogueTaste());
+  const tasteLoading = $derived(isCatalogueTasteLoading());
   const tasteError = $derived(getCatalogueTasteError());
   const summary = $derived(getTasteSummary());
   const profileKey = $derived(getTasteProfileKey());
@@ -79,7 +81,7 @@
     !(searching && !results) &&
     !(summary.liked === 0 && summary.played === 0) &&
     !tasteError &&
-    taste.length > 0,
+    (taste.length > 0 || tasteLoading),
   );
 
   $effect(() => {
@@ -214,6 +216,20 @@
                   onplay={() => playTrack(track, taste)}
                   onmenu={(e, item) => songMenu.open(e, item)}
                 />
+              {/each}
+            </div>
+          </section>
+        {:else if tasteLoading}
+          <section class="section">
+            <div class="card-grid" bind:this={mixGrid}>
+              {#each { length: 6 } as _, i (i)}
+                <div class="skeleton">
+                  <span class="sk-art"></span>
+                  <span class="sk-meta">
+                    <span class="sk-line"></span>
+                    <span class="sk-line sk-short"></span>
+                  </span>
+                </div>
               {/each}
             </div>
           </section>
@@ -433,6 +449,52 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
     gap: 10px;
+  }
+
+  .skeleton {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    padding: 5px;
+  }
+
+  .sk-art {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    background: var(--bg-raise);
+    box-shadow: var(--shadow-sm);
+    animation: sk-pulse 1.4s ease-in-out infinite;
+  }
+
+  .sk-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 9px 1px 3px;
+  }
+
+  .sk-line {
+    height: 9px;
+    border-radius: 3px;
+    background: var(--bg-raise);
+    animation: sk-pulse 1.4s ease-in-out infinite;
+  }
+
+  .sk-short {
+    width: 60%;
+  }
+
+  @keyframes sk-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 0.8;
+    }
   }
 
   .state {

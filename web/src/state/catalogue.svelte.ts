@@ -243,6 +243,10 @@ export function getCatalogueTaste(): readonly CatalogueTrack[] {
   return _taste;
 }
 
+export function isCatalogueTasteLoading(): boolean {
+  return _tasteLoading;
+}
+
 export function getCatalogueTasteError(): string | null {
   return _tasteError;
 }
