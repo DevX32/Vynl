@@ -7,7 +7,6 @@ import '../models.dart';
 import '../services/api.dart';
 import '../services/auth_store.dart';
 import '../services/library_db.dart';
-import '../services/local_catalogue.dart';
 import '../services/notifications.dart';
 import '../services/sync_service.dart';
 import '../theme.dart';
@@ -23,7 +22,6 @@ class AppState extends ChangeNotifier {
   static const tabHome = 0;
   static const tabLibrary = 1;
   static const tabPlaylists = 2;
-  static const tabBrowse = 3;
 
   static const _displayNameKey = 'vynl.display_name';
   static const _nicknameKey = 'vynl.nickname';
@@ -33,7 +31,6 @@ class AppState extends ChangeNotifier {
   final LibraryDb db;
   final SyncNotifications notifications;
   final SyncService syncService;
-  final LocalCatalogue localCatalogue = LocalCatalogue();
 
   final Map<String, CatalogTrack> _trackIndex = {};
 
@@ -55,10 +52,6 @@ class AppState extends ChangeNotifier {
 
   MobilePlayerState? remotePlayer;
   MobileTaste? remoteTaste;
-  String browseQuery = '';
-  CatalogueSearchResults? browseResults;
-  bool browseSearching = false;
-  String? browseError;
 
   void setTab(int index) {
     if (tabIndex == index) return;
@@ -420,101 +413,6 @@ class AppState extends ChangeNotifier {
       debugPrint('remote action failed: $e');
     }
     await refreshRemote();
-  }
-
-  Future<void> browse(String query) async {
-    final trimmed = query.trim();
-    browseQuery = trimmed;
-    if (trimmed.isEmpty) {
-      browseResults = null;
-      browseError = null;
-      notifyListeners();
-      return;
-    }
-    browseSearching = true;
-    browseError = null;
-    notifyListeners();
-    try {
-      browseResults = await _catalogueSearch(trimmed);
-    } catch (e) {
-      browseResults = null;
-      browseError = e.toString();
-    } finally {
-      browseSearching = false;
-      notifyListeners();
-    }
-  }
-
-  /// The catalogue that runs inside the app answers first. The desktop is
-  /// the fallback, so a phone that has the library still works.
-  Future<CatalogueSearchResults> _catalogueSearch(String query) async {
-    if (await localCatalogue.ensureAvailable()) {
-      return localCatalogue.search(query);
-    }
-    final client = api;
-    if (client == null) {
-      throw StateError('The catalogue is not ready yet.');
-    }
-    return client.catalogueSearch(query);
-  }
-
-  Future<CatalogueAlbumDetail> openAlbum(String id) async {
-    if (await localCatalogue.ensureAvailable()) {
-      return localCatalogue.album(id);
-    }
-    final client = api;
-    if (client == null) {
-      throw StateError('The catalogue is not ready yet.');
-    }
-    return client.catalogueAlbum(id);
-  }
-
-  Future<CatalogueArtist> openArtist(String id) async {
-    if (await localCatalogue.ensureAvailable()) {
-      return localCatalogue.artist(id);
-    }
-    final client = api;
-    if (client == null) {
-      throw StateError('The catalogue is not ready yet.');
-    }
-    return client.catalogueArtist(id);
-  }
-
-  Future<CataloguePlaylistDetail> openPlaylist(String id) async {
-    if (await localCatalogue.ensureAvailable()) {
-      return localCatalogue.playlist(id);
-    }
-    final client = api;
-    if (client == null) {
-      throw StateError('The catalogue is not ready yet.');
-    }
-    return client.cataloguePlaylist(id);
-  }
-
-  /// Resolves the audio addresses of catalogue tracks so they can play
-  /// without the desktop. The catalogue that runs inside the app does the
-  /// looking up; the desktop is the fallback.
-  Future<List<CatalogTrack>> playableStreamTracks(
-    List<StreamTrack> songs,
-  ) async {
-    final client = api;
-    final local = await localCatalogue.ensureAvailable();
-    final resolved = await Future.wait(
-      songs.map((song) async {
-        try {
-          if (local) {
-            final stream = await localCatalogue.stream(song.id);
-            return song.toCatalogTrack(streamUrl: Uri.parse(stream.url));
-          }
-          if (client == null) return null;
-          return client.streamTrack(song);
-        } catch (e) {
-          debugPrint('stream lookup failed for ${song.id}: $e');
-          return null;
-        }
-      }),
-    );
-    return resolved.whereType<CatalogTrack>().toList();
   }
 
   List<CatalogTrack> streamTracks(List<StreamTrack> tracks) {

@@ -136,51 +136,6 @@ class VynlApi {
         .toList();
   }
 
-  Future<CatalogueSearchResults> catalogueSearch(String query) async {
-    final res = await _client
-        .get(
-          _uri('/v1/catalogue/search').replace(
-            queryParameters: {'q': query},
-          ),
-          headers: _headers,
-        )
-        .timeout(const Duration(seconds: 45));
-    _ensureOk(res);
-    return CatalogueSearchResults.fromJson(
-      jsonDecode(res.body) as Map<String, dynamic>,
-    );
-  }
-
-  Future<CatalogueAlbumDetail> catalogueAlbum(String id) async {
-    final res = await _client
-        .get(_uri('/v1/catalogue/album/$id'), headers: _headers)
-        .timeout(const Duration(seconds: 45));
-    _ensureOk(res);
-    return CatalogueAlbumDetail.fromJson(
-      jsonDecode(res.body) as Map<String, dynamic>,
-    );
-  }
-
-  Future<CatalogueArtist> catalogueArtist(String id) async {
-    final res = await _client
-        .get(_uri('/v1/catalogue/artist/$id'), headers: _headers)
-        .timeout(const Duration(seconds: 45));
-    _ensureOk(res);
-    return CatalogueArtist.fromJson(
-      jsonDecode(res.body) as Map<String, dynamic>,
-    );
-  }
-
-  Future<CataloguePlaylistDetail> cataloguePlaylist(String id) async {
-    final res = await _client
-        .get(_uri('/v1/catalogue/playlist/$id'), headers: _headers)
-        .timeout(const Duration(seconds: 45));
-    _ensureOk(res);
-    return CataloguePlaylistDetail.fromJson(
-      jsonDecode(res.body) as Map<String, dynamic>,
-    );
-  }
-
   Uri streamUri(String videoId) => _uri('/v1/stream/$videoId/audio');
 
   Map<String, String> get streamHeaders => {

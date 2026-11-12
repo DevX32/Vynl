@@ -8,7 +8,6 @@ import '../widgets/splash.dart';
 import 'home_page.dart';
 import 'library_page.dart';
 import 'playlists_page.dart';
-import 'browse_page.dart';
 import 'settings_page.dart';
 
 class HomeShell extends StatefulWidget {
@@ -19,7 +18,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMixin {
-  static const _titles = ['Home', 'Library', 'Playlists', 'Browse'];
+  static const _titles = ['Home', 'Library', 'Playlists'];
 
   bool _exiting = false;
   bool _showSplash = true;
@@ -81,7 +80,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       HomePage(),
       LibraryPage(),
       PlaylistsPage(),
-      BrowsePage(),
     ];
 
     return FadeTransition(
@@ -125,11 +123,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                       icon: Icon(Icons.queue_music_outlined),
                       selectedIcon: Icon(Icons.queue_music_rounded),
                       label: 'Playlists',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.travel_explore_outlined),
-                      selectedIcon: Icon(Icons.travel_explore_rounded),
-                      label: 'Browse',
                     ),
                   ],
                 ),

@@ -111,13 +111,8 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - name: rustfmt (shared catalogue)
         run: cargo fmt --manifest-path crates/vynl-catalogue/Cargo.toml -- --check
-      - name: rustfmt (phone bridge)
-        run: cargo fmt --manifest-path crates/vynl-catalogue-ffi/Cargo.toml -- --check
       - run: cargo check
         working-directory: src-tauri
       - name: cargo check (shared catalogue, without the javascript runtime)
         working-directory: crates/vynl-catalogue
         run: cargo check --no-default-features
-      - name: cargo check (phone bridge)
-        working-directory: crates/vynl-catalogue-ffi
-        run: cargo check
