@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Play, Shuffle, Disc3, AlertCircle, Loader } from "lucide-svelte";
+  import { Play, Shuffle, Disc3, AlertCircle, LoaderCircle } from "lucide-svelte";
   import type { CatalogueAlbumDetail, CatalogueTrack, Page } from "@lib/types";
   import { loadCatalogueAlbum, cataloguePath } from "@state/catalogue.svelte";
   import { requestPlay } from "@state/now-playing.svelte";
@@ -142,7 +142,7 @@
   <div class="detail-scroll">
     {#if loading && !detail}
       <div class="state">
-        <span class="spin"><Loader size={22} stroke-width={1.4} /></span>
+        <span class="spin"><LoaderCircle size={22} stroke-width={1.5} /></span>
         <span class="state-sub mono">{t("common.loading")}</span>
       </div>
     {:else if error && !detail}
@@ -420,7 +420,7 @@
   .spin {
     display: inline-flex;
     align-items: center;
-    animation: spin 1s linear infinite;
+    animation: spin 0.85s linear infinite;
   }
 
   @keyframes spin {
