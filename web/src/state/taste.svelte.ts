@@ -1,6 +1,5 @@
-import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
+import type { CatalogueTrack, TasteEntry } from "@lib/types";
 import { vynl } from "@lib/vynl";
-import { libraryTrackOf } from "./catalogue.svelte";
 
 const TASTE_KEY = "vynl.taste.v1";
 const MAX_ENTRIES = 160;
@@ -217,17 +216,6 @@ export function getLikedTracks(): CatalogueTrack[] {
     .filter((entry) => entry.liked)
     .sort((a, b) => (b.likedAt ?? 0) - (a.likedAt ?? 0))
     .map((entry) => entry.track);
-}
-
-export function getRecentlyPlayedTracks(limit = 12): LibraryTrack[] {
-  return _entries
-    .filter((entry) => entry.plays > 0)
-    .sort((a, b) => b.lastPlayed - a.lastPlayed)
-    .slice(0, limit)
-    .map((entry) => ({
-      ...libraryTrackOf(entry.track),
-      addedAt: entry.lastPlayed,
-    }));
 }
 
 export function getTasteSeeds(limit = 6): string[] {

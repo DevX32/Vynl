@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Play, Shuffle, Link2, Music2, Library } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
-  import { getRecentlyPlayedTracks } from "@state/taste.svelte";
   import { getPlaylistStreamTracks } from "@state/playlists.svelte";
   import type { LibraryTrack } from "@lib/types";
   import {
@@ -25,7 +24,6 @@
   } = $props();
 
   const library = $derived(getLibrary());
-  const recentlyPlayed = $derived(getRecentlyPlayedTracks());
   const playlistStreams = $derived(getPlaylistStreamTracks());
   const pluginSections = $derived(getPluginHomeSections());
   const currentId = $derived(getCurrentId());
@@ -74,7 +72,7 @@
 
   const allTracks = $derived.by(() => {
     const seen: LibraryTrack[] = [];
-    for (const track of [...library, ...recentlyPlayed, ...playlistStreams]) {
+    for (const track of [...library, ...playlistStreams]) {
       if (seen.some((known) => known.id === track.id || isSameSong(known, track)))
         continue;
       seen.push(track);

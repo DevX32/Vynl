@@ -96,7 +96,7 @@ function persistRegistry(): void {
   }
 }
 
-export function libraryTrackOf(track: CatalogueTrack): LibraryTrack {
+function libraryTrackOf(track: CatalogueTrack): LibraryTrack {
   return {
     id: track.id,
     path: `${CATALOGUE_PREFIX}${track.id}`,
