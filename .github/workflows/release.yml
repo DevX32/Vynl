@@ -34,7 +34,8 @@ jobs:
           cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)"
           root_pkg="$(jq -r '.version' package.json)"
           pubspec="$(sed -n 's/^version: *\([0-9][^+ ]*\).*/\1/p' mobile/pubspec.yaml | head -n1)"
-          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg pubspec=$pubspec"
+          phone="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' mobile-android/app/build.gradle.kts | head -n1)"
+          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg pubspec=$pubspec phone=$phone"
           if [ "$tag" != "$conf" ]; then
             echo "::error::Tag v$tag does not match tauri.conf.json version ($conf) — bump it before tagging."
             exit 1
@@ -49,6 +50,10 @@ jobs:
           fi
           if [ "$tag" != "$pubspec" ]; then
             echo "::error::Tag v$tag does not match mobile/pubspec.yaml version ($pubspec) — the APK reports this version."
+            exit 1
+          fi
+          if [ "$tag" != "$phone" ]; then
+            echo "::error::Tag v$tag does not match the phone app version ($phone) — the APK reports this version."
             exit 1
           fi
           echo "version=$tag" >> "$GITHUB_OUTPUT"
@@ -124,11 +129,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: subosito/flutter-action@v2
+      - uses: android-actions/setup-android@v3
         with:
-          flutter-version: "3.47.5"
-          channel: stable
-          cache: true
+          packages: "platform-tools"
+
+      - name: Install the android sdk parts
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;28.2.13676358"
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -136,41 +142,15 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
-      - uses: nttld/setup-ndk@v1
-        id: ndk
+      - uses: Swatinem/rust-cache@v2
         with:
-          ndk-version: r27c
+          workspaces: mobile-android/rust -> target
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
 
-      - name: Build the shared catalogue library
-        working-directory: crates/vynl-catalogue-ffi
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: |
-          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 build --release
-
-      - name: Collect the catalogue library
-        run: |
-          set -euo pipefail
-          for pair in "arm64-v8a aarch64-linux-android" \
-                      "armeabi-v7a armv7-linux-androideabi" \
-                      "x86_64 x86_64-linux-android"; do
-            set -- $pair
-            mkdir -p "mobile/android/app/src/main/jniLibs/$1"
-            cp "crates/vynl-catalogue-ffi/target/$2/release/libvynl_catalogue.so" \
-               "mobile/android/app/src/main/jniLibs/$1/"
-          done
-
-      - name: Write android/local.properties
-        working-directory: mobile
-        run: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
-          echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
-
       - name: Decode release keystore
-        working-directory: mobile
+        working-directory: mobile-android
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -191,21 +171,23 @@ jobs:
 
           store_path="${RUNNER_TEMP}/keystore/release.jks"
 
-          cat > android/key.properties <<EOF
+          cat > key.properties <<EOF
           storeFile=$store_path
           storePassword=${STORE_PASS}
           keyAlias=${KEY_ALIAS}
           keyPassword=${KEY_PASS}
           EOF
 
-          if [ "$(head -c3 android/key.properties | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
+          if [ "$(head -c3 key.properties | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
             echo "::error::key.properties has a UTF-8 BOM - strip it or the first property will be unreadable"
             exit 1
           fi
 
       - name: Build release APKs
-        working-directory: mobile
-        run: flutter build apk --release --split-per-abi
+        working-directory: mobile-android
+        env:
+          ANDROID_NDK_HOME: $ANDROID_HOME/ndk/28.2.13676358
+        run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Attach APKs to the release
         env:
@@ -227,7 +209,7 @@ jobs:
           done
           version="${TAG#v}"
           for apk in app-arm64-v8a-release.apk app-armeabi-v7a-release.apk app-x86_64-release.apk; do
-            path="mobile/build/app/outputs/flutter-apk/$apk"
+            path="mobile-android/app/build/outputs/apk/release/$apk"
             if [ ! -f "$path" ]; then
               echo "::error::Missing expected APK: $path"
               exit 1
@@ -235,9 +217,9 @@ jobs:
             abi="${apk#app-}"
             abi="${abi%-release.apk}"
             renamed="Vynl-mobile-${version}-${abi}.apk"
-            mv "$path" "mobile/build/app/outputs/flutter-apk/$renamed"
+            mv "$path" "mobile-android/app/build/outputs/apk/release/$renamed"
             echo "Uploading $renamed"
-            gh release upload "$TAG" "mobile/build/app/outputs/flutter-apk/$renamed" --clobber
+            gh release upload "$TAG" "mobile-android/app/build/outputs/apk/release/$renamed" --clobber
           done
           echo "APKs attached to $TAG"
 
@@ -248,9 +230,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^version: *\(.*\)$/\1/p' mobile/pubspec.yaml | tr -d '[:space:]')"
-          build="$(printf '%s' "$version" | sed -n 's/.*+\([0-9]*\)$/\1/p')"
-          short="${version%%+*}"
+          version="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' mobile-android/app/build.gradle.kts | head -n1)"
+          build="$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' mobile-android/app/build.gradle.kts | head -n1)"
+          short="$version"
           base="https://github.com/$GH_REPO/releases/download/$TAG"
           jq -n \
             --arg version "$version" \
