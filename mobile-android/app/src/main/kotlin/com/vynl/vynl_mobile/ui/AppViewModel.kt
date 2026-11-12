@@ -12,14 +12,22 @@ import com.vynl.vynl_mobile.data.CataloguePlaylistDetail
 import com.vynl.vynl_mobile.data.CatalogueRepository
 import com.vynl.vynl_mobile.data.CatalogueResults
 import com.vynl.vynl_mobile.data.CatalogueTrack
+import com.vynl.vynl_mobile.data.Downloader
+import com.vynl.vynl_mobile.data.LocalPlaylist
+import com.vynl.vynl_mobile.data.LocalTrack
+import com.vynl.vynl_mobile.data.Store
 import com.vynl.vynl_mobile.playback.PlayerController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CatalogueRepository()
+    private val store = Store(application)
+    private val downloader = Downloader(application, repository)
     val player = PlayerController(application, repository)
 
     var tab by mutableStateOf(0)
@@ -61,13 +69,45 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var detailLoading by mutableStateOf(false)
         private set
 
+    private val _library = MutableStateFlow<List<LocalTrack>>(emptyList())
+    val library: StateFlow<List<LocalTrack>> = _library.asStateFlow()
+
+    private val _playlists = MutableStateFlow<List<LocalPlaylist>>(emptyList())
+    val playlists: StateFlow<List<LocalPlaylist>> = _playlists.asStateFlow()
+
+    private val _playlistTracks = MutableStateFlow<List<LocalTrack>>(emptyList())
+    val playlistTracks: StateFlow<List<LocalTrack>> = _playlistTracks.asStateFlow()
+
+    var actionsTrack by mutableStateOf<CatalogueTrack?>(null)
+        private set
+
+    var playlistPickerFor by mutableStateOf<CatalogueTrack?>(null)
+        private set
+
+    var downloadingId by mutableStateOf<String?>(null)
+        private set
+
+    var downloadProgress by mutableStateOf(0f)
+        private set
+
+    var notice by mutableStateOf<String?>(null)
+        private set
+
+    var openPlaylistId by mutableStateOf<String?>(null)
+        private set
+
     init {
         viewModelScope.launch { player.connect() }
         loadMix()
+        refreshStore()
     }
 
     fun selectTab(index: Int) {
         tab = index
+    }
+
+    fun dismissNotice() {
+        notice = null
     }
 
     private fun loadMix() {
@@ -158,6 +198,106 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun closeDetail() {
         detailTitle = null
         detailTracks = emptyList()
+    }
+
+    fun refreshStore() {
+        viewModelScope.launch {
+            val library = withContext(Dispatchers.IO) { store.tracks() }
+            val playlists = withContext(Dispatchers.IO) { store.playlists() }
+            _library.value = library
+            _playlists.value = playlists
+        }
+    }
+
+    fun openActions(track: CatalogueTrack) {
+        actionsTrack = track
+    }
+
+    fun closeActions() {
+        actionsTrack = null
+    }
+
+    fun openPlaylistPicker(track: CatalogueTrack) {
+        actionsTrack = null
+        playlistPickerFor = track
+    }
+
+    fun closePlaylistPicker() {
+        playlistPickerFor = null
+    }
+
+    fun addToPlaylist(playlistId: String, track: CatalogueTrack) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { store.addToPlaylist(playlistId, track) }
+            closePlaylistPicker()
+            refreshStore()
+            notice = "Added to ${_playlists.value.firstOrNull { it.id == playlistId }?.name ?: "the playlist"}"
+        }
+    }
+
+    fun createPlaylist(name: String, track: CatalogueTrack?) {
+        viewModelScope.launch {
+            val id = withContext(Dispatchers.IO) { store.createPlaylist(name) }
+            if (track != null) {
+                withContext(Dispatchers.IO) { store.addToPlaylist(id, track) }
+            }
+            closePlaylistPicker()
+            refreshStore()
+            notice = "Playlist created"
+        }
+    }
+
+    fun deletePlaylist(id: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { store.deletePlaylist(id) }
+            refreshStore()
+        }
+    }
+
+    fun openLocalPlaylist(id: String) {
+        openPlaylistId = id
+        viewModelScope.launch {
+            _playlistTracks.value = withContext(Dispatchers.IO) { store.playlistTracks(id) }
+        }
+    }
+
+    fun clearLocalPlaylist() {
+        openPlaylistId = null
+        _playlistTracks.value = emptyList()
+    }
+
+    fun download(track: CatalogueTrack) {
+        if (downloadingId != null) return
+        viewModelScope.launch {
+            downloadingId = track.id
+            downloadProgress = 0f
+            try {
+                val cover = downloader.cover(track)
+                val audio = downloader.audio(track) { value -> downloadProgress = value }
+                withContext(Dispatchers.IO) {
+                    store.addTrack(track)
+                    store.setAudioPath(track.id, audio)
+                    if (cover != null) store.setCoverPath(track.id, cover)
+                }
+                closeActions()
+                refreshStore()
+                notice = "Downloaded ${track.title}"
+            } catch (error: Exception) {
+                notice = friendly(error)
+            } finally {
+                downloadingId = null
+                downloadProgress = 0f
+            }
+        }
+    }
+
+    fun playLocal(tracks: List<LocalTrack>, index: Int) {
+        if (tracks.isEmpty()) return
+        val catalogue = tracks.map { it.toCatalogue() }
+        val files = tracks.mapNotNull { track ->
+            track.audioPath?.takeIf { it.isNotEmpty() }?.let { track.id to it }
+        }.toMap()
+        player.play(catalogue, index.coerceIn(0, catalogue.lastIndex), files)
     }
 
     private fun friendly(error: Exception): String {

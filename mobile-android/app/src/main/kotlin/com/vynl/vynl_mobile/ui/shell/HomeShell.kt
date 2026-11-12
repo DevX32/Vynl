@@ -58,6 +58,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.ArtTile
+import com.vynl.vynl_mobile.ui.components.PlaylistPickerSheet
+import com.vynl.vynl_mobile.ui.components.TrackActions
+import com.vynl.vynl_mobile.ui.components.TrackActionsSheet
 import com.vynl.vynl_mobile.ui.components.VynlControl
 import com.vynl.vynl_mobile.ui.components.VynlControlStyle
 import com.vynl.vynl_mobile.ui.screens.BrowseScreen
@@ -78,6 +81,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
     var playerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = VynlColors.bg,
@@ -198,6 +202,38 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
         exit = fadeOut(),
     ) {
         SettingsScreen(onClose = { settingsOpen = false })
+    }
+
+    val actionsTrack = viewModel.actionsTrack
+    if (actionsTrack != null) {
+        TrackActionsSheet(
+            track = actionsTrack,
+            actions = TrackActions(
+                onGoToAlbum = {
+                    viewModel.closeActions()
+                    viewModel.openAlbum(actionsTrack.albumId.orEmpty())
+                },
+                onGoToArtist = {
+                    viewModel.closeActions()
+                    viewModel.openArtist(actionsTrack.artistId.orEmpty())
+                },
+                onAddToPlaylist = { viewModel.openPlaylistPicker(actionsTrack) },
+                onDownload = { viewModel.download(actionsTrack) },
+            ),
+            downloading = viewModel.downloadingId == actionsTrack.id,
+            progress = viewModel.downloadProgress,
+            onDismiss = { viewModel.closeActions() },
+        )
+    }
+
+    val pickerFor = viewModel.playlistPickerFor
+    if (pickerFor != null) {
+        PlaylistPickerSheet(
+            playlists = playlists,
+            onPick = { viewModel.addToPlaylist(it.id, pickerFor) },
+            onCreate = { viewModel.createPlaylist(it, pickerFor) },
+            onDismiss = { viewModel.closePlaylistPicker() },
+        )
     }
 }
 

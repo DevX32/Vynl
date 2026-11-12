@@ -110,6 +110,7 @@ fun HomeScreen(viewModel: AppViewModel) {
                     track = track,
                     active = playback.track?.id == track.id,
                     onTap = { viewModel.player.play(mix, mix.indexOf(track)) },
+                    onMore = { viewModel.openActions(track) },
                 )
             }
         }

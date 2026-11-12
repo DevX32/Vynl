@@ -151,6 +151,7 @@ fun BrowseScreen(viewModel: AppViewModel) {
                                     track = song,
                                     active = playback.track?.id == song.id,
                                     onTap = { viewModel.player.play(found.songs, found.songs.indexOf(song)) },
+                                    onMore = { viewModel.openActions(song) },
                                 )
                             }
                         }
