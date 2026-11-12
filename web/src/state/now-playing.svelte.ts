@@ -683,6 +683,43 @@ export function peekNextId(
   return null;
 }
 
+export function peekPrevId(
+  currentId: string | null,
+  contextQueue: readonly string[],
+  contextIndex: number,
+  shuffle: boolean,
+  loop: LoopMode,
+): string | null {
+  const byPath = libraryByPath();
+  const trackAt = (path: string): LibraryTrack | undefined => byPath.get(path);
+
+  if (shuffle) {
+    const currentPath = findTrackById(currentId)?.path;
+    if (!currentPath) return null;
+    const history = _shuffleHistory.filter((path) => trackAt(path) !== undefined);
+    const walked =
+      history[history.length - 1] === currentPath
+        ? history
+        : [...history, currentPath];
+    if (walked.length <= 1) return null;
+    const previousPath = walked[walked.length - 2];
+    return trackAt(previousPath)?.id ?? null;
+  }
+
+  const total = contextQueue.length;
+  if (total === 0) return null;
+
+  const start = Math.min(Math.max(0, contextIndex), total - 1);
+  const span = loop === "all" ? total : start;
+  for (let step = 1; step <= span; step += 1) {
+    const idx = (((start - step) % total) + total) % total;
+    if (idx === start && total > 1) continue;
+    const track = trackAt(contextQueue[idx]);
+    if (track) return track.id;
+  }
+  return null;
+}
+
 export function pickPrevId(
   currentId: string | null,
   contextQueue: readonly string[],

@@ -76,7 +76,7 @@ export function friendlyVaultError(error: unknown, fallback = ""): string {
 export function friendlyError(error: unknown, fallback = ""): string {
   if (error == null) return fallback;
   const raw = typeof error === "string" ? error : String(error);
-  const cleaned = stripUrls(raw);
+  const cleaned = stripUrls(raw).replace(/^error:\s*/i, "");
   if (!cleaned) return fallback;
 
   const tail = cleaned

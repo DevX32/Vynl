@@ -195,14 +195,23 @@ impl UrlResolver {
             return Ok(format);
         }
 
-        let webm = webm_format(&self.ytmusic, video_id).await;
+        let mut webm = webm_format(&self.ytmusic, video_id).await;
+        if webm.is_err() {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            webm = webm_format(&self.ytmusic, video_id).await;
+        }
         if let Ok(format) = &webm
             && url_serves(&self.http, format).await
         {
             return Ok(format.clone());
         }
 
-        match self.ytmusic.best_audio(video_id).await {
+        let mut best = self.ytmusic.best_audio(video_id).await;
+        if best.is_err() {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            best = self.ytmusic.best_audio(video_id).await;
+        }
+        match best {
             Ok(format) if url_serves(&self.http, &format).await => return Ok(format),
             Ok(_) => {}
             Err(error) => {
