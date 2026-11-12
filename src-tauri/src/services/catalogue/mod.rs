@@ -84,6 +84,7 @@ impl CatalogueService {
             runtime: runtime.clone(),
             http,
             data_dir: user_data.to_path_buf(),
+            formats: Mutex::new(HashMap::new()),
         });
 
         Ok(Self {

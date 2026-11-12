@@ -4,7 +4,7 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use reqwest::header::{ACCEPT, CONTENT_RANGE, RANGE, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -167,9 +167,31 @@ pub struct UrlResolver {
     pub runtime: Arc<tokio::runtime::Runtime>,
     pub http: reqwest::Client,
     pub data_dir: PathBuf,
+    pub formats: Mutex<HashMap<String, (YtAudioFormat, Instant)>>,
 }
 
+const FORMAT_TTL: Duration = Duration::from_secs(20 * 60);
+
 impl UrlResolver {
+    fn cached_format(&self, video_id: &str) -> Option<YtAudioFormat> {
+        let mut formats = self.formats.lock().unwrap_or_else(|e| e.into_inner());
+        let now = Instant::now();
+        let fresh = formats.get(video_id).is_some_and(|(_, at)| {
+            now.checked_duration_since(*at)
+                .is_some_and(|age| age < FORMAT_TTL)
+        });
+        if fresh {
+            return formats.get(video_id).map(|(format, _)| format.clone());
+        }
+        formats.remove(video_id);
+        None
+    }
+
+    fn remember_format(&self, video_id: &str, format: &YtAudioFormat) {
+        let mut formats = self.formats.lock().unwrap_or_else(|e| e.into_inner());
+        formats.insert(video_id.to_string(), (format.clone(), Instant::now()));
+    }
+
     pub async fn resolve(
         &self,
         video_id: &str,
@@ -181,6 +203,7 @@ impl UrlResolver {
                 if format.itag != 251 {
                     return Err("YouTube no longer offers the WebM stream for this track".into());
                 }
+                self.remember_format(video_id, &format);
                 return Ok(format);
             }
             let format = self.ytmusic.best_audio(video_id).await.map_err(|e| {
@@ -192,6 +215,11 @@ impl UrlResolver {
             if format.itag != itag {
                 return Err("YouTube changed the stream format for this track".into());
             }
+            self.remember_format(video_id, &format);
+            return Ok(format);
+        }
+
+        if let Some(format) = self.cached_format(video_id) {
             return Ok(format);
         }
 
@@ -203,6 +231,7 @@ impl UrlResolver {
         if let Ok(format) = &webm
             && url_serves(&self.http, format).await
         {
+            self.remember_format(video_id, format);
             return Ok(format.clone());
         }
 
@@ -212,7 +241,10 @@ impl UrlResolver {
             best = self.ytmusic.best_audio(video_id).await;
         }
         match best {
-            Ok(format) if url_serves(&self.http, &format).await => return Ok(format),
+            Ok(format) if url_serves(&self.http, &format).await => {
+                self.remember_format(video_id, &format);
+                return Ok(format);
+            }
             Ok(_) => {}
             Err(error) => {
                 if webm.is_ok() {
@@ -574,15 +606,22 @@ impl StreamCache {
         drop(file);
 
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.index.entries.insert(
-            video_id.to_string(),
-            CacheEntry {
-                file: file_name.clone(),
-                size: total,
-                complete: false,
-                last_used: now_secs(),
-            },
-        );
+        if !state
+            .index
+            .entries
+            .get(video_id)
+            .is_some_and(|entry| entry.complete)
+        {
+            state.index.entries.insert(
+                video_id.to_string(),
+                CacheEntry {
+                    file: file_name.clone(),
+                    size: total,
+                    complete: false,
+                    last_used: now_secs(),
+                },
+            );
+        }
         state.active.insert(video_id.to_string());
         state.dirty = true;
         self.save_locked(&mut state);
@@ -591,11 +630,21 @@ impl StreamCache {
 
     pub fn mark_complete(&self, video_id: &str, file_name: &str, total: u64) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(entry) = state.index.entries.get_mut(video_id) else {
-            return;
-        };
+        let entry = state
+            .index
+            .entries
+            .entry(video_id.to_string())
+            .or_insert(CacheEntry {
+                file: file_name.to_string(),
+                size: total,
+                complete: false,
+                last_used: now_secs(),
+            });
         if entry.file != file_name {
-            return;
+            if entry.complete {
+                return;
+            }
+            entry.file = file_name.to_string();
         }
         entry.complete = true;
         entry.size = total;
@@ -607,27 +656,36 @@ impl StreamCache {
     pub fn finish(&self, video_id: &str, file_name: &str, complete: bool) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.active.remove(video_id);
-        let keep = state
-            .index
-            .entries
-            .get(video_id)
-            .is_some_and(|entry| entry.file == file_name && (entry.complete || complete));
-        if keep {
-            if let Some(entry) = state.index.entries.get_mut(video_id) {
-                entry.complete = true;
-                entry.last_used = now_secs();
-            }
-        } else if state
+
+        if state
             .index
             .entries
             .get(video_id)
             .is_some_and(|entry| entry.file == file_name)
         {
-            state.index.entries.remove(video_id);
+            let keep = complete
+                || state
+                    .index
+                    .entries
+                    .get(video_id)
+                    .is_some_and(|entry| entry.complete);
+            if keep {
+                if let Some(entry) = state.index.entries.get_mut(video_id) {
+                    entry.complete = true;
+                    entry.last_used = now_secs();
+                }
+            } else {
+                state.index.entries.remove(video_id);
+            }
         }
-        let path = self.dir.join(file_name);
+
+        let keep = state
+            .index
+            .entries
+            .get(video_id)
+            .is_some_and(|entry| entry.file == file_name);
         if !keep {
-            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(self.dir.join(file_name));
         }
         state.dirty = true;
         self.evict_locked(&mut state);
