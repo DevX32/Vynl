@@ -37,7 +37,6 @@ export const en = {
     freshTitle: "Start your own mix",
     freshHint:
       "Search for something you love and like it. Vynl learns from your likes and plays, right here on this device.",
-    buildingMix: "Building your mix...",
     mixFailed: "Could not build your mix",
     likeTrack: "Like song",
     unlikeTrack: "Unlike song",

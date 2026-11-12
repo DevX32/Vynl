@@ -16,7 +16,6 @@
     getCatalogueTaste,
     getCatalogueTasteError,
     isCatalogueSearching,
-    isCatalogueTasteLoading,
     loadCatalogueTaste,
     searchCatalogue,
   } from "@state/catalogue.svelte";
@@ -52,7 +51,6 @@
   const error = $derived(getCatalogueSearchError());
 
   const taste = $derived(getCatalogueTaste());
-  const tasteLoading = $derived(isCatalogueTasteLoading());
   const tasteError = $derived(getCatalogueTasteError());
   const summary = $derived(getTasteSummary());
   const profileKey = $derived(getTasteProfileKey());
@@ -219,11 +217,6 @@
               {/each}
             </div>
           </section>
-        {:else if tasteLoading}
-          <div class="mix-note">
-            <span class="spin"><Loader size={14} stroke-width={1.4} /></span>
-            <span>{t("catalogue.buildingMix")}</span>
-          </div>
         {/if}
       {/if}
     {:else if results}
