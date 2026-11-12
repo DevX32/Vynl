@@ -53,6 +53,7 @@ class PlayerController(
     private var controller: MediaController? = null
     private var playlist: List<CatalogueTrack> = emptyList()
     private var queueStart = 0
+    private var localFiles: Map<String, String> = emptyMap()
     private val resolved = mutableMapOf<Int, String>()
     private var poll: Job? = null
     private var filling = false
@@ -107,11 +108,16 @@ class PlayerController(
         }
     }
 
-    fun play(tracks: List<CatalogueTrack>, startIndex: Int) {
+    fun play(
+        tracks: List<CatalogueTrack>,
+        startIndex: Int,
+        files: Map<String, String> = emptyMap(),
+    ) {
         if (tracks.isEmpty()) return
         scope.launch {
             playlist = tracks
             queueStart = startIndex.coerceIn(0, tracks.lastIndex)
+            localFiles = files
             resolved.clear()
             val items = resolve(queueStart)
             if (items.isEmpty()) {
@@ -151,10 +157,16 @@ class PlayerController(
         if (from >= end) return@coroutineScope emptyList()
         val items = (from until end).map { index ->
             async {
-                val url = resolved[index] ?: runCatching {
-                    repository.stream(playlist[index].id).url
-                }.getOrNull()?.also { resolved[index] = it }
-                url?.let { mediaItem(playlist[index], it) }
+                val track = playlist[index]
+                val local = localFiles[track.id]
+                if (local != null) {
+                    mediaItem(track, android.net.Uri.fromFile(java.io.File(local)).toString())
+                } else {
+                    val url = resolved[index] ?: runCatching {
+                        repository.stream(track.id).url
+                    }.getOrNull()?.also { resolved[index] = it }
+                    url?.let { mediaItem(track, it) }
+                }
             }
         }.awaitAll()
         items.filterNotNull()

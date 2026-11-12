@@ -46,6 +46,7 @@ fun ArtTile(
     radius: Dp = VynlRadius.thumb,
     icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.MusicNote,
     accent: Color = VynlColors.accent,
+    coverPath: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -53,7 +54,22 @@ fun ArtTile(
             .size(size)
             .clip(RoundedCornerShape(radius)),
     ) {
-        if (coverUrl.isNullOrEmpty()) {
+        val local = coverPath?.takeIf { it.isNotEmpty() }
+        if (local != null) {
+            AsyncImage(
+                model = java.io.File(local),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (!coverUrl.isNullOrEmpty()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -66,13 +82,6 @@ fun ArtTile(
             ) {
                 Icon(icon, contentDescription = null, tint = VynlColors.faint, modifier = Modifier.size(size * 0.42f))
             }
-        } else {
-            AsyncImage(
-                model = coverUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
         }
     }
 }
@@ -87,6 +96,7 @@ fun TrackTile(
     durationLabel: String? = null,
     showStatus: Boolean = true,
     downloaded: Boolean = false,
+    coverPath: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val row = Row(
@@ -108,7 +118,7 @@ fun TrackTile(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
-            ArtTile(coverUrl = track.cover, size = 56.dp)
+            ArtTile(coverUrl = track.cover, size = 56.dp, coverPath = coverPath)
             if (active) {
                 Box(
                     modifier = Modifier

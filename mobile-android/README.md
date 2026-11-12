@@ -54,11 +54,12 @@ Done:
 - the theme, with the same colours, fonts, shapes and motion as the flutter app
 - the catalogue: search, albums, artists, playlists and the mix
 - playback through Media3, with the audio resolved by the rust catalogue
+- the row menu: go to album, go to artist, add to playlist and download
+- the phone's own store: playlists, the library and the downloaded files
 
 Still to do:
 
-- the library and the playlists, which need the local store
-- the downloads and the offline playback
 - the lyrics
 - the settings, the accent picker, the updater and the installer
 - the pairing and the remote control
+- the full player page, with the synced lyrics and the karaoke words

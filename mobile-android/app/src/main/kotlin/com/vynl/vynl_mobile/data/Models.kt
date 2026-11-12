@@ -8,6 +8,8 @@ data class CatalogueTrack(
     val title: String,
     val artist: String,
     val album: String?,
+    val albumId: String? = null,
+    val artistId: String? = null,
     val duration: Double,
     val cover: String?,
     val explicit: Boolean,
@@ -75,11 +77,15 @@ internal fun JSONObject.optIntOrNull(key: String): Int? {
 
 internal fun parseTrack(value: JSONObject): CatalogueTrack {
     val album = value.optJSONObject("album")
+    val artists = value.optJSONArray("artists")
+    val firstArtist = artists?.optJSONObject(0)
     return CatalogueTrack(
         id = value.optString("id", ""),
         title = value.optString("title", "Unknown"),
         artist = value.optString("artist", "Unknown"),
         album = album?.optStringOrNull("name"),
+        albumId = album?.optStringOrNull("id"),
+        artistId = firstArtist?.optStringOrNull("id"),
         duration = value.optDouble("duration", 0.0),
         cover = value.optStringOrNull("cover"),
         explicit = value.optBoolean("explicit", false),
