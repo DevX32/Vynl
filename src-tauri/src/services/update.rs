@@ -1,8 +1,12 @@
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::commands::types::UpdateStatus;
+
+const PROGRESS_EMIT_STEP: f64 = 1.0;
+const INDETERMINATE_EMIT_INTERVAL: Duration = Duration::from_millis(200);
 
 pub struct UpdateState {
     pub pending: Mutex<Option<Update>>,
@@ -29,6 +33,8 @@ pub fn emit_status(app: &AppHandle, status: &UpdateStatus) {
 pub async fn download_and_install(app: &AppHandle, update: Update) -> Result<(), String> {
     let mut downloaded: u64 = 0;
     let mut content_length: u64 = 0;
+    let mut last_emitted = -1.0_f64;
+    let mut last_ping = Instant::now();
 
     update
         .download_and_install(
@@ -38,16 +44,27 @@ pub async fn download_and_install(app: &AppHandle, update: Update) -> Result<(),
                     content_length = t;
                 }
                 let progress = if content_length > 0 {
-                    (downloaded as f64 / content_length as f64) * 100.0
+                    Some((downloaded as f64 / content_length as f64 * 100.0).min(100.0))
                 } else {
-                    0.0
+                    None
                 };
+                let should_emit = match progress {
+                    Some(pct) => pct - last_emitted >= PROGRESS_EMIT_STEP || pct >= 100.0,
+                    None => last_ping.elapsed() >= INDETERMINATE_EMIT_INTERVAL,
+                };
+                if !should_emit {
+                    return;
+                }
+                if let Some(pct) = progress {
+                    last_emitted = pct;
+                }
+                last_ping = Instant::now();
                 let status = UpdateStatus {
                     available: true,
                     version: None,
                     current_version: env!("CARGO_PKG_VERSION").to_string(),
                     downloading: Some(true),
-                    progress: Some(progress),
+                    progress,
                     ready: None,
                     error: None,
                 };

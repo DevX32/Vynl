@@ -32,7 +32,6 @@ let _tools = $state<ToolStatus[]>([]);
 let _toolsUnlisten: (() => void) | null = null;
 
 const currentSettings = $derived(_settings ?? defaultSettings());
-const currentTools = $derived(_tools);
 
 function normalizeSettings(s: Settings): Settings {
   const format: AudioFormat = "mp3";
@@ -50,9 +49,6 @@ function normalizeSettings(s: Settings): Settings {
 export function getCurrentSettings(): Settings {
   return currentSettings;
 }
-export function getCurrentTools(): ToolStatus[] {
-  return currentTools;
-}
 
 export async function initSettings(): Promise<void> {
   await loadEqDesign();
@@ -68,14 +64,14 @@ export async function initSettings(): Promise<void> {
       s.name === update.name ? { ...s, ...update } : s,
     );
   });
-  void autoInstallMissingTools();
+  void ensureTools();
 }
 
-let _autoInstallStarted = false;
+let _ensureStarted = false;
 
-async function autoInstallMissingTools(): Promise<void> {
-  if (_autoInstallStarted) return;
-  _autoInstallStarted = true;
+async function ensureTools(): Promise<void> {
+  if (_ensureStarted) return;
+  _ensureStarted = true;
   const missing = _tools.filter((tool) => !tool.installed);
   for (const tool of missing) {
     try {
@@ -84,6 +80,22 @@ async function autoInstallMissingTools(): Promise<void> {
       console.warn(`auto-install failed for ${tool.name}:`, e);
       markToolError(tool.name, e);
     }
+  }
+  if (missing.length > 0) return;
+  try {
+    const checked = await vynl.checkToolUpdates();
+    for (const tool of checked) {
+      if (!tool.updateAvailable) continue;
+      console.info(`tools: updating ${tool.name} in background`);
+      try {
+        await vynl.installTool(tool.name);
+      } catch (e) {
+        console.warn(`auto-update failed for ${tool.name}:`, e);
+        markToolError(tool.name, e);
+      }
+    }
+  } catch (e) {
+    console.warn("tool update check failed:", e);
   }
 }
 

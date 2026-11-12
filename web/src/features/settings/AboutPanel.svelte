@@ -10,7 +10,6 @@
     getUpdateCheckedAt,
     getUpdateChecking,
     getUpdateInstalling,
-    getUpdateRestarting,
     getUpdateStatus,
     checkForAppUpdate,
     installAppUpdate,
@@ -18,13 +17,13 @@
   } from "@state/app-update.svelte";
 
   const status = $derived(getUpdateStatus());
+  const progress = $derived(status?.progress ?? null);
+  const indeterminate = $derived(!!status?.downloading && progress == null);
   const version = $derived(getCurrentVersion());
   const available = $derived(getUpdateAvailable());
   const checking = $derived(getUpdateChecking());
   const installing = $derived(getUpdateInstalling());
   const ready = $derived(!!status?.ready);
-  const restarting = $derived(getUpdateRestarting());
-  const pending = $derived(ready || restarting);
   const downloading = $derived(!!status?.downloading);
   const failed = $derived(!!status?.error);
   const busy = $derived(checking || installing);
@@ -44,8 +43,6 @@ const upToDate = $derived(
 
   const rowHint = $derived.by(() => {
     if (failed) return status?.error ?? "";
-    if (downloading) return t("update.downloadingTitle");
-    if (pending) return t("update.installingTitle");
     if (available) return t("update.updateAvailableHint");
     if (upToDate) return t("update.upToDate");
     return "";
@@ -79,11 +76,20 @@ const upToDate = $derived(
   >
     {#snippet control()}
       {#if downloading}
-        <div class="bar">
-          <div class="fill" style:width={`${status?.progress ?? 0}%`}></div>
+        <div
+          class="bar"
+          class:indeterminate
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={indeterminate ? undefined : Math.round(progress ?? 0)}
+          aria-label={t("update.downloadingTitle")}
+        >
+          <div
+            class="fill"
+            style:width={indeterminate ? "40%" : `${progress ?? 0}%`}
+          ></div>
         </div>
-      {:else if pending}
-        <span class="pending mono">{t("update.installingTitle")}</span>
       {:else if available}
         <Button
           variant="primary"
@@ -166,11 +172,6 @@ const upToDate = $derived(
     color: var(--faint);
   }
 
-  .pending {
-    font-size: 11px;
-    color: var(--accent);
-  }
-
   .bar {
     width: 100px;
     height: 3px;
@@ -183,6 +184,20 @@ const upToDate = $derived(
     height: 100%;
     background: var(--accent);
     border-radius: var(--radius-sm);
-    transition: width 0.2s;
+    transition: width 0.18s linear;
+  }
+
+  .bar.indeterminate .fill {
+    transition: none;
+    animation: sweep 1.25s ease-in-out infinite;
+  }
+
+  @keyframes sweep {
+    0% {
+      transform: translateX(-110%);
+    }
+    100% {
+      transform: translateX(330%);
+    }
   }
 </style>
