@@ -161,6 +161,11 @@ export interface CatalogueSearchResults {
   playlists: CataloguePlaylist[];
 }
 
+export interface DeleteTracksResult {
+  deleted: number;
+  failed: number;
+}
+
 export interface CatalogueStreamInfo {
   videoId: string;
   duration: number | null;

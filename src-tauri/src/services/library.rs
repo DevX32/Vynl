@@ -23,7 +23,7 @@ fn codec_ext(codec: &str) -> &str {
     }
 }
 
-fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
+pub(crate) fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     let mut visited: std::collections::HashSet<std::path::PathBuf> =

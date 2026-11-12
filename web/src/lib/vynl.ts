@@ -37,6 +37,7 @@ import type {
   CatalogueSearchResults,
   CatalogueStreamInfo,
   CatalogueTrack,
+  DeleteTracksResult,
 } from "../lib/types";
 import type {
   PluginHttpInit,
@@ -142,6 +143,9 @@ export const vynl = {
   deleteLibraryTrack: (path: string, id?: string): Promise<void> =>
     cmd("delete_library_track", { path, id }),
 
+  deleteAllLibraryTracks: (): Promise<DeleteTracksResult> =>
+    cmd("delete_all_library_tracks"),
+
   mediaUpdate: (state: MediaUpdate | null): Promise<void> =>
     cmd("media_update", { state }),
 
@@ -162,7 +166,8 @@ export const vynl = {
   renamePlaylist: (id: string, name: string): Promise<Playlist> =>
     cmd("rename_playlist", { id, name }),
 
-  deletePlaylist: (id: string): Promise<void> => cmd("delete_playlist", { id }),
+  deletePlaylist: (id: string): Promise<DeleteTracksResult> =>
+    cmd("delete_playlist", { id }),
 
   addToPlaylist: (id: string, paths: string[]): Promise<Playlist> =>
     cmd("add_to_playlist", { id, paths }),

@@ -261,7 +261,15 @@
   async function confirmDeletePlaylist(target: { id: string; name: string }): Promise<void> {
     const wasViewing = page === "playlist" && getSelectedId() === target.id;
     try {
-      await deletePlaylist(target.id);
+      const result = await deletePlaylist(target.id);
+      await refreshLibrary();
+      if (result.failed > 0) {
+        toasts.error(t("playlists.deletePartial", { failed: result.failed }));
+      } else {
+        toasts.success(
+          t("playlists.deleteDone", { name: toPascalCase(target.name), deleted: result.deleted }),
+        );
+      }
       if (wasViewing) navigate("library");
     } catch {
       toasts.error(t("playlists.deleteFailed"));

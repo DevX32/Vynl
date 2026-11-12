@@ -2,6 +2,7 @@
   import { t } from "@lib/i18n";
   import SettingsPanel from "./SettingsPanel.svelte";
   import BackupPanel from "./BackupPanel.svelte";
+  import DownloadsPanel from "./DownloadsPanel.svelte";
   import PluginSettings from "./PluginSettings.svelte";
   import ToolSetup from "./ToolSetup.svelte";
   import AboutPanel from "./AboutPanel.svelte";
@@ -19,6 +20,7 @@
     <ToolSetup />
     <SettingsPanel />
     <BackupPanel {onOpenVault} />
+    <DownloadsPanel />
     <PluginSettings />
     <AboutPanel />
   </div>

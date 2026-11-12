@@ -1,4 +1,10 @@
-import type { CatalogueTrack, LibraryTrack, Playlist, PlaylistMeta } from "@lib/types";
+import type {
+  CatalogueTrack,
+  DeleteTracksResult,
+  LibraryTrack,
+  Playlist,
+  PlaylistMeta,
+} from "@lib/types";
 import { getLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
 import { isSameSong } from "@lib/format";
@@ -121,13 +127,25 @@ export async function renamePlaylist(id: string, name: string): Promise<void> {
   _meta = await vynl.listPlaylists();
 }
 
-export async function deletePlaylist(id: string): Promise<void> {
-  await vynl.deletePlaylist(id);
+async function refreshMeta(): Promise<void> {
+  try {
+    _meta = await vynl.listPlaylists();
+  } catch (e) {
+    console.warn("refreshMeta failed:", e);
+  }
+}
+
+export async function deletePlaylist(id: string): Promise<DeleteTracksResult> {
+  const result = await vynl.deletePlaylist(id);
+  await refreshMeta();
+  const next = { ..._all };
+  delete next[id];
+  _all = next;
   if (_selected === id) {
     _selected = null;
     _current = null;
   }
-  _meta = await vynl.listPlaylists();
+  return result;
 }
 
 export async function addToPlaylist(

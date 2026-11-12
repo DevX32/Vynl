@@ -514,12 +514,104 @@ pub async fn rename_playlist(id: String, name: String, app: AppHandle) -> Result
     crate::services::playlists::rename_playlist(&output, &id, &name)
 }
 
+fn delete_track_file(user_data: &Path, path: &str, canonical: &Path) -> bool {
+    let canonical_str = canonical.to_string_lossy().to_string();
+    crate::services::library::remove_cached_cover(user_data, None, path);
+    if fs::remove_file(canonical).is_err() {
+        return false;
+    }
+    for ext in ["ttml", "lrc", "txt"] {
+        let sidecar = crate::services::lyrics::sidecar_path(&canonical_str, ext);
+        let _ = fs::remove_file(sidecar);
+        let legacy = crate::services::lyrics::legacy_sidecar_path(&canonical_str, ext);
+        let _ = fs::remove_file(legacy);
+    }
+    true
+}
+
+fn prune_empty_dirs(root: &Path) {
+    let mut dirs = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path.clone());
+                dirs.push(path);
+            }
+        }
+    }
+    dirs.sort_by_key(|dir| dir.as_os_str().len());
+    dirs.reverse();
+    for dir in dirs {
+        let _ = fs::remove_dir(dir);
+    }
+}
+
 #[tauri::command]
-pub async fn delete_playlist(id: String, app: AppHandle) -> Result<(), String> {
+pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksResult, String> {
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
+    let mut deleted = 0_u64;
+    let mut failed = 0_u64;
+    if let Some(playlist) = crate::services::playlists::get_playlist(&output, &id) {
+        let mut stale: Vec<String> = Vec::new();
+        for path in playlist
+            .paths
+            .iter()
+            .filter(|path| !path.starts_with("ytm:"))
+        {
+            match validate_path_in_output(path, &app) {
+                Ok(canonical) if canonical.exists() => {
+                    if delete_track_file(&user_data, path, &canonical) {
+                        deleted += 1;
+                    } else {
+                        failed += 1;
+                    }
+                    stale.push(path.clone());
+                    let canonical_str = canonical.to_string_lossy().to_string();
+                    if canonical_str != *path {
+                        stale.push(canonical_str);
+                    }
+                }
+                Ok(_) | Err(_) => {
+                    stale.push(path.clone());
+                }
+            }
+        }
+        if !stale.is_empty() {
+            crate::services::playlists::remove_paths_from_all(&output, &stale);
+        }
+    }
     crate::services::playlists::delete_playlist(&output, &user_data, &id);
-    Ok(())
+    Ok(DeleteTracksResult { deleted, failed })
+}
+
+#[tauri::command]
+pub async fn delete_all_library_tracks(app: AppHandle) -> Result<DeleteTracksResult, String> {
+    let output = output_dir_from_settings(&app)?;
+    let user_data = user_data_dir(&app)?;
+    let files = crate::services::library::list_audio_files(&output);
+    let mut deleted = 0_u64;
+    let mut failed = 0_u64;
+    let mut stale = Vec::with_capacity(files.len());
+    for file in &files {
+        let path = file.to_string_lossy().to_string();
+        if delete_track_file(&user_data, &path, file) {
+            deleted += 1;
+        } else {
+            failed += 1;
+        }
+        stale.push(path);
+    }
+    if !stale.is_empty() {
+        crate::services::playlists::remove_paths_from_all(&output, &stale);
+    }
+    prune_empty_dirs(&output);
+    Ok(DeleteTracksResult { deleted, failed })
 }
 
 #[tauri::command]

@@ -630,3 +630,10 @@ pub struct PluginHttpResponse {
     pub headers: std::collections::HashMap<String, String>,
     pub text: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteTracksResult {
+    pub deleted: u64,
+    pub failed: u64,
+}

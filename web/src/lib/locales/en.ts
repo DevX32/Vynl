@@ -332,6 +332,23 @@ export const en = {
     restored: "Importing {tracks} tracks from your backup — downloading in the background ({known} already have a saved source).",
     restoreFailed: "Couldn't read that backup: {error}",
   },
+  downloads: {
+    title: "Downloads",
+    hint:
+      "Songs stored in your music folder. Streaming from the catalogue does not count as a download — only files on disk.",
+    removeAll: "Remove all downloaded songs",
+    removeAllHint:
+      "Deletes every audio file in your music folder, including songs you added yourself. Downloaded lyric files go too, and every playlist is cleaned of the deleted tracks. This cannot be undone.",
+    removeAllConfirm: "Remove all",
+    removeAllTitle: "Remove all downloaded songs?",
+    removeAllBody:
+      "Every audio file in your music folder will be permanently deleted. This action cannot be undone.",
+    removing: "Removing",
+    removeDownloadedDone: "Deleted {deleted} songs",
+    removeDownloadedPartial:
+      "{failed} songs could not be deleted because they were in use",
+    removeDownloadedFailed: "Couldn't remove songs: {error}",
+  },
   tools: {
     missingTitle: "Missing tools",
     updatesTitle: "Updates available",
@@ -420,7 +437,10 @@ export const en = {
     deleteTitle: "Delete playlist",
     deleteConfirm: "Delete",
     deleteBody:
-      '"{name}" and its track list will be permanently deleted. Tracks in your library will not be affected. This action cannot be undone.',
+      '"{name}" and every song in it will be permanently deleted. This action cannot be undone.',
+    deleteDone: 'Deleted "{name}" and {deleted} songs',
+    deletePartial:
+      "{failed} songs could not be deleted because they were in use",
     deleteFailed: "Failed to delete playlist",
     renameTitle: "Rename playlist",
     renameConfirm: "Rename",
