@@ -12,6 +12,7 @@
     addToQueueFront,
     getCurrentTrack,
     getIsTrackPlaying,
+    matchesCurrentSong,
   } from "@state/now-playing.svelte";
   import { toggle } from "@lib/player.svelte";
   import {
@@ -65,6 +66,15 @@
     } else {
       onPlayTrack(track);
     }
+  }
+
+  function isCurrent(track: CatalogueTrack): boolean {
+    if (nowPlaying?.id === track.id) return true;
+    return matchesCurrentSong(
+      track.title,
+      track.artist,
+      track.duration ?? 0,
+    );
   }
 
   function showCtx(e: MouseEvent, track: CatalogueTrack): void {
@@ -242,7 +252,7 @@
     {#each tracks as track, i (track.id)}
       <div
         class="row"
-        class:playing={nowPlaying?.id === track.id}
+        class:playing={isCurrent(track)}
         role="button"
         tabindex="0"
         aria-label={`${track.title} - ${track.artist}`}
@@ -256,7 +266,7 @@
         oncontextmenu={(e) => showCtx(e, track)}
       >
         <span class="c-num mono">
-          {#if nowPlaying?.id === track.id}
+          {#if isCurrent(track)}
             <EqualizerBars />
           {:else}
             {String(i + 1).padStart(2, "0")}
@@ -266,7 +276,7 @@
           <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
         </div>
         <div class="c-meta">
-          <span class="c-title" class:accent={nowPlaying?.id === track.id}>
+          <span class="c-title" class:accent={isCurrent(track)}>
             {track.title}
           </span>
           {#if showAlbum && track.album}

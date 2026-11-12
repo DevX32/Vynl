@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Music } from "lucide-svelte";
   import { blobSrc } from "@lib/format";
-  import { getCurrentTrack } from "@state/now-playing.svelte";
+  import { getCurrentTrack, matchesCurrentSong } from "@state/now-playing.svelte";
   import type { CatalogueTrack } from "@lib/types";
   import { t } from "@lib/i18n";
 
@@ -15,7 +15,14 @@
     onmenu?: (e: MouseEvent, track: CatalogueTrack) => void;
   } = $props();
 
-  const isCurrent = $derived(getCurrentTrack()?.id === track.id);
+  const isCurrent = $derived.by(() => {
+    if (getCurrentTrack()?.id === track.id) return true;
+    return matchesCurrentSong(
+      track.title,
+      track.artist,
+      track.duration ?? 0,
+    );
+  });
 </script>
 
 <button

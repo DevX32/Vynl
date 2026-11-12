@@ -10,6 +10,7 @@ import {
   getCatalogueTracks,
 } from "./catalogue.svelte";
 import { hydrateTaste, recordTastePlay } from "./taste.svelte";
+import { isSameSong } from "@lib/format";
 import type { LoopMode } from "./player.svelte";
 
 let _state = $state<NowPlaying | null>(null);
@@ -117,6 +118,16 @@ export function findTrackByPath(path: string | null | undefined): LibraryTrack |
   if (track) return track;
   const catalogueId = path.startsWith("ytm:") ? path.slice(4) : null;
   return catalogueId ? getCatalogueTrack(catalogueId) : null;
+}
+
+export function matchesCurrentSong(
+  title: string,
+  artist: string,
+  duration: number,
+): boolean {
+  const np = _state;
+  if (!np) return false;
+  return isSameSong({ title, artist, duration }, np);
 }
 
 function tracksForPaths(

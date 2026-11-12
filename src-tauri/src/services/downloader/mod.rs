@@ -1283,6 +1283,30 @@ fn song_key(title: &str, artist: &str) -> String {
     format!("{}||{}", normalize(title), normalize(artist))
 }
 
+const DURATION_TOLERANCE: f64 = 5.0;
+
+fn same_song(duration: f64, wanted: Option<f64>) -> bool {
+    let want = wanted.unwrap_or(0.0);
+    want <= 0.0 || duration <= 0.0 || (want - duration).abs() <= DURATION_TOLERANCE
+}
+
+pub fn find_song_on_disk(
+    output_dir: &Path,
+    user_data_dir: &Path,
+    track: &TrackMeta,
+) -> Option<PathBuf> {
+    let key = song_key(&track.title, &track.artist);
+    for found in crate::services::library::scan_cached_library(output_dir, user_data_dir).0 {
+        if song_key(&found.title, &found.artist) != key {
+            continue;
+        }
+        if same_song(found.duration, track.duration) {
+            return Some(PathBuf::from(found.path));
+        }
+    }
+    None
+}
+
 fn existing_songs(output_dir: &Path, user_data_dir: &Path) -> HashMap<String, Vec<f64>> {
     let mut map: HashMap<String, Vec<f64>> = HashMap::new();
     for track in crate::services::library::scan_cached_library(output_dir, user_data_dir).0 {
@@ -1300,11 +1324,7 @@ fn is_already_on_disk(existing: &HashMap<String, Vec<f64>>, track: &TrackMeta) -
     let Some(durations) = existing.get(&song_key(&track.title, &track.artist)) else {
         return false;
     };
-    let want = track.duration.unwrap_or(0.0);
-    const DURATION_TOLERANCE: f64 = 5.0;
-    durations
-        .iter()
-        .any(|d| want <= 0.0 || *d <= 0.0 || (want - *d).abs() <= DURATION_TOLERANCE)
+    durations.iter().any(|d| same_song(*d, track.duration))
 }
 
 fn deduplicate_tracks(

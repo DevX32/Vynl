@@ -235,30 +235,10 @@ impl CatalogueService {
             return Err("This track has no video id.".into());
         }
 
-        let url = format!("https://music.youtube.com/watch?v={video_id}");
-        let album = track
-            .album
-            .as_ref()
-            .map(|a| a.name.clone())
-            .unwrap_or_default();
-        let meta = TrackMeta {
-            id: video_id.to_string(),
-            title: track.title.clone(),
-            artist: track.artist.clone(),
-            album,
-            year: None,
-            duration: track.duration,
-            cover: track.cover.clone(),
-            track_number: None,
-            url: url.clone(),
-        };
-        let ext = downloader::audio_format_ext(&settings.format);
-        let base = downloader::sanitize(&downloader::render_pattern(
-            &settings.filename_pattern,
-            &meta,
-        ));
-        let path = PathBuf::from(&settings.output_dir).join(format!("{base}.{ext}"));
+        let output = Path::new(&settings.output_dir);
+        let (mut path, meta) = local_file_for(track, settings, output);
         let existed = path.is_file();
+        let mut downloaded = false;
 
         if !existed {
             let collection = Collection {
@@ -273,7 +253,7 @@ impl CatalogueService {
             matches.insert(
                 video_id.to_string(),
                 vec![SearchCandidate {
-                    url,
+                    url: meta.url.clone(),
                     title: track.title.clone(),
                     duration: track.duration,
                     channel: Some(track.artist.clone()),
@@ -296,43 +276,85 @@ impl CatalogueService {
                 },
             )
             .await?;
+            downloaded = path.is_file();
         }
 
         if !path.is_file() {
-            return Err("The track downloaded but its file could not be found.".into());
+            let found = downloader::find_song_on_disk(output, user_data, &meta);
+            let Some(found) = found else {
+                return Err("The track downloaded but its file could not be found.".into());
+            };
+            path = found;
+            downloaded = false;
         }
         let path_string = path.to_string_lossy().to_string();
 
         let playlist = match playlist_id {
-            Some(id) if !id.trim().is_empty() => {
-                let playlist = playlists::add_to_playlist(
-                    Path::new(&settings.output_dir),
-                    &id,
-                    &[path_string.clone()],
-                )?;
-                Some(playlist)
-            }
+            Some(id) if !id.trim().is_empty() => Some(playlists::add_local_replacing_stream(
+                output,
+                &id,
+                &path_string,
+                video_id,
+            )?),
             _ => {
                 let name = playlist_name
                     .map(|name| name.trim().to_string())
                     .filter(|name| !name.is_empty())
                     .unwrap_or_else(|| "Liked Songs".to_string());
-                let playlist = playlists::create_playlist(Path::new(&settings.output_dir), &name)?;
-                let playlist = playlists::add_to_playlist(
-                    Path::new(&settings.output_dir),
+                let playlist = playlist_by_name(output, &name)?;
+                Some(playlists::add_local_replacing_stream(
+                    output,
                     &playlist.id,
-                    &[path_string.clone()],
-                )?;
-                Some(playlist)
+                    &path_string,
+                    video_id,
+                )?)
             }
         };
 
         Ok(CatalogueAddResult {
             path: path_string,
-            downloaded: !existed,
+            downloaded,
             playlist,
         })
     }
+}
+
+fn local_file_for(
+    track: &CatalogueTrack,
+    settings: &Settings,
+    output_dir: &Path,
+) -> (PathBuf, TrackMeta) {
+    let video_id = track.id.trim();
+    let album = track
+        .album
+        .as_ref()
+        .map(|a| a.name.clone())
+        .unwrap_or_default();
+    let meta = TrackMeta {
+        id: video_id.to_string(),
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        album,
+        year: None,
+        duration: track.duration,
+        cover: track.cover.clone(),
+        track_number: None,
+        url: format!("https://music.youtube.com/watch?v={video_id}"),
+    };
+    let ext = downloader::audio_format_ext(&settings.format);
+    let base = downloader::sanitize(&downloader::render_pattern(
+        &settings.filename_pattern,
+        &meta,
+    ));
+    let path = output_dir.join(format!("{base}.{ext}"));
+    (path, meta)
+}
+
+fn playlist_by_name(output_dir: &Path, name: &str) -> Result<Playlist, String> {
+    if let Some(existing) = playlists::find_playlist_by_name(output_dir, name) {
+        return Ok(existing);
+    }
+    playlists::create_playlist(output_dir, name)
 }
 
 pub fn init(user_data: &Path) -> Result<Arc<CatalogueService>, String> {
@@ -562,6 +584,11 @@ pub async fn catalogue_save_to_playlist(
     app: AppHandle,
 ) -> Result<Playlist, String> {
     let output = crate::commands::output_dir_from_settings(&app)?;
+    let user_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
+    let settings = crate::services::settings::get_settings(&user_data);
     let id = match playlist_id {
         Some(id) if !id.trim().is_empty() => id.trim().to_string(),
         _ => {
@@ -569,10 +596,12 @@ pub async fn catalogue_save_to_playlist(
                 .map(|name| name.trim().to_string())
                 .filter(|name| !name.is_empty())
                 .unwrap_or_else(|| "Liked Songs".to_string());
-            playlists::create_playlist(&output, &name)?.id
+            playlist_by_name(&output, &name)?.id
         }
     };
-    playlists::add_stream_to_playlist(&output, &id, &track)
+    let (local, _) = local_file_for(&track, &settings, &output);
+    let local_string = local.to_string_lossy().to_string();
+    playlists::add_stream_to_playlist(&output, &id, &track, Some(&local_string))
 }
 
 #[tauri::command]
