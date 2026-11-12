@@ -24,6 +24,7 @@ import {
   nowPlayingFromTrack,
   findTrackById,
   peekNextId,
+  peekPrevId,
   isSeekDragging,
   setSeekDragging,
   setDragTime,
@@ -41,6 +42,7 @@ import {
 import type { LoopMode } from "@state/player.svelte";
 import { vynl } from "@lib/vynl";
 import { clamp01 } from "@lib/pointer";
+import { friendlyError } from "@lib/errors";
 import { t } from "@lib/i18n";
 import type {
   CatalogueStreamInfo,
@@ -84,50 +86,77 @@ interface PrebufferEntry {
   at: number;
 }
 
+interface PrebufferTarget {
+  videoId: string;
+  duration?: number;
+}
+
 const prebufferState = new Map<string, PrebufferEntry>();
 const PREBUFFER_REFRESH_MS = 45_000;
 const PREBUFFER_CHECK_MS = 15_000;
 let lastPrebufferCheck = 0;
-let prebufferCandidate: string | null = null;
+let prebufferCandidates: string[] = [];
 
-function scheduleNextPrebuffer(force = false): void {
-  if (typeof window === "undefined") return;
+function requestPrebuffer(target: PrebufferTarget, force: boolean): void {
   const now = Date.now();
-  const nextId = peekNextId(
-    getUserQueuePaths(),
-    getContextQueuePaths(),
-    getContextIndex(),
-    getCurrentTrack()?.id ?? null,
-    getCurrentShuffle(),
-    getCurrentLoop(),
-  );
-  const nextTrack = findTrackById(nextId);
-  const videoId = catalogueIdOf(nextTrack?.path);
-
-  if (prebufferCandidate && prebufferCandidate !== videoId) {
-    const stale = prebufferCandidate;
-    prebufferState.delete(stale);
-    void vynl.catalogueDiscardPrebuffer(stale).catch(() => {});
-  }
-  prebufferCandidate = videoId;
-
-  if (!videoId) return;
-  const entry = prebufferState.get(videoId);
+  const entry = prebufferState.get(target.videoId);
   if (!force && entry && now - entry.at < PREBUFFER_REFRESH_MS) return;
   if (entry?.status === "pending") return;
 
-  prebufferState.set(videoId, { status: "pending", at: now });
+  prebufferState.set(target.videoId, { status: "pending", at: now });
   void vynl
-    .cataloguePrebuffer(videoId, nextTrack?.duration)
+    .cataloguePrebuffer(target.videoId, target.duration)
     .then(() => {
-      if (prebufferCandidate !== videoId) return;
-      prebufferState.set(videoId, { status: "ready", at: Date.now() });
+      if (!prebufferCandidates.includes(target.videoId)) return;
+      prebufferState.set(target.videoId, { status: "ready", at: Date.now() });
     })
     .catch((error) => {
-      if (prebufferCandidate !== videoId) return;
-      prebufferState.set(videoId, { status: "failed", at: Date.now() });
+      if (!prebufferCandidates.includes(target.videoId)) return;
+      prebufferState.set(target.videoId, { status: "failed", at: Date.now() });
       console.warn("[vynl] prebuffer failed:", error);
     });
+}
+
+function schedulePrebuffers(force = false): void {
+  if (typeof window === "undefined") return;
+  const currentId = getCurrentTrack()?.id ?? null;
+
+  const nextTrack = findTrackById(
+    peekNextId(
+      getUserQueuePaths(),
+      getContextQueuePaths(),
+      getContextIndex(),
+      currentId,
+      getCurrentShuffle(),
+      getCurrentLoop(),
+    ),
+  );
+  const prevTrack = findTrackById(
+    peekPrevId(
+      currentId,
+      getContextQueuePaths(),
+      getContextIndex(),
+      getCurrentShuffle(),
+      getCurrentLoop(),
+    ),
+  );
+
+  const targets: PrebufferTarget[] = [];
+  for (const track of [nextTrack, prevTrack]) {
+    const videoId = catalogueIdOf(track?.path);
+    if (!videoId) continue;
+    if (targets.some((target) => target.videoId === videoId)) continue;
+    targets.push({ videoId, duration: track?.duration });
+  }
+
+  for (const stale of prebufferCandidates) {
+    if (targets.some((target) => target.videoId === stale)) continue;
+    prebufferState.delete(stale);
+    void vynl.catalogueDiscardPrebuffer(stale).catch(() => {});
+  }
+  prebufferCandidates = targets.map((target) => target.videoId);
+
+  for (const target of targets) requestPrebuffer(target, force);
 }
 
 onMuteChange(applyVolume);
@@ -215,7 +244,7 @@ function handleTick(tick: PlaybackTick): void {
     Date.now() - lastPrebufferCheck >= PREBUFFER_CHECK_MS
   ) {
     lastPrebufferCheck = Date.now();
-    scheduleNextPrebuffer();
+    schedulePrebuffers();
   }
 }
 
@@ -306,8 +335,8 @@ function scheduleRetry(failedId: string | null): void {
   clearRetry();
   pendingRetry = window.setTimeout(() => {
     pendingRetry = null;
-    if ((getCurrentTrack()?.id ?? null) !== failedId) return;
     setPlayError(null);
+    if ((getCurrentTrack()?.id ?? null) !== failedId) return;
     if (!isSharedPlayback()) next();
   }, 1600);
 }
@@ -317,7 +346,7 @@ function handlePlayReject(err: unknown): void {
   console.error("[vynl] native play failed:", err);
   updatePlaying(false);
   updateMediaSession();
-  setPlayError(t("error.couldNotPlay"));
+  setPlayError(friendlyError(err, t("error.couldNotPlay")));
   const failedId = getCurrentTrack()?.id ?? null;
   scheduleRetry(failedId);
 }
@@ -380,7 +409,7 @@ function loadAndPlayNative(
     }
     updatePlaying(true);
     updateMediaSession();
-    scheduleNextPrebuffer();
+    schedulePrebuffers();
   }).catch((err) => {
     finishPlayReconcile(gen);
     if (gen !== playGeneration) return;
@@ -685,6 +714,8 @@ function consumeNextTrack(nextTrack: LibraryTrack): void {
 
 function startTrack(nextTrack: LibraryTrack): void {
   consumeNextTrack(nextTrack);
+  clearRetry();
+  setPlayError(null);
   resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
@@ -737,7 +768,7 @@ function maybeStartCrossfade(position: number): boolean {
       });
       updateMediaSession();
       resetCrossfade();
-      scheduleNextPrebuffer();
+      schedulePrebuffers();
     })
     .catch((error) => {
       console.warn("[vynl] crossfade failed:", error);
@@ -776,8 +807,13 @@ export function prev(): void {
   if (!prevTrack) return;
 
   invalidateSharedPlayback();
+  if (getUserQueuePaths().includes(prevTrack.path)) {
+    removeFromUserQueue(prevTrack.path);
+  }
   advanceContextIndex(prevId);
 
+  clearRetry();
+  setPlayError(null);
   resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
