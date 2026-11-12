@@ -1,7 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { ArrowLeft, ArrowRight, Minus, Square, Copy, X } from "lucide-svelte";
+  import {
+    ArrowLeft,
+    ArrowRight,
+    Minus,
+    Square,
+    Copy,
+    X,
+    Home,
+    PanelLeftClose,
+    PanelLeftOpen,
+  } from "lucide-svelte";
   import { t } from "@lib/i18n";
 
   const win = getCurrentWindow();
@@ -13,11 +23,17 @@
     onForward,
     canBack = false,
     canForward = false,
+    onHome,
+    sidebarOpen = true,
+    onToggleSidebar,
   }: {
     onBack?: () => void;
     onForward?: () => void;
     canBack?: boolean;
     canForward?: boolean;
+    onHome?: () => void;
+    sidebarOpen?: boolean;
+    onToggleSidebar?: () => void;
   } = $props();
 
   onMount(() => {
@@ -53,7 +69,28 @@
 </script>
 
 <div class="titlebar">
-  <div class="left">
+  <div class="left" class:collapsed={!sidebarOpen}>
+    <button
+      class="nav-btn sidebar-toggle"
+      aria-label={sidebarOpen ? t("playlists.collapseSidebar") : t("playlists.expandSidebar")}
+      title={sidebarOpen ? t("playlists.collapseSidebar") : t("playlists.expandSidebar")}
+      onclick={onToggleSidebar}
+    >
+      {#if sidebarOpen}
+        <PanelLeftClose size={14} stroke-width={1.5} />
+      {:else}
+        <PanelLeftOpen size={14} stroke-width={1.5} />
+      {/if}
+    </button>
+    <button
+      class="nav-btn"
+      aria-label={t("nav.home")}
+      title={t("nav.home")}
+      onclick={onHome}
+    >
+      <Home size={14} stroke-width={1.5} />
+    </button>
+    <span class="left-divider" aria-hidden="true"></span>
     <button
       class="nav-btn"
       disabled={!canBack || !onBack}
@@ -152,6 +189,21 @@
   .nav-btn:hover:not(:disabled) {
     color: var(--text);
     background: rgba(255, 255, 255, 0.06);
+  }
+
+  .sidebar-toggle {
+    margin-right: 130px;
+  }
+
+  .left.collapsed .sidebar-toggle {
+    margin-right: 20px;
+  }
+
+  .left-divider {
+    width: 1px;
+    height: 14px;
+    margin: 0 4px;
+    background: var(--line);
   }
 
   .nav-btn:active:not(:disabled) {

@@ -457,6 +457,13 @@
     padding: 20px 0 12px;
   }
 
+  .kicker {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--faint);
+    text-transform: uppercase;
+  }
+
   .title {
     font-size: 42px;
     line-height: 1;

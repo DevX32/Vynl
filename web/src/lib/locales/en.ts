@@ -1,7 +1,7 @@
 export const en = {
   nav: {
     home: "Home",
-    library: "Your Library",
+    library: "Library",
     catalogue: "Browse",
     nowPlaying: "Now Playing",
     vault: "Vault",
@@ -385,7 +385,7 @@ export const en = {
     updateButton: "Update",
   },
   library: {
-    title: "Your Library",
+    title: "Library",
     songs: "Songs",
     song: "Song",
     songsPlural: "Songs",

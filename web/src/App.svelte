@@ -352,6 +352,9 @@
     onForward={goForward}
     canBack={historyIdx > 0}
     canForward={historyIdx < history.length - 1}
+    onHome={openHome}
+    {sidebarOpen}
+    onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
   />
   <div class="body">
     <Sidebar
@@ -359,8 +362,6 @@
       {sidebarOpen}
       {playlists}
       selectedId={getSelectedId()}
-      onSetSidebarOpen={setSidebarOpen}
-      onHome={openHome}
       onLibrary={openLibrary}
       onCatalogue={openCatalogue}
       onPlayer={openPlayer}

@@ -3,12 +3,9 @@
     SlidersHorizontal as SettingsIcon,
     Disc3,
     Library,
-    PanelLeftClose,
-    PanelLeftOpen,
     Music2,
     Link2,
     Plus,
-    Home,
     Compass,
     Puzzle,
     Heart,
@@ -28,8 +25,6 @@
     sidebarOpen,
     playlists,
     selectedId,
-    onSetSidebarOpen,
-    onHome,
     onLibrary,
     onCatalogue,
     onPlayer,
@@ -47,8 +42,6 @@
     sidebarOpen: boolean;
     playlists: PlaylistMeta[];
     selectedId: string | null;
-    onSetSidebarOpen: (open: boolean) => void;
-    onHome: () => void;
     onLibrary: () => void;
     onCatalogue: () => void;
     onPlayer: () => void;
@@ -83,10 +76,6 @@
 
 <nav class="sidebar" class:collapsed={!sidebarOpen} aria-label={t("nav.mainNavigation")}>
   <div class="nav-group">
-    <button class="nav-link" class:active={page === "home"} onclick={onHome}>
-      <span class="nav-icon"><Home size={15} stroke-width={1.5} /></span>
-      <span class="nav-label">{t("nav.home")}</span>
-    </button>
     <button class="nav-link" class:active={page === "library"} onclick={onLibrary}>
       <span class="nav-icon"><Library size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("nav.library")}</span>
@@ -238,18 +227,6 @@
       <span class="nav-icon"><SettingsIcon size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("nav.settings")}</span>
     </button>
-    <button class="nav-link collapse-btn" onclick={() => onSetSidebarOpen(!sidebarOpen)}>
-      <span class="nav-icon">
-        {#if sidebarOpen}
-          <PanelLeftClose size={15} stroke-width={1.5} />
-        {:else}
-          <PanelLeftOpen size={15} stroke-width={1.5} />
-        {/if}
-      </span>
-      <span class="nav-label">
-        {sidebarOpen ? t("playlists.collapseSidebar") : t("playlists.expandSidebar")}
-      </span>
-    </button>
   </div>
 </nav>
 
@@ -263,7 +240,7 @@
     --nav-pad-x: calc(var(--axis) - var(--pad) - var(--icon) / 2);
     --rail-pad-x: calc(var(--axis) - var(--pad) - var(--cover) / 2);
 
-    width: 252px;
+    width: 250px;
     flex-shrink: 0;
     padding: 14px var(--pad) 12px;
     display: flex;
@@ -271,6 +248,7 @@
     gap: 10px;
     transition: width 0.22s ease;
     background: none;
+    border-right: 1px solid var(--line);
     position: relative;
     overflow: hidden;
   }
@@ -281,10 +259,6 @@
 
   .sidebar.collapsed .nav-label {
     display: none;
-  }
-
-  .collapse-btn {
-    color: var(--faint);
   }
 
   .sidebar .icon-btn.small {

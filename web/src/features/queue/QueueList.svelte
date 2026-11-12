@@ -274,6 +274,7 @@
     position: relative;
     z-index: 2;
     background: var(--bg);
+    border-left: 1px solid var(--line);
     overflow: hidden;
     display: flex;
     flex-direction: column;
