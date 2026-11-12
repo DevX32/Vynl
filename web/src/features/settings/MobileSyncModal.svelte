@@ -285,11 +285,11 @@
   }
 
   .qr {
-    width: 200px;
-    height: 200px;
-    background: #fff;
+    width: 240px;
+    height: 240px;
+    background: #ffffff;
     border-radius: var(--radius-sm);
-    padding: 8px;
+    padding: 6px;
     display: flex;
     align-items: center;
     justify-content: center;

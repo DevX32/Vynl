@@ -40,24 +40,7 @@ jobs:
         run: bun install --frozen-lockfile && bun run build
 
   mobile:
-    name: Mobile · analyze
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.47.5"
-          channel: stable
-          cache: true
-      - name: Analyze
-        working-directory: mobile
-        run: flutter analyze
-      - name: Test
-        working-directory: mobile
-        run: flutter test
-
-  mobile-compose:
-    name: Mobile · compose build
+    name: Mobile · build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -75,13 +58,13 @@ jobs:
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: mobile-android/rust -> target
+          workspaces: mobile/rust -> target
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
       - name: rustfmt (the phone catalogue)
-        run: cargo fmt --manifest-path mobile-android/rust/Cargo.toml -- --check
+        run: cargo fmt --manifest-path mobile/rust/Cargo.toml -- --check
       - name: Build the phone app
-        working-directory: mobile-android
+        working-directory: mobile
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: ./gradlew :app:assembleDebug --no-daemon

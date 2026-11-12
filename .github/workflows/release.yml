@@ -33,9 +33,8 @@ jobs:
           conf="$(jq -r '.version' src-tauri/tauri.conf.json)"
           cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)"
           root_pkg="$(jq -r '.version' package.json)"
-          pubspec="$(sed -n 's/^version: *\([0-9][^+ ]*\).*/\1/p' mobile/pubspec.yaml | head -n1)"
-          phone="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' mobile-android/app/build.gradle.kts | head -n1)"
-          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg pubspec=$pubspec phone=$phone"
+          phone="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' mobile/app/build.gradle.kts | head -n1)"
+          echo "tag=$tag tauri.conf.json=$conf Cargo.toml=$cargo package.json=$root_pkg phone=$phone"
           if [ "$tag" != "$conf" ]; then
             echo "::error::Tag v$tag does not match tauri.conf.json version ($conf) — bump it before tagging."
             exit 1
@@ -46,10 +45,6 @@ jobs:
           fi
           if [ "$tag" != "$root_pkg" ]; then
             echo "::error::Tag v$tag does not match root package.json version ($root_pkg) — the site shows this version."
-            exit 1
-          fi
-          if [ "$tag" != "$pubspec" ]; then
-            echo "::error::Tag v$tag does not match mobile/pubspec.yaml version ($pubspec) — the APK reports this version."
             exit 1
           fi
           if [ "$tag" != "$phone" ]; then
@@ -144,13 +139,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: mobile-android/rust -> target
+          workspaces: mobile/rust -> target
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
 
       - name: Decode release keystore
-        working-directory: mobile-android
+        working-directory: mobile
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -184,7 +179,7 @@ jobs:
           fi
 
       - name: Build release APKs
-        working-directory: mobile-android
+        working-directory: mobile
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: ./gradlew :app:assembleRelease --no-daemon
@@ -209,7 +204,7 @@ jobs:
           done
           version="${TAG#v}"
           for apk in app-arm64-v8a-release.apk app-armeabi-v7a-release.apk app-x86_64-release.apk; do
-            path="mobile-android/app/build/outputs/apk/release/$apk"
+            path="mobile/app/build/outputs/apk/release/$apk"
             if [ ! -f "$path" ]; then
               echo "::error::Missing expected APK: $path"
               exit 1
@@ -217,9 +212,9 @@ jobs:
             abi="${apk#app-}"
             abi="${abi%-release.apk}"
             renamed="Vynl-mobile-${version}-${abi}.apk"
-            mv "$path" "mobile-android/app/build/outputs/apk/release/$renamed"
+            mv "$path" "mobile/app/build/outputs/apk/release/$renamed"
             echo "Uploading $renamed"
-            gh release upload "$TAG" "mobile-android/app/build/outputs/apk/release/$renamed" --clobber
+            gh release upload "$TAG" "mobile/app/build/outputs/apk/release/$renamed" --clobber
           done
           echo "APKs attached to $TAG"
 
@@ -230,19 +225,29 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' mobile-android/app/build.gradle.kts | head -n1)"
-          build="$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' mobile-android/app/build.gradle.kts | head -n1)"
+          version="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' mobile/app/build.gradle.kts | head -n1)"
+          build="$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' mobile/app/build.gradle.kts | head -n1)"
+          build="${build:-0}"
           short="$version"
           base="https://github.com/$GH_REPO/releases/download/$TAG"
+          # The apks are numbered the way the flutter build numbered them:
+          # +1000 for armeabi-v7a, +2000 for arm64-v8a and +4000 for x86_64.
+          builds="$(jq -n --argjson base "$build" '{
+            "armeabi-v7a": ($base + 1000),
+            "arm64-v8a": ($base + 2000),
+            "x86_64": ($base + 4000)
+          }')"
           jq -n \
             --arg version "$version" \
-            --arg build "${build:-0}" \
+            --argjson build "$build" \
             --arg notes "$RELEASE_BODY" \
             --arg base "$base" \
             --arg short "$short" \
+            --argjson builds "$builds" \
             '{
               version: $version,
               build: $build,
+              builds: $builds,
               notes: $notes,
               apks: {
                 "arm64-v8a": "\($base)/Vynl-mobile-\($short)-arm64-v8a.apk",
