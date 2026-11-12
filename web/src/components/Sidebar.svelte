@@ -439,12 +439,34 @@
   }
 
   .rail-cover.placeholder {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--faint);
+    color: var(--accent);
     border: 1px solid var(--line);
-    background: var(--placeholder-gradient);
+    background: var(--bg-raise);
+  }
+
+  .rail-cover.placeholder::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(
+        circle at 50% 50%,
+        color-mix(in srgb, var(--accent) 52%, transparent) 0%,
+        transparent 62%
+      );
+    filter: blur(10px);
+    opacity: 0.85;
+  }
+
+  .rail-cover.placeholder :global(svg) {
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
   }
 
   .rail-cover.liked-cover {
@@ -500,7 +522,23 @@
   }
 
   .rail-cover-tile-empty {
-    background: var(--placeholder-gradient);
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-raise);
+  }
+
+  .rail-cover-tile-empty::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(
+        circle at 50% 50%,
+        color-mix(in srgb, var(--accent) 38%, transparent) 0%,
+        transparent 62%
+      );
+    filter: blur(8px);
+    opacity: 0.9;
   }
 
   .rail-meta {
