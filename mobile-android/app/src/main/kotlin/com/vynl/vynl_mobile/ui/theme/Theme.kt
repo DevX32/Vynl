@@ -1,7 +1,9 @@
 package com.vynl.vynl_mobile.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -131,8 +133,10 @@ private fun VynlColorScheme(accent: Color) = darkColorScheme(
 @Composable
 fun VynlTheme(content: @Composable () -> Unit) {
     val accent = Accent.color
-    MaterialTheme(
-        colorScheme = VynlColorScheme(accent),
-        content = content,
-    )
+    CompositionLocalProvider(LocalRippleConfiguration provides null) {
+        MaterialTheme(
+            colorScheme = VynlColorScheme(accent),
+            content = content,
+        )
+    }
 }
