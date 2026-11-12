@@ -9,7 +9,7 @@
     ListPlus,
     Image,
     Clock,
-    Loader,
+    LoaderCircle,
   } from "lucide-svelte";
   import {
     getCurrentTrack,
@@ -206,7 +206,7 @@
 <div class="pl-detail">
   {#if loading && !pl}
     <div class="pl-loading" role="status">
-      <Loader size={18} stroke-width={1.5} class="spin" />
+      <LoaderCircle size={18} stroke-width={1.5} class="spin" />
       <span class="mono">{t("common.loading")}</span>
     </div>
   {:else if pl}
@@ -450,6 +450,18 @@
     min-height: 0;
     color: var(--faint);
     font-size: 11.5px;
+  }
+
+  .pl-loading :global(.spin) {
+    display: inline-flex;
+    align-items: center;
+    animation: spin 0.85s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .hero {
