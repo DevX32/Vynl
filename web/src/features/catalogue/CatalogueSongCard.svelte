@@ -39,6 +39,8 @@
         use:blobSrc={track.cover}
         alt=""
         loading="lazy"
+        decoding="async"
+        fetchpriority="low"
         draggable="false"
       />
     {:else}
@@ -67,6 +69,8 @@
     text-align: left;
     cursor: pointer;
     transition: background 0.15s;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 180px;
   }
 
   .card:hover {
@@ -81,7 +85,7 @@
     border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg-raise);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--line);
   }
 
   .art-img {
