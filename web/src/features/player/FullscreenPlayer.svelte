@@ -52,7 +52,6 @@
     class="fs-close"
     onclick={close}
     aria-label={t("player.closeFullscreen")}
-    title={t("player.closeFullscreen")}
   >
     <X size={16} stroke-width={1.5} />
   </button>
@@ -168,12 +167,6 @@
   .fs-art :global(.now-art) {
     width: min(260px, 34vh) !important;
     aspect-ratio: 1 / 1 !important;
-  }
-
-  .fs-art :global(.dust) {
-    position: fixed;
-    inset: 0;
-    z-index: 2;
   }
 
   .fs-controls {

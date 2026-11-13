@@ -7,8 +7,12 @@
     Expand,
     Shrink,
     SlidersHorizontal,
+    PictureInPicture2,
     Heart,
   } from "lucide-svelte";
+  import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
+  import { listen } from "@tauri-apps/api/event";
+  import { MINI_CLOSED_EVENT } from "@lib/mini-sync";
   import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
   import { getCurrentMuted, getCurrentVolume, toggleMute } from "@state/player.svelte";
   import { applyVolume } from "@lib/player.svelte";
@@ -37,6 +41,25 @@
   } = $props();
 
   let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
+  let miniOpen = $state(false);
+
+  async function toggleMini(): Promise<void> {
+    try {
+      const win = (await getAllWebviewWindows()).find((w) => w.label === "mini");
+      if (!win) return;
+      const visible = await win.isVisible();
+      if (visible) {
+        await win.hide();
+        miniOpen = false;
+      } else {
+        await win.show();
+        await win.setFocus();
+        miniOpen = true;
+      }
+    } catch (e) {
+      console.warn("mini toggle failed:", e);
+    }
+  }
 
   const likedTracks = $derived(getTasteLikedIds());
   const current = $derived(getCurrentTrack());
@@ -67,6 +90,20 @@
 
   onMount(() => {
     applyVolume();
+
+    let disposed = false;
+    let offMini: (() => void) | null = null;
+    void listen(MINI_CLOSED_EVENT, () => {
+      miniOpen = false;
+    }).then((fn) => {
+      if (disposed) fn();
+      else offMini = fn;
+    });
+
+    return () => {
+      disposed = true;
+      offMini?.();
+    };
   });
 </script>
 
@@ -123,9 +160,6 @@
         aria-label={currentLiked
           ? t("catalogue.unlikeTrack")
           : t("catalogue.likeTrack")}
-        title={currentLiked
-          ? t("catalogue.unlikeTrack")
-          : t("catalogue.likeTrack")}
       >
         <Heart
           size={14}
@@ -175,6 +209,15 @@
       <SlidersHorizontal size={12} stroke-width={1.5} />
     </button>
     <span class="bar-sep"></span>
+    <button
+      class="icon-btn small"
+      class:on={miniOpen}
+      onclick={() => void toggleMini()}
+      aria-label={t("player.miniPlayer")}
+      aria-pressed={miniOpen}
+    >
+      <PictureInPicture2 size={12} stroke-width={1.5} />
+    </button>
     <button
       class="icon-btn small"
       class:on={fullscreen}

@@ -186,7 +186,6 @@
         onclick={resetAll}
         disabled={!settings.eqEnabled || !isModified}
         aria-label={t("eq.reset")}
-        title={t("eq.reset")}
       >
         <RotateCcw size={13} stroke-width={1.6} />
       </button>

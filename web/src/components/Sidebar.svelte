@@ -117,7 +117,6 @@
         class="icon-btn small"
         onclick={onNewPlaylist}
         aria-label={t("playlists.newPlaylist")}
-        title={t("playlists.newPlaylist")}
       >
         <Plus size={14} stroke-width={1.5} />
       </button>
@@ -134,7 +133,6 @@
           class="rail-item rail-liked"
           class:active={page === "catalogue:liked"}
           onclick={onOpenLikedSongs}
-          title={sidebarOpen ? undefined : t("catalogue.likedSongs")}
           aria-label={sidebarOpen ? undefined : t("catalogue.likedSongs")}
         >
           <div class="rail-cover liked-cover">
@@ -170,7 +168,6 @@
           }}
           onpointerdown={(e) => onRailPointerDown(e, i)}
           oncontextmenu={(e) => onShowCtx(e, p.id, p.name)}
-          title={sidebarOpen ? undefined : p.name}
           aria-label={sidebarOpen ? undefined : p.name}
         >
           {#if covers.length >= 2}

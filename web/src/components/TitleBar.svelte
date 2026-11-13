@@ -73,7 +73,6 @@
     <button
       class="nav-btn sidebar-toggle"
       aria-label={sidebarOpen ? t("playlists.collapseSidebar") : t("playlists.expandSidebar")}
-      title={sidebarOpen ? t("playlists.collapseSidebar") : t("playlists.expandSidebar")}
       onclick={onToggleSidebar}
     >
       {#if sidebarOpen}
@@ -85,7 +84,6 @@
     <button
       class="nav-btn"
       aria-label={t("nav.home")}
-      title={t("nav.home")}
       onclick={onHome}
     >
       <Home size={14} stroke-width={1.5} />

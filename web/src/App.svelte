@@ -1,12 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { vynl } from "./lib/vynl";
+  import {
+    restoreNowPlaying,
+    setPlayHandler,
+    getCurrentTrack,
+    getIsTrackPlaying,
+  } from "@state/now-playing.svelte";
+  import { sendMiniState } from "@lib/mini-sync";
+  import MiniPlayer from "./features/player/MiniPlayer.svelte";
   import { initSettings, getCurrentSettings } from "@state/settings.svelte";
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
   import { getPluginsUiOpen, initPlugins } from "@state/plugins.svelte";
   import { emitAppEvent } from "@lib/plugins/events";
-  import { restoreNowPlaying, setPlayHandler } from "@state/now-playing.svelte";
   import { playTrack } from "@lib/player.svelte";
   import { handleGlobalKey, getShowShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
@@ -48,6 +55,9 @@
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
   import { catalogueRoute, isPluginPage, type Page } from "@lib/types";
   import { ImageOff, Pencil, Trash2 } from "lucide-svelte";
+
+  const isMini =
+    typeof window !== "undefined" && window.location.hash.startsWith("#mini");
 
   let page = $state<Page>("home");
   function loadSidebarOpen(): boolean {
@@ -107,6 +117,26 @@
     if (!enabled) void vynl.rpcUpdate(null);
   });
 
+  $effect(() => {
+    if (isMini) return;
+    const track = getCurrentTrack();
+    const playing = getIsTrackPlaying();
+    sendMiniState({
+      track: track
+        ? {
+            id: track.id,
+            path: track.path,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            cover: track.cover,
+            duration: track.duration,
+          }
+        : null,
+      playing,
+    });
+  });
+
   const playlists = $derived(getCurrentPlaylists());
   const catalogue = $derived(catalogueRoute(page));
 
@@ -118,9 +148,9 @@
   const SPLASH_MIN_MS = 2500;
   const splashReady = Date.now();
 
-  function hideSplash(): void {
+  function hideSplash(minMs: number = SPLASH_MIN_MS): void {
     const elapsed = Date.now() - splashReady;
-    const wait = Math.max(0, SPLASH_MIN_MS - elapsed);
+    const wait = Math.max(0, minMs - elapsed);
     setTimeout(() => {
       const splash = document.getElementById("splash");
       if (splash) {
@@ -160,6 +190,11 @@
   }
 
   onMount(() => {
+    if (isMini) {
+      hideSplash(200);
+      return () => {};
+    }
+
     const offToast = vynl.onToast((summary) => {
       if (summary.cancelled) {
         toasts.info(t("vault.downloadCancelled"));
@@ -179,7 +214,15 @@
     document.addEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
     const stopMobileBridge = startMobileBridge();
     let cleanup: (() => void) | undefined;
+    let disposeMini: (() => void) | undefined;
     let disposed = false;
+    void import("@state/mini-bridge.svelte").then((m) => {
+      if (disposed) {
+        m.initMiniBridge()();
+      } else {
+        disposeMini = m.initMiniBridge();
+      }
+    });
     void bootApp()
       .then((c) => {
         if (disposed) {
@@ -191,6 +234,7 @@
       .catch(console.error);
     return () => {
       disposed = true;
+      disposeMini?.();
       cleanup?.();
       offToast();
       setPlayHandler(null);
@@ -346,6 +390,9 @@
   }
 </script>
 
+{#if isMini}
+  <MiniPlayer />
+{:else}
 <div class="shell">
   <TitleBar
     onBack={goBack}
@@ -503,6 +550,7 @@
 {/if}
 
 <Toast />
+{/if}
 
 <style>
   .shell {

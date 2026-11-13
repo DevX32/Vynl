@@ -83,7 +83,6 @@
           <button
             class="save-btn"
             disabled={savingPlaylist}
-            title={saveHint ?? t("vault.saveToPlaylist")}
             onclick={onSaveToPlaylist}
           >
             {#if savingPlaylist}

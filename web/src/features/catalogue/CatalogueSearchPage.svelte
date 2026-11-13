@@ -159,7 +159,6 @@
           class="play-btn"
           onclick={() => playList(playableSongs, false)}
           aria-label={t("catalogue.playAll")}
-          title={t("catalogue.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -167,7 +166,6 @@
           class="shuffle-btn"
           onclick={() => playList(playableSongs, true)}
           aria-label={t("catalogue.shuffle")}
-          title={t("catalogue.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>

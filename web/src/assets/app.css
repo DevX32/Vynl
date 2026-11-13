@@ -47,7 +47,6 @@
   --accent-text: #161128;
   --vinyl: #14141c;
   --vinyl-disc: min(272px, 32vh);
-  --vinyl-cover-offset: calc(var(--vinyl-disc) * 0.0956);
   --placeholder-gradient:
     radial-gradient(
       circle at 50% 50%,

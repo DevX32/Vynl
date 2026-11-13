@@ -357,6 +357,24 @@ export interface NowPlayingState {
   timestamp: number;
 }
 
+export interface MiniSyncState {
+  track: {
+    id: string;
+    path: string;
+    title: string;
+    artist: string;
+    album: string;
+    cover: string | null;
+    duration: number;
+  } | null;
+  playing: boolean;
+}
+
+export type MiniCommand =
+  | { type: "toggle" | "next" | "prev" | "toggleMute" | "expand" }
+  | { type: "seek"; value: number }
+  | { type: "volume"; value: number };
+
 export interface PlaybackTick {
   generation: number;
   position: number;

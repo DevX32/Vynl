@@ -260,6 +260,8 @@ pub fn run() {
                 if should_minimize {
                     let _ = window.hide();
                     api.prevent_close();
+                } else {
+                    app.exit(0);
                 }
             }
         })

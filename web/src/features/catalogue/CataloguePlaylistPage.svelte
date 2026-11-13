@@ -125,7 +125,6 @@
           onclick={() => play(false)}
           disabled={tracks.length === 0}
           aria-label={t("catalogue.playAll")}
-          title={t("catalogue.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -134,7 +133,6 @@
           onclick={() => play(true)}
           disabled={tracks.length === 0}
           aria-label={t("catalogue.shuffle")}
-          title={t("catalogue.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>

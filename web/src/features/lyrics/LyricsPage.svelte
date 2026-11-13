@@ -455,7 +455,6 @@ import { toggleLyrics } from "@state/player.svelte";
             class="lyr-icon"
             onclick={copyAllLyrics}
             aria-label={t("lyrics.copyAllLyrics")}
-            title={t("lyrics.copyAllLyrics")}
           >
             <Copy size={14} stroke-width={1.5} />
           </button>
@@ -464,7 +463,6 @@ import { toggleLyrics } from "@state/player.svelte";
             class:active={settingsOpen}
             onclick={() => (settingsOpen = !settingsOpen)}
             aria-label={t("lyrics.settings")}
-            title={t("lyrics.settings")}
           >
             <Settings2 size={14} stroke-width={1.5} />
           </button>
@@ -473,7 +471,6 @@ import { toggleLyrics } from "@state/player.svelte";
             class="lyr-icon"
             onclick={onclose}
             aria-label={t("lyrics.closeLyrics")}
-            title={t("lyrics.closeLyrics")}
           >
             <X size={14} stroke-width={1.5} />
           </button>

@@ -23,13 +23,6 @@
     showLyricsButton?: boolean;
   } = $props();
 
-  const dust = Array.from({ length: 14 }, (_, i) => ({
-    id: i,
-    x: 4 + ((i * 31) % 90),
-    delay: (i * 0.8) % 7,
-    dur: 8 + ((i * 5) % 9),
-  }));
-
   const VINYL_RPM = 33 + 1 / 3;
   const VINYL_DEG_PER_SEC = (360 / 60) * VINYL_RPM;
   const EASE = 0.03;
@@ -87,9 +80,16 @@
         />
       {:else}
         <div class="now-cover placeholder" in:fade={{ duration: 260 }}>
-          <span class="mono" class:empty={!current}
-            >{current ? current.title.charAt(0).toUpperCase() : "·"}</span
-          >
+          {#if current}
+            <span class="ph-initial display"
+              >{current.title.charAt(0).toUpperCase()}</span
+            >
+          {:else}
+            <span class="ph">
+              <Music2 size={17} stroke-width={1.1} />
+              <span class="ph-mark display">VYNL</span>
+            </span>
+          {/if}
         </div>
       {/if}
     {/key}
@@ -124,17 +124,6 @@
   {:else}
     <div class="now-title display">{t("player.nothingPlaying")}</div>
   {/if}
-
-  <div class="dust" aria-hidden="true">
-    {#each dust as d (d.id)}
-      <span
-        class="dust-p"
-        style:left={`${d.x}%`}
-        style:animation-delay={`${d.delay}s`}
-        style:animation-duration={`${d.dur}s`}
-      ></span>
-    {/each}
-  </div>
 </div>
 
 <style>
@@ -160,41 +149,10 @@
     margin: 18px auto 22px;
   }
 
-  .now-art::before {
-    content: "";
-    position: absolute;
-    inset: -64px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle,
-      color-mix(in srgb, var(--accent) 9%, transparent) 0%,
-      transparent 62%
-    );
-    pointer-events: none;
-    z-index: -1;
-    transition: opacity 0.6s ease;
-  }
-
-  .now-art.playing::before {
-    animation: glow-pulse 3.2s ease-in-out infinite;
-  }
-
-  @keyframes glow-pulse {
-    0%,
-    100% {
-      opacity: 0.7;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.08);
-    }
-  }
-
   .vinyl-slot {
     position: absolute;
     inset: 0;
-    transform: translateX(5.2%);
+    transform: translateX(3.5%);
     transition:
       transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
       filter 0.5s ease;
@@ -202,12 +160,12 @@
   }
 
   .now-art.playing .vinyl-slot {
-    transform: translateX(14.7%);
+    transform: translateX(14.5%);
   }
 
   .now-art.empty .vinyl-slot {
     transform: translateX(1.5%);
-    filter: saturate(0.5) brightness(0.8);
+    filter: saturate(0.35) brightness(0.72);
   }
 
   .vinyl {
@@ -218,8 +176,9 @@
     overflow: hidden;
     will-change: transform;
     box-shadow:
-      inset 0 0 0 3px rgba(0, 0, 0, 0.45),
-      inset 0 0 14px 2px rgba(0, 0, 0, 0.55);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      inset 0 0 0 4px rgba(0, 0, 0, 0.5),
+      inset 0 0 20px 3px rgba(0, 0, 0, 0.6);
   }
 
   .vinyl::before {
@@ -227,20 +186,26 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: repeating-radial-gradient(
-      circle at 50% 50%,
-      rgba(255, 255, 255, 0.05) 0 0.52%,
-      transparent 0.52% 3.12%
-    );
+    background:
+      repeating-radial-gradient(
+        circle at 50% 50%,
+        rgba(255, 255, 255, 0.05) 0 0.5%,
+        transparent 0.5% 2.9%
+      ),
+      repeating-radial-gradient(
+        circle at 50% 50%,
+        rgba(255, 255, 255, 0.028) 0 0.34%,
+        transparent 0.34% 1.63%
+      );
     mask-image: radial-gradient(
       circle at 50% 50%,
-      transparent 0 10.9%,
-      black 12.5%
+      transparent 0 12%,
+      black 13.5%
     );
     -webkit-mask-image: radial-gradient(
       circle at 50% 50%,
-      transparent 0 10.9%,
-      black 12.5%
+      transparent 0 12%,
+      black 13.5%
     );
   }
 
@@ -249,13 +214,22 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: linear-gradient(
-      150deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      transparent 30%,
-      transparent 60%,
-      rgba(255, 255, 255, 0.05) 100%
-    );
+    background:
+      conic-gradient(
+        from 200deg at 50% 50%,
+        transparent 0deg,
+        rgba(255, 255, 255, 0.07) 24deg,
+        transparent 58deg,
+        transparent 188deg,
+        rgba(255, 255, 255, 0.05) 214deg,
+        transparent 250deg
+      ),
+      linear-gradient(
+        150deg,
+        rgba(255, 255, 255, 0.1) 0%,
+        transparent 32%
+      );
+    mix-blend-mode: screen;
     pointer-events: none;
   }
 
@@ -264,71 +238,58 @@
     z-index: 1;
     left: 50%;
     top: 50%;
-    transform: translate(calc(-50% - var(--vinyl-cover-offset)), -50%);
-    width: 71%;
-    height: 71%;
+    transform: translate(calc(-50% - var(--vinyl-disc) * 0.055), -50%);
+    width: 72%;
+    height: 72%;
     border-radius: var(--radius-sm);
     object-fit: cover;
     background: var(--bg-raise);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
-    transition: box-shadow 0.3s ease;
+    box-shadow: 0 0 0 1px var(--line);
+    transition:
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.3s ease;
   }
 
-  .now-cover::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 8px;
-    background: linear-gradient(
-      115deg,
-      transparent 32%,
-      rgba(255, 255, 255, 0.16) 46%,
-      transparent 60%
-    );
-    background-size: 250% 100%;
-    background-position: 135% 0;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-    pointer-events: none;
-  }
-
-  .now-art.playing .now-cover::after {
-    opacity: 1;
-    animation: cover-shine 5.5s ease-in-out infinite;
-  }
-
-  @keyframes cover-shine {
-    0%,
-    50% {
-      background-position: 135% 0;
-    }
-    75%,
-    100% {
-      background-position: -35% 0;
-    }
+  .now-art:not(.playing) .now-cover {
+    transform: translate(calc(-50% - var(--vinyl-disc) * 0.121), -50%);
   }
 
   .now-art.playing .now-cover {
-    box-shadow:
-      0 18px 50px rgba(0, 0, 0, 0.55),
-      0 0 0 1px color-mix(in srgb, var(--accent) 65%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 65%, transparent);
   }
 
   .now-cover.placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--placeholder-gradient);
-  }
-
-  .now-cover.placeholder span {
-    font-size: 46px;
-    line-height: 1;
+    background:
+      linear-gradient(
+        155deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        transparent 55%
+      ),
+      var(--placeholder-gradient);
     color: var(--faint);
   }
 
-  .now-cover.placeholder span.empty {
-    transform: translateY(-2px);
+  .ph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.85;
+  }
+
+  .ph-mark {
+    font-size: 8.5px;
+    letter-spacing: 0.34em;
+    text-indent: 0.34em;
+  }
+
+  .ph-initial {
+    font-size: 56px;
+    line-height: 1;
+    opacity: 0.7;
   }
 
   .now-title {
@@ -392,42 +353,5 @@
   .now-empty {
     color: var(--faint);
     font-size: 11.5px;
-  }
-
-  .dust {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .dust-p {
-    position: absolute;
-    bottom: -6px;
-    width: 2px;
-    height: 2px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--accent) 45%, transparent);
-    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent) 30%, transparent);
-    opacity: 0;
-    animation: dust-rise linear infinite;
-  }
-
-  @keyframes dust-rise {
-    0% {
-      transform: translate(0, 0);
-      opacity: 0;
-    }
-    12% {
-      opacity: 0.7;
-    }
-    85% {
-      opacity: 0.12;
-    }
-    100% {
-      transform: translate(16px, -380px);
-      opacity: 0;
-    }
   }
 </style>

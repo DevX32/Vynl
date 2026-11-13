@@ -22,6 +22,23 @@
         "maximizable": true,
         "decorations": false,
         "backgroundColor": "#0d0d0d"
+      },
+      {
+        "label": "mini",
+        "title": "Vynl",
+        "url": "index.html#mini",
+        "width": 340,
+        "height": 440,
+        "minWidth": 320,
+        "minHeight": 400,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "backgroundColor": "#0d0d0d"
       }
     ],
     "security": {
@@ -42,7 +59,7 @@
     "createUpdaterArtifacts": true,
     "copyright": "Copyright (c) 2026 Vynl Contributors",
     "shortDescription": "A minimal music player",
-    "longDescription": "Vynl Is a Desktop Music Player.",
+    "longDescription": "A minimal music player.",
     "homepage": "https://github.com/DevX32/Vynl",
     "publisher": "Vynl",
     "licenseFile": "../LICENSE",

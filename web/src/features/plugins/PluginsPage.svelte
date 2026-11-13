@@ -242,7 +242,6 @@
                 {/if}
                 <button
                   class="icon-btn"
-                  title={t("plugins.remove")}
                   aria-label={t("plugins.remove")}
                   onclick={() => (removeTarget = p)}
                 >
