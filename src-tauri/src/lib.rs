@@ -90,6 +90,15 @@ fn register_aumid() {
             KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY,
         ) {
             let _ = key.set_value("DisplayName", &"Vynl".to_string());
+            if let Some(dir) = dirs::data_dir() {
+                let dir = dir.join("vynl");
+                if std::fs::create_dir_all(&dir).is_ok() {
+                    let icon = dir.join("vynl.ico");
+                    if std::fs::write(&icon, include_bytes!("../icons/icon.ico")).is_ok() {
+                        let _ = key.set_value("IconUri", &icon.to_string_lossy().to_string());
+                    }
+                }
+            }
         }
     }
 }
