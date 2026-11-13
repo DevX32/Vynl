@@ -1,5 +1,3 @@
-
-
 pub mod client;
 pub mod lyrics;
 pub mod types;
