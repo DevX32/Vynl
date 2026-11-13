@@ -122,7 +122,6 @@ const upToDate = $derived(
     border-radius: var(--radius-sm);
     background: var(--surface);
     margin-bottom: 18px;
-    box-shadow: var(--shadow-sm);
     overflow: hidden;
     transition:
       border-color 0.2s,

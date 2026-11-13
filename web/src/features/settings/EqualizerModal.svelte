@@ -50,7 +50,6 @@
     background: var(--bg-raise);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-lg);
     overflow: hidden;
     display: flex;
     flex-direction: column;

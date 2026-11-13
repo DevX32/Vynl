@@ -80,7 +80,6 @@
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     background: var(--surface);
-    box-shadow: var(--shadow-sm);
     overflow: hidden;
   }
 
