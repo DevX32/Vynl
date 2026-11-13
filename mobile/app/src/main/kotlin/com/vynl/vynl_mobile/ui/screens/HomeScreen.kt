@@ -23,14 +23,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.MusicOff
-import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -94,7 +92,7 @@ private fun greetingFor(hour: Int): String = when {
 }
 
 @Composable
-fun HomeScreen(viewModel: AppViewModel) {
+fun HomeScreen(viewModel: AppViewModel, onOpenRemote: () -> Unit) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     val remote by viewModel.remote.collectAsStateWithLifecycle()
@@ -114,13 +112,18 @@ fun HomeScreen(viewModel: AppViewModel) {
     }
 
     val now = remember(clock) { Calendar.getInstance().apply { timeInMillis = clock } }
-    val downloaded = library.filter { it.isDownloaded }
-    val featured = if (downloaded.isEmpty()) {
-        null
-    } else {
-        downloaded[(now.get(Calendar.DAY_OF_MONTH) * 31 + now.get(Calendar.MONTH)) % downloaded.size]
+    val remoteCover = remember(remote?.track?.id) {
+        remote?.track?.let(viewModel::remoteCoverPath)
     }
-    val recent = downloaded.take(6)
+    val downloaded = remember(library) { library.filter { it.isDownloaded } }
+    val recent = remember(downloaded) { downloaded.take(6) }
+    val featured = remember(downloaded) {
+        if (downloaded.isEmpty()) {
+            null
+        } else {
+            downloaded[(now.get(Calendar.DAY_OF_MONTH) * 31 + now.get(Calendar.MONTH)) % downloaded.size]
+        }
+    }
     val greeting = greetingFor(now.get(Calendar.HOUR_OF_DAY))
     val quote = quotes[(now.get(Calendar.DAY_OF_MONTH) - 1).coerceAtLeast(0) % quotes.size]
 
@@ -218,9 +221,8 @@ fun HomeScreen(viewModel: AppViewModel) {
                 RemotePanel(
                     remote = remote,
                     paired = viewModel.desktop.paired,
-                    onToggle = { viewModel.remoteAction("toggle") },
-                    onNext = { viewModel.remoteAction("next") },
-                    onPrevious = { viewModel.remoteAction("previous") },
+                    coverPath = remoteCover,
+                    onOpen = onOpenRemote,
                 )
             }
         }
@@ -598,9 +600,8 @@ private fun RecentCard(
 private fun RemotePanel(
     remote: DesktopPlayer?,
     paired: Boolean,
-    onToggle: () -> Unit,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
+    coverPath: String?,
+    onOpen: () -> Unit,
 ) {
     val track = remote?.track
     Row(
@@ -609,11 +610,13 @@ private fun RemotePanel(
             .padding(horizontal = 20.dp)
             .clip(RoundedCornerShape(VynlRadius.card))
             .background(VynlColors.surfaceRaised)
+            .then(if (paired) Modifier.clickable { onOpen() } else Modifier)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ArtTile(
-            coverUrl = track?.cover,
+            coverUrl = track?.cover?.takeIf { it.startsWith("http") },
+            coverPath = coverPath,
             size = 68.dp,
             radius = VynlRadius.control,
         )
@@ -644,33 +647,14 @@ private fun RemotePanel(
                 fontFamily = VynlFonts.display,
             )
         }
-        Spacer(Modifier.width(10.dp))
         if (paired) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                VynlControl(
-                    onTap = onPrevious,
-                    icon = Icons.Rounded.SkipPrevious,
-                    style = VynlControlStyle.plain,
-                    size = 40.dp,
-                    iconSize = 21.dp,
-                )
-                Spacer(Modifier.width(4.dp))
-                VynlControl(
-                    onTap = onToggle,
-                    icon = if (remote?.playing == true) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    style = VynlControlStyle.accent,
-                    size = 46.dp,
-                    iconSize = 26.dp,
-                )
-                Spacer(Modifier.width(4.dp))
-                VynlControl(
-                    onTap = onNext,
-                    icon = Icons.Rounded.SkipNext,
-                    style = VynlControlStyle.plain,
-                    size = 40.dp,
-                    iconSize = 21.dp,
-                )
-            }
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = VynlColors.faint,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

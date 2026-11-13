@@ -28,6 +28,7 @@ import {
   isSeekDragging,
   setSeekDragging,
   setDragTime,
+  getContextUpcoming,
 } from "@state/now-playing.svelte";
 import {
   getCrossfade,
@@ -38,6 +39,8 @@ import {
   setPlayError,
   setVolume,
   onMuteChange,
+  toggleShuffle,
+  toggleLoop,
 } from "@state/player.svelte";
 import type { LoopMode } from "@state/player.svelte";
 import { vynl } from "@lib/vynl";
@@ -1048,7 +1051,23 @@ function handleMediaControl(event: MediaControlEvent): void {
     case "setVolume":
       setVolumeAt(clamp01(event.volume));
       break;
+    case "toggleShuffle":
+      toggleShuffle();
+      break;
+    case "toggleRepeat":
+      toggleLoop();
+      break;
+    case "playUpcoming":
+      playUpcomingAt(event.index);
+      break;
   }
+}
+
+export function playUpcomingAt(index: number): void {
+  const upcoming = getContextUpcoming(getCurrentShuffle(), getCurrentLoop());
+  const target = upcoming[index];
+  if (!target) return;
+  playTrack(target.id);
 }
 
 if (typeof window !== "undefined") {

@@ -58,8 +58,12 @@ data class DesktopPlayer(
     val playing: Boolean,
     val position: Double,
     val duration: Double,
-    val volume: Double,
+    /** The desktop's volume, 0 to 100, exactly as it reports it. */
+    val volume: Int,
     val track: DesktopTrack?,
+    val queue: List<DesktopTrack> = emptyList(),
+    val shuffle: Boolean = false,
+    val loopMode: String = "off",
 )
 
 /**
@@ -117,20 +121,30 @@ class Desktop(context: Context) {
             http.newCall(request("/v1/player").build()).execute().use { response ->
                 if (!response.isSuccessful) return@use null
                 val json = JSONObject(response.body?.string().orEmpty())
+                val queue = json.optJSONArray("queue")?.let { items ->
+                    (0 until items.length()).mapNotNull { index ->
+                        items.optJSONObject(index)?.let(::track)
+                    }
+                } ?: emptyList()
                 DesktopPlayer(
                     playing = json.optBoolean("playing", false),
                     position = json.optDouble("position", 0.0),
                     duration = json.optDouble("duration", 0.0),
-                    volume = json.optDouble("volume", 1.0),
+                    volume = json.optInt("volume", 75).coerceIn(0, 100),
                     track = json.optJSONObject("track")?.let { track(it) },
+                    queue = queue,
+                    shuffle = json.optBoolean("shuffle", false),
+                    loopMode = json.optString("loopMode", "off").ifBlank { "off" },
                 )
             }
         }.getOrNull()
     }
 
-    suspend fun action(name: String, time: Double? = null): Boolean = withContext(Dispatchers.IO) {
+    suspend fun action(name: String, time: Double? = null, volume: Int? = null, index: Int? = null): Boolean = withContext(Dispatchers.IO) {
         val body = JSONObject().put("action", name)
         if (time != null) body.put("time", time)
+        if (volume != null) body.put("volume", volume)
+        if (index != null) body.put("index", index)
         val request = request("/v1/player/action")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()

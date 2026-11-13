@@ -29,7 +29,7 @@ function publish(): void {
   if (publishing) return;
   const current = getCurrentTrack();
   const upcoming = getContextUpcoming(getCurrentShuffle(), getCurrentLoop());
-  const key = `${current?.id ?? ""}|${upcoming.map((t) => t.id).join(",")}`;
+  const key = `${current?.id ?? ""}|${upcoming.map((t) => t.id).join(",")}|${getCurrentShuffle()}|${getCurrentLoop()}`;
   if (key === publishedKey) return;
   publishedKey = key;
   publishing = true;
@@ -37,6 +37,8 @@ function publish(): void {
   const state: MobileNowPlaying = {
     track: current ? toMobileTrack(current) : null,
     queue: upcoming.slice(0, 50).map(toMobileTrack),
+    shuffle: getCurrentShuffle(),
+    loopMode: getCurrentLoop(),
   };
 
   void vynl

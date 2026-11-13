@@ -25,6 +25,7 @@ import com.vynl.vynl_mobile.data.resolveDisplayName
 import com.vynl.vynl_mobile.playback.PlayerController
 import com.vynl.vynl_mobile.remote.Desktop
 import com.vynl.vynl_mobile.remote.DesktopPlayer
+import com.vynl.vynl_mobile.remote.DesktopTrack
 import com.vynl.vynl_mobile.ui.theme.Accent
 import com.vynl.vynl_mobile.update.AppUpdate
 import com.vynl.vynl_mobile.update.Update
@@ -245,18 +246,53 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshRemote() {
         if (!desktop.paired) return
         viewModelScope.launch {
-            _remote.value = desktop.player()
+            val next = desktop.player()
+            if (next != _remote.value) _remote.value = next
         }
     }
 
     /** Sends a command to the desktop. */
-    fun remoteAction(name: String) {
+    fun remoteAction(name: String, time: Double? = null, volume: Int? = null, index: Int? = null) {
         if (!desktop.paired) return
         viewModelScope.launch {
-            desktop.action(name)
+            desktop.action(name, time = time, volume = volume, index = index)
             refreshRemote()
         }
     }
+
+    /** Jumps the desktop playback to a position, in seconds. */
+    fun remoteSeek(seconds: Double) = remoteAction("seek", time = seconds.coerceAtLeast(0.0))
+
+    /** Sets the desktop volume, 0 to 100. */
+    fun remoteVolume(volume: Int) = remoteAction("volume", volume = volume.coerceIn(0, 100))
+
+    /** Toggles shuffle on the desktop. */
+    fun remoteShuffle() = remoteAction("shuffle")
+
+    /** Cycles repeat on the desktop: off, all, one. */
+    fun remoteRepeat() = remoteAction("repeat")
+
+    /** Taps the desktop's upcoming queue, playing that entry. */
+    fun remotePlayUpcoming(index: Int) = remoteAction("playUpcoming", index = index.coerceAtLeast(0))
+
+    /**
+     * The cached cover for a desktop track: the synced copy when this phone
+     * has it, falling back to a one-off download of the desktop's cover.
+     * Returns null while it is not on disk yet.
+     */
+    fun remoteCoverPath(track: DesktopTrack): String? {
+        val cached = runCatching { store.coverFile(track.id, "jpg") }.getOrNull() ?: return null
+        if (cached.exists() && cached.length() > 0) return cached.absolutePath
+        if (track.id.isBlank()) return null
+        if (remoteCoverAttempted.add(track.id)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                desktop.downloadCover(track.id, cached)
+            }
+        }
+        return null
+    }
+
+    private val remoteCoverAttempted = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     /** Pulls the songs the desktop holds into the phone. */
     fun syncLibrary() {

@@ -395,6 +395,8 @@ export interface MobileTrack {
 export interface MobileNowPlaying {
   track: MobileTrack | null;
   queue: MobileTrack[];
+  shuffle: boolean;
+  loopMode: "off" | "all" | "one";
 }
 
 export interface TasteEntry {
@@ -449,8 +451,11 @@ export type MediaControlEvent =
         | "toggle"
         | "next"
         | "previous"
-        | "stop";
+        | "stop"
+        | "toggleShuffle"
+        | "toggleRepeat";
     }
   | { action: "seek"; position: number }
   | { action: "seekBy"; offset: number }
-  | { action: "setVolume"; volume: number };
+  | { action: "setVolume"; volume: number }
+  | { action: "playUpcoming"; index: number };

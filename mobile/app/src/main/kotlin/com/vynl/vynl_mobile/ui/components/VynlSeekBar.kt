@@ -3,13 +3,16 @@ package com.vynl.vynl_mobile.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -19,11 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -100,50 +104,7 @@ fun VynlSeekBar(
                     }
                 },
         ) {
-            val trackHeight = 3.dp.toPx()
-            val top = (size.height - trackHeight) / 2f
-            val radius = androidx.compose.ui.geometry.CornerRadius(VynlRadius.control.toPx())
-
-            drawRoundRect(
-                color = VynlColors.text.copy(alpha = 0.20f),
-                topLeft = Offset(0f, top),
-                size = Size(size.width, trackHeight),
-                cornerRadius = radius,
-            )
-            if (buffered > 0f) {
-                drawRoundRect(
-                    color = VynlColors.text.copy(alpha = 0.34f),
-                    topLeft = Offset(0f, top),
-                    size = Size(size.width * buffered, trackHeight),
-                    cornerRadius = radius,
-                )
-            }
-            if (progress > 0f) {
-                drawRoundRect(
-                    color = accent,
-                    topLeft = Offset(0f, top),
-                    size = Size(size.width * progress, trackHeight),
-                    cornerRadius = radius,
-                )
-            }
-
-            val side = if (dragging) 13.dp.toPx() else 9.dp.toPx()
-            val center = Offset(size.width * progress, size.height / 2f)
-            val glowSide = side + 10.dp.toPx()
-            rotate(degrees = 45f, pivot = center) {
-                drawRoundRect(
-                    color = accent.copy(alpha = if (dragging) 0.34f else 0.2f),
-                    topLeft = Offset(center.x - glowSide / 2f, center.y - glowSide / 2f),
-                    size = Size(glowSide, glowSide),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
-                )
-                drawRoundRect(
-                    color = accent,
-                    topLeft = Offset(center.x - side / 2f, center.y - side / 2f),
-                    size = Size(side, side),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-                )
-            }
+            drawSlider(progress, dragging, accent, buffered = buffered)
         }
         Text(
             text = formatClock(durationMs),
@@ -154,6 +115,128 @@ fun VynlSeekBar(
             fontSize = 12.sp,
             fontFamily = VynlFonts.display,
             fontWeight = FontWeight.W500,
+        )
+    }
+}
+
+/**
+ * The volume of the desktop remote: the same thin track and rotated square
+ * thumb as the seek bar, with speaker icons either side instead of the
+ * times.
+ */
+@Composable
+fun VynlVolumeBar(
+    volume: Int,
+    accent: Color,
+    onVolumeChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var preview by remember { mutableFloatStateOf(-1f) }
+    var dragging by remember { mutableStateOf(false) }
+    val live = (volume.coerceIn(0, 100) / 100f).coerceIn(0f, 1f)
+    val progress = if (preview >= 0f) preview else live
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Rounded.VolumeDown,
+            contentDescription = null,
+            tint = VynlColors.dim,
+            modifier = Modifier.height(30.dp).padding(end = 12.dp).size(20.dp),
+        )
+        Canvas(
+            modifier = Modifier
+                .weight(1f)
+                .height(30.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                        onVolumeChange((fraction * 100).toInt().coerceIn(0, 100))
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            dragging = true
+                            preview = (offset.x / size.width).coerceIn(0f, 1f)
+                        },
+                        onDragEnd = {
+                            if (dragging) {
+                                val target = (preview.takeIf { it >= 0f } ?: -1f)
+                                if (target >= 0f) {
+                                    onVolumeChange((target * 100).toInt().coerceIn(0, 100))
+                                }
+                            }
+                            dragging = false
+                            preview = -1f
+                        },
+                        onDragCancel = {
+                            dragging = false
+                            preview = -1f
+                        },
+                    ) { change, _ ->
+                        preview = (change.position.x / size.width).coerceIn(0f, 1f)
+                    }
+                },
+        ) {
+            drawSlider(progress, dragging, accent)
+        }
+        // Matches the seek bar's right-hand clock slot, so the two tracks
+        // share the same width.
+        Spacer(Modifier.width(53.dp))
+    }
+}
+
+private fun DrawScope.drawSlider(
+    progress: Float,
+    dragging: Boolean,
+    accent: Color,
+    buffered: Float? = null,
+) {
+    val trackHeight = 3.dp.toPx()
+    val top = (size.height - trackHeight) / 2f
+    val radius = CornerRadius(VynlRadius.control.toPx())
+
+    drawRoundRect(
+        color = VynlColors.text.copy(alpha = 0.20f),
+        topLeft = Offset(0f, top),
+        size = Size(size.width, trackHeight),
+        cornerRadius = radius,
+    )
+    if (buffered != null && buffered > 0f) {
+        drawRoundRect(
+            color = VynlColors.text.copy(alpha = 0.34f),
+            topLeft = Offset(0f, top),
+            size = Size(size.width * buffered, trackHeight),
+            cornerRadius = radius,
+        )
+    }
+    if (progress > 0f) {
+        drawRoundRect(
+            color = accent,
+            topLeft = Offset(0f, top),
+            size = Size(size.width * progress, trackHeight),
+            cornerRadius = radius,
+        )
+    }
+
+    val side = if (dragging) 13.dp.toPx() else 9.dp.toPx()
+    val center = Offset(size.width * progress, size.height / 2f)
+    val glowSide = side + 10.dp.toPx()
+    rotate(degrees = 45f, pivot = center) {
+        drawRoundRect(
+            color = accent.copy(alpha = if (dragging) 0.34f else 0.2f),
+            topLeft = Offset(center.x - glowSide / 2f, center.y - glowSide / 2f),
+            size = Size(glowSide, glowSide),
+            cornerRadius = CornerRadius(3.dp.toPx()),
+        )
+        drawRoundRect(
+            color = accent,
+            topLeft = Offset(center.x - side / 2f, center.y - side / 2f),
+            size = Size(side, side),
+            cornerRadius = CornerRadius(2.dp.toPx()),
         )
     }
 }

@@ -35,6 +35,14 @@ pub struct MobileNowPlaying {
     pub track: Option<MobileTrack>,
     #[serde(default)]
     pub queue: Vec<MobileTrack>,
+    #[serde(default)]
+    pub shuffle: bool,
+    #[serde(default = "default_loop_mode")]
+    pub loop_mode: String,
+}
+
+fn default_loop_mode() -> String {
+    "off".to_string()
 }
 
 static NOW_PLAYING: Lazy<tokio::sync::RwLock<Option<MobileNowPlaying>>> =
@@ -58,6 +66,8 @@ pub struct MobilePlayerState {
     pub volume: u32,
     pub track: Option<MobileTrack>,
     pub queue: Vec<MobileTrack>,
+    pub shuffle: bool,
+    pub loop_mode: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,6 +76,7 @@ pub struct MobilePlayerAction {
     pub action: String,
     pub time: Option<f64>,
     pub volume: Option<u32>,
+    pub index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -256,6 +267,12 @@ async fn player_state(State(_state): State<SharedState>) -> Response {
         volume: status.volume,
         track: np.track,
         queue: np.queue,
+        shuffle: np.shuffle,
+        loop_mode: if np.loop_mode.is_empty() {
+            "off".to_string()
+        } else {
+            np.loop_mode
+        },
     })
     .into_response()
 }
@@ -284,6 +301,14 @@ async fn player_action(
             MediaControlAction::SetVolume {
                 volume: f64::from(volume) / 100.0,
             }
+        }
+        "shuffle" => MediaControlAction::ToggleShuffle,
+        "repeat" | "loop" => MediaControlAction::ToggleRepeat,
+        "playUpcoming" => {
+            let Some(index) = action.index.filter(|i| *i < 50) else {
+                return error(StatusCode::BAD_REQUEST, "That queue position is not valid.");
+            };
+            MediaControlAction::PlayUpcoming { index }
         }
         _ => {
             return error(StatusCode::BAD_REQUEST, "That action is not supported.");
