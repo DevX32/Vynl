@@ -7,6 +7,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -37,7 +39,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -75,6 +76,7 @@ import com.vynl.vynl_mobile.ui.screens.PlayerScreen
 import com.vynl.vynl_mobile.ui.screens.PlaylistsScreen
 import com.vynl.vynl_mobile.ui.screens.SettingsScreen
 import com.vynl.vynl_mobile.ui.screens.PlaylistDetailScreen
+import com.vynl.vynl_mobile.ui.theme.VynlMotion
 import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
@@ -245,70 +247,98 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
     }
 }
 
+private data class NavDestination(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+)
+
+private val navDestinations = listOf(
+    NavDestination("HOME", Icons.Rounded.Home),
+    NavDestination("LIBRARY", Icons.Rounded.LibraryMusic),
+    NavDestination("PLAYLISTS", Icons.Rounded.QueueMusic),
+    NavDestination("BROWSE", Icons.Rounded.TravelExplore),
+)
+
 @Composable
 private fun VynlNavigationBar(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
 ) {
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val items = listOf(
-        Triple("Home", Icons.Rounded.Home, Icons.Rounded.Home),
-        Triple("Library", Icons.Rounded.LibraryMusic, Icons.Rounded.LibraryMusic),
-        Triple("Playlists", Icons.Rounded.QueueMusic, Icons.Rounded.QueueMusic),
-        Triple("Browse", Icons.Rounded.TravelExplore, Icons.Rounded.TravelExplore),
-    )
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(VynlColors.surface)
-            .padding(bottom = bottomInset),
+            .padding(start = 14.dp, end = 14.dp, bottom = 8.dp + bottomInset),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(VynlColors.line),
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(66.dp),
+                .height(60.dp)
+                .clip(RoundedCornerShape(VynlRadius.hero))
+                .background(VynlColors.surfaceRaised)
+                .border(1.dp, VynlColors.line, RoundedCornerShape(VynlRadius.hero))
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            items.forEachIndexed { index, item ->
+            navDestinations.forEachIndexed { index, item ->
                 val selected = selectedIndex == index
+                val diamond by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (selected) 1f else 0f,
+                    animationSpec = androidx.compose.animation.core.tween(VynlMotion.fast),
+                    label = "nav-diamond",
+                )
+                val iconTint by androidx.compose.animation.animateColorAsState(
+                    targetValue = if (selected) VynlColors.accentOn else VynlColors.faint,
+                    animationSpec = androidx.compose.animation.core.tween(VynlMotion.fast),
+                    label = "nav-tint",
+                )
+                val labelTint by androidx.compose.animation.animateColorAsState(
+                    targetValue = if (selected) VynlColors.accent else VynlColors.faint,
+                    animationSpec = androidx.compose.animation.core.tween(VynlMotion.fast),
+                    label = "nav-label",
+                )
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .clickable { onSelect(index) },
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
-                    Spacer(Modifier.height(8.dp))
                     Box(
-                        modifier = Modifier
-                            .size(width = 64.dp, height = 32.dp)
-                            .clip(RoundedCornerShape(VynlRadius.control))
-                            .background(
-                                if (selected) VynlColors.accent.copy(alpha = 0.16f) else Color.Transparent,
-                            ),
+                        modifier = Modifier.size(30.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        if (diamond > 0.01f) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer {
+                                        rotationZ = 45f
+                                        alpha = diamond
+                                        scaleX = 0.6f + 0.4f * diamond
+                                        scaleY = 0.6f + 0.4f * diamond
+                                    }
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(VynlColors.accent),
+                            )
+                        }
                         Icon(
-                            item.second,
-                            contentDescription = item.first,
-                            tint = if (selected) VynlColors.accent else VynlColors.faint,
-                            modifier = Modifier.size(24.dp),
+                            item.icon,
+                            contentDescription = item.label,
+                            tint = iconTint,
+                            modifier = Modifier.size(if (selected) 16.dp else 21.dp),
                         )
                     }
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = item.first,
-                        color = if (selected) VynlColors.text else VynlColors.faint,
-                        fontSize = 10.5.sp,
-                        lineHeight = 12.sp,
+                        text = item.label,
+                        color = labelTint,
+                        fontSize = 9.sp,
+                        lineHeight = 10.sp,
                         fontWeight = if (selected) FontWeight.W700 else FontWeight.W600,
-                        letterSpacing = 0.1.sp,
-                        fontFamily = VynlFonts.display,
+                        letterSpacing = 0.9.sp,
+                        fontFamily = VynlFonts.mono,
                     )
                 }
             }
