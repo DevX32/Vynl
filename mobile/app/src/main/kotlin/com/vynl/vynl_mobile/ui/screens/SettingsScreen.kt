@@ -25,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -291,20 +290,18 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             SettingsRow(
                 label = update?.let { "Update ${it.short} is ready" } ?: "Check for updates",
-                hint = update?.let { "Tap to install it" } ?: "Builds ship whenever the desktop ships",
+                hint = update?.let { "A new build is ready — grab it below" } ?: "Builds ship whenever the desktop ships",
                 onClick = { viewModel.checkForUpdate() },
-                trailing = {
-                    if (viewModel.updateBusy) {
+                trailing = if (viewModel.updateBusy) {
+                    {
                         CircularProgressIndicator(
                             modifier = Modifier.size(17.dp),
                             color = VynlColors.accent,
                             strokeWidth = 2.dp,
                         )
-                    } else if (viewModel.updateDownloaded) {
-                        Chip("Install")
-                    } else {
-                        Chip("Check")
                     }
+                } else {
+                    null
                 },
             )
             if (viewModel.updateBusy) {
@@ -317,20 +314,7 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                     drawStopIndicator = {},
                 )
             }
-            update?.let { ready ->
-                if (ready.notes.isNotEmpty() || viewModel.updateDownloaded) {
-                    Spacer(Modifier.height(2.dp))
-                }
-                if (ready.notes.isNotEmpty()) {
-                    Text(
-                        text = ready.notes,
-                        color = VynlColors.dim,
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
-                        fontFamily = VynlFonts.display,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
+            update?.let {
                 ActionButton(
                     title = if (viewModel.updateDownloaded) "Install the update" else "Download the update",
                     onClick = {
@@ -445,7 +429,7 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
             },
             text = {
                 Text(
-                    text = "The desktop will be forgotten — no more remote control or sync. The library you synced stays on the phone.",
+                    text = "The desktop will be forgotten — no more sync. The library you synced stays on the phone.",
                     color = VynlColors.dim,
                     fontFamily = VynlFonts.display,
                 )
