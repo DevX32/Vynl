@@ -130,6 +130,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val greetingName: String
         get() = resolveDisplayName(displayName, nickname)
 
+    var onboarded by mutableStateOf(settings.onboarded)
+        private set
+
+    fun completeOnboarding(name: String) {
+        val trimmed = name.trim().take(32)
+        settings.displayName = trimmed
+        settings.onboarded = true
+        displayName = trimmed
+        onboarded = true
+    }
+
     private val _update = MutableStateFlow<Update?>(null)
     val update: StateFlow<Update?> = _update.asStateFlow()
 

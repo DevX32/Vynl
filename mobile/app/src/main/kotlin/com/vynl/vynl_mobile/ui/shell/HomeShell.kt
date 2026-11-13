@@ -71,6 +71,7 @@ import com.vynl.vynl_mobile.ui.components.VynlControl
 import com.vynl.vynl_mobile.ui.components.VynlControlStyle
 import com.vynl.vynl_mobile.ui.screens.BrowseScreen
 import com.vynl.vynl_mobile.ui.screens.HomeScreen
+import com.vynl.vynl_mobile.ui.screens.OnboardingScreen
 import com.vynl.vynl_mobile.ui.screens.LibraryScreen
 import com.vynl.vynl_mobile.ui.screens.PlayerScreen
 import com.vynl.vynl_mobile.ui.screens.PlaylistsScreen
@@ -86,6 +87,10 @@ private val tabTitles = listOf("Home", "Library", "Playlists", "Browse")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeShell(viewModel: AppViewModel = viewModel()) {
+    if (!viewModel.onboarded) {
+        OnboardingScreen(viewModel)
+        return
+    }
     var playerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }

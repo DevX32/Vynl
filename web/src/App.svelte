@@ -18,6 +18,8 @@
   import { handleGlobalKey, getShowShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
+  import { wasOnboarded } from "@lib/onboarding.svelte";
+  import Onboarding from "./features/onboarding/Onboarding.svelte";
   import { initAppUpdate } from "@state/app-update.svelte";
   import { toasts } from "./lib/toast";
   import { toPascalCase } from "./lib/format";
@@ -66,6 +68,7 @@
 
   let sidebarOpen = $state(loadSidebarOpen());
   let showFullscreen = $state(false);
+  let onboarded = $state(true);
 
   const history = $state<Page[]>(["home"]);
   let historyIdx = $state(0);
@@ -162,6 +165,7 @@
   async function bootApp(): Promise<(() => void) | undefined> {
     setPlayHandler((id, queue) => playTrack(id, queue));
     await initSettings();
+    onboarded = wasOnboarded();
     void vynl.rpcUpdate(null);
     await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
     void initPlugins().catch(console.warn);
@@ -389,6 +393,8 @@
 
 {#if isMini}
   <MiniPlayer />
+{:else if !onboarded}
+  <Onboarding onComplete={() => (onboarded = true)} />
 {:else}
 <div class="shell">
   <TitleBar

@@ -21,11 +21,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_NICKNAME, "") ?: ""
         set(value) = prefs.edit().putString(KEY_NICKNAME, value).apply()
 
+    var onboarded: Boolean
+        get() = prefs.getBoolean(KEY_ONBOARDED, prefs.getString(KEY_NICKNAME, "")?.isNotBlank() == true)
+        set(value) = prefs.edit().putBoolean(KEY_ONBOARDED, value).apply()
+
     companion object {
         const val KEY_ACCENT = "accent"
         const val KEY_ACCENT_SET = "accent_set"
         const val KEY_DISPLAY_NAME = "vynl.display_name"
         const val KEY_NICKNAME = "vynl.nickname"
+        const val KEY_ONBOARDED = "vynl.onboarded"
         const val DEFAULT_ACCENT = 0xFFA894E8.toInt()
     }
 }
