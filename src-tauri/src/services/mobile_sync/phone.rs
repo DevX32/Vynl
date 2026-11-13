@@ -1,19 +1,14 @@
-use axum::extract::{Path as AxumPath, Query, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
-use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
-use tauri::Emitter;
-
 use crate::commands::types::{
     CatalogueAlbumDetail, CatalogueArtist, CataloguePlaylistDetail, CatalogueSearchResults,
-    MediaControlAction,
 };
 use crate::services::catalogue;
 use crate::services::mobile_sync::server::SharedState;
-use crate::services::player;
+use axum::extract::{Path as AxumPath, Query, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::routing::get;
+use axum::{Json, Router};
+use serde::{Deserialize, Serialize};
 
 const CATALOGUE_PREFIX: &str = "ytm:";
 
@@ -26,57 +21,6 @@ pub struct MobileTrack {
     pub album: Option<String>,
     pub duration: Option<f64>,
     pub cover: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct MobileNowPlaying {
-    #[serde(default)]
-    pub track: Option<MobileTrack>,
-    #[serde(default)]
-    pub queue: Vec<MobileTrack>,
-    #[serde(default)]
-    pub shuffle: bool,
-    #[serde(default = "default_loop_mode")]
-    pub loop_mode: String,
-}
-
-fn default_loop_mode() -> String {
-    "off".to_string()
-}
-
-static NOW_PLAYING: Lazy<tokio::sync::RwLock<Option<MobileNowPlaying>>> =
-    Lazy::new(|| tokio::sync::RwLock::new(None));
-
-pub async fn set_now_playing(state: MobileNowPlaying) {
-    let mut guard = NOW_PLAYING.write().await;
-    *guard = Some(state);
-}
-
-pub async fn now_playing() -> MobileNowPlaying {
-    NOW_PLAYING.read().await.clone().unwrap_or_default()
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MobilePlayerState {
-    pub playing: bool,
-    pub position: f64,
-    pub duration: Option<f64>,
-    pub volume: u32,
-    pub track: Option<MobileTrack>,
-    pub queue: Vec<MobileTrack>,
-    pub shuffle: bool,
-    pub loop_mode: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MobilePlayerAction {
-    pub action: String,
-    pub time: Option<f64>,
-    pub volume: Option<u32>,
-    pub index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -118,8 +62,6 @@ pub fn router() -> Router<SharedState> {
         .route("/v1/catalogue/artist/{id}", get(catalogue_artist))
         .route("/v1/catalogue/playlist/{id}", get(catalogue_playlist))
         .route("/v1/stream/{id}/audio", get(stream_audio))
-        .route("/v1/player", get(player_state))
-        .route("/v1/player/action", post(player_action))
         .route("/v1/taste", get(taste_state))
 }
 
@@ -252,81 +194,4 @@ async fn stream_audio(
         _ => "application/octet-stream",
     };
     crate::services::mobile_sync::server::serve_file_with_range(path, headers, content_type).await
-}
-
-async fn player_state(State(_state): State<SharedState>) -> Response {
-    let status = match player::status() {
-        Ok(status) => status,
-        Err(message) => return error(StatusCode::SERVICE_UNAVAILABLE, clean(message)),
-    };
-    let np = now_playing().await;
-    Json(MobilePlayerState {
-        playing: status.playing,
-        position: status.position,
-        duration: status.duration,
-        volume: status.volume,
-        track: np.track,
-        queue: np.queue,
-        shuffle: np.shuffle,
-        loop_mode: if np.loop_mode.is_empty() {
-            "off".to_string()
-        } else {
-            np.loop_mode
-        },
-    })
-    .into_response()
-}
-
-async fn player_action(
-    State(_state): State<SharedState>,
-    Json(action): Json<MobilePlayerAction>,
-) -> Response {
-    let name = action.action.trim().to_ascii_lowercase();
-    let command = match name.as_str() {
-        "pause" => MediaControlAction::Pause,
-        "play" | "resume" => MediaControlAction::Play,
-        "toggle" => MediaControlAction::Toggle,
-        "next" => MediaControlAction::Next,
-        "previous" => MediaControlAction::Previous,
-        "seek" => {
-            let Some(position) = action.time.filter(|t| t.is_finite() && *t >= 0.0) else {
-                return error(StatusCode::BAD_REQUEST, "That seek position is not valid.");
-            };
-            MediaControlAction::Seek { position }
-        }
-        "volume" => {
-            let Some(volume) = action.volume.filter(|v| *v <= 100) else {
-                return error(StatusCode::BAD_REQUEST, "That volume is not valid.");
-            };
-            MediaControlAction::SetVolume {
-                volume: f64::from(volume) / 100.0,
-            }
-        }
-        "shuffle" => MediaControlAction::ToggleShuffle,
-        "repeat" | "loop" => MediaControlAction::ToggleRepeat,
-        "playUpcoming" => {
-            let Some(index) = action.index.filter(|i| *i < 50) else {
-                return error(StatusCode::BAD_REQUEST, "That queue position is not valid.");
-            };
-            MediaControlAction::PlayUpcoming { index }
-        }
-        _ => {
-            return error(StatusCode::BAD_REQUEST, "That action is not supported.");
-        }
-    };
-
-    let Some(app) = player::app_handle() else {
-        return error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "The player is not ready yet.",
-        );
-    };
-    if app.emit("vynl:media-control", command).is_err() {
-        return error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "The player is not ready yet.",
-        );
-    }
-
-    Json(serde_json::json!({ "ok": true })).into_response()
 }

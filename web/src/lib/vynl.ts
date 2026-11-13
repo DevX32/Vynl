@@ -27,7 +27,6 @@ import type {
   EqDesign,
   MediaUpdate,
   MediaControlEvent,
-  MobileNowPlaying,
   TasteEntry,
   CatalogueAddResult,
   CatalogueAlbumDetail,
@@ -298,9 +297,6 @@ export const vynl = {
 
   onPlaybackTick: (cb: (tick: PlaybackTick) => void): (() => void) =>
     onEvent<PlaybackTick>("vynl:player:tick", cb),
-
-  mobileSyncSetNowPlaying: (state: MobileNowPlaying): Promise<void> =>
-    cmd("mobile_sync_set_now_playing", { state }),
 
   tasteLoad: (): Promise<TasteEntry[]> => cmd("taste_load"),
 

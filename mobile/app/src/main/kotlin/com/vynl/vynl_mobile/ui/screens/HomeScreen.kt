@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.MusicOff
@@ -60,7 +59,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.vynl.vynl_mobile.data.LocalTrack
-import com.vynl.vynl_mobile.remote.DesktopPlayer
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.ArtTile
 import com.vynl.vynl_mobile.ui.components.SectionHeader
@@ -92,18 +90,11 @@ private fun greetingFor(hour: Int): String = when {
 }
 
 @Composable
-fun HomeScreen(viewModel: AppViewModel, onOpenRemote: () -> Unit) {
+fun HomeScreen(viewModel: AppViewModel) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
-    val remote by viewModel.remote.collectAsStateWithLifecycle()
     var clock by remember { mutableStateOf(System.currentTimeMillis()) }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            viewModel.refreshRemote()
-            delay(5000)
-        }
-    }
     LaunchedEffect(Unit) {
         while (true) {
             delay(60_000)
@@ -112,9 +103,6 @@ fun HomeScreen(viewModel: AppViewModel, onOpenRemote: () -> Unit) {
     }
 
     val now = remember(clock) { Calendar.getInstance().apply { timeInMillis = clock } }
-    val remoteCover = remember(remote?.track?.id) {
-        remote?.track?.let(viewModel::remoteCoverPath)
-    }
     val downloaded = remember(library) { library.filter { it.isDownloaded } }
     val recent = remember(downloaded) { downloaded.take(6) }
     val featured = remember(downloaded) {
@@ -215,17 +203,6 @@ fun HomeScreen(viewModel: AppViewModel, onOpenRemote: () -> Unit) {
             }
         }
 
-        if (viewModel.desktop.paired) {
-            item {
-                SectionHeader(title = "ON YOUR DESKTOP")
-                RemotePanel(
-                    remote = remote,
-                    paired = viewModel.desktop.paired,
-                    coverPath = remoteCover,
-                    onOpen = onOpenRemote,
-                )
-            }
-        }
     }
 }
 
@@ -593,68 +570,5 @@ private fun RecentCard(
             fontSize = 11.sp,
             fontFamily = VynlFonts.display,
         )
-    }
-}
-
-@Composable
-private fun RemotePanel(
-    remote: DesktopPlayer?,
-    paired: Boolean,
-    coverPath: String?,
-    onOpen: () -> Unit,
-) {
-    val track = remote?.track
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(VynlRadius.card))
-            .background(VynlColors.surfaceRaised)
-            .then(if (paired) Modifier.clickable { onOpen() } else Modifier)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ArtTile(
-            coverUrl = track?.cover?.takeIf { it.startsWith("http") },
-            coverPath = coverPath,
-            size = 68.dp,
-            radius = VynlRadius.control,
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track?.title ?: "Nothing playing",
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = VynlColors.text,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.W700,
-                letterSpacing = (-0.1).sp,
-                lineHeight = 19.sp,
-                fontFamily = VynlFonts.display,
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                text = track?.artist ?: if (paired) {
-                    "Start something on your desktop"
-                } else {
-                    "Pair the desktop to control it"
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = VynlColors.faint,
-                fontSize = 12.sp,
-                fontFamily = VynlFonts.display,
-            )
-        }
-        if (paired) {
-            Spacer(Modifier.width(10.dp))
-            Icon(
-                Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                tint = VynlColors.faint,
-                modifier = Modifier.size(22.dp),
-            )
-        }
     }
 }

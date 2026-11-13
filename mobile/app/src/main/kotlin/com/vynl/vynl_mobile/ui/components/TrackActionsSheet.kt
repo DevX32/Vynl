@@ -15,12 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +38,6 @@ data class TrackActions(
     val onGoToAlbum: () -> Unit,
     val onGoToArtist: () -> Unit,
     val onAddToPlaylist: () -> Unit,
-    val onDownload: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,8 +45,6 @@ data class TrackActions(
 fun TrackActionsSheet(
     track: CatalogueTrack,
     actions: TrackActions,
-    downloading: Boolean,
-    progress: Float,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -91,24 +86,6 @@ fun TrackActionsSheet(
                 title = "Add to playlist",
                 onClick = actions.onAddToPlaylist,
             )
-            ActionRow(
-                icon = Icons.Rounded.Download,
-                title = if (downloading) "Downloading" else "Download",
-                enabled = !downloading,
-                onClick = actions.onDownload,
-            )
-            if (downloading) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .height(4.dp),
-                    color = VynlColors.accent,
-                    trackColor = VynlColors.line,
-                    drawStopIndicator = {},
-                )
-            }
         }
     }
 }

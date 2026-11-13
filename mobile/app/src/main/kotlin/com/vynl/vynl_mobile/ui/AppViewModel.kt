@@ -24,8 +24,6 @@ import com.vynl.vynl_mobile.data.randomNickname
 import com.vynl.vynl_mobile.data.resolveDisplayName
 import com.vynl.vynl_mobile.playback.PlayerController
 import com.vynl.vynl_mobile.remote.Desktop
-import com.vynl.vynl_mobile.remote.DesktopPlayer
-import com.vynl.vynl_mobile.remote.DesktopTrack
 import com.vynl.vynl_mobile.ui.theme.Accent
 import com.vynl.vynl_mobile.update.AppUpdate
 import com.vynl.vynl_mobile.update.Update
@@ -99,12 +97,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var playlistPickerFor by mutableStateOf<CatalogueTrack?>(null)
         private set
 
-    var downloadingId by mutableStateOf<String?>(null)
-        private set
-
-    var downloadProgress by mutableStateOf(0f)
-        private set
-
     var notice by mutableStateOf<String?>(null)
         private set
 
@@ -158,9 +150,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadedSize = MutableStateFlow("0 MB")
     val downloadedSize: StateFlow<String> = _downloadedSize.asStateFlow()
 
-    private val _remote = MutableStateFlow<DesktopPlayer?>(null)
-    val remote: StateFlow<DesktopPlayer?> = _remote.asStateFlow()
-
     var pairing by mutableStateOf(false)
         private set
 
@@ -207,7 +196,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 desktop.token = ""
                 if (desktop.pair(pin)) {
                     notice = "Paired with the desktop"
-                    refreshRemote()
                     if (autoSync) syncLibrary()
                     return null
                 }
@@ -230,77 +218,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun unpairDesktop() {
         desktop.address = ""
         desktop.token = ""
-        _remote.value = null
         notice = "The desktop is forgotten"
     }
-
-    fun refreshRemote() {
-        if (!desktop.paired) return
-        viewModelScope.launch {
-            val next = desktop.player()
-            if (next != _remote.value) _remote.value = next
-        }
-    }
-
-    fun remoteAction(name: String, time: Double? = null, volume: Int? = null, index: Int? = null) {
-        if (!desktop.paired) return
-        _remote.value?.let { current ->
-            _remote.value = applyRemoteAction(current, name, time, volume, index)
-        }
-        viewModelScope.launch {
-            desktop.action(name, time = time, volume = volume, index = index)
-            refreshRemote()
-        }
-    }
-
-    private fun applyRemoteAction(
-        current: DesktopPlayer,
-        name: String,
-        time: Double?,
-        volume: Int?,
-        index: Int?,
-    ): DesktopPlayer = when (name) {
-        "toggle" -> current.copy(playing = !current.playing)
-        "pause" -> current.copy(playing = false)
-        "play", "resume" -> current.copy(playing = true)
-        "next", "previous" -> current.copy(position = 0.0)
-        "seek" -> time?.let { current.copy(position = it) } ?: current
-        "volume" -> volume?.let { current.copy(volume = it) } ?: current
-        "shuffle" -> current.copy(shuffle = !current.shuffle)
-        "repeat" -> current.copy(
-            loopMode = when (current.loopMode) {
-                "off" -> "all"
-                "all" -> "one"
-                else -> "off"
-            },
-        )
-        "playUpcoming" -> current.copy(position = 0.0, playing = true)
-        else -> current
-    }
-
-    fun remoteSeek(seconds: Double) = remoteAction("seek", time = seconds.coerceAtLeast(0.0))
-
-    fun remoteVolume(volume: Int) = remoteAction("volume", volume = volume.coerceIn(0, 100))
-
-    fun remoteShuffle() = remoteAction("shuffle")
-
-    fun remoteRepeat() = remoteAction("repeat")
-
-    fun remotePlayUpcoming(index: Int) = remoteAction("playUpcoming", index = index.coerceAtLeast(0))
-
-    fun remoteCoverPath(track: DesktopTrack): String? {
-        val cached = runCatching { store.coverFile(track.id, "jpg") }.getOrNull() ?: return null
-        if (cached.exists() && cached.length() > 0) return cached.absolutePath
-        if (track.id.isBlank()) return null
-        if (remoteCoverAttempted.add(track.id)) {
-            viewModelScope.launch(Dispatchers.IO) {
-                desktop.downloadCover(track.id, cached)
-            }
-        }
-        return null
-    }
-
-    private val remoteCoverAttempted = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     fun syncLibrary() {
         if (!desktop.paired) {
@@ -752,6 +671,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             closePlaylistPicker()
             refreshStore()
             notice = "Added to ${_playlists.value.firstOrNull { it.id == playlistId }?.name ?: "the playlist"}"
+            cacheTrackForOffline(track)
+        }
+    }
+
+    private val cachingTracks = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    private fun cacheTrackForOffline(track: CatalogueTrack) {
+        if (!cachingTracks.add(track.id)) return
+        viewModelScope.launch {
+            try {
+                val existing = withContext(Dispatchers.IO) { store.findPrivateTrack(track.id) }
+                val cached = existing?.audioPath?.takeIf { it.isNotEmpty() }
+                if (cached != null && withContext(Dispatchers.IO) { java.io.File(cached).exists() }) {
+                    return@launch
+                }
+                val cover = downloader.cover(track)
+                val audio = downloader.audio(track) { }
+                withContext(Dispatchers.IO) {
+                    store.addTrack(track)
+                    store.setAudioPath(track.id, audio)
+                    if (cover != null) store.setCoverPath(track.id, cover)
+                }
+                refreshStore()
+            } catch (error: Exception) {
+                notice = "Could not cache ${track.title}"
+            } finally {
+                cachingTracks.remove(track.id)
+            }
         }
     }
 
@@ -760,6 +707,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val id = withContext(Dispatchers.IO) { store.createPlaylist(name) }
             if (track != null) {
                 withContext(Dispatchers.IO) { store.addToPlaylist(id, track) }
+                cacheTrackForOffline(track)
             }
             closePlaylistPicker()
             refreshStore()
@@ -784,31 +732,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun clearLocalPlaylist() {
         openPlaylistId = null
         _playlistTracks.value = emptyList()
-    }
-
-    fun download(track: CatalogueTrack) {
-        if (downloadingId != null) return
-        viewModelScope.launch {
-            downloadingId = track.id
-            downloadProgress = 0f
-            try {
-                val cover = downloader.cover(track)
-                val audio = downloader.audio(track) { value -> downloadProgress = value }
-                withContext(Dispatchers.IO) {
-                    store.addTrack(track)
-                    store.setAudioPath(track.id, audio)
-                    if (cover != null) store.setCoverPath(track.id, cover)
-                }
-                closeActions()
-                refreshStore()
-                notice = "Downloaded ${track.title}"
-            } catch (error: Exception) {
-                notice = friendly(error)
-            } finally {
-                downloadingId = null
-                downloadProgress = 0f
-            }
-        }
     }
 
     fun playLocal(tracks: List<LocalTrack>, index: Int) {

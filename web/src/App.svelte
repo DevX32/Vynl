@@ -18,7 +18,6 @@
   import { handleGlobalKey, getShowShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
-  import { startMobileBridge } from "@state/mobile-bridge.svelte";
   import { initAppUpdate } from "@state/app-update.svelte";
   import { toasts } from "./lib/toast";
   import { toPascalCase } from "./lib/format";
@@ -212,7 +211,6 @@
     window.addEventListener("keydown", handleGlobalKey);
     const onFullscreenToggle = (): void => { showFullscreen = !showFullscreen; };
     document.addEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
-    const stopMobileBridge = startMobileBridge();
     let cleanup: (() => void) | undefined;
     let disposeMini: (() => void) | undefined;
     let disposed = false;
@@ -238,7 +236,6 @@
       cleanup?.();
       offToast();
       setPlayHandler(null);
-      stopMobileBridge();
       window.removeEventListener("keydown", handleGlobalKey);
       document.removeEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
     };

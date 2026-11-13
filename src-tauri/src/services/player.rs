@@ -1392,8 +1392,10 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                 if last_device_poll.elapsed() >= DEVICE_POLL_INTERVAL {
                     last_device_poll = Instant::now();
                     let now = default_output_device_name();
-                    if now != output_device_name {
-                        output_device_name = now;
+                    if let Some(name) = now
+                        && output_device_name.as_deref() != Some(name.as_str())
+                    {
+                        output_device_name = Some(name);
                         reopen_output(
                             &mut output,
                             &mut handle,

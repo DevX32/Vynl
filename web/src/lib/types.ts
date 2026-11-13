@@ -383,22 +383,6 @@ export interface PlaybackTick {
   duration: number | null;
 }
 
-export interface MobileTrack {
-  id: string;
-  title: string;
-  artist: string;
-  album: string | null;
-  duration: number | null;
-  cover: string | null;
-}
-
-export interface MobileNowPlaying {
-  track: MobileTrack | null;
-  queue: MobileTrack[];
-  shuffle: boolean;
-  loopMode: "off" | "all" | "one";
-}
-
 export interface TasteEntry {
   track: CatalogueTrack;
   plays: number;
@@ -451,11 +435,8 @@ export type MediaControlEvent =
         | "toggle"
         | "next"
         | "previous"
-        | "stop"
-        | "toggleShuffle"
-        | "toggleRepeat";
+        | "stop";
     }
   | { action: "seek"; position: number }
   | { action: "seekBy"; offset: number }
-  | { action: "setVolume"; volume: number }
-  | { action: "playUpcoming"; index: number };
+  | { action: "setVolume"; volume: number };

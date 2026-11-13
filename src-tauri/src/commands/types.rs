@@ -332,9 +332,6 @@ pub enum MediaControlAction {
     Seek { position: f64 },
     SeekBy { offset: f64 },
     SetVolume { volume: f64 },
-    ToggleShuffle,
-    ToggleRepeat,
-    PlayUpcoming { index: usize },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

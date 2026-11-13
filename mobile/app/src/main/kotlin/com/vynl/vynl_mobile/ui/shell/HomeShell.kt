@@ -74,7 +74,6 @@ import com.vynl.vynl_mobile.ui.screens.LibraryScreen
 import com.vynl.vynl_mobile.ui.screens.PlayerScreen
 import com.vynl.vynl_mobile.ui.screens.PlaylistsScreen
 import com.vynl.vynl_mobile.ui.screens.SettingsScreen
-import com.vynl.vynl_mobile.ui.screens.RemoteScreen
 import com.vynl.vynl_mobile.ui.screens.PlaylistDetailScreen
 import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
@@ -87,7 +86,6 @@ private val tabTitles = listOf("Home", "Library", "Playlists", "Browse")
 fun HomeShell(viewModel: AppViewModel = viewModel()) {
     var playerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
-    var remoteOpen by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
@@ -164,7 +162,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                 .padding(padding),
         ) {
             when (viewModel.tab) {
-                0 -> HomeScreen(viewModel, onOpenRemote = { remoteOpen = true })
+                0 -> HomeScreen(viewModel)
                 1 -> LibraryScreen(viewModel)
                 2 -> PlaylistsScreen(viewModel)
                 else -> BrowseScreen(viewModel)
@@ -173,14 +171,6 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
     }
 
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
-
-    AnimatedVisibility(
-        visible = remoteOpen,
-        enter = fadeIn() + scaleIn(initialScale = 0.94f),
-        exit = fadeOut() + scaleOut(targetScale = 0.94f),
-    ) {
-        RemoteScreen(viewModel, onClose = { remoteOpen = false })
-    }
 
     AnimatedVisibility(
         visible = playerOpen,
@@ -239,10 +229,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     viewModel.openArtist(actionsTrack.artistId.orEmpty())
                 },
                 onAddToPlaylist = { viewModel.openPlaylistPicker(actionsTrack) },
-                onDownload = { viewModel.download(actionsTrack) },
             ),
-            downloading = viewModel.downloadingId == actionsTrack.id,
-            progress = viewModel.downloadProgress,
             onDismiss = { viewModel.closeActions() },
         )
     }

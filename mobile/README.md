@@ -12,7 +12,7 @@ app/src/main/kotlin/com/vynl/vynl_mobile/
   MainActivity.kt         the entry point
   data/                   the models, the catalogue client and the phone's store
   playback/               the media player and the service that keeps it alive
-  remote/                 the link to the desktop
+  remote/                 the http client for the desktop (pairing and sync)
   ui/theme/               the colours, the fonts and the shapes
   ui/components/          the shared widgets
   ui/screens/             the screens
@@ -64,4 +64,4 @@ lives beside a release install on the same phone.
 - the lyrics: synced lines and the karaoke words inside them
 - the phone's own store: playlists, the library and the downloaded files
 - the settings, the accent picker, the updater and the system installer
-- pairing with the desktop, its remote control and its library
+- pairing with the desktop and syncing its library
