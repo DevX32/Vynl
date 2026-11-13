@@ -84,11 +84,6 @@ import com.vynl.vynl_mobile.ui.components.VynlSeekBar
 import com.vynl.vynl_mobile.data.Lyrics
 import com.vynl.vynl_mobile.data.LyricsStatus
 
-/**
- * The player: over the same blurred cover as everywhere, with the cover as a
- * square tile, track info, the seek bar, transport controls, and shuffle and
- * repeat toggles along the bottom.
- */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
@@ -472,7 +467,6 @@ fun PlayerScreen(
     }
 }
 
-/** The cover, blown up and dimmed, behind the player. */
 @Composable
 private fun ArtBackdrop(coverUrl: String?, lyricsOn: Boolean, modifier: Modifier = Modifier) {
     val blurRadius = if (lyricsOn) 120.dp else 72.dp

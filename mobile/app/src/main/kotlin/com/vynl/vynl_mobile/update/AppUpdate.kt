@@ -26,15 +26,9 @@ data class Update(
     val short: String
         get() = version.substringBefore('+')
 
-    /** The build number of the apk made for a certain phone. */
     fun buildFor(abi: String?): Int = abi?.let { builds[it] } ?: build
 }
 
-/**
- * The updater. It reads the manifest the release publishes, works out whether
- * the build on the phone is older, fetches the right apk and hands it to the
- * system installer.
- */
 class AppUpdate(private val context: Context) {
     private val http = OkHttpClient.Builder().build()
 
@@ -81,10 +75,8 @@ class AppUpdate(private val context: Context) {
         return Update(version, build, notes, apks, builds)
     }
 
-    /** The abi of this phone. */
     fun abi(): String? = Build.SUPPORTED_ABIS.firstOrNull()
 
-    /** The apk that suits this phone. */
     fun urlFor(update: Update): String? {
         val abi = abi() ?: return null
         return update.apks[abi] ?: update.apks.values.firstOrNull()
@@ -116,7 +108,6 @@ class AppUpdate(private val context: Context) {
         file
     }
 
-    /** Whether the system will let the app install packages. */
     fun canInstall(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.packageManager.canRequestPackageInstalls()
@@ -124,11 +115,9 @@ class AppUpdate(private val context: Context) {
             true
         }
 
-    /** The screen where the permission is given. */
     fun installSettingsIntent(): Intent =
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
 
-    /** Hands the apk to the system installer. */
     fun install(file: File): Boolean {
         val uri = FileProvider.getUriForFile(
             context,
@@ -149,7 +138,7 @@ class AppUpdate(private val context: Context) {
     }
 
     companion object {
-        /** Whether the update on offer is newer than what is installed. */
+
         fun isNewer(current: String, currentBuild: Int, update: Update, abi: String? = null): Boolean {
             val target = update.buildFor(abi)
             if (target != currentBuild) return target > currentBuild

@@ -35,8 +35,6 @@ export function blobSrc(
         node.src = convertFileSrc(known);
         return;
       }
-      // The image CDN rejects requests carrying a Referer, so load the cover
-      // straight from the network instead of proxying it through the backend.
       node.referrerPolicy = "no-referrer";
       node.src = p;
       void cacheRemote(p).then(

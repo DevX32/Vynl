@@ -7,11 +7,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
-/**
- * The player that keeps playing when the app is closed. It owns the queue and
- * hands the controls to the system, so the lock screen and the notification
- * work the way the platform expects.
- */
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
 

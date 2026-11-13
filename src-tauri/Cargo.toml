@@ -59,4 +59,3 @@ souvlaki = { version = "0.8.3", default-features = false, features = ["use_zbus"
 lto = true
 codegen-units = 1
 strip = true
-

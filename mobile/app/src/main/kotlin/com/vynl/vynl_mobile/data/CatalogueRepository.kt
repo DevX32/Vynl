@@ -6,10 +6,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * The catalogue client, written in Rust and shared with the desktop. Every
- * call blocks, so they all run off the main thread.
- */
 class CatalogueRepository {
 
     suspend fun search(query: String): CatalogueResults = withContext(Dispatchers.IO) {

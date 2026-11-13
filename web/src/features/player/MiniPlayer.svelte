@@ -153,7 +153,7 @@
         const settings = await vynl.getSettings();
         applyAccentColor(settings.accentColor, false);
       } catch {
-        // keep the default accent
+
       }
     })();
     requestMiniState();
@@ -282,6 +282,8 @@
   <div class="scrim" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
 
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="mini-head"
@@ -351,7 +353,7 @@
 
     <div class="seek-row">
       <span class="time mono">{fmtTime(time)}</span>
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+
       <div
         class="slider seek"
         class:disabled={duration <= 0}
@@ -416,7 +418,7 @@
           <Volume2 size={13} stroke-width={1.5} />
         {/if}
       </button>
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+
       <div
         class="slider vol"
         class:dragging={volDragging}

@@ -44,11 +44,6 @@ data class PlaybackState(
     val error: String? = null,
 )
 
-/**
- * The playback side of the app. The queue lives here, the audio addresses are
- * resolved by the rust catalogue, and the player itself lives in the service
- * so it keeps playing in the background.
- */
 class PlayerController(
     private val context: Context,
     private val repository: CatalogueRepository,
@@ -254,10 +249,8 @@ class PlayerController(
         )
     }
 
-    /** The current queue, in play order. */
     fun queueTracks(): List<CatalogueTrack> = playlist.toList()
 
-    /** Moves the queue item at [from] to [to]. */
     fun moveInQueue(from: Int, to: Int) {
         if (from == to || from !in playlist.indices || to !in playlist.indices) return
         val oldStart = queueStart
@@ -289,21 +282,18 @@ class PlayerController(
         )
     }
 
-    /** Shuffles the queue, starts at 0. */
     fun shuffle() {
         if (playlist.isEmpty()) return
         playlist = playlist.shuffled()
         queueStart = 0
-        // Resolve from 0 is deferred: callers pick the starting track.
+
     }
 
-    /** Toggles shuffle mode. */
     fun toggleShuffle() {
         val controller = controller ?: return
         controller.shuffleModeEnabled = !controller.shuffleModeEnabled
     }
 
-    /** Cycles repeat mode: off -> all -> one -> off. */
     fun toggleRepeat() {
         val controller = controller ?: return
         controller.repeatMode = when (controller.repeatMode) {

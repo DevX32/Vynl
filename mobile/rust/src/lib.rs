@@ -1,8 +1,4 @@
-//! The catalogue the phone app talks to.
-//!
-//! The code lives inside the app: the phone builds its own rust and links it
-//! in, so nothing outside this folder has to change for the phone to browse.
-//! The desktop keeps its own copy of the same client.
+
 
 pub mod client;
 pub mod lyrics;
@@ -59,7 +55,6 @@ fn finish(env: &mut JNIEnv, result: Result<serde_json::Value, String>) -> jstrin
     to_jstring(env, &text)
 }
 
-/// The kind of answer a call wants back.
 enum Ask {
     Search,
     Album,
@@ -125,9 +120,6 @@ fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
     finish(env, result)
 }
 
-// The jni name of a class turns every character that is not a letter or a
-// digit into its code, so the underscore in `vynl_mobile` becomes `_1`.
-// Without that the phone cannot find the method at all.
 macro_rules! bridge {
     ($short:ident, $long:ident, $kind:expr) => {
         #[unsafe(no_mangle)]

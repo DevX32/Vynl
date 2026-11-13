@@ -360,7 +360,6 @@
     transform: translate(-50%, -50%) scale(0.95);
   }
 
-
   .queue-head {
     display: flex;
     align-items: center;

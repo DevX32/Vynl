@@ -36,10 +36,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 
-/**
- * The seek bar of the player: a thin line with a small square that sits on
- * the position, and the time on either side.
- */
 @Composable
 fun VynlSeekBar(
     positionMs: Long,
@@ -119,11 +115,6 @@ fun VynlSeekBar(
     }
 }
 
-/**
- * The volume of the desktop remote: the same thin track and rotated square
- * thumb as the seek bar, with speaker icons either side instead of the
- * times.
- */
 @Composable
 fun VynlVolumeBar(
     volume: Int,
@@ -183,8 +174,7 @@ fun VynlVolumeBar(
         ) {
             drawSlider(progress, dragging, accent)
         }
-        // Matches the seek bar's right-hand clock slot, so the two tracks
-        // share the same width.
+
         Spacer(Modifier.width(53.dp))
     }
 }

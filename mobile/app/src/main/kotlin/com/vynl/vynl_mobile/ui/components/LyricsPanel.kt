@@ -76,11 +76,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 import kotlinx.coroutines.delay
 
-/**
- * The lyrics of the song that is playing, shown in place of the cover.
- * Synced lines light up one after another, and the words inside a line
- * sweep across as they are sung.
- */
 @Composable
 fun LyricsPanel(
     lyrics: Lyrics?,

@@ -1,13 +1,13 @@
 export const DEFAULT_ACCENT_COLOR = "#a894e8";
 
 export const ACCENT_PRESETS = [
-  "#a894e8", // lavender
-  "#7aa2f7", // blue
-  "#8fd694", // green
-  "#e8c86a", // gold
-  "#e8945c", // orange
-  "#ff6b61", // red
-  "#f06ba8", // pink
+  "#a894e8",
+  "#7aa2f7",
+  "#8fd694",
+  "#e8c86a",
+  "#e8945c",
+  "#ff6b61",
+  "#f06ba8",
 ] as const;
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;

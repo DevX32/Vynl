@@ -169,6 +169,8 @@
   </button>
 
   {#if open}
+        <!-- svelte-ignore a11y_interactive_supports_focus -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       id="{uid}-list"
       class="select-list"
@@ -177,8 +179,7 @@
       aria-label={label}
     >
       {#each options as opt, i}
-        <!-- svelte-ignore a11y_interactive_supports_focus -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
+
         <div
           id={optionId(i)}
           role="option"
@@ -273,7 +274,7 @@
     box-shadow: var(--shadow-lg);
     animation: select-in 0.1s ease-out;
   }
- 
+
   .select-list::-webkit-scrollbar {
     display: none;
   }

@@ -20,6 +20,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="overlay" transition:fade={{ duration: 150 }} onclick={closeShortcutsOverlay}>
+
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div
     class="panel"

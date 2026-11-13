@@ -7,11 +7,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-/**
- * Downloads a track so it can be played without a connection. The audio
- * address comes from the catalogue, the file is written into the app's own
- * storage.
- */
 class Downloader(context: Context, private val repository: CatalogueRepository) {
     private val root = File(context.filesDir, "music")
     private val http = OkHttpClient.Builder().build()

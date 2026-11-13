@@ -6,15 +6,12 @@ out
 .env
 .env.local
 
-# Tauri
 src-tauri/target
 src-tauri/gen
 
-# The phone catalogue library is built, not committed
 mobile/rust/target
 mobile/app/src/main/jniLibs
 
-# Signing keys
 src-tauri/*.key
 src-tauri/*.key.pub
 key.properties

@@ -10,9 +10,7 @@ name = "vynl_catalogue"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Browsing and searching only. The javascript runtime that signs player
-# requests is not needed here, which keeps a phone build small and free of
-# a javascript engine.
+
 ytmusic = { git = "https://github.com/DevX32/vynl-ytmusic", branch = "main", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 serde = { version = "1", features = ["derive"] }

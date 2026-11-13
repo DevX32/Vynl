@@ -58,7 +58,7 @@ data class DesktopPlayer(
     val playing: Boolean,
     val position: Double,
     val duration: Double,
-    /** The desktop's volume, 0 to 100, exactly as it reports it. */
+
     val volume: Int,
     val track: DesktopTrack?,
     val queue: List<DesktopTrack> = emptyList(),
@@ -66,13 +66,13 @@ data class DesktopPlayer(
     val loopMode: String = "off",
 )
 
-/**
- * The link to the desktop: pairing with the pin it shows, the player it is
- * playing and the library it holds.
- */
 class Desktop(context: Context) {
     private val prefs = context.getSharedPreferences("vynl", Context.MODE_PRIVATE)
-    private val http = OkHttpClient.Builder().build()
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(2_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .readTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .writeTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .build()
 
     var address: String
         get() = prefs.getString(KEY_ADDRESS, "") ?: ""
@@ -96,7 +96,6 @@ class Desktop(context: Context) {
         return builder
     }
 
-    /** Trades the pin for a token. */
     suspend fun pair(pin: String): Boolean = withContext(Dispatchers.IO) {
         val body = JSONObject().put("pin", pin.trim()).toString()
             .toRequestBody("application/json".toMediaType())
@@ -153,7 +152,6 @@ class Desktop(context: Context) {
         }.getOrDefault(false)
     }
 
-    /** The songs the desktop holds. */
     suspend fun catalog(): List<DesktopTrack> = withContext(Dispatchers.IO) {
         parseEntries("/v1/catalog") { entry ->
             DesktopTrack(
@@ -169,7 +167,6 @@ class Desktop(context: Context) {
         }
     }
 
-    /** What the desktop has, with sizes and mtimes so the phone knows what it has. */
     suspend fun syncManifest(): List<DesktopManifestEntry> = withContext(Dispatchers.IO) {
         parseEntries("/v1/sync-manifest") { entry ->
             DesktopManifestEntry(
@@ -182,7 +179,6 @@ class Desktop(context: Context) {
         }
     }
 
-    /** The playlists the desktop has, with their tracks resolved to ids. */
     suspend fun playlists(): List<DesktopPlaylist> = withContext(Dispatchers.IO) {
         parseEntries("/v1/playlists") { entry ->
             DesktopPlaylist(
@@ -210,7 +206,6 @@ class Desktop(context: Context) {
         }
     }
 
-    /** The lyrics of a track, plain text, as the desktop knows them. */
     suspend fun syncedLyrics(trackId: String): DesktopLyrics? = withContext(Dispatchers.IO) {
         runCatching {
             http.newCall(request("/v1/tracks/$trackId/synced-lyrics").build()).execute().use { response ->
@@ -225,13 +220,11 @@ class Desktop(context: Context) {
         }.getOrNull()
     }
 
-    /** Downloads the audio of a track into the given destination. */
     suspend fun downloadAudio(trackId: String, dest: File, onProgress: (Float) -> Unit): Long? =
         withContext(Dispatchers.IO) {
             downloadInto("/v1/tracks/$trackId/audio", dest) { onProgress(it) }
         }
 
-    /** Downloads the cover of a track into the given destination, null if it hasn't one. */
     suspend fun downloadCover(trackId: String, dest: File): Boolean? = withContext(Dispatchers.IO) {
         downloadInto("/v1/tracks/$trackId/cover", dest) { }; true
     }

@@ -118,7 +118,6 @@
       {/snippet}
     </SettingRow>
 
-    
     <SettingRow
       label={t("settings.overwrite")}
       hint={t("settings.overwriteHint")}

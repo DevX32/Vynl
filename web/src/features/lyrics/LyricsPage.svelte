@@ -661,7 +661,6 @@ import { toggleLyrics } from "@state/player.svelte";
     max-width: 100%;
   }
 
-
   .lyrics-page.fullscreen .lyrics-scroll {
     flex: 1 1 auto;
     min-width: 0;

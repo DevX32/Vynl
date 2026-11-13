@@ -42,10 +42,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 
-/**
- * The playlist as a page: the cover and the name on top, every track below,
- * playing one starts playback right there.
- */
 @Composable
 fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()

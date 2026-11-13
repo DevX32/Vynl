@@ -2,7 +2,6 @@ package com.vynl.vynl_mobile.data
 
 import android.content.Context
 
-/** The few settings the phone keeps between runs. */
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("vynl", Context.MODE_PRIVATE)
 

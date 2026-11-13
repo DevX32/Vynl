@@ -53,9 +53,6 @@ jobs:
           fi
           echo "version=$tag" >> "$GITHUB_OUTPUT"
 
-      # Create the release immediately, while the tag still matches main's
-      # workflow files. The Releases API refuses to create a release with the
-      # Actions token if main gains a workflow change after the tag was cut.
       - name: Ensure release exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -230,8 +227,7 @@ jobs:
           build="${build:-0}"
           short="$version"
           base="https://github.com/$GH_REPO/releases/download/$TAG"
-          # The apks are numbered the way the flutter build numbered them:
-          # +1000 for armeabi-v7a, +2000 for arm64-v8a and +4000 for x86_64.
+
           builds="$(jq -n --argjson base "$build" '{
             "armeabi-v7a": ($base + 1000),
             "arm64-v8a": ($base + 2000),

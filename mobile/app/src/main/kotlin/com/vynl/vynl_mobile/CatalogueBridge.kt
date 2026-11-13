@@ -1,13 +1,5 @@
 package com.vynl.vynl_mobile
 
-/**
- * The shared catalogue client, compiled from the same Rust code the desktop
- * uses. It answers searches, albums, artists, playlists and streams on the
- * phone, so the phone can browse without the desktop running.
- *
- * Every call returns a JSON string: the payload on success, or
- * `{"error": "..."}` when the request could not be answered.
- */
 class CatalogueBridge {
     companion object {
         @Volatile
@@ -31,7 +23,6 @@ class CatalogueBridge {
             }
         }
 
-        /** Whether the native library is present on this build. */
         fun isAvailable(): Boolean {
             load()
             return available

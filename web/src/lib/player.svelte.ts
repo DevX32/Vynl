@@ -517,7 +517,6 @@ function playSharedFile(opts: {
   );
 }
 
-
 let _sharedKey: string | null = null;
 let _sharedGen = 0;
 let _lastSharedSeekAt = 0;
@@ -545,7 +544,7 @@ export async function playShared(s: PluginSharedState): Promise<void> {
       }
       if (gen !== _sharedGen) return;
     } else if (following && np?.path) {
-      path = np.path; 
+      path = np.path;
     }
     if (!path) return;
     _sharedKey = key ?? _sharedKey;

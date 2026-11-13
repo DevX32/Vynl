@@ -141,8 +141,6 @@ pub async fn lookup(artist: &str, album: &str, title: &str, duration: f64) -> Op
     result
 }
 
-/// Cover lookup chain. Spotify has the largest catalog and matches tracks that
-/// were downloaded through Vynl; Deezer and iTunes cover the gaps.
 async fn fetch(artist: &str, album: &str, title: &str, duration: f64) -> Option<String> {
     let artist = repair_mojibake(artist.trim()).into_owned();
     let album = repair_mojibake(album.trim()).into_owned();
@@ -494,8 +492,6 @@ fn base_title(s: &str) -> String {
     norm(&lower[..cut])
 }
 
-/// Repairs the common UTF-8-read-as-Latin-1 tag corruption, e.g. "MarÃ­as"
-/// (U+00C3 U+00AD) back to "Marías".
 fn repair_mojibake(s: &str) -> Cow<'_, str> {
     let has_latin1 = s.chars().any(|ch| ('\u{80}'..='\u{ff}').contains(&ch));
     if !has_latin1 || s.chars().any(|ch| ch as u32 > 0xff) {

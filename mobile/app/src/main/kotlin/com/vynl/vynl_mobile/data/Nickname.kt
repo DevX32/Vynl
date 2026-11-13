@@ -2,10 +2,6 @@ package com.vynl.vynl_mobile.data
 
 import kotlin.random.Random
 
-/**
- * The words the app draws its random nicknames from. They match the names the
- * phone app has always used, so a fresh install still feels like Vynl.
- */
 private val adjectives = listOf(
     "Cosmic", "Velvet", "Neon", "Quiet", "Golden", "Midnight", "Paper", "Wild",
     "Silver", "Lunar", "Electric", "Soft", "Amber", "Static", "Marble", "Feral",
@@ -36,7 +32,6 @@ private val nouns = listOf(
 fun randomNickname(): String =
     "${adjectives[Random.nextInt(adjectives.size)]} ${nouns[Random.nextInt(nouns.size)]}"
 
-/** The name shown in the greeting: the chosen one, or the random nickname. */
 fun resolveDisplayName(configured: String, nickname: String): String {
     val name = configured.trim()
     return if (name.isEmpty()) nickname else name

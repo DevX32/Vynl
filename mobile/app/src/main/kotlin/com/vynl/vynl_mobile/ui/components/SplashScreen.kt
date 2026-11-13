@@ -25,10 +25,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Shown at launch: the logo fades and scales in, then the whole splash
- * fades up and away, revealing the app underneath.
- */
 @Composable
 fun SplashScreen(onExited: () -> Unit) {
     val enterEasing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)

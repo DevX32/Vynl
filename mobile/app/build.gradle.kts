@@ -47,7 +47,7 @@ android {
 
     buildTypes {
         debug {
-            // The debug app lives beside a release install on the same phone.
+
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
         }
@@ -83,9 +83,6 @@ android {
     }
 }
 
-// The flutter build numbered each apk by adding to the base version code:
-// +1000 for armeabi-v7a, +2000 for arm64-v8a and +4000 for x86_64. Keep the
-// same scheme so the compose app upgrades a flutter install in place.
 val baseVersionCode = android.defaultConfig.versionCode ?: 0
 
 androidComponents {
@@ -136,8 +133,6 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
-// The catalogue client is Rust, written inside the app. It is built with
-// cargo-ndk and copied into the jniLibs folder the apk packs.
 val catalogueTargets = mapOf(
     "arm64-v8a" to "aarch64-linux-android",
     "armeabi-v7a" to "armv7-linux-androideabi",

@@ -36,7 +36,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 
-/** The things a row can do. */
 data class TrackActions(
     val onGoToAlbum: () -> Unit,
     val onGoToArtist: () -> Unit,

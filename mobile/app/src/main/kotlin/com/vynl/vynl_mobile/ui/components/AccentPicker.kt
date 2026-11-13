@@ -55,7 +55,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 import kotlin.math.abs
 
-/** One colour in the accent chooser, drawn as a small squared-off swatch. */
 @Composable
 fun AccentSwatch(
     color: Color,
@@ -90,10 +89,6 @@ fun AccentSwatch(
     }
 }
 
-/**
- * The accent chooser: the presets first, then the whole colour space for
- * anyone who wants a shade that is theirs alone.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccentSheet(
@@ -372,12 +367,10 @@ private fun HueField(
     }
 }
 
-/** Compose helper: hold the newest value for pointer loops that outlive a frame. */
 @Composable
 private fun <T> rememberUpdatedStateValue(value: T): androidx.compose.runtime.State<T> =
     androidx.compose.runtime.rememberUpdatedState(value)
 
-/** Hue in degrees, saturation and value as 0..1. */
 fun hsvOf(color: Color): Triple<Float, Float, Float> {
     val max = maxOf(color.red, color.green, color.blue)
     val min = minOf(color.red, color.green, color.blue)
@@ -395,7 +388,6 @@ fun hsvOf(color: Color): Triple<Float, Float, Float> {
     return Triple(hue, saturation, max)
 }
 
-/** A colour from hue in degrees and saturation/value in 0..1. */
 fun colorOfHsv(hue: Float, saturation: Float, value: Float): Color {
     val h = ((hue % 360f) + 360f) % 360f
     val s = saturation.coerceIn(0f, 1f)

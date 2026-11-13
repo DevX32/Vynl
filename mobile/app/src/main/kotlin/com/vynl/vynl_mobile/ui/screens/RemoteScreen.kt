@@ -56,11 +56,6 @@ import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 import kotlinx.coroutines.delay
 
-/**
- * The full-screen remote for the desktop, in the style of the player page:
- * the same cover, seek bar, transport and queue, but it drives the desktop's
- * own playback over the local network instead of this phone's.
- */
 @Composable
 fun RemoteScreen(
     viewModel: AppViewModel,

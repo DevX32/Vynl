@@ -1,7 +1,4 @@
-//! The lyrics the phone shows while a song plays.
-//!
-//! The same three providers the desktop uses, in the same order, and the
-//! same scoring when several songs share a title.
+
 
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -44,7 +41,6 @@ fn http_client() -> &'static reqwest::Client {
     })
 }
 
-/// Whether the text carries timestamps, in the lrc way.
 pub fn is_lrc(text: &str) -> bool {
     text.lines().any(|line| {
         let line = line.trim_start();
@@ -70,7 +66,6 @@ pub fn is_lrc(text: &str) -> bool {
     })
 }
 
-/// Whether the text is a timed xml document.
 pub fn is_ttml(text: &str) -> bool {
     let bytes = text.as_bytes();
     for index in 0..bytes.len().saturating_sub(3) {
@@ -401,7 +396,6 @@ async fn fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
     None
 }
 
-/// The lyrics for a song, or nothing when no provider has them.
 pub async fn fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
     let lrclib = fetch_lrclib(lookup).await;
     if lrclib.as_ref().is_some_and(|hit| is_synced(&hit.kind)) {

@@ -68,7 +68,7 @@ export function initMiniBridge(): () => void {
             await win.show();
             await win.setFocus();
           } catch {
-            // ignore window restore failures
+
           }
         })();
         break;

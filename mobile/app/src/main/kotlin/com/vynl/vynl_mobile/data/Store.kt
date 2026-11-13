@@ -9,10 +9,6 @@ import java.io.File
 
 private const val SCHEMA_VERSION = 2
 
-/**
- * The phone's own store: the songs it has, the playlists the user makes and
- * the ones it syncs from the desktop, the downloaded covers and lyrics.
- */
 class Store(context: Context) {
     private val files = File(context.filesDir, "music")
 
@@ -169,7 +165,6 @@ class Store(context: Context) {
         )
     }
 
-    /** The first track's cover for each playlist, chosen by position. */
     fun firstTrackCovers(): Map<String, Pair<String?, String?>> {
         val result = mutableMapOf<String, Pair<String?, String?>>()
         helper.readableDatabase.rawQuery(

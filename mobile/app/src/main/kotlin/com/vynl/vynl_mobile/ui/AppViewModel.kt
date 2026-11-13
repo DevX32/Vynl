@@ -129,7 +129,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val updater = AppUpdate(application)
     val desktop = Desktop(application)
 
-    /** The name the user chose, and the fallback the app rolls for them. */
     var displayName by mutableStateOf(settings.displayName)
         private set
 
@@ -189,11 +188,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshStore()
     }
 
-    /**
-     * Pairs the phone with the desktop, using the pin it shows. The QR code can
-     * offer more than one address for the same desktop; they are tried in turn.
-     * Returns null when pairing worked, or a message when it did not.
-     */
     suspend fun pairDesktop(
         address: String,
         pin: String,
@@ -227,14 +221,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The same pairing, fired from a button that does not wait for it. */
     fun pairDesktop(address: String, pin: String) {
         viewModelScope.launch {
             pairDesktop(address, pin, autoSync = true)?.let { notice = it }
         }
     }
 
-    /** Forgets the desktop, its token and its synced library. */
     fun unpairDesktop() {
         desktop.address = ""
         desktop.token = ""
@@ -242,7 +234,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         notice = "The desktop is forgotten"
     }
 
-    /** Asks the desktop what it is playing. */
     fun refreshRemote() {
         if (!desktop.paired) return
         viewModelScope.launch {
@@ -251,35 +242,52 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Sends a command to the desktop. */
     fun remoteAction(name: String, time: Double? = null, volume: Int? = null, index: Int? = null) {
         if (!desktop.paired) return
+        _remote.value?.let { current ->
+            _remote.value = applyRemoteAction(current, name, time, volume, index)
+        }
         viewModelScope.launch {
             desktop.action(name, time = time, volume = volume, index = index)
             refreshRemote()
         }
     }
 
-    /** Jumps the desktop playback to a position, in seconds. */
+    private fun applyRemoteAction(
+        current: DesktopPlayer,
+        name: String,
+        time: Double?,
+        volume: Int?,
+        index: Int?,
+    ): DesktopPlayer = when (name) {
+        "toggle" -> current.copy(playing = !current.playing)
+        "pause" -> current.copy(playing = false)
+        "play", "resume" -> current.copy(playing = true)
+        "next", "previous" -> current.copy(position = 0.0)
+        "seek" -> time?.let { current.copy(position = it) } ?: current
+        "volume" -> volume?.let { current.copy(volume = it) } ?: current
+        "shuffle" -> current.copy(shuffle = !current.shuffle)
+        "repeat" -> current.copy(
+            loopMode = when (current.loopMode) {
+                "off" -> "all"
+                "all" -> "one"
+                else -> "off"
+            },
+        )
+        "playUpcoming" -> current.copy(position = 0.0, playing = true)
+        else -> current
+    }
+
     fun remoteSeek(seconds: Double) = remoteAction("seek", time = seconds.coerceAtLeast(0.0))
 
-    /** Sets the desktop volume, 0 to 100. */
     fun remoteVolume(volume: Int) = remoteAction("volume", volume = volume.coerceIn(0, 100))
 
-    /** Toggles shuffle on the desktop. */
     fun remoteShuffle() = remoteAction("shuffle")
 
-    /** Cycles repeat on the desktop: off, all, one. */
     fun remoteRepeat() = remoteAction("repeat")
 
-    /** Taps the desktop's upcoming queue, playing that entry. */
     fun remotePlayUpcoming(index: Int) = remoteAction("playUpcoming", index = index.coerceAtLeast(0))
 
-    /**
-     * The cached cover for a desktop track: the synced copy when this phone
-     * has it, falling back to a one-off download of the desktop's cover.
-     * Returns null while it is not on disk yet.
-     */
     fun remoteCoverPath(track: DesktopTrack): String? {
         val cached = runCatching { store.coverFile(track.id, "jpg") }.getOrNull() ?: return null
         if (cached.exists() && cached.length() > 0) return cached.absolutePath
@@ -294,7 +302,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val remoteCoverAttempted = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
-    /** Pulls the songs the desktop holds into the phone. */
     fun syncLibrary() {
         if (!desktop.paired) {
             notice = "Pair with the desktop first"
@@ -441,7 +448,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The profile name, shown in the greeting and across the app. */
     fun saveDisplayName(value: String) {
         val clipped = value.trim().take(32)
         if (clipped == displayName) return
@@ -449,12 +455,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         settings.displayName = clipped
     }
 
-    /** Rolls a new random nickname for people who leave the name blank. */
     fun rollNickname() {
         nickname = randomNickname()
         settings.nickname = nickname
     }
-    /** The colour the app wears. */
+
     fun setAccent(color: androidx.compose.ui.graphics.Color) {
         Accent.set(color)
         settings.accent = color.toArgb()
@@ -575,7 +580,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         notice = null
     }
 
-    /** Toggles the lyrics panel in place of the cover. */
     fun toggleLyrics() {
         val track = player.state.value.track ?: return
         lyricsOpen = !lyricsOpen
@@ -586,14 +590,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Loads the lyrics for a track without opening the panel. */
     fun ensureLyrics(track: CatalogueTrack) {
         if (lyricsTrackId == track.id) return
         lyricsTrackId = track.id
         loadLyrics(track)
     }
 
-    /** Fetches the lyrics again after a failure. */
     fun retryLyrics() {
         val track = player.state.value.track ?: return
         lyricsTrackId = track.id

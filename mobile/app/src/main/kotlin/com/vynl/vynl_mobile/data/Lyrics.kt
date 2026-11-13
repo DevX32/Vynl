@@ -7,10 +7,6 @@ enum class LyricsStatus {
     Failed,
 }
 
-/**
- * The lyrics of a song, parsed into lines that carry their own time, and the
- * words inside a line that carry theirs.
- */
 data class LyricLine(
     val timeMs: Long,
     val text: String,
@@ -31,11 +27,9 @@ data class Lyrics(
     val isSynced: Boolean
         get() = kind == "lrc" || kind == "ttml"
 
-    /** True when at least one line is timed. */
     val synced: Boolean
         get() = isSynced && lines.any { it.timeMs >= 0 }
 
-    /** The line that should be showing at this moment, or -1 when idle. */
     fun activeIndex(positionMs: Long): Int {
         if (lines.isEmpty()) return -1
         var index = -1
@@ -87,7 +81,6 @@ data class Lyrics(
         private fun ttmlAttr(attrs: String, name: String): String? =
             ATTR_REGEX(name).find(attrs)?.groupValues?.get(1)
 
-        /** TTML times: plain seconds ("9.589"), mm:ss.mmm ("02:42.857") or hh:mm:ss.mmm ("00:00:16.620"). */
         private fun ttmlTime(value: String?): Long? {
             if (value == null) return null
             val base = value.trim()
@@ -139,7 +132,6 @@ data class Lyrics(
         private fun stripTags(body: String): String =
             body.replace(Regex("<[^>]*>"), "").trim()
 
-        /** The words of a line, with the time each one starts. */
         private fun wordsOf(body: String): List<LyricWord> {
             if (!body.contains('<')) return emptyList()
             val words = mutableListOf<LyricWord>()
@@ -223,7 +215,6 @@ private val INSTRUMENTAL_PHRASE = Regex(
     RegexOption.IGNORE_CASE,
 )
 
-/** A line that carries no words, only music. */
 fun isInstrumental(text: String): Boolean {
     val value = text.trim()
     if (value.isEmpty()) return true
@@ -234,7 +225,6 @@ fun isInstrumental(text: String): Boolean {
     return INSTRUMENTAL_WORD.matches(unwrapped) || INSTRUMENTAL_PHRASE.matches(unwrapped)
 }
 
-/** The text without any time tags, as paragraphs separated by empty lines. */
 fun stripStamps(text: String): String =
     text.lines()
         .joinToString("\n") { line ->
@@ -243,7 +233,6 @@ fun stripStamps(text: String): String =
         .replace(Regex("\n{3,}"), "\n\n")
         .trim()
 
-/** Plain lyrics grouped into stanzas, blank lines as the breaks. */
 fun stanzasOf(text: String): List<List<String>> {
     val stanzas = mutableListOf<List<String>>()
     var current = mutableListOf<String>()

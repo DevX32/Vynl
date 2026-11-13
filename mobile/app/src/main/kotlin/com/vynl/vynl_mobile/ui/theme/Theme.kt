@@ -35,7 +35,6 @@ object VynlColors {
     val accentOn = Color(0xFF161128)
     val accentSoft = Color(0x1CB9A7FF)
 
-    /** The accent in use, read from the one place that holds it. */
     val accent: Color get() = Accent.color
 
     val presets = listOf(
@@ -49,7 +48,6 @@ object VynlColors {
     )
 }
 
-/** The accent the app uses, kept in one place so every screen follows it. */
 object Accent {
     var color: Color by androidx.compose.runtime.mutableStateOf(VynlColors.accentDefault)
         private set
@@ -58,7 +56,6 @@ object Accent {
         color = value
     }
 
-    /** The text that sits on the accent, dark on a light accent. */
     fun on(): Color {
         val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
         return if (luminance > 0.55f) VynlColors.accentOn else VynlColors.text

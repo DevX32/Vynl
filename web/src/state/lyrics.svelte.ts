@@ -9,7 +9,6 @@ export type Word = {
   text: string;
   end?: number;
   bg?: boolean;
-  /** Whether the source had whitespace after this word (karaoke spacing). */
   sep?: boolean;
 };
 export type LyricLine = {
