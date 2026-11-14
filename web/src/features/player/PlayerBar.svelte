@@ -300,12 +300,12 @@
   }
 
   .now-like {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 28px;
     height: 28px;
-    flex-shrink: 0;
     padding: 0;
     border: none;
     background: none;
@@ -465,6 +465,7 @@
   }
 
   .bar-right .icon-btn {
+    flex-shrink: 0;
     width: 26px;
     height: 26px;
     border-radius: var(--radius-sm);
@@ -508,6 +509,7 @@
   }
 
   .bar-sep {
+    flex-shrink: 0;
     width: 1px;
     height: 16px;
     background: var(--line);
@@ -515,6 +517,7 @@
   }
 
   .vol-btn {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;

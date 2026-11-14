@@ -66,6 +66,13 @@
     muted = loadMuted();
   }
 
+  const ACCENT_KEY = "vynl.accent";
+
+  function syncAccentFromStorage(): void {
+    const hex = localStorage.getItem(ACCENT_KEY);
+    if (hex) applyAccentColor(hex, false);
+  }
+
   function setVolume(ratio: number): void {
     const next = Math.min(1, Math.max(0, ratio));
     volume = next;
@@ -166,6 +173,7 @@
       try {
         const settings = await vynl.getSettings();
         applyAccentColor(settings.accentColor, false);
+        syncAccentFromStorage();
       } catch {
 
       }
@@ -208,7 +216,10 @@
         else offClose = fn;
       });
 
-    const onStorage = (): void => syncVolumeFromStorage();
+    const onStorage = (): void => {
+      syncVolumeFromStorage();
+      syncAccentFromStorage();
+    };
     window.addEventListener("storage", onStorage);
 
     const onKey = (e: KeyboardEvent): void => {

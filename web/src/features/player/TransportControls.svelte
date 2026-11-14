@@ -77,6 +77,7 @@
 
 <style>
   .icon-btn {
+    flex-shrink: 0;
     width: 32px;
     height: 32px;
     border-radius: var(--radius-sm);
@@ -123,6 +124,7 @@
   }
 
   .play-btn {
+    flex-shrink: 0;
     position: relative;
     width: 40px;
     height: 40px;

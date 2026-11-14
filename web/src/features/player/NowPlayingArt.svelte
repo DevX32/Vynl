@@ -314,7 +314,7 @@
   }
 
   .lyr-btn {
-    margin: 21px auto 7px;
+    margin: 21px auto 65px;
     display: flex;
     align-items: center;
     justify-content: center;

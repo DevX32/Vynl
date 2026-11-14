@@ -124,6 +124,12 @@
     width: 100%;
     max-width: 600px;
     height: 100vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .fs-content::-webkit-scrollbar {
+    display: none;
   }
 
   .fs-close {
@@ -161,7 +167,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 0 120px;
   }
 
   .fs-art :global(.now-art) {

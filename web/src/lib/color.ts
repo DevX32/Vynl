@@ -144,6 +144,9 @@ function writeAccent(rgb: Rgb, text: Rgb): void {
   root.setProperty("--accent-soft", `rgba(${rgbStr}, 0.11)`);
   root.setProperty("--accent-glow", `rgba(${rgbStr}, 0.38)`);
   root.setProperty("--accent-text", rgbToHexString(text));
+  if (typeof localStorage !== "undefined" && window.location.hash !== "#mini") {
+    localStorage.setItem("vynl.accent", rgbToHexString(rgb));
+  }
 }
 
 function lerp(a: number, b: number, t: number): number {
