@@ -137,10 +137,11 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                 },
                 actions = {
                     val cloud = viewModel.cloudStatus
+                    val displayName = viewModel.greetingName
                     val accountSeed = if (cloud.signedIn && !cloud.email.isNullOrBlank()) {
                         cloud.email
                     } else {
-                        viewModel.displayName.ifBlank { viewModel.nickname.ifBlank { "vynl" } }
+                        displayName
                     }
                     Box {
                         IconButton(onClick = { accountMenuOpen = true }) {
@@ -149,7 +150,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                         AccountMenu(
                             expanded = accountMenuOpen,
                             onDismiss = { accountMenuOpen = false },
-                            displayName = viewModel.displayName,
+                            displayName = displayName,
                             email = cloud.email,
                             signedIn = cloud.signedIn,
                             onAccount = { accountOpen = true },

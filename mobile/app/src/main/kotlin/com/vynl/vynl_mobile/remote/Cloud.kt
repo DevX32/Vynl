@@ -385,10 +385,10 @@ class Cloud(context: Context) {
     }
 
     private fun validSession(): CloudSession {
-        val current = session() ?: throw IOException("Sign in to Vynl Cloud first.")
+        val current = session() ?: throw IOException("Sign in to Vynl first.")
         if (current.expiresAt > System.currentTimeMillis() + 30_000) return current
         synchronized(refreshLock) {
-            val again = session() ?: throw IOException("Sign in to Vynl Cloud first.")
+            val again = session() ?: throw IOException("Sign in to Vynl first.")
             if (again.expiresAt > System.currentTimeMillis() + 30_000) return again
             if (again.refreshToken.isBlank()) {
                 clearSession()

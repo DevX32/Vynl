@@ -277,7 +277,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 cloudStatus = CloudStatus(false, null)
                 cloudError = null
                 cloudNotice = null
-                notice = "Signed out of Vynl Cloud"
+                notice = "Signed out of Vynl"
             } catch (error: Exception) {
                 cloudError = friendly(error)
             } finally {
@@ -289,7 +289,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun syncCloud(silent: Boolean = false) {
         if (cloudSyncing) return
         if (!cloud.status.signedIn) {
-            if (!silent) notice = "Sign in to Vynl Cloud first"
+            if (!silent) notice = "Sign in to Vynl first"
             return
         }
         cloudSyncing = true

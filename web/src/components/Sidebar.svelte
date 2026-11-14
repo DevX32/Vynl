@@ -336,10 +336,16 @@
       {#if accountMenuOpen}
         <div class="account-menu" style={accountMenuStyle} role="menu">
           <div class="account-menu-head">
-            <span class="menu-name display">{displayName}</span>
-            <span class="menu-sub mono">
-              {cloud.signedIn ? cloud.email : t("account.notSignedIn")}
+            <span class="menu-avatar">
+              <img src={avatarSrc} alt="" draggable="false" />
+              {#if cloud.signedIn}<span class="avatar-dot"></span>{/if}
             </span>
+            <div class="menu-head-text">
+              <span class="menu-name display">{displayName}</span>
+              <span class="menu-sub mono">
+                {cloud.signedIn ? cloud.email : t("account.notSignedIn")}
+              </span>
+            </div>
           </div>
           {#if cloud.signedIn}
             <button
@@ -853,11 +859,36 @@
 
   .account-menu-head {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    gap: 10px;
     padding: 8px 10px 9px;
     margin-bottom: 2px;
     border-bottom: 1px solid var(--line);
+  }
+
+  .menu-avatar {
+    position: relative;
+    display: block;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+
+  .menu-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    transform: scale(1.3);
+    user-select: none;
+  }
+
+  .menu-head-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
   }
 
   .menu-name {

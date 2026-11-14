@@ -114,7 +114,7 @@ fn clear_session(data_dir: &Path) {
 
 fn http() -> Result<reqwest::Client, String> {
     if !cloud_enabled() {
-        return Err("Vynl Cloud isn't configured.".into());
+        return Err("Vynl isn't configured.".into());
     }
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
@@ -531,7 +531,7 @@ fn row_to_playlist(row: &CloudRow) -> Playlist {
 
 pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<CloudSyncResult, String> {
     if !cloud_enabled() {
-        return Err("Vynl Cloud isn't configured.".into());
+        return Err("Vynl isn't configured.".into());
     }
     let session = valid_session(data_dir).await?;
     let rows = fetch_rows(data_dir).await?;

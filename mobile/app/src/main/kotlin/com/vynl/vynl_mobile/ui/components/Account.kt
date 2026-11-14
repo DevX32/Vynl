@@ -47,8 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -119,26 +119,32 @@ internal fun AccountMenu(
         Column(
             modifier = Modifier
                 .widthIn(min = 220.dp, max = 240.dp)
-                .padding(vertical = 6.dp),
+                .padding(vertical = 4.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
-                Text(
-                    text = displayName,
-                    color = VynlColors.text,
-                    fontSize = 14.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.W600,
-                    fontFamily = VynlFonts.display,
-                    maxLines = 1,
-                )
-                Text(
-                    text = if (signedIn) email.orEmpty() else "Not signed in",
-                    color = VynlColors.faint,
-                    fontSize = 10.sp,
-                    fontFamily = VynlFonts.mono,
-                    maxLines = 1,
-                )
+                val seed = if (signedIn && !email.isNullOrBlank()) email else displayName
+                AccountAvatar(seed = seed, signedIn = signedIn, size = 34.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayName,
+                        color = VynlColors.text,
+                        fontSize = 14.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.W600,
+                        fontFamily = VynlFonts.display,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = if (signedIn) email.orEmpty() else "Not signed in",
+                        color = VynlColors.faint,
+                        fontSize = 10.sp,
+                        fontFamily = VynlFonts.mono,
+                        maxLines = 1,
+                    )
+                }
             }
             HorizontalDivider(color = VynlColors.line)
             if (signedIn) {
@@ -191,6 +197,7 @@ private fun AccountMenuItem(
         else -> VynlColors.dim
     }
     DropdownMenuItem(
+        modifier = Modifier.height(44.dp),
         text = {
             Text(
                 text = label,
@@ -283,68 +290,153 @@ internal fun AccountDialog(
 }
 
 @Composable
-private fun SignedInBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
-    val cloud = viewModel.cloudStatus
-    val seed = cloud.email ?: viewModel.displayName
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AccountAvatar(seed = seed, signedIn = true, size = 56.dp)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Signed in as",
-                    color = VynlColors.faint,
-                    fontSize = 9.5.sp,
-                    fontFamily = VynlFonts.mono,
-                    letterSpacing = 0.8.sp,
-                )
-                Text(
-                    text = cloud.email.orEmpty(),
-                    color = VynlColors.text,
-                    fontSize = 13.sp,
-                    fontFamily = VynlFonts.display,
-                    maxLines = 1,
-                )
-            }
+private fun AccountBanner(seed: String, signedIn: Boolean, email: String?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(VynlRadius.control))
+            .background(VynlColors.bg)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AccountAvatar(seed = seed, signedIn = signedIn, size = 46.dp)
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "MIRRORING",
-                color = VynlColors.accent,
+                text = "ACCOUNT",
+                color = VynlColors.faint,
                 fontSize = 9.5.sp,
                 fontFamily = VynlFonts.mono,
-                letterSpacing = 1.1.sp,
+                letterSpacing = 1.6.sp,
+            )
+            Text(
+                text = if (signedIn) email.orEmpty() else "Not signed in",
+                color = VynlColors.text,
+                fontSize = 14.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.W600,
+                fontFamily = VynlFonts.display,
+                maxLines = 1,
+            )
+            Text(
+                text = if (signedIn) "Playlist changes mirror automatically." else "Keep everything on this device.",
+                color = VynlColors.faint,
+                fontSize = 10.5.sp,
+                lineHeight = 15.sp,
+                fontFamily = VynlFonts.display,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionRow(
+    label: String,
+    hint: String,
+    control: @Composable () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(VynlRadius.control))
+            .border(1.dp, VynlColors.line, RoundedCornerShape(VynlRadius.control))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = VynlColors.text,
+                fontSize = 12.5.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.W500,
+                fontFamily = VynlFonts.display,
+            )
+            Text(
+                text = hint,
+                color = VynlColors.faint,
+                fontSize = 10.5.sp,
+                lineHeight = 14.sp,
+                fontFamily = VynlFonts.display,
+            )
+        }
+        control()
+    }
+}
+
+@Composable
+private fun ActionButton(
+    label: String,
+    onClick: () -> Unit,
+    accent: Boolean = false,
+    danger: Boolean = false,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    val color = when {
+        danger -> VynlColors.danger
+        accent -> VynlColors.accent
+        else -> VynlColors.dim
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(VynlRadius.control))
+            .border(1.dp, color.copy(alpha = if (enabled || busy) 0.55f else 0.2f), RoundedCornerShape(VynlRadius.control))
+            .background(color.copy(alpha = if (enabled || busy) 0.12f else 0.05f))
+            .clickable(enabled = enabled && !busy, onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 8.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(modifier = Modifier.size(12.dp), color = color, strokeWidth = 1.6.dp)
+        }
+        Text(
+            text = label,
+            color = color,
+            fontSize = 12.5.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.W600,
+            fontFamily = VynlFonts.display,
+        )
+    }
+}
+
+@Composable
+private fun SignedInBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
+    val cloud = viewModel.cloudStatus
+    val seed = cloud.email ?: viewModel.displayName.ifBlank { viewModel.nickname }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        AccountBanner(seed = seed, signedIn = true, email = cloud.email)
+
+        ActionRow(
+            label = "Playlist mirror",
+            hint = "Audio files and cover art stay on this device.",
+        ) {
+            ActionButton(
+                label = if (viewModel.cloudSyncing) "Syncing…" else "Sync now",
+                onClick = { viewModel.syncCloud() },
+                accent = true,
+                busy = viewModel.cloudSyncing,
             )
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(VynlRadius.control))
-                .background(VynlColors.accent.copy(alpha = 0.12f))
-                .border(1.dp, VynlColors.accent.copy(alpha = 0.4f), RoundedCornerShape(VynlRadius.control))
-                .clickable(enabled = !viewModel.cloudSyncing) { viewModel.syncCloud() }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            contentAlignment = Alignment.Center,
+        ActionRow(
+            label = "Sign out",
+            hint = "Stop mirroring playlists on this device.",
         ) {
-            if (viewModel.cloudSyncing) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(14.dp), color = VynlColors.accent, strokeWidth = 2.dp)
-                    Spacer(Modifier.width(10.dp))
-                    Text("Syncing playlists…", color = VynlColors.accent, fontFamily = VynlFonts.display)
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null, tint = VynlColors.accent, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Sync playlists now", color = VynlColors.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.W600, fontFamily = VynlFonts.display)
-                }
-            }
+            ActionButton(
+                label = "Sign out",
+                onClick = { viewModel.cloudSignOut(); onDismiss() },
+                danger = true,
+            )
         }
 
-        AccountFooterButton(
-            label = "Sign out",
-            icon = Icons.AutoMirrored.Rounded.Logout,
-            color = VynlColors.danger,
-            onClick = { viewModel.cloudSignOut(); onDismiss() },
+        Text(
+            text = "Stay signed out and Vynl works exactly as it does today - everything stays on this device.",
+            color = VynlColors.faint,
+            fontSize = 9.sp,
+            lineHeight = 13.sp,
+            fontFamily = VynlFonts.mono,
         )
     }
 }
@@ -355,59 +447,57 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val canSubmit = email.isNotBlank() && password.isNotEmpty()
+    val seed = viewModel.displayName.ifBlank { viewModel.nickname }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AccountAvatar(seed = viewModel.displayName.ifBlank { viewModel.nickname }, signedIn = false, size = 56.dp)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Vynl Cloud",
-                    color = VynlColors.text,
-                    fontSize = 15.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.W600,
-                    fontFamily = VynlFonts.display,
-                )
-                Text(
-                    text = "Mirror playlists across your devices.",
-                    color = VynlColors.faint,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    fontFamily = VynlFonts.display,
-                )
-            }
+        AccountBanner(seed = seed, signedIn = false, email = null)
+
+        Column {
+            Text(
+                text = "EMAIL",
+                color = VynlColors.faint,
+                fontSize = 9.5.sp,
+                letterSpacing = 1.4.sp,
+                fontFamily = VynlFonts.mono,
+                modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
+            )
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                placeholder = { Text("you@example.com") },
+                singleLine = true,
+                enabled = !viewModel.cloudBusy,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next, keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(VynlRadius.control),
+                colors = accountFieldColors(),
+            )
         }
 
-        Text(
-            text = if (signUp) "CREATE ACCOUNT" else "SIGN IN",
-            color = VynlColors.faint,
-            fontSize = 9.5.sp,
-            letterSpacing = 1.1.sp,
-            fontFamily = VynlFonts.mono,
-        )
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            singleLine = true,
-            enabled = !viewModel.cloudBusy,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(VynlRadius.control),
-            colors = accountFieldColors(),
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            singleLine = true,
-            enabled = !viewModel.cloudBusy,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submitCloud(viewModel, signUp, email, password) }),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(VynlRadius.control),
-            colors = accountFieldColors(),
-        )
+        Column {
+            Text(
+                text = "PASSWORD",
+                color = VynlColors.faint,
+                fontSize = 9.5.sp,
+                letterSpacing = 1.4.sp,
+                fontFamily = VynlFonts.mono,
+                modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                placeholder = { Text("Your password") },
+                singleLine = true,
+                enabled = !viewModel.cloudBusy,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, keyboardType = KeyboardType.Password),
+                keyboardActions = KeyboardActions(onDone = { submitCloud(viewModel, signUp, email.trim(), password) }),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(VynlRadius.control),
+                colors = accountFieldColors(),
+            )
+        }
+
         if (viewModel.cloudError != null) {
             Text(
                 text = viewModel.cloudError.orEmpty(),
@@ -425,64 +515,34 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
                 fontFamily = VynlFonts.display,
             )
         }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(VynlRadius.control))
-                .background(VynlColors.accent.copy(alpha = if (canSubmit || viewModel.cloudBusy) 0.12f else 0.04f))
-                .border(1.dp, VynlColors.accent.copy(alpha = if (canSubmit || viewModel.cloudBusy) 0.5f else 0.2f), RoundedCornerShape(VynlRadius.control))
-                .clickable(enabled = !viewModel.cloudBusy && canSubmit) { submitCloud(viewModel, signUp, email, password) }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            contentAlignment = Alignment.Center,
+
+        ActionRow(
+            label = if (signUp) "Create account" else "Sign in",
+            hint = if (signUp) "Create a playlist mirror for this device" else "Mirror playlists already saved to your account",
         ) {
-            if (viewModel.cloudBusy) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(14.dp), color = VynlColors.accent, strokeWidth = 2.dp)
-                    Spacer(Modifier.width(10.dp))
-                    Text(if (signUp) "Creating…" else "Signing in…", color = VynlColors.accent, fontFamily = VynlFonts.display)
-                }
-            } else {
-                Text(
-                    text = if (signUp) "Create account" else "Sign in",
-                    color = if (canSubmit || viewModel.cloudBusy) VynlColors.accent else VynlColors.faint,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.W700,
-                    fontFamily = VynlFonts.display,
-                )
-            }
+            ActionButton(
+                label = if (viewModel.cloudBusy) (if (signUp) "Creating…" else "Signing in…") else (if (signUp) "Create account" else "Sign in"),
+                onClick = { submitCloud(viewModel, signUp, email.trim(), password) },
+                accent = true,
+                enabled = canSubmit,
+                busy = viewModel.cloudBusy,
+            )
         }
+
         Text(
-            text = if (signUp) "Already have an account? Sign in" else "New to Vynl? Create an account",
+            text = if (signUp) "Already have an account? Sign in" else "New here? Create an account",
             color = VynlColors.dim,
-            fontSize = 11.5.sp,
-            fontFamily = VynlFonts.display,
+            fontSize = 10.5.sp,
+            fontFamily = VynlFonts.mono,
             modifier = Modifier.clickable(enabled = !viewModel.cloudBusy) { signUp = !signUp },
         )
-    }
-}
 
-@Composable
-private fun AccountFooterButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(VynlRadius.control))
-            .border(1.dp, VynlColors.line, RoundedCornerShape(VynlRadius.control))
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(10.dp))
         Text(
-            text = label,
-            color = color,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.W600,
-            fontFamily = VynlFonts.display,
+            text = "Stay signed out and Vynl works exactly as it does today - everything stays on this device.",
+            color = VynlColors.faint,
+            fontSize = 9.sp,
+            lineHeight = 13.sp,
+            fontFamily = VynlFonts.mono,
         )
     }
 }
