@@ -28,8 +28,8 @@ android {
         applicationId = "com.vynl.vynl_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2038
-        versionName = "0.5.8"
+        versionCode = 2039
+        versionName = "0.5.9"
 
         buildConfigField("String", "SUPABASE_URL", supabaseField("url"))
         buildConfigField("String", "SUPABASE_ANON_KEY", supabaseField("anonKey"))
