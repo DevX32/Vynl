@@ -1,6 +1,6 @@
 [package]
 name = "vynl"
-version = "0.6.0"
+version = "0.6.1"
 description = "Music Player"
 authors = ["Vynl"]
 edition = "2024"
