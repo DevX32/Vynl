@@ -526,6 +526,7 @@
     y={ctxMenu.y}
     onclose={() => (ctxMenu = null)}
     onnewplaylist={ctxMenu.type === "rail" ? newPlaylist : undefined}
+    onmovetovynl={ctxMenu.type === "rail" ? () => (moveToVynlOpen = true) : undefined}
     items={ctxItems()}
   />
 {/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Pencil, Trash2, Plus } from "lucide-svelte";
+  import { Pencil, Trash2, Plus, Import } from "lucide-svelte";
   import { t } from "@lib/i18n";
 
   export interface CtxItem {
@@ -23,6 +23,7 @@
     onrename,
     ondelete,
     onnewplaylist,
+    onmovetovynl,
     items,
   }: {
     x: number;
@@ -31,6 +32,7 @@
     onrename?: () => void;
     ondelete?: () => void;
     onnewplaylist?: () => void;
+    onmovetovynl?: () => void;
     items?: CtxEntry[];
   } = $props();
 
@@ -105,6 +107,22 @@
     >
       <Plus size={12} stroke-width={1.5} />
       <span>{t("contextMenu.newPlaylist")}</span>
+    </button>
+  {/if}
+  {#if onnewplaylist && onmovetovynl}
+    <div class="ctx-sep"></div>
+  {/if}
+  {#if onmovetovynl}
+    <button
+      class="ctx-item"
+      role="menuitem"
+      onclick={() => {
+        onmovetovynl();
+        onclose();
+      }}
+    >
+      <Import size={12} stroke-width={1.5} />
+      <span>{t("playlists.moveToVynl")}</span>
     </button>
   {/if}
   {#if onrename}
