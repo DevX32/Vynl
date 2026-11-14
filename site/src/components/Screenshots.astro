@@ -1,5 +1,6 @@
 ---
 import { base } from '../lib/base'
+import Icon from './Icon.astro'
 
 const shots = [
   { file: 'home', title: 'Home', text: 'Recently played, pinned and your next listens in one place.' },
@@ -51,7 +52,7 @@ const shots = [
       </div>
 
       <div class="controls">
-        <button class="arrow" type="button" data-prev aria-label="Previous screenshot">←</button>
+        <button class="arrow" type="button" data-prev aria-label="Previous screenshot"><Icon name="arrow-left" size={16} /></button>
         <div class="dots">
           {shots.map((shot, index) => (
             <button
@@ -62,7 +63,7 @@ const shots = [
             ></button>
           ))}
         </div>
-        <button class="arrow" type="button" data-next aria-label="Next screenshot">→</button>
+        <button class="arrow" type="button" data-next aria-label="Next screenshot"><Icon name="arrow-right" size={16} /></button>
       </div>
     </div>
   </div>
@@ -173,6 +174,8 @@ const shots = [
     background: var(--paper-deep);
     color: var(--ink);
     cursor: pointer;
+    display: grid;
+    place-items: center;
     transition:
       background-color 0.3s ease,
       border-color 0.3s ease;
