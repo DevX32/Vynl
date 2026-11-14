@@ -231,7 +231,7 @@ fn full_quality_cover(url: &str) -> String {
     if j == height_start {
         return url.to_string();
     }
-    format!("{}w512-h512{}", &url[..digits_start], &url[j..])
+    format!("{}=w512-h512{}", &url[..start], &url[j..])
 }
 
 pub fn artist_names(artists: &[ytmusic::ArtistRef]) -> String {
