@@ -36,8 +36,8 @@ pub async fn download_and_install(app: &AppHandle, update: Update) -> Result<(),
     let mut last_emitted = -1.0_f64;
     let mut last_ping = Instant::now();
 
-    update
-        .download_and_install(
+    let bytes = update
+        .download(
             |chunk_length, total| {
                 downloaded += chunk_length as u64;
                 if let Some(t) = total {
@@ -86,5 +86,7 @@ pub async fn download_and_install(app: &AppHandle, update: Update) -> Result<(),
         .await
         .map_err(|e| e.to_string())?;
 
+    tokio::time::sleep(Duration::from_millis(900)).await;
+    update.install(bytes).map_err(|e| e.to_string())?;
     Ok(())
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "@lib/i18n";
+  import { LoaderCircle } from "lucide-svelte";
   import Button from "@components/Button.svelte";
   import SettingRow from "./SettingRow.svelte";
   import SupportBanner from "./SupportBanner.svelte";
@@ -96,16 +97,26 @@ const upToDate = $derived(
           size="sm"
           onclick={() => void installAppUpdate()}
           disabled={busy}
+          title={busy ? t("update.checking") : undefined}
         >
-          {chipLabel}
+          {#if busy}
+            <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
+          {:else}
+            {chipLabel}
+          {/if}
         </Button>
       {:else}
         <Button
           size="sm"
           onclick={() => void checkForAppUpdate(true, true)}
           disabled={busy}
+          title={busy ? t("update.checking") : undefined}
         >
-          {chipLabel}
+          {#if busy}
+            <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
+          {:else}
+            {chipLabel}
+          {/if}
         </Button>
       {/if}
     {/snippet}
@@ -177,6 +188,17 @@ const upToDate = $derived(
     background: var(--line-strong);
     border-radius: var(--radius-sm);
     overflow: hidden;
+  }
+
+  .spin {
+    display: inline-flex;
+    animation: spin 0.85s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .fill {
