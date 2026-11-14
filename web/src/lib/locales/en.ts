@@ -188,8 +188,8 @@ export const en = {
   moveToVynl: {
     title: "Move to Vynl",
     description:
-      "Paste a link to a public playlist. Every track is matched to a streamable source and moved into a Vynl playlist — nothing is downloaded.",
-    placeholder: "Paste a playlist link…",
+      "Paste a link to a public playlist. Every track is matched to a streamable source and moved into a Vynl playlist.",
+    placeholder: "Paste a playlist link",
     continue: "Move",
     importing: "Matching and moving {n} tracks…",
     importingNote: "Large playlists can take a minute while tracks are matched.",
@@ -197,7 +197,6 @@ export const en = {
     notPlaylist: "That link is not a supported playlist.",
     empty: "That playlist has no tracks.",
     resolveFailed: "Could not open that link",
-    note: "The moved playlist streams like the Catalogue — it does not create downloaded files.",
     done: 'Moved {n} tracks into "{name}"',
     partial:
       'Moved {n} of {total} tracks into "{name}" — {missed} could not be matched',

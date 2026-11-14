@@ -134,7 +134,7 @@
           disabled={phase === "importing"}
           aria-label={t("moveToVynl.close")}
         >
-          <X size={15} stroke-width={1.75} />
+          <X size={12} stroke-width={1.6} />
         </button>
       </header>
 
@@ -168,7 +168,6 @@
               <span>{error}</span>
             </div>
           {/if}
-          <p class="note">{t("moveToVynl.note")}</p>
         </div>
         <footer class="foot">
           <button class="btn ghost" onclick={onClose}>
@@ -232,18 +231,27 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: var(--radius-sm);
-    background: transparent;
-    border: none;
-    color: var(--dim);
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
+    color: var(--faint);
     cursor: pointer;
+    transform: rotate(45deg);
+    transition:
+      color 0.15s,
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .close-btn :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .close-btn:hover:not(:disabled) {
     color: var(--text);
-    background: var(--bg-raise);
+    border-color: var(--line-strong);
   }
 
   .close-btn:disabled {
@@ -307,13 +315,6 @@
     color: var(--red);
     font-size: 11px;
     line-height: 1.45;
-  }
-
-  .note {
-    margin: 0;
-    font-size: 10.5px;
-    color: var(--faint);
-    letter-spacing: 0.02em;
   }
 
   .foot {
