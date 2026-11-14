@@ -40,6 +40,7 @@ import type {
   CatalogueStreamInfo,
   CatalogueTrack,
   DeleteTracksResult,
+  StreamImportResult,
 } from "../lib/types";
 
 async function cmd<T>(command: string, args?: InvokeArgs): Promise<T> {
@@ -89,8 +90,8 @@ function installAppUpdate(): Promise<void> {
 export const vynl = {
   resolve: (url: string): Promise<Collection> => cmd("resolve", { url }),
 
-  searchSpotify: (query: string, limit?: number, offset?: number): Promise<SearchResult[]> =>
-    cmd("search_spotify", { query, limit: limit ?? 20, offset: offset ?? 0 }),
+  searchTracks: (query: string, limit?: number, offset?: number): Promise<SearchResult[]> =>
+    cmd("search_tracks", { query, limit: limit ?? 20, offset: offset ?? 0 }),
 
   downloadedPaths: (collection: Collection): Promise<string[]> =>
     cmd("downloaded_paths", { collection }),
@@ -406,6 +407,17 @@ export const vynl = {
   ): Promise<Playlist> =>
     cmd("catalogue_save_to_playlist", {
       track,
+      playlistId: playlistId ?? null,
+      playlistName: playlistName ?? null,
+    }),
+
+  importStreamPlaylist: (
+    collection: Collection,
+    playlistId?: string | null,
+    playlistName?: string | null,
+  ): Promise<StreamImportResult> =>
+    cmd("import_stream_playlist", {
+      collection,
       playlistId: playlistId ?? null,
       playlistName: playlistName ?? null,
     }),

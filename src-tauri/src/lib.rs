@@ -276,7 +276,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::resolve,
-            commands::search_spotify,
+            commands::search_tracks,
             crate::services::catalogue::catalogue_search,
             crate::services::catalogue::catalogue_cover,
             crate::services::catalogue::catalogue_album,
@@ -291,6 +291,7 @@ pub fn run() {
             crate::services::catalogue::catalogue_add_to_playlist,
             crate::services::catalogue::catalogue_save_to_playlist,
             crate::services::catalogue::catalogue_taste,
+            crate::services::importer::import_stream_playlist,
             commands::downloaded_paths,
             commands::start_download,
             commands::cancel_download,

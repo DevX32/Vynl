@@ -133,11 +133,6 @@
     font-size: 11px;
     letter-spacing: 0.05em;
     outline: none;
-    transition: outline-color 0.15s;
-  }
-  .search-input:focus {
-    outline: 1px solid color-mix(in srgb, var(--text) 40%, transparent);
-    outline-offset: -1px;
   }
   .search-results {
     max-height: 300px;

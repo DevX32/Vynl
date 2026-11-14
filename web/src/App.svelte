@@ -50,6 +50,8 @@
   import VaultPage from "./features/vault/VaultPage.svelte";
   import HomePage from "./features/home/HomePage.svelte";
   import CataloguePage from "./features/catalogue/CataloguePage.svelte";
+  import MoveToVynlDialog from "./features/playlists/MoveToVynlDialog.svelte";
+  import type { StreamImportResult } from "./lib/types";
   import TitleBar from "./components/TitleBar.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
   import { catalogueRoute, type Page } from "@lib/types";
@@ -99,6 +101,7 @@
     playlistName?: string;
     type: "playlist" | "rail";
   } | null>(null);
+  let moveToVynlOpen = $state(false);
   let renameTarget = $state<{ id: string; name: string } | null>(null);
   let deleteTarget = $state<{ id: string; name: string } | null>(null);
   let createTarget = $state(false);
@@ -257,6 +260,25 @@
   async function openPlaylist(id: string): Promise<void> {
     navigate("playlist");
     await selectPlaylist(id);
+  }
+
+  function onMovedToVynl(result: StreamImportResult): void {
+    moveToVynlOpen = false;
+    void refreshPlaylists();
+    const name = toPascalCase(result.playlist.name);
+    if (result.unmatched.length === 0) {
+      toasts.success(t("moveToVynl.done", { n: result.matched, name }));
+    } else {
+      toasts.warning(
+        t("moveToVynl.partial", {
+          n: result.matched,
+          total: result.total,
+          missed: result.unmatched.length,
+          name,
+        }),
+      );
+    }
+    void openPlaylist(result.playlist.id);
   }
 
   function newPlaylist(): void {
@@ -433,6 +455,7 @@
       onSettings={openSettings}
       onAccount={openAccount}
       onNewPlaylist={newPlaylist}
+      onMoveToVynl={() => (moveToVynlOpen = true)}
       onOpenPlaylist={(id) => void openPlaylist(id)}
       onOpenLikedSongs={openLikedSongs}
       onShowCtx={showCtx}
@@ -562,6 +585,13 @@
       }}
     />
   </Dialog>
+{/if}
+
+{#if moveToVynlOpen}
+  <MoveToVynlDialog
+    onClose={() => (moveToVynlOpen = false)}
+    onImported={onMovedToVynl}
+  />
 {/if}
 
 <Toast />

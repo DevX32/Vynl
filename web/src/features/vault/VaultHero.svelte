@@ -76,10 +76,12 @@
     }
   });
 
-  function isUrl(v: string): boolean {
+  function isLink(v: string): boolean {
     return (
       /open\.spotify\.com\/(track|album|playlist)\//.test(v) ||
-      /^spotify:(track|album|playlist):/.test(v)
+      /^spotify:(track|album|playlist):/.test(v) ||
+      /spotify\.app\.link\//.test(v) ||
+      /spotify\.link\//.test(v)
     );
   }
 
@@ -92,11 +94,11 @@
       return;
     }
     lastScheduled = trimmed;
-    const delay = isUrl(trimmed) ? 300 : 350;
+    const delay = isLink(trimmed) ? 300 : 350;
     debounceId = setTimeout(() => {
       debounceId = null;
       if (value.trim() !== lastScheduled) return;
-      if (isUrl(trimmed)) onResolve();
+      if (isLink(trimmed)) onResolve();
       else onSearch(trimmed);
     }, delay);
   }
@@ -114,7 +116,7 @@
     if (!trimmed) return;
     clearDebounce();
     lastScheduled = trimmed;
-    if (isUrl(trimmed)) onResolve();
+    if (isLink(trimmed)) onResolve();
     else onSearch(trimmed);
   }
 </script>

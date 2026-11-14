@@ -468,7 +468,7 @@ mod tests {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SpotifySearchResult {
+pub struct SearchResult {
     pub id: String,
     pub title: String,
     pub artist: String,

@@ -18,7 +18,7 @@ mod paths;
 mod process;
 mod search;
 
-use matching::filter_and_rank_candidates;
+pub(crate) use matching::filter_and_rank_candidates;
 use paths::tmp_dir;
 pub use paths::{audio_format_ext, keep_native, render_pattern, sanitize};
 pub use process::cancel_download;

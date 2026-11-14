@@ -13,6 +13,7 @@
     LogOut,
     RefreshCw,
     UserRound,
+    Import,
   } from "lucide-svelte";
   import { blobSrc, toPascalCase } from "../lib/format";
   import { blobatarUri } from "blobatar/uri";
@@ -43,6 +44,7 @@
     onSettings,
     onAccount,
     onNewPlaylist,
+    onMoveToVynl,
     onOpenPlaylist,
     onShowCtx,
     onShowRailCtx,
@@ -60,6 +62,7 @@
     onSettings: () => void;
     onAccount: () => void;
     onNewPlaylist: () => void;
+    onMoveToVynl: () => void;
     onOpenPlaylist: (id: string) => void;
     onShowCtx: (e: MouseEvent, id: string, name: string) => void;
     onShowRailCtx: (e: MouseEvent) => void;
@@ -212,13 +215,23 @@
       {#if sidebarOpen}
         <span class="rail-title mono">{t("playlists.title")}</span>
       {/if}
-      <button
-        class="icon-btn small"
-        onclick={onNewPlaylist}
-        aria-label={t("playlists.newPlaylist")}
-      >
-        <Plus size={14} stroke-width={1.5} />
-      </button>
+      <div class="rail-actions">
+        <button
+          class="icon-btn small"
+          onclick={onMoveToVynl}
+          aria-label={t("playlists.moveToVynl")}
+          title={t("playlists.moveToVynl")}
+        >
+          <Import size={14} stroke-width={1.5} />
+        </button>
+        <button
+          class="icon-btn small"
+          onclick={onNewPlaylist}
+          aria-label={t("playlists.newPlaylist")}
+        >
+          <Plus size={14} stroke-width={1.5} />
+        </button>
+      </div>
     </div>
 
     <div
@@ -503,6 +516,12 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 6px 2px;
+  }
+
+  .rail-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .sidebar.collapsed .rail-head {

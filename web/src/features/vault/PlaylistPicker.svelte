@@ -349,10 +349,6 @@
     color: var(--text);
   }
 
-  .name-input:focus {
-    border-color: var(--accent);
-  }
-
   .btn {
     display: inline-flex;
     align-items: center;

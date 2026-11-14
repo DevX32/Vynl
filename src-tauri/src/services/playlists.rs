@@ -394,6 +394,35 @@ pub fn add_stream_to_playlist(
     Ok(pl)
 }
 
+pub fn add_streams_to_playlist(
+    output_dir: &Path,
+    id: &str,
+    tracks: &[CatalogueTrack],
+) -> Result<Playlist, String> {
+    if !validate_id(id) {
+        return Err("invalid playlist id".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
+    for track in tracks {
+        let video_id = track.id.trim();
+        if video_id.is_empty() {
+            continue;
+        }
+        let path = format!("{CATALOGUE_PREFIX}{video_id}");
+        if !pl.paths.iter().any(|p| p == &path) {
+            pl.paths.push(path);
+        }
+        match pl.streams.iter_mut().find(|t| t.id == video_id) {
+            Some(existing) => *existing = track.clone(),
+            None => pl.streams.push(track.clone()),
+        }
+    }
+    touch(&mut pl);
+    write_playlist(output_dir, &pl)?;
+    Ok(pl)
+}
+
 pub fn remove_from_playlist(
     output_dir: &Path,
     id: &str,

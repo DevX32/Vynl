@@ -49,11 +49,6 @@
     resize: vertical;
     outline: none;
     min-height: 160px;
-    transition: outline-color 0.15s;
-  }
-  .paste-input:focus {
-    outline: 1px solid color-mix(in srgb, var(--text) 40%, transparent);
-    outline-offset: -1px;
   }
   .paste-actions {
     display: flex;

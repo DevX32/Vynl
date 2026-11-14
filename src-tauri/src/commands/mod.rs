@@ -100,14 +100,14 @@ pub async fn resolve(url: String) -> Result<Collection, String> {
 }
 
 #[tauri::command]
-pub async fn search_spotify(
+pub async fn search_tracks(
     query: String,
     limit: Option<u32>,
     offset: Option<u32>,
-) -> Result<Vec<SpotifySearchResult>, String> {
+) -> Result<Vec<SearchResult>, String> {
     let l = limit.unwrap_or(20);
     let o = offset.unwrap_or(0);
-    crate::services::internal::search_spotify(&query, l, o).await
+    crate::services::internal::search_tracks(&query, l, o).await
 }
 
 #[tauri::command]

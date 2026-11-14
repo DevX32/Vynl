@@ -801,11 +801,11 @@ fn extract_url_from_object(val: &Value) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-pub async fn search_spotify(
+pub async fn search_tracks(
     query: &str,
     limit: u32,
     offset: u32,
-) -> Result<Vec<crate::commands::types::SpotifySearchResult>, String> {
+) -> Result<Vec<crate::commands::types::SearchResult>, String> {
     let http = build_client(UA, TIMEOUT_SECS)?;
     let session = init_session(&http).await?;
 
@@ -935,7 +935,7 @@ pub async fn search_spotify(
             };
 
             if !title.is_empty() && !artist.is_empty() {
-                results.push(crate::commands::types::SpotifySearchResult {
+                results.push(crate::commands::types::SearchResult {
                     id,
                     title,
                     artist,

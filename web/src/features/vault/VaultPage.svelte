@@ -186,7 +186,7 @@
     searching = true;
     searchError = null;
     try {
-      const results = await vynl.searchSpotify(trimmed, 20);
+      const results = await vynl.searchTracks(trimmed, 20);
       if (gen !== searchGen) return;
       searchResults = results;
     } catch (e) {

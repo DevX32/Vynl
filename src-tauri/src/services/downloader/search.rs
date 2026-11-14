@@ -195,7 +195,7 @@ async fn search_via_ytmusic(query: &str) -> Vec<SearchCandidate> {
 }
 
 async fn resolve_candidates(
-    ytdlp: &str,
+    ytdlp: Option<&str>,
     track: &TrackMeta,
     user_data_dir: &Path,
 ) -> Vec<SearchCandidate> {
@@ -209,6 +209,10 @@ async fn resolve_candidates(
         match_cache_put(user_data_dir, &track.id, found.clone());
         return found;
     }
+
+    let Some(ytdlp) = ytdlp else {
+        return Vec::new();
+    };
 
     let query_alt = build_query_simple(track, "");
     let query_lyrics = build_query_simple(track, " lyrics");
@@ -345,8 +349,7 @@ pub async fn find_matches(
     user_data_dir: &Path,
 ) -> Result<HashMap<String, Vec<SearchCandidate>>, String> {
     CANCELLED_FIND.store(false, Ordering::SeqCst);
-    let ytdlp = resolve_tool("yt-dlp", user_data_dir)
-        .ok_or_else(|| "yt-dlp is required to search for matches.".to_string())?;
+    let ytdlp = resolve_tool("yt-dlp", user_data_dir);
 
     let result: Arc<Mutex<HashMap<String, Vec<SearchCandidate>>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -377,7 +380,7 @@ pub async fn find_matches(
                     break;
                 }
                 let track = &collection.tracks[i];
-                let candidates = resolve_candidates(&ytdlp, track, &data_dir).await;
+                let candidates = resolve_candidates(ytdlp.as_deref(), track, &data_dir).await;
                 let mut res = result.lock().await;
                 res.insert(track.id.clone(), candidates);
             }
@@ -413,6 +416,6 @@ pub(super) async fn search_and_rank_candidates(
             None => filter_and_rank_candidates(cands.clone(), track),
         };
     }
-    let raw = resolve_candidates(ytdlp, track, user_data_dir).await;
+    let raw = resolve_candidates(Some(ytdlp), track, user_data_dir).await;
     filter_and_rank_candidates(raw, track)
 }

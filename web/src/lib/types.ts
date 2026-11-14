@@ -249,6 +249,13 @@ export interface Playlist {
   updatedAt: number;
 }
 
+export interface StreamImportResult {
+  playlist: Playlist;
+  matched: number;
+  total: number;
+  unmatched: { title: string; artist: string }[];
+}
+
 export interface ToolStatus {
   name: ToolName;
   installed: boolean;

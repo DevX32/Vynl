@@ -8,6 +8,7 @@ pub mod cover_cache;
 pub mod downloader;
 pub mod export;
 pub mod history;
+pub mod importer;
 pub mod internal;
 pub mod library;
 pub mod lyrics;

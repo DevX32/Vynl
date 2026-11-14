@@ -146,7 +146,7 @@ async fn fetch(artist: &str, album: &str, title: &str, duration: f64) -> Option<
     let album = repair_mojibake(album.trim()).into_owned();
     let title = repair_mojibake(title.trim()).into_owned();
 
-    if let Some(cover) = spotify(&artist, &album, &title, duration).await {
+    if let Some(cover) = internal_cover(&artist, &album, &title, duration).await {
         return Some(cover);
     }
 
@@ -157,9 +157,9 @@ async fn fetch(artist: &str, album: &str, title: &str, duration: f64) -> Option<
     itunes(&artist, &album, &title, duration).await
 }
 
-async fn spotify(artist: &str, album: &str, title: &str, duration: f64) -> Option<String> {
+async fn internal_cover(artist: &str, album: &str, title: &str, duration: f64) -> Option<String> {
     for term in search_terms(artist, album, title) {
-        let Ok(results) = internal::search_spotify(&term, 10, 0).await else {
+        let Ok(results) = internal::search_tracks(&term, 10, 0).await else {
             break;
         };
 
