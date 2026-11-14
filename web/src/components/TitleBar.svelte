@@ -9,6 +9,7 @@
     Copy,
     X,
     Home,
+    CircleQuestionMark,
     PanelLeftClose,
     PanelLeftOpen,
   } from "lucide-svelte";
@@ -26,6 +27,7 @@
     onHome,
     sidebarOpen = true,
     onToggleSidebar,
+    onShowShortcuts,
   }: {
     onBack?: () => void;
     onForward?: () => void;
@@ -34,6 +36,7 @@
     onHome?: () => void;
     sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
+    onShowShortcuts?: () => void;
   } = $props();
 
   onMount(() => {
@@ -117,6 +120,15 @@
   </div>
 
   <div class="controls">
+    <button
+      class="shortcut-btn"
+      aria-label={t("shortcuts.actions.showShortcuts")}
+      title={t("shortcuts.actions.showShortcuts")}
+      onclick={onShowShortcuts}
+    >
+      <CircleQuestionMark size={14} stroke-width={1.5} />
+    </button>
+    <span class="controls-divider" aria-hidden="true"></span>
     <button
       class="ctrl-btn"
       aria-label={t("titleBar.minimize")}
@@ -259,6 +271,35 @@
     height: 100%;
     -webkit-app-region: no-drag;
     z-index: 2;
+  }
+
+  .shortcut-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 3px;
+    color: var(--faint);
+    transition:
+      color 0.1s,
+      background 0.1s;
+  }
+
+  .shortcut-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .shortcut-btn:active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .controls-divider {
+    width: 1px;
+    height: 14px;
+    margin: 0 8px 0 6px;
+    background: var(--line);
   }
 
   .ctrl-btn {

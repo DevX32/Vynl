@@ -15,7 +15,7 @@
   import { getPluginsUiOpen, initPlugins } from "@state/plugins.svelte";
   import { emitAppEvent } from "@lib/plugins/events";
   import { playTrack } from "@lib/player.svelte";
-  import { handleGlobalKey, getShowShortcutsOverlay } from "@state/shortcuts.svelte";
+  import { handleGlobalKey, getShowShortcutsOverlay, toggleShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
   import { wasOnboarded } from "@lib/onboarding.svelte";
@@ -405,6 +405,7 @@
     onHome={openHome}
     {sidebarOpen}
     onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+    onShowShortcuts={toggleShortcutsOverlay}
   />
   <div class="body">
     <Sidebar

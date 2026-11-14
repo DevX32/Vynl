@@ -149,13 +149,6 @@ const ACTIONS: readonly KeybindAction[] = [
     run: () => toggleMute(),
   },
   {
-    id: "showShortcuts",
-    labelKey: "shortcuts.actions.showShortcuts",
-    categoryKey: "shortcuts.categories.interface",
-    binding: { key: "?" },
-    run: () => toggleShortcutsOverlay(),
-  },
-  {
     id: "fullscreenPlayer",
     labelKey: "shortcuts.actions.fullscreenPlayer",
     categoryKey: "shortcuts.categories.interface",
@@ -291,9 +284,7 @@ export function handleGlobalKey(e: KeyboardEvent): void {
   const action = ACTION_INDEX.get(id);
   if (!action) return;
 
-  if (getEqOpen() || _showOverlay) {
-    if (action.id !== "showShortcuts") return;
-  }
+  if (getEqOpen() || _showOverlay) return;
 
   e.preventDefault();
   action.run();
