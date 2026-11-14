@@ -28,7 +28,7 @@
 
   const win = getCurrentWindow();
 
-  const VINYL_DEG_PER_SEC = (360 / 60) * (33 + 1 / 3);
+  const VYNL_DEG_PER_SEC = (360 / 60) * (33 + 1 / 3);
   const SPEED_EPSILON = 0.5;
   const EASE = 0.03;
 
@@ -37,8 +37,8 @@
   let time = $state(0);
   let previewTime = $state(0);
   let duration = $state(0);
-  let vinylDeg = $state(0);
-  let vinylSpeed = 0;
+  let vynlDeg = $state(0);
+  let vynlSpeed = 0;
   let raf = 0;
   let lastTs = 0;
   let seeking = $state(false);
@@ -138,11 +138,11 @@
     lastTs = ts;
     if (dt > 0) {
       const blend = 1 - Math.pow(1 - EASE, dt * 60);
-      vinylSpeed += (target - vinylSpeed) * blend;
-      vinylDeg = (vinylDeg + vinylSpeed * dt) % 360;
+      vynlSpeed += (target - vynlSpeed) * blend;
+      vynlDeg = (vynlDeg + vynlSpeed * dt) % 360;
     }
-    if (target === 0 && Math.abs(vinylSpeed) < SPEED_EPSILON) {
-      vinylSpeed = 0;
+    if (target === 0 && Math.abs(vynlSpeed) < SPEED_EPSILON) {
+      vynlSpeed = 0;
       lastTs = 0;
       raf = 0;
       return;
@@ -151,7 +151,7 @@
   }
 
   $effect(() => {
-    const target = playing ? VINYL_DEG_PER_SEC : 0;
+    const target = playing ? VYNL_DEG_PER_SEC : 0;
     lastTs = 0;
     raf = requestAnimationFrame((ts) => loop(target, ts));
     return () => {
@@ -328,10 +328,10 @@
   <div class="mini-body">
     <div class="stage" data-tauri-drag-region="deep">
       <div class="disc" class:playing class:empty={!track}>
-        <div class="vinyl-slot">
+        <div class="vynl-slot">
           <div
-            class="vinyl"
-            style:transform={`rotate(${vinylDeg}deg)`}
+            class="vynl"
+            style:transform={`rotate(${vynlDeg}deg)`}
             aria-hidden="true"
           ></div>
         </div>
@@ -633,7 +633,7 @@
     isolation: isolate;
   }
 
-  .vinyl-slot {
+  .vynl-slot {
     position: absolute;
     inset: 0;
     z-index: 1;
@@ -644,20 +644,20 @@
     will-change: transform;
   }
 
-  .disc.playing .vinyl-slot {
+  .disc.playing .vynl-slot {
     transform: translateX(14.5%);
   }
 
-  .disc.empty .vinyl-slot {
+  .disc.empty .vynl-slot {
     transform: translateX(1.5%);
     filter: saturate(0.35) brightness(0.72);
   }
 
-  .vinyl {
+  .vynl {
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: var(--vinyl);
+    background: var(--vynl);
     overflow: hidden;
     will-change: transform;
     box-shadow:
@@ -666,7 +666,7 @@
       inset 0 0 20px 3px rgba(0, 0, 0, 0.6);
   }
 
-  .vinyl::before {
+  .vynl::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -694,7 +694,7 @@
     );
   }
 
-  .vinyl-slot::after {
+  .vynl-slot::after {
     content: "";
     position: absolute;
     inset: 0;

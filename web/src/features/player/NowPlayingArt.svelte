@@ -10,26 +10,26 @@
     playing,
     playError,
     scanning,
-    lyricsOpen,
-    onToggleLyrics,
+    lyricsOpen = false,
+    onToggleLyrics = () => {},
     showLyricsButton = true,
   }: {
     current: NowPlaying | null;
     playing: boolean;
     playError: string | null;
     scanning: boolean;
-    lyricsOpen: boolean;
-    onToggleLyrics: () => void;
+    lyricsOpen?: boolean;
+    onToggleLyrics?: () => void;
     showLyricsButton?: boolean;
   } = $props();
 
-  const VINYL_RPM = 33 + 1 / 3;
-  const VINYL_DEG_PER_SEC = (360 / 60) * VINYL_RPM;
+  const VYNL_RPM = 33 + 1 / 3;
+  const VYNL_DEG_PER_SEC = (360 / 60) * VYNL_RPM;
   const EASE = 0.03;
   const SPEED_EPSILON = 0.5;
 
-  let vinylDeg = $state(0);
-  let vinylSpeed = 0;
+  let vynlDeg = $state(0);
+  let vynlSpeed = 0;
   let raf = 0;
   let lastTs = 0;
 
@@ -39,12 +39,12 @@
 
     if (dt > 0) {
       const blend = 1 - Math.pow(1 - EASE, dt * 60);
-      vinylSpeed += (target - vinylSpeed) * blend;
-      vinylDeg = (vinylDeg + vinylSpeed * dt) % 360;
+      vynlSpeed += (target - vynlSpeed) * blend;
+      vynlDeg = (vynlDeg + vynlSpeed * dt) % 360;
     }
 
-    if (target === 0 && Math.abs(vinylSpeed) < SPEED_EPSILON) {
-      vinylSpeed = 0;
+    if (target === 0 && Math.abs(vynlSpeed) < SPEED_EPSILON) {
+      vynlSpeed = 0;
       lastTs = 0;
       raf = 0;
       return;
@@ -53,7 +53,7 @@
   }
 
   $effect(() => {
-    const target = playing ? VINYL_DEG_PER_SEC : 0;
+    const target = playing ? VYNL_DEG_PER_SEC : 0;
     lastTs = 0;
     raf = requestAnimationFrame((ts) => loop(target, ts));
     return () => {
@@ -66,8 +66,8 @@
 
 <div class="now">
   <div class="now-art" class:playing class:empty={!current}>
-    <div class="vinyl-slot" aria-hidden="true">
-      <div class="vinyl" style:transform={`rotate(${vinylDeg}deg)`}></div>
+    <div class="vynl-slot" aria-hidden="true">
+      <div class="vynl" style:transform={`rotate(${vynlDeg}deg)`}></div>
     </div>
     {#key current?.id ?? "none"}
       {#if current?.cover}
@@ -142,14 +142,14 @@
 
   .now-art {
     position: relative;
-    width: var(--vinyl-disc);
+    width: var(--vynl-disc);
     aspect-ratio: 1 / 1;
     height: auto;
     flex-shrink: 1;
     margin: 18px auto 22px;
   }
 
-  .vinyl-slot {
+  .vynl-slot {
     position: absolute;
     inset: 0;
     transform: translateX(3.5%);
@@ -159,20 +159,20 @@
     will-change: transform;
   }
 
-  .now-art.playing .vinyl-slot {
+  .now-art.playing .vynl-slot {
     transform: translateX(14.5%);
   }
 
-  .now-art.empty .vinyl-slot {
+  .now-art.empty .vynl-slot {
     transform: translateX(1.5%);
     filter: saturate(0.35) brightness(0.72);
   }
 
-  .vinyl {
+  .vynl {
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: var(--vinyl);
+    background: var(--vynl);
     overflow: hidden;
     will-change: transform;
     box-shadow:
@@ -181,7 +181,7 @@
       inset 0 0 20px 3px rgba(0, 0, 0, 0.6);
   }
 
-  .vinyl::before {
+  .vynl::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -209,7 +209,7 @@
     );
   }
 
-  .vinyl-slot::after {
+  .vynl-slot::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -238,7 +238,7 @@
     z-index: 1;
     left: 50%;
     top: 50%;
-    transform: translate(calc(-50% - var(--vinyl-disc) * 0.055), -50%);
+    transform: translate(calc(-50% - var(--vynl-disc) * 0.055), -50%);
     width: 72%;
     height: 72%;
     border-radius: var(--radius-sm);
@@ -251,7 +251,7 @@
   }
 
   .now-art:not(.playing) .now-cover {
-    transform: translate(calc(-50% - var(--vinyl-disc) * 0.121), -50%);
+    transform: translate(calc(-50% - var(--vynl-disc) * 0.121), -50%);
   }
 
   .now-art.playing .now-cover {

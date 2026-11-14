@@ -10,7 +10,6 @@
   import { getCurrentPlayError } from "@state/player.svelte";
   import {
     getLyricsOpen,
-    toggleLyrics,
     closeLyrics,
   } from "@state/player.svelte";
   import NowPlayingArt from "./NowPlayingArt.svelte";
@@ -77,8 +76,7 @@
         playing={getIsTrackPlaying()}
         {playError}
         {scanning}
-        lyricsOpen={getLyricsOpen()}
-        onToggleLyrics={toggleLyrics}
+        showLyricsButton={false}
       />
       {#if getLyricsOpen()}
         <LyricsOverlay onclose={closeLyrics} />

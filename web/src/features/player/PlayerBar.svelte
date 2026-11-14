@@ -9,12 +9,13 @@
     SlidersHorizontal,
     PictureInPicture2,
     Heart,
+    Music2,
   } from "lucide-svelte";
   import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
   import { listen } from "@tauri-apps/api/event";
   import { MINI_CLOSED_EVENT } from "@lib/mini-sync";
   import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
-  import { getCurrentMuted, getCurrentVolume, toggleMute } from "@state/player.svelte";
+  import { getCurrentMuted, getCurrentVolume, toggleMute, getLyricsOpen, toggleLyrics } from "@state/player.svelte";
   import { applyVolume } from "@lib/player.svelte";
   import { catalogueIdFromPath } from "@state/catalogue.svelte";
   import {
@@ -34,10 +35,12 @@
     onOpenPlayer,
     fullscreen = false,
     onToggleFullscreen,
+    active = false,
   }: {
     onOpenPlayer: () => void;
     fullscreen?: boolean;
     onToggleFullscreen: () => void;
+    active?: boolean;
   } = $props();
 
   let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
@@ -67,6 +70,11 @@
     } catch (e) {
       console.warn("mini toggle failed:", e);
     }
+  }
+
+  function openLyrics(): void {
+    if (!active) onOpenPlayer();
+    toggleLyrics();
   }
 
   const likedTracks = $derived(getTasteLikedIds());
@@ -207,6 +215,15 @@
       </button>
       <VolumeSlider />
     </div>
+    <button
+      class="icon-btn small"
+      class:on={active && getLyricsOpen()}
+      onclick={openLyrics}
+      aria-label={t("player.lyrics")}
+      aria-pressed={active && getLyricsOpen()}
+    >
+      <Music2 size={12} stroke-width={1.5} />
+    </button>
     <button
       class="icon-btn small"
       class:on={getCurrentSettings().eqEnabled}

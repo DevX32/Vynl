@@ -45,8 +45,8 @@
   --danger-border-hover: color-mix(in srgb, var(--red) 60%, transparent);
   --amber: #d9a15c;
   --accent-text: #161128;
-  --vinyl: #14141c;
-  --vinyl-disc: min(272px, 32vh);
+  --vynl: #14141c;
+  --vynl-disc: min(272px, 32vh);
   --placeholder-gradient:
     radial-gradient(
       circle at 50% 50%,

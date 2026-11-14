@@ -474,7 +474,7 @@
     </main>
   </div>
 
-  <PlayerBar onOpenPlayer={openPlayer} fullscreen={showFullscreen} onToggleFullscreen={() => { showFullscreen = !showFullscreen; }} />
+  <PlayerBar onOpenPlayer={openPlayer} fullscreen={showFullscreen} active={page === "player" || showFullscreen} onToggleFullscreen={() => { showFullscreen = !showFullscreen; }} />
 </div>
 
 {#if showFullscreen}
