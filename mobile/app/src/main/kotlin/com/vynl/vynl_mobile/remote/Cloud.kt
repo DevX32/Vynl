@@ -82,7 +82,12 @@ class Cloud(context: Context) {
             val body = JSONObject()
                 .put("email", clean)
                 .put("password", password)
-            val response = post("$baseUrl/auth/v1/signup", body, token = null)
+                .put("redirect_to", CONFIRM_REDIRECT_URL)
+            val response = post(
+                "$baseUrl/auth/v1/signup?redirect_to=${URLEncoder.encode(CONFIRM_REDIRECT_URL, "UTF-8")}",
+                body,
+                token = null,
+            )
             val session = parseSession(response.second, clean)
             if (session == null) {
                 CloudAuthResult(needsConfirmation = true, status = status)
@@ -418,6 +423,7 @@ class Cloud(context: Context) {
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
     companion object {
+        const val CONFIRM_REDIRECT_URL = "https://devx32.github.io/Vynl/confirm/"
         private const val KEY_EMAIL = "email"
         private const val KEY_USER = "user_id"
         private const val KEY_ACCESS = "access_token"

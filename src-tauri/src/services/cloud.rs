@@ -221,12 +221,23 @@ async fn sign_in_with_password(email: &str, password: &str) -> Result<Session, S
     parse_session(&value, email).ok_or_else(|| "The cloud returned an empty session.".into())
 }
 
+const CONFIRM_REDIRECT_URL: &str = "https://devx32.github.io/Vynl/confirm/";
+
 async fn sign_up_with_password(email: &str, password: &str) -> Result<Option<Session>, String> {
+    let url = format!(
+        "{}/auth/v1/signup?redirect_to={}",
+        base_url(),
+        urlencoding::encode(CONFIRM_REDIRECT_URL)
+    );
     let response = http()?
-        .post(format!("{}/auth/v1/signup", base_url()))
+        .post(url)
         .header("apikey", anon_key())
         .header("Content-Type", "application/json")
-        .json(&json!({ "email": email, "password": password }))
+        .json(&json!({
+            "email": email,
+            "password": password,
+            "redirect_to": CONFIRM_REDIRECT_URL
+        }))
         .send()
         .await
         .map_err(|e| format!("Could not reach the cloud: {e}"))?;

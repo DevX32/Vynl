@@ -13,8 +13,10 @@ interface Props {
 
 const { title, description, image = 'screenshots/home.png' } = Astro.props
 
-const sitePath = Astro.url.pathname.replace(new RegExp(`^${base.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}`), '') || '/'
-const canonical = new URL(sitePath, Astro.site)
+const basePath = base.replace(/\/$/, '')
+const escapedBase = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
+const sitePath = Astro.url.pathname.replace(new RegExp(`^${escapedBase}`), '') || '/'
+const canonical = new URL(`${basePath}${sitePath}`, Astro.site)
 const ogImage = new URL(`${base}${image.replace(/^\//, '')}`, Astro.site).href
 ---
 

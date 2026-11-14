@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro'
+import { base } from '../lib/base'
+---
+
+<Base
+  title="Vynl: Confirm your email"
+  description="Confirm the email address attached to your Vynl account."
+>
+  <section class="section confirm">
+    <div class="container confirm-inner">
+      <p class="kicker" id="kicker">Vynl Account</p>
+      <h1 class="confirm-title" id="headline">Checking your link…</h1>
+      <p class="confirm-sub" id="detail">Hold on a second — reading the link from your inbox.</p>
+
+      <div class="btn-row confirm-actions">
+        <a class="btn btn--primary btn--lg" id="cta" data-default-href={`${base}#download`} href={`${base}#download`}>Get Vynl</a>
+        <a class="btn btn--ghost btn--lg" id="home" href={base}>Back to vynl.app</a>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script is:inline>
+  const params = new URLSearchParams(window.location.search)
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+
+  const errorCode =
+    params.get('error_code') || hash.get('error_code') || params.get('error') || hash.get('error') || null
+  const errorDescription = (params.get('error_description') || hash.get('error_description') || '').trim()
+
+  const hasToken = params.has('token_hash') || params.has('token') || hash.has('access_token')
+
+  const kicker = document.getElementById('kicker')
+  const headline = document.getElementById('headline')
+  const detail = document.getElementById('detail')
+  const cta = document.getElementById('cta')
+
+  if (errorCode) {
+    kicker.textContent = 'Link didn’t work'
+    headline.textContent = 'That link didn’t work.'
+    detail.textContent = errorDescription || 'The link is invalid or has expired. Request a new confirmation email from the Vynl sign-in screen and try again.'
+    cta.textContent = 'Get Vynl'
+    cta.setAttribute('href', cta.dataset.defaultHref || '/Vynl/#download')
+  } else if (hasToken) {
+    kicker.textContent = 'Confirmed'
+    headline.textContent = 'You’re in.'
+    detail.textContent = 'Your email is confirmed and your account is ready. You can close this tab and sign in to Vynl now.'
+    cta.textContent = 'Get Vynl'
+  } else {
+    kicker.textContent = 'Email confirmation'
+    headline.textContent = 'Confirm your email.'
+    detail.textContent = 'This page confirms the email address attached to your Vynl account. Open the link we sent you from your inbox — nothing else is needed.'
+    cta.textContent = 'Get Vynl'
+  }
+</script>
+
+<style>
+  .confirm-inner {
+    max-width: 780px;
+    padding-block: 48px 8px;
+  }
+
+  .confirm-title {
+    margin-top: 18px;
+    font-size: clamp(40px, 6vw, 76px);
+    font-weight: 480;
+  }
+
+  .confirm-sub {
+    margin-top: 18px;
+    max-width: 52ch;
+    color: var(--ink-soft);
+    font-size: 16px;
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+
+  .confirm-actions {
+    margin-top: 30px;
+  }
+</style>
