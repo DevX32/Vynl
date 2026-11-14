@@ -67,6 +67,7 @@ jobs:
           fi
           gh release create "$TAG" \
             --verify-tag \
+            --draft \
             --title "Vynl $VERSION" \
             --notes "$RELEASE_BODY"
 
@@ -281,7 +282,7 @@ jobs:
       actions: write
     steps:
       - name: Remove release after a failed build
-        if: needs.build.result == 'failure'
+        if: needs.build.result == 'failure' || needs.mobile.result == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -290,6 +291,17 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release delete "$GITHUB_REF_NAME" --yes
           fi
+
+      - name: Publish release
+        if: needs.mobile.result == 'success' && needs.build.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false
+          echo "Release $TAG published"
 
       - name: Rebuild site for the new version
         if: needs.build.result == 'success'
