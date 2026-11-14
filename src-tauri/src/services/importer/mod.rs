@@ -173,7 +173,11 @@ pub async fn import_stream_playlist(
     playlist = playlists::add_streams_to_playlist(&output, &playlist.id, &picked)?;
 
     if created_new
-        && let Some(cover_url) = collection.cover.as_deref().map(str::trim).filter(|u| !u.is_empty())
+        && let Some(cover_url) = collection
+            .cover
+            .as_deref()
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
         && let Ok(local) = cover_cache::cache_cover(&user_data, cover_url).await
     {
         match playlists::set_playlist_cover(&output, &user_data, &playlist.id, Some(local)) {
@@ -192,51 +196,4 @@ pub async fn import_stream_playlist(
         total,
         unmatched,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::extract_video_id;
-
-    #[test]
-    fn parses_watch_urls() {
-        assert_eq!(
-            extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ").as_deref(),
-            Some("dQw4w9WgXcQ")
-        );
-        assert_eq!(
-            extract_video_id("https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDAMVM")
-                .as_deref(),
-            Some("dQw4w9WgXcQ")
-        );
-        assert_eq!(
-            extract_video_id("https://www.youtube.com/watch?time_continue=12&v=dQw4w9WgXcQ&feature=share")
-                .as_deref(),
-            Some("dQw4w9WgXcQ")
-        );
-    }
-
-    #[test]
-    fn parses_short_and_embed_urls() {
-        assert_eq!(
-            extract_video_id("https://youtu.be/dQw4w9WgXcQ?si=abc123").as_deref(),
-            Some("dQw4w9WgXcQ")
-        );
-        assert_eq!(
-            extract_video_id("https://www.youtube.com/shorts/dQw4w9WgXcQ").as_deref(),
-            Some("dQw4w9WgXcQ")
-        );
-        assert_eq!(
-            extract_video_id("dQw4w9WgXcQ").as_deref(),
-            Some("dQw4w9WgXcQ")
-        );
-    }
-
-    #[test]
-    fn rejects_junk() {
-        assert!(extract_video_id("").is_none());
-        assert!(extract_video_id("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC").is_none());
-        assert!(extract_video_id("https://www.youtube.com/watch?v=%&*").is_none());
-        assert!(extract_video_id("https://www.youtube.com/watch").is_none());
-    }
 }

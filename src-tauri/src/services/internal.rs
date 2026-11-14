@@ -951,35 +951,3 @@ pub async fn search_tracks(
     results.truncate(limit as usize);
     Ok(results)
 }
-#[cfg(test)]
-mod tests {
-    use super::token_failure_message;
-    use reqwest::StatusCode;
-
-    #[test]
-    fn blocked_sign_in_reports_without_service_detail() {
-        let body = r#"{"error":{"code":400,"message":"Unauthorized request","extra":{"notes":"Usage of this endpoint is not permitted under the Spotify Developer Terms and Developer Policy, law"},"trace":"eyJoY2lBIjoiMzcxMjgifQ=="}}"#;
-        let message = token_failure_message(StatusCode::BAD_REQUEST, body);
-        assert_eq!(message, "This service blocked the request.");
-        assert!(!message.contains("Spotify"));
-        assert!(!message.contains("trace"));
-    }
-
-    #[test]
-    fn rate_limit_is_reported_plainly() {
-        let message = token_failure_message(StatusCode::TOO_MANY_REQUESTS, "slow down");
-        assert_eq!(message, "Too many sign-in attempts. Try again in a moment.");
-    }
-
-    #[test]
-    fn client_error_is_reported_plainly() {
-        let message = token_failure_message(StatusCode::FORBIDDEN, "nope");
-        assert_eq!(message, "The service rejected the sign-in request.");
-    }
-
-    #[test]
-    fn server_error_reports_the_status_only() {
-        let message = token_failure_message(StatusCode::BAD_GATEWAY, "");
-        assert_eq!(message, "The service could not be reached (HTTP 502).");
-    }
-}

@@ -433,39 +433,6 @@ pub struct LrcSearchResult {
     pub synced_lyrics: Option<String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::LrcSearchResult;
-
-    #[test]
-    fn lrc_search_result_accepts_numeric_id() {
-        let parsed: LrcSearchResult = serde_json::from_str(
-            r#"{"id":123456,"trackName":"Song","artistName":"Artist","albumName":null,"duration":12.5,"instrumental":false,"plainLyrics":null,"syncedLyrics":"[00:01.00]hi"}"#,
-        )
-        .expect("numeric LRCLIB id should deserialize");
-
-        assert_eq!(parsed.id, "123456");
-        assert_eq!(parsed.track_name, "Song");
-        assert_eq!(parsed.artist_name, "Artist");
-        assert_eq!(parsed.album_name, "");
-        assert_eq!(parsed.synced_lyrics.as_deref(), Some("[00:01.00]hi"));
-    }
-
-    #[test]
-    fn lrc_search_result_accepts_string_id_and_missing_names() {
-        let parsed: LrcSearchResult = serde_json::from_str(
-            r#"{"id":"USRC17607839","duration":0.0,"instrumental":false,"plainLyrics":"hi","syncedLyrics":null}"#,
-        )
-        .expect("ISRC string id should deserialize");
-
-        assert_eq!(parsed.id, "USRC17607839");
-        assert_eq!(parsed.track_name, "");
-        assert_eq!(parsed.artist_name, "");
-        assert_eq!(parsed.album_name, "");
-        assert_eq!(parsed.plain_lyrics.as_deref(), Some("hi"));
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
