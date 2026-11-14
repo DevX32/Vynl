@@ -18,8 +18,8 @@ android {
         applicationId = "com.vynl.vynl_mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2037
-        versionName = "0.5.7"
+        versionCode = 2038
+        versionName = "0.5.8"
     }
 
     signingConfigs {
