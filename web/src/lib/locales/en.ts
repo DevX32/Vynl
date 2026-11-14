@@ -289,7 +289,7 @@ export const en = {
     nicknameRoll: "Roll nickname",
     taste: "Your Taste",
     tasteHint:
-      "{liked} liked · {played} played. Vynl builds your mixes from this, only on this device.",
+      "Vynl builds your mixes from this, only on this device.",
     tasteEmpty:
       "Like a song or play a few tracks and Vynl will start building your mix.",
     tasteReset: "Reset taste",

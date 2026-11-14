@@ -2,7 +2,6 @@
   import { t } from "@lib/i18n";
   import SettingsPanel from "./SettingsPanel.svelte";
   import BackupPanel from "./BackupPanel.svelte";
-  import DownloadsPanel from "./DownloadsPanel.svelte";
   import AboutPanel from "./AboutPanel.svelte";
 
   let { onOpenVault }: { onOpenVault?: () => void } = $props();
@@ -17,7 +16,6 @@
   <div class="body">
     <SettingsPanel />
     <BackupPanel {onOpenVault} />
-    <DownloadsPanel />
     <AboutPanel />
   </div>
 </section>

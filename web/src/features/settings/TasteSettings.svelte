@@ -18,10 +18,7 @@
     label={t("settings.taste")}
     hint={summary.entries === 0
       ? t("settings.tasteEmpty")
-      : t("settings.tasteHint", {
-          liked: summary.liked,
-          played: summary.played,
-        })}
+      : t("settings.tasteHint")}
   >
     {#snippet control()}
       <Button
