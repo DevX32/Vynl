@@ -289,9 +289,23 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             SettingsRow(
-                label = update?.let { "Update ${it.short} is ready" } ?: "Check for updates",
-                hint = update?.let { "A new build is ready — grab it below" } ?: "Builds ship whenever the desktop ships",
-                onClick = { viewModel.checkForUpdate() },
+                label = when {
+                    update == null -> "Check for updates"
+                    viewModel.updateDownloaded -> "Install update ${update?.short}"
+                    else -> "Update ${update?.short} is ready"
+                },
+                hint = when {
+                    update == null -> "Builds ship whenever the desktop ships"
+                    viewModel.updateDownloaded -> "Ready to install"
+                    else -> "A new build is ready to download"
+                },
+                onClick = {
+                    when {
+                        update == null -> viewModel.checkForUpdate()
+                        viewModel.updateDownloaded -> viewModel.installUpdate()
+                        else -> viewModel.downloadUpdate()
+                    }
+                },
                 trailing = if (viewModel.updateBusy) {
                     {
                         CircularProgressIndicator(
@@ -301,28 +315,18 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                         )
                     }
                 } else {
-                    null
+                    {
+                        Chip(
+                            label = when {
+                                update == null -> "Check"
+                                viewModel.updateDownloaded -> "Install"
+                                else -> "Download"
+                            },
+                            accent = true,
+                        )
+                    }
                 },
             )
-            if (viewModel.updateBusy) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { viewModel.updateProgress },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = VynlColors.accent,
-                    trackColor = VynlColors.line,
-                    drawStopIndicator = {},
-                )
-            }
-            update?.let {
-                ActionButton(
-                    title = if (viewModel.updateDownloaded) "Install the update" else "Download the update",
-                    onClick = {
-                        if (viewModel.updateDownloaded) viewModel.installUpdate() else viewModel.downloadUpdate()
-                    },
-                )
-                Spacer(Modifier.height(10.dp))
-            }
             SettingsRow(
                 label = "Support Vynl",
                 hint = "If you like the app, a coffee helps keep it going.",
@@ -665,23 +669,3 @@ private fun SettingsGroup(title: String) {
     Spacer(Modifier.height(6.dp))
 }
 
-@Composable
-private fun ActionButton(title: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .clip(RoundedCornerShape(VynlRadius.control))
-            .background(VynlColors.accent)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = title,
-            color = VynlColors.accentOn,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.W700,
-            fontFamily = VynlFonts.display,
-        )
-    }
-}
