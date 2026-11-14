@@ -53,7 +53,7 @@
     onclick={close}
     aria-label={t("player.closeFullscreen")}
   >
-    <X size={16} stroke-width={1.5} />
+    <X size={12} stroke-width={1.6} />
   </button>
 
   <div class="fs-content">
@@ -131,8 +131,8 @@
     right: 10px;
     top: 50%;
     z-index: 210;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: var(--radius-sm);
     background: var(--bg-raise);
     border: 1px solid var(--line);

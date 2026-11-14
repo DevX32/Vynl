@@ -47,7 +47,6 @@ fn defaults() -> Settings {
         display_name: String::new(),
         eq_enabled: false,
         eq_bands: crate::services::player::normalize_eq_bands(&[]),
-        plugins_auto_update: true,
     }
 }
 
@@ -99,7 +98,6 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
         display_name: patch.display_name,
         eq_enabled: patch.eq_enabled,
         eq_bands: crate::services::player::normalize_eq_bands(&patch.eq_bands),
-        plugins_auto_update: patch.plugins_auto_update,
     };
 
     util::write_json(&settings_file(user_data_dir), &next)?;

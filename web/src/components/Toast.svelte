@@ -48,7 +48,7 @@
         onclick={() => toasts.dismiss(toast.id)}
         aria-label={t("toast.dismiss")}
       >
-        <X size={14} strokeWidth={1.5} />
+        <X size={12} strokeWidth={1.5} />
       </button>
 
       <span class="timer" aria-hidden="true" style:transform={`scaleX(${unit(toast.progress)})`}></span>
@@ -114,8 +114,8 @@
     align-self: center;
     display: grid;
     place-items: center;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     padding: 0;
     color: var(--faint);
     background: var(--bg-raise);

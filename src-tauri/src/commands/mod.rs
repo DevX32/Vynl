@@ -1,4 +1,3 @@
-pub mod plugins;
 pub mod types;
 
 use std::collections::HashMap;
@@ -492,7 +491,9 @@ pub async fn get_playlist(id: String, app: AppHandle) -> Result<Option<Playlist>
 #[tauri::command]
 pub async fn create_playlist(name: String, app: AppHandle) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
-    crate::services::playlists::create_playlist(&output, &name)
+    let playlist = crate::services::playlists::create_playlist(&output, &name)?;
+    mirror_playlist(&app, &playlist);
+    Ok(playlist)
 }
 
 #[tauri::command]
@@ -504,7 +505,9 @@ pub async fn reorder_playlists(ids: Vec<String>, app: AppHandle) -> Result<(), S
 #[tauri::command]
 pub async fn rename_playlist(id: String, name: String, app: AppHandle) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
-    crate::services::playlists::rename_playlist(&output, &id, &name)
+    let playlist = crate::services::playlists::rename_playlist(&output, &id, &name)?;
+    mirror_playlist(&app, &playlist);
+    Ok(playlist)
 }
 
 fn delete_track_file(user_data: &Path, path: &str, canonical: &Path) -> bool {
@@ -580,6 +583,7 @@ pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksR
         }
     }
     crate::services::playlists::delete_playlist(&output, &user_data, &id);
+    mirror_delete(&app, &id);
     Ok(DeleteTracksResult { deleted, failed })
 }
 
@@ -618,7 +622,9 @@ pub async fn add_to_playlist(
         .iter()
         .map(|p| require_path_in_output(p, &app).map(|c| c.to_string_lossy().to_string()))
         .collect::<Result<Vec<String>, String>>()?;
-    crate::services::playlists::add_to_playlist(&output, &id, &validated_paths)
+    let playlist = crate::services::playlists::add_to_playlist(&output, &id, &validated_paths)?;
+    mirror_playlist(&app, &playlist);
+    Ok(playlist)
 }
 
 #[tauri::command]
@@ -630,7 +636,9 @@ pub async fn remove_from_playlist(
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
     if track_path.starts_with("ytm:") {
-        return crate::services::playlists::remove_from_playlist(&output, &id, &track_path);
+        let playlist = crate::services::playlists::remove_from_playlist(&output, &id, &track_path)?;
+        mirror_playlist(&app, &playlist);
+        return Ok(playlist);
     }
 
     let canonical = validate_path_in_output(&track_path, &app).ok();
@@ -651,8 +659,10 @@ pub async fn remove_from_playlist(
         }
     }
     crate::services::playlists::remove_paths_from_all(&output, &stale);
-    crate::services::playlists::get_playlist(&output, &id)
-        .ok_or_else(|| "playlist not found".into())
+    let playlist = crate::services::playlists::get_playlist(&output, &id)
+        .ok_or_else(|| "playlist not found".to_string())?;
+    mirror_playlist(&app, &playlist);
+    Ok(playlist)
 }
 
 #[tauri::command]
@@ -674,7 +684,14 @@ pub async fn move_in_playlist(
         return Err("from index out of bounds".into());
     }
     let to = to.min(len - 1);
-    crate::services::playlists::move_in_playlist(&output_clone, &id, from as usize, to as usize)
+    let playlist = crate::services::playlists::move_in_playlist(
+        &output_clone,
+        &id,
+        from as usize,
+        to as usize,
+    )?;
+    mirror_playlist(&app, &playlist);
+    Ok(playlist)
 }
 
 #[tauri::command]
@@ -685,7 +702,89 @@ pub async fn set_playlist_cover(
 ) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
-    crate::services::playlists::set_playlist_cover(&output, &user_data, &id, cover)
+    let playlist = crate::services::playlists::set_playlist_cover(&output, &user_data, &id, cover)?;
+    mirror_playlist(&app, &playlist);
+    Ok(playlist)
+}
+
+pub(crate) fn mirror_playlist(app: &AppHandle, playlist: &Playlist) {
+    let Ok(user_data) = user_data_dir(app) else {
+        return;
+    };
+    if crate::services::cloud::status(&user_data).signed_in {
+        let playlist = playlist.clone();
+        tauri::async_runtime::spawn(async move {
+            crate::services::cloud::push_playlist(&user_data, &playlist).await;
+        });
+    }
+}
+
+pub(crate) fn mirror_delete(app: &AppHandle, id: &str) {
+    let Ok(user_data) = user_data_dir(app) else {
+        return;
+    };
+    if crate::services::cloud::status(&user_data).signed_in {
+        let id = id.to_string();
+        tauri::async_runtime::spawn(async move {
+            crate::services::cloud::tombstone_playlist(&user_data, &id).await;
+        });
+    }
+}
+
+#[tauri::command]
+pub async fn cloud_status(app: AppHandle) -> Result<crate::services::cloud::CloudStatus, String> {
+    let user_data = user_data_dir(&app)?;
+    Ok(crate::services::cloud::status(&user_data))
+}
+
+async fn cloud_auth(
+    app: &AppHandle,
+    email: String,
+    password: String,
+    create: bool,
+) -> Result<crate::services::cloud::CloudAuthResult, String> {
+    let user_data = user_data_dir(app)?;
+    let output = output_dir_from_settings(app)?;
+    let result = if create {
+        crate::services::cloud::sign_up(&user_data, &email, &password).await?
+    } else {
+        crate::services::cloud::sign_in(&user_data, &email, &password).await?
+    };
+    if result.status.signed_in {
+        let _ = crate::services::cloud::sync(&user_data, &output).await;
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn cloud_sign_in(
+    email: String,
+    password: String,
+    app: AppHandle,
+) -> Result<crate::services::cloud::CloudAuthResult, String> {
+    cloud_auth(&app, email, password, false).await
+}
+
+#[tauri::command]
+pub async fn cloud_sign_up(
+    email: String,
+    password: String,
+    app: AppHandle,
+) -> Result<crate::services::cloud::CloudAuthResult, String> {
+    cloud_auth(&app, email, password, true).await
+}
+
+#[tauri::command]
+pub async fn cloud_sign_out(app: AppHandle) -> Result<(), String> {
+    let user_data = user_data_dir(&app)?;
+    crate::services::cloud::sign_out(&user_data).await
+}
+
+#[tauri::command]
+pub async fn cloud_sync(app: AppHandle) -> Result<crate::services::cloud::CloudSyncResult, String> {
+    let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+    crate::services::cloud::sync(&user_data, &output).await
 }
 
 #[tauri::command]

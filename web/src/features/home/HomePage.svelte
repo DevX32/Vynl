@@ -9,8 +9,6 @@
     matchesCurrentSong,
   } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
-  import { getPluginHomeSections } from "@state/plugins.svelte";
-  import { vynl } from "@lib/vynl";
   import { blobSrc, isSameSong } from "../../lib/format";
   import { QUOTES } from "@lib/constants";
   import { resolveDisplayName } from "@lib/nickname.svelte";
@@ -25,7 +23,6 @@
 
   const library = $derived(getLibrary());
   const playlistStreams = $derived(getPlaylistStreamTracks());
-  const pluginSections = $derived(getPluginHomeSections());
   const currentId = $derived(getCurrentId());
 
   function isCurrent(track: {
@@ -219,51 +216,6 @@
           <span>{t("home.openVault")}</span>
         </button>
       </div>
-    {/if}
-
-    {#if pluginSections.length > 0}
-      {#each pluginSections as section (`${section.pluginId}:${section.id}`)}
-        <div class="section">
-          <div class="section-head">
-            <span class="section-label">{section.title}</span>
-            {#if section.pluginName}
-              <span class="plugin-by">{section.pluginName}</span>
-            {/if}
-          </div>
-          <div class="plugin-list">
-            {#each section.items as item (item.id)}
-              {#if item.trackId}
-                <button
-                  class="plugin-item"
-                  onclick={() => item.trackId && playTrack(item.trackId)}
-                >
-                  <span class="plugin-item-title">{item.title}</span>
-                  {#if item.subtitle}
-                    <span class="plugin-item-sub">{item.subtitle}</span>
-                  {/if}
-                </button>
-              {:else if item.url}
-                <button
-                  class="plugin-item"
-                  onclick={() => item.url && void vynl.openExternal(item.url)}
-                >
-                  <span class="plugin-item-title">{item.title}</span>
-                  {#if item.subtitle}
-                    <span class="plugin-item-sub">{item.subtitle}</span>
-                  {/if}
-                </button>
-              {:else}
-                <div class="plugin-item">
-                  <span class="plugin-item-title">{item.title}</span>
-                  {#if item.subtitle}
-                    <span class="plugin-item-sub">{item.subtitle}</span>
-                  {/if}
-                </div>
-              {/if}
-            {/each}
-          </div>
-        </div>
-      {/each}
     {/if}
   </div>
 </section>
@@ -463,57 +415,6 @@
 
   .see-all:hover {
     color: var(--text);
-  }
-
-  .plugin-by {
-    font-size: 10.5px;
-    color: var(--faint);
-    font-family: var(--font-mono);
-    letter-spacing: 0.06em;
-  }
-
-  .plugin-list {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-
-  .plugin-item {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 11px 14px;
-    background: var(--bg-raise);
-    border-top: 1px solid var(--line);
-    text-align: left;
-    transition: background 0.15s;
-  }
-
-  .plugin-item:first-child {
-    border-top: none;
-  }
-
-  button.plugin-item:hover {
-    background: var(--bg-hover, rgba(255, 255, 255, 0.04));
-  }
-
-  .plugin-item-title {
-    font-size: 12.5px;
-    color: var(--text);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .plugin-item-sub {
-    font-size: 11px;
-    color: var(--faint);
-    font-family: var(--font-mono);
-    flex-shrink: 0;
   }
 
   .actions {

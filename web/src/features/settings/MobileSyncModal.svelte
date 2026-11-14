@@ -41,7 +41,7 @@
     <div class="head">
       <span class="title display">{t("settings.mobileSync")}</span>
       <button class="icon-btn" onclick={closeMobileSyncUi} aria-label={t("common.close")}>
-        <X size={16} stroke-width={1.5} />
+        <X size={12} stroke-width={1.6} />
       </button>
     </div>
 
@@ -159,8 +159,8 @@
   }
 
   .icon-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     background: var(--bg-raise);

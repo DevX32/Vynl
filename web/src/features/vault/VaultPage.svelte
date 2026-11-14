@@ -10,7 +10,6 @@
   } from "../../lib/types";
   import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-svelte";
   import { vynl } from "../../lib/vynl";
-  import { resolveCollectionWithPlugins } from "@lib/plugins/providers";
   import { getCurrentSettings } from "@state/settings.svelte";
   import { blobSrc, fmtDuration, totalSeconds } from "../../lib/format";
   import { toasts } from "@lib/toast";
@@ -168,7 +167,7 @@
     addedTrackIds = new Set();
     doneIds = [];
     try {
-      const c = await resolveCollectionWithPlugins(query);
+      const c = await vynl.resolve(query);
       collection = c;
       addedTrackIds = new Set(c.tracks.map((t) => t.id));
       await refreshDone({ force: true });

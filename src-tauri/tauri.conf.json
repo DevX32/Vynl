@@ -38,6 +38,8 @@
         "skipTaskbar": true,
         "visible": false,
         "focus": false,
+        "transparent": true,
+        "shadow": false,
         "backgroundColor": "#0d0d0d"
       }
     ],

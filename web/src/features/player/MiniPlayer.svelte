@@ -35,6 +35,7 @@
   let track = $state<MiniSyncState["track"]>(null);
   let playing = $state(false);
   let time = $state(0);
+  let previewTime = $state(0);
   let duration = $state(0);
   let vinylDeg = $state(0);
   let vinylSpeed = 0;
@@ -80,26 +81,40 @@
     sendMiniCommand({ type: "toggleMute" });
   }
 
-  function seekToRatio(ratio: number): void {
+  function clampRatio(ratio: number): number {
+    return Math.min(1, Math.max(0, ratio));
+  }
+
+  function previewSeekAt(ratio: number): void {
     if (duration <= 0) return;
-    time = ratio * duration;
-    sendMiniCommand({ type: "seek", value: ratio * duration });
+    previewTime = clampRatio(ratio) * duration;
+  }
+
+  function commitSeek(value: number): void {
+    if (!Number.isFinite(value)) return;
+    time = Math.min(duration, Math.max(0, value));
+    sendMiniCommand({ type: "seek", value: time });
   }
 
   function onSeekPointerDown(e: PointerEvent): void {
     const el = e.currentTarget as HTMLDivElement;
     seeking = true;
+    const target = pointerRatio(el, e.clientX);
+    previewSeekAt(target);
     const move = (ev: PointerEvent): void => {
-      seekToRatio(pointerRatio(el, ev.clientX));
+      previewSeekAt(pointerRatio(el, ev.clientX));
     };
     const up = (): void => {
+      const value = previewTime;
       seeking = false;
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      commitSeek(value);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    seekToRatio(pointerRatio(el, e.clientX));
+    window.addEventListener("pointercancel", up);
   }
 
   function onVolumePointerDown(e: PointerEvent): void {
@@ -264,9 +279,19 @@
     if (e.target === e.currentTarget) expand();
   }
 
-  const seekRatio = $derived(duration > 0 ? Math.min(1, time / duration) : 0);
+  const displayTime = $derived(seeking ? previewTime : time);
+  const seekRatio = $derived(duration > 0 ? Math.min(1, displayTime / duration) : 0);
   const volRatio = $derived(volume);
 </script>
+
+<svelte:head>
+  <style>
+    html,
+    body {
+      background: transparent !important;
+    }
+  </style>
+</svelte:head>
 
 <div class="mini">
   <div class="ambient" aria-hidden="true"></div>
@@ -341,7 +366,7 @@
     </div>
 
     <div class="seek-row">
-      <span class="time mono">{fmtTime(time)}</span>
+      <span class="time mono">{fmtTime(displayTime)}</span>
 
       <div
         class="slider seek"
@@ -351,7 +376,7 @@
         aria-label={t("player.seek")}
         aria-valuemin={0}
         aria-valuemax={duration}
-        aria-valuenow={Math.round(time)}
+        aria-valuenow={Math.round(displayTime)}
         tabindex="0"
         onpointerdown={onSeekPointerDown}
       >
@@ -439,6 +464,7 @@
     overflow: hidden;
     user-select: none;
     isolation: isolate;
+    border-radius: var(--radius-sm);
   }
 
   .mini::after {
@@ -447,6 +473,7 @@
     inset: 0;
     z-index: 20;
     border: 1px solid rgba(255, 255, 255, 0.055);
+    border-radius: var(--radius-sm);
     pointer-events: none;
   }
 
@@ -532,6 +559,7 @@
   }
 
   .mini-btn {
+    position: relative;
     width: 26px;
     height: 26px;
     display: flex;
@@ -540,21 +568,40 @@
     border: none;
     background: none;
     color: var(--faint);
-    border-radius: 3px;
     cursor: pointer;
     transition:
       color 0.1s,
-      background 0.1s,
       transform 0.1s;
+  }
+
+  .mini-btn::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    transform: rotate(45deg);
+    transition: background 0.1s;
+  }
+
+  .mini-btn :global(svg) {
+    position: relative;
+    z-index: 1;
   }
 
   .mini-btn:hover {
     color: var(--text);
+  }
+
+  .mini-btn:hover::before {
     background: rgba(255, 255, 255, 0.06);
   }
 
   .mini-btn:active {
     transform: scale(0.9);
+  }
+
+  .mini-btn:active::before {
     background: rgba(255, 255, 255, 0.04);
   }
 

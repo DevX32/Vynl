@@ -23,7 +23,6 @@ function defaultSettings(): Settings {
     displayName: "",
     eqEnabled: false,
     eqBands: eqFlat(),
-    pluginsAutoUpdate: true,
   };
 }
 

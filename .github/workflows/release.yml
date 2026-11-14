@@ -82,6 +82,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
+      - name: Create local Supabase config
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::Set SUPABASE_URL and SUPABASE_ANON_KEY repository secrets before releasing."
+            exit 1
+          fi
+          printf 'url=%s\nanonKey=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > supabase.properties
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
@@ -116,6 +127,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - name: Create local Supabase config
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::Set SUPABASE_URL and SUPABASE_ANON_KEY repository secrets before releasing."
+            exit 1
+          fi
+          printf 'url=%s\nanonKey=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > supabase.properties
 
       - uses: actions/setup-java@v5
         with:

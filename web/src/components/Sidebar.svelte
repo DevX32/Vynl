@@ -7,14 +7,25 @@
     Link2,
     Plus,
     Compass,
-    Puzzle,
     Heart,
+    ChevronUp,
+    LogIn,
+    LogOut,
+    RefreshCw,
+    UserRound,
   } from "lucide-svelte";
   import { blobSrc, toPascalCase } from "../lib/format";
+  import { blobatarUri } from "blobatar/uri";
   import { t } from "@lib/i18n";
-  import { getPlaylistCovers, markCoverFailed } from "@state/playlists.svelte";
-  import { getPluginPages } from "@state/plugins.svelte";
+  import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
+  import {
+    getCloudStatus,
+    refreshCloudStatus,
+    setCloudStatus,
+  } from "@state/cloud.svelte";
+  import { vynl } from "@lib/vynl";
+  import { toasts } from "@lib/toast";
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import { useDragList } from "@lib/drag-list.svelte";
   import { getLikedTracks } from "@state/taste.svelte";
@@ -30,7 +41,7 @@
     onPlayer,
     onVault,
     onSettings,
-    onPluginPage,
+    onAccount,
     onNewPlaylist,
     onOpenPlaylist,
     onShowCtx,
@@ -47,7 +58,7 @@
     onPlayer: () => void;
     onVault: () => void;
     onSettings: () => void;
-    onPluginPage: (id: string) => void;
+    onAccount: () => void;
     onNewPlaylist: () => void;
     onOpenPlaylist: (id: string) => void;
     onShowCtx: (e: MouseEvent, id: string, name: string) => void;
@@ -68,11 +79,109 @@
       (page.startsWith("catalogue:") && page !== "catalogue:liked"),
   );
 
+  const cloud = $derived(getCloudStatus());
+  const displayName = $derived(
+    resolveDisplayName(getCurrentSettings().displayName),
+  );
+  const avatarSrc = $derived(
+    blobatarUri(cloud.signedIn && cloud.email ? cloud.email : displayName, {
+      size: 80,
+    }),
+  );
+
+  let accountMenuOpen = $state(false);
+  let accountMenuStyle = $state("");
+  let accountWrap: HTMLDivElement | undefined = $state();
+  let accountButton: HTMLButtonElement | undefined = $state();
+
+  function toggleAccountMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    const next = !accountMenuOpen;
+    accountMenuOpen = next;
+    if (!next) return;
+    const rect = accountButton?.getBoundingClientRect();
+    if (rect) {
+      const width = 220;
+      const margin = 12;
+      const left = sidebarOpen
+        ? rect.left + margin
+        : Math.min(rect.right + margin, window.innerWidth - width - margin);
+      const bottom = Math.max(4, window.innerHeight - rect.bottom - 8);
+      accountMenuStyle = `left: ${left}px; bottom: ${bottom}px;`;
+    }
+    void refreshCloudStatus().catch(() => {});
+  }
+
+  function closeAccountMenu(event: MouseEvent): void {
+    if (!accountMenuOpen) return;
+    const target = event.target;
+    if (accountWrap && target instanceof Node && accountWrap.contains(target)) {
+      return;
+    }
+    accountMenuOpen = false;
+  }
+
+  function openAccountModal(): void {
+    accountMenuOpen = false;
+    onAccount();
+  }
+
+  function openAccountSettings(): void {
+    accountMenuOpen = false;
+    onSettings();
+  }
+
+  async function syncCloudNow(): Promise<void> {
+    accountMenuOpen = false;
+    try {
+      const result = await vynl.cloudSync();
+      await refreshPlaylists();
+      toasts.success(
+        result.deleted > 0
+          ? t("account.syncDoneDeleted", {
+              pulled: result.pulled,
+              pushed: result.pushed,
+              deleted: result.deleted,
+            })
+          : t("account.syncDone", {
+              pulled: result.pulled,
+              pushed: result.pushed,
+            }),
+        5000,
+      );
+    } catch (e) {
+      toasts.error(
+        t("account.syncFailed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+        6000,
+      );
+    }
+  }
+
+  async function signOutCloud(): Promise<void> {
+    accountMenuOpen = false;
+    try {
+      await vynl.cloudSignOut();
+      setCloudStatus({ signedIn: false, email: null, userId: null });
+      toasts.success(t("account.signedOut"), 4000);
+    } catch (e) {
+      toasts.error(
+        t("account.signOutFailed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+        6000,
+      );
+    }
+  }
+
   function onRailPointerDown(e: PointerEvent, idx: number): void {
     const p = playlists[idx];
     if (p) start(e, { idx, path: p.id });
   }
 </script>
+
+<svelte:window onclick={closeAccountMenu} />
 
 <nav class="sidebar" class:collapsed={!sidebarOpen} aria-label={t("nav.mainNavigation")}>
   <div class="nav-group">
@@ -96,16 +205,6 @@
       <span class="nav-icon"><Link2 size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("nav.vault")}</span>
     </button>
-    {#each getPluginPages() as pp (pp.pluginId)}
-      <button
-        class="nav-link"
-        class:active={page === `plugin:${pp.pluginId}`}
-        onclick={() => onPluginPage(pp.pluginId)}
-      >
-        <span class="nav-icon"><Puzzle size={15} stroke-width={1.5} /></span>
-        <span class="nav-label">{pp.title}</span>
-      </button>
-    {/each}
   </div>
 
   <div class="rail-section">
@@ -220,10 +319,85 @@
   </div>
 
   <div class="sidebar-foot">
-    <button class="nav-link" class:active={page === "settings"} onclick={onSettings}>
-      <span class="nav-icon"><SettingsIcon size={15} stroke-width={1.5} /></span>
-      <span class="nav-label">{t("nav.settings")}</span>
-    </button>
+    <div class="account-wrap" bind:this={accountWrap}>
+      {#if accountMenuOpen}
+        <div class="account-menu" style={accountMenuStyle} role="menu">
+          <div class="account-menu-head">
+            <span class="menu-name display">{displayName}</span>
+            <span class="menu-sub mono">
+              {cloud.signedIn ? cloud.email : t("account.notSignedIn")}
+            </span>
+          </div>
+          {#if cloud.signedIn}
+            <button
+              class="menu-item"
+              role="menuitem"
+              onclick={openAccountModal}
+            >
+              <UserRound size={14} stroke-width={1.5} />
+              <span>{t("account.menuLabel")}</span>
+            </button>
+            <button
+              class="menu-item"
+              role="menuitem"
+              onclick={() => void syncCloudNow()}
+            >
+              <RefreshCw size={14} stroke-width={1.5} />
+              <span>{t("account.syncNow")}</span>
+            </button>
+          {:else}
+            <button
+              class="menu-item accent"
+              role="menuitem"
+              onclick={openAccountModal}
+            >
+              <LogIn size={14} stroke-width={1.5} />
+              <span>{t("account.signIn")}</span>
+            </button>
+          {/if}
+          <button class="menu-item" role="menuitem" onclick={openAccountSettings}>
+            <SettingsIcon size={14} stroke-width={1.5} />
+            <span>{t("nav.settings")}</span>
+          </button>
+          {#if cloud.signedIn}
+            <button
+              class="menu-item danger"
+              role="menuitem"
+              onclick={() => void signOutCloud()}
+            >
+              <LogOut size={14} stroke-width={1.5} />
+              <span>{t("account.signOut")}</span>
+            </button>
+          {/if}
+        </div>
+      {/if}
+      <button
+        class="account-btn"
+        bind:this={accountButton}
+        onclick={toggleAccountMenu}
+        aria-label={cloud.signedIn
+          ? `${t("account.signedInAs")} ${cloud.email ?? ""}`
+          : t("account.signIn")}
+        aria-haspopup="menu"
+        aria-expanded={accountMenuOpen}
+      >
+        <span class="avatar">
+          <img src={avatarSrc} alt="" />
+          {#if cloud.signedIn}<span class="avatar-dot"></span>{/if}
+        </span>
+        {#if sidebarOpen}
+          <span class="account-meta">
+            <span class="account-name">{displayName}</span>
+            <span class="account-sub mono">
+              {cloud.signedIn ? cloud.email : t("account.notSignedIn")}
+            </span>
+          </span>
+          <span class="account-chevron" class:open={accountMenuOpen}>
+            <ChevronUp size={14} stroke-width={1.5} />
+          </span>
+        {/if}
+      </button>
+    </div>
   </div>
 </nav>
 
@@ -558,6 +732,163 @@
     padding-top: 6px;
     border-top: 1px solid var(--line);
     margin-top: auto;
+  }
+
+  .account-wrap {
+    position: relative;
+  }
+
+  .account-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 6px var(--nav-pad-x);
+    border-radius: var(--radius-sm);
+    color: var(--dim);
+    text-align: left;
+  }
+
+  .sidebar.collapsed .account-btn {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .avatar {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+
+  .avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    transform: scale(1.3);
+    user-select: none;
+  }
+
+  .avatar-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface);
+  }
+
+  .account-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .account-name {
+    font-size: 12.5px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .account-sub {
+    font-size: 9.5px;
+    color: var(--faint);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .account-chevron {
+    display: flex;
+    flex-shrink: 0;
+    color: var(--faint);
+    transition: transform 0.15s;
+  }
+
+  .account-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .account-menu {
+    position: fixed;
+    z-index: 60;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .account-menu-head {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px 9px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .menu-name {
+    font-size: 14px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .menu-sub {
+    font-size: 10px;
+    color: var(--faint);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--dim);
+    font-size: 12.5px;
+    text-align: left;
+    transition:
+      background 0.12s,
+      color 0.12s;
+  }
+
+  .menu-item:hover {
+    background: var(--bg-raise);
+    color: var(--text);
+  }
+
+  .menu-item.accent {
+    color: var(--accent);
+  }
+
+  .menu-item.danger {
+    color: var(--red);
+  }
+
+  .menu-item.danger:hover {
+    background: color-mix(in srgb, var(--red) 12%, transparent);
+    color: var(--red);
   }
 
   @container player (max-width: 620px) {

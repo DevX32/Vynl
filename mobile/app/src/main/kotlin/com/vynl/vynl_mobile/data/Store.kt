@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.vynl.vynl_mobile.remote.DesktopPlaylist
 import java.io.File
 
-private const val SCHEMA_VERSION = 2
+private const val SCHEMA_VERSION = 3
 
 class Store(context: Context) {
     private val files = File(context.filesDir, "music")
@@ -52,7 +52,8 @@ class Store(context: Context) {
                 CREATE TABLE playlists (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
-                    created_at INTEGER NOT NULL
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL DEFAULT 0
                 )
                 """.trimIndent(),
             )
@@ -73,6 +74,10 @@ class Store(context: Context) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN ext TEXT")
                 db.execSQL("ALTER TABLE tracks ADD COLUMN mtime INTEGER")
                 db.execSQL("ALTER TABLE tracks ADD COLUMN lyrics TEXT")
+            }
+            if (oldVersion < 3) {
+                db.execSQL("ALTER TABLE playlists ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE playlists SET updated_at = created_at")
             }
         }
     }
@@ -216,7 +221,7 @@ class Store(context: Context) {
         val result = mutableListOf<LocalPlaylist>()
         helper.readableDatabase.rawQuery(
             """
-            SELECT p.id, p.name, p.created_at,
+            SELECT p.id, p.name, p.created_at, p.updated_at,
                    (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id)
             FROM playlists p ORDER BY p.created_at ASC
             """.trimIndent(),
@@ -227,22 +232,47 @@ class Store(context: Context) {
                     id = cursor.getString(0),
                     name = cursor.getString(1),
                     createdAt = cursor.getLong(2),
-                    trackCount = cursor.getInt(3),
+                    updatedAt = cursor.getLong(3),
+                    trackCount = cursor.getInt(4),
                 )
             }
         }
         return result
     }
 
+    fun playlist(id: String): LocalPlaylist? {
+        helper.readableDatabase.rawQuery(
+            """
+            SELECT p.id, p.name, p.created_at, p.updated_at,
+                   (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id)
+            FROM playlists p WHERE p.id = ?
+            """.trimIndent(),
+            arrayOf(id),
+        ).use { cursor ->
+            if (cursor.moveToNext()) {
+                return LocalPlaylist(
+                    id = cursor.getString(0),
+                    name = cursor.getString(1),
+                    createdAt = cursor.getLong(2),
+                    updatedAt = cursor.getLong(3),
+                    trackCount = cursor.getInt(4),
+                )
+            }
+        }
+        return null
+    }
+
     fun createPlaylist(name: String): String {
         val id = "pl-${System.currentTimeMillis()}"
+        val now = System.currentTimeMillis()
         helper.writableDatabase.insert(
             "playlists",
             null,
             ContentValues().apply {
                 put("id", id)
                 put("name", name.trim().ifEmpty { "New playlist" })
-                put("created_at", System.currentTimeMillis())
+                put("created_at", now)
+                put("updated_at", now)
             },
         )
         return id
@@ -251,7 +281,19 @@ class Store(context: Context) {
     fun renamePlaylist(id: String, name: String) {
         helper.writableDatabase.update(
             "playlists",
-            ContentValues().apply { put("name", name.trim().ifEmpty { "New playlist" }) },
+            ContentValues().apply {
+                put("name", name.trim().ifEmpty { "New playlist" })
+                put("updated_at", System.currentTimeMillis())
+            },
+            "id = ?",
+            arrayOf(id),
+        )
+    }
+
+    private fun touchPlaylist(id: String) {
+        helper.writableDatabase.update(
+            "playlists",
+            ContentValues().apply { put("updated_at", System.currentTimeMillis()) },
             "id = ?",
             arrayOf(id),
         )
@@ -278,6 +320,7 @@ class Store(context: Context) {
                         put("id", id)
                         put("name", list.name)
                         put("created_at", list.createdAt)
+                        put("updated_at", list.updatedAt.takeIf { it > 0 } ?: list.createdAt)
                     },
                     SQLiteDatabase.CONFLICT_REPLACE,
                 )
@@ -320,6 +363,7 @@ class Store(context: Context) {
             },
             SQLiteDatabase.CONFLICT_REPLACE,
         )
+        touchPlaylist(playlistId)
     }
 
     fun removeFromPlaylist(playlistId: String, trackId: String) {
@@ -328,6 +372,7 @@ class Store(context: Context) {
             "playlist_id = ? AND track_id = ?",
             arrayOf(playlistId, trackId),
         )
+        touchPlaylist(playlistId)
     }
 
     fun playlistTracks(playlistId: String): List<LocalTrack> {
@@ -384,8 +429,102 @@ class Store(context: Context) {
         }
         return null
     }
-}
 
+    fun cloudPayload(id: String): CloudPlaylistPayload? {
+        val playlist = playlist(id) ?: return null
+        val canonical = id.removePrefix("dt-")
+        return CloudPlaylistPayload(
+            localId = canonical,
+            name = playlist.name,
+            createdAt = playlist.createdAt,
+            updatedAt = playlist.updatedAt.takeIf { it > 0 } ?: playlist.createdAt,
+            tracks = playlistTracks(id).map { it.toCatalogue() },
+        )
+    }
+
+    fun localIdForCloud(canonical: String): String {
+        if (playlist(canonical) != null) return canonical
+        val synced = "dt-$canonical"
+        if (playlist(synced) != null) return synced
+        return canonical
+    }
+
+    fun upsertCloudPlaylist(
+        localId: String,
+        name: String,
+        createdAt: Long,
+        updatedAt: Long,
+        tracks: List<CatalogueTrack>,
+    ) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.insertWithOnConflict(
+                "playlists",
+                null,
+                ContentValues().apply {
+                    put("id", localId)
+                    put("name", name.trim().ifEmpty { "Playlist" })
+                    put("created_at", createdAt)
+                    put("updated_at", updatedAt)
+                },
+                SQLiteDatabase.CONFLICT_REPLACE,
+            )
+            db.delete("playlist_tracks", "playlist_id = ?", arrayOf(localId))
+            var position = 0
+            for (track in tracks) {
+                upsertTrackMetadata(db, track)
+                db.insertWithOnConflict(
+                    "playlist_tracks",
+                    null,
+                    ContentValues().apply {
+                        put("playlist_id", localId)
+                        put("track_id", track.id)
+                        put("position", position++)
+                    },
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun upsertTrackMetadata(db: SQLiteDatabase, track: CatalogueTrack) {
+        val exists = db.rawQuery("SELECT 1 FROM tracks WHERE id = ?", arrayOf(track.id)).use {
+            it.moveToFirst()
+        }
+        if (!exists) {
+            db.insertOrThrow(
+                "tracks",
+                null,
+                ContentValues().apply {
+                    put("id", track.id)
+                    put("title", track.title)
+                    put("artist", track.artist)
+                    put("album", track.album)
+                    put("duration", track.duration)
+                    put("cover", track.cover)
+                    put("added_at", System.currentTimeMillis())
+                },
+            )
+        } else {
+            db.update(
+                "tracks",
+                ContentValues().apply {
+                    put("title", track.title)
+                    put("artist", track.artist)
+                    put("album", track.album)
+                    if (track.duration > 0) put("duration", track.duration)
+                    put("cover", track.cover)
+                },
+                "id = ?",
+                arrayOf(track.id),
+            )
+        }
+    }
+}
 data class LocalTrack(
     val id: String,
     val title: String,
@@ -417,5 +556,14 @@ data class LocalPlaylist(
     val id: String,
     val name: String,
     val createdAt: Long,
+    val updatedAt: Long,
     val trackCount: Int,
+)
+
+data class CloudPlaylistPayload(
+    val localId: String,
+    val name: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val tracks: List<CatalogueTrack>,
 )

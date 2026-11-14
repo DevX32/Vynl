@@ -82,7 +82,7 @@
         onclick={onClose}
         aria-label={t("titleBar.close")}
       >
-        <X size={16} stroke-width={1.5} />
+        <X size={12} stroke-width={1.6} />
       </button>
     </div>
     <div class="add-search">
@@ -251,8 +251,8 @@
   }
 
   .icon-btn.close-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     background: var(--surface);
     border: 1px solid var(--line);
     transform: rotate(45deg);

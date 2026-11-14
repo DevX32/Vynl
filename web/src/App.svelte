@@ -10,10 +10,9 @@
   import { sendMiniState } from "@lib/mini-sync";
   import MiniPlayer from "./features/player/MiniPlayer.svelte";
   import { initSettings, getCurrentSettings } from "@state/settings.svelte";
+  import { refreshCloudStatus } from "@state/cloud.svelte";
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
-  import { getPluginsUiOpen, initPlugins } from "@state/plugins.svelte";
-  import { emitAppEvent } from "@lib/plugins/events";
   import { playTrack } from "@lib/player.svelte";
   import { handleGlobalKey, getShowShortcutsOverlay, toggleShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getEqOpen } from "@state/equalizer.svelte";
@@ -45,16 +44,15 @@
   import LibraryPage from "./features/playlists/LibraryPage.svelte";
   import PlaylistDetail from "./features/playlists/PlaylistDetail.svelte";
   import SettingsPage from "./features/settings/SettingsPage.svelte";
+  import AccountModal from "./features/account/AccountModal.svelte";
   import EqualizerModal from "./features/settings/EqualizerModal.svelte";
   import MobileSyncModal from "./features/settings/MobileSyncModal.svelte";
-  import PluginsModal from "./features/plugins/PluginsModal.svelte";
   import VaultPage from "./features/vault/VaultPage.svelte";
   import HomePage from "./features/home/HomePage.svelte";
   import CataloguePage from "./features/catalogue/CataloguePage.svelte";
-  import PluginPageHost from "./features/plugins/PluginPageHost.svelte";
   import TitleBar from "./components/TitleBar.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
-  import { catalogueRoute, isPluginPage, type Page } from "@lib/types";
+  import { catalogueRoute, type Page } from "@lib/types";
   import { ImageOff, Pencil, Trash2 } from "lucide-svelte";
 
   const isMini =
@@ -69,6 +67,7 @@
   let sidebarOpen = $state(loadSidebarOpen());
   let showFullscreen = $state(false);
   let onboarded = $state(true);
+  let accountOpen = $state(false);
 
   const history = $state<Page[]>(["home"]);
   let historyIdx = $state(0);
@@ -168,13 +167,11 @@
     onboarded = wasOnboarded();
     void vynl.rpcUpdate(null);
     await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
-    void initPlugins().catch(console.warn);
     hideSplash();
     const off = vynl.onDownloadEvent((e) => {
       if (e.type === "finished") {
-        void Promise.all([refreshPlaylists(), refreshLibrary()]).finally(() => {
-          emitAppEvent("download-finished");
-        });
+        void refreshPlaylists();
+        void refreshLibrary();
       }
     });
     const offUpdate = vynl.onUpdateStatus((s) => {
@@ -189,6 +186,18 @@
       }
     });
     void initAppUpdate();
+    void (async () => {
+      try {
+        const cloud = await refreshCloudStatus();
+        if (!cloud.signedIn) return;
+        const result = await vynl.cloudSync();
+        if (result.pulled > 0 || result.deleted > 0) {
+          await refreshPlaylists();
+        }
+      } catch (e) {
+        console.warn("cloud sync failed", e);
+      }
+    })();
     return () => { off(); offUpdate(); };
   }
 
@@ -262,6 +271,10 @@
 
   function openSettings(): void {
     navigate("settings");
+  }
+
+  function openAccount(): void {
+    accountOpen = true;
   }
 
   function openVault(): void {
@@ -418,7 +431,7 @@
       onPlayer={openPlayer}
       onVault={openVault}
       onSettings={openSettings}
-      onPluginPage={(id) => navigate(`plugin:${id}`)}
+      onAccount={openAccount}
       onNewPlaylist={newPlaylist}
       onOpenPlaylist={(id) => void openPlaylist(id)}
       onOpenLikedSongs={openLikedSongs}
@@ -453,8 +466,6 @@
           <div class="page-inner">
             <SettingsPage onOpenVault={openVault} />
           </div>
-        {:else if isPluginPage(page)}
-          <PluginPageHost pageId={page.slice("plugin:".length)} />
         {/if}
         <div class="page-inner" class:hidden={page !== "vault"}>
           <VaultPage active={page === "vault"} />
@@ -474,12 +485,12 @@
   <ShortcutsOverlay />
 {/if}
 
-{#if getEqOpen()}
-  <EqualizerModal />
+{#if accountOpen}
+  <AccountModal onclose={() => (accountOpen = false)} />
 {/if}
 
-{#if getPluginsUiOpen()}
-  <PluginsModal />
+{#if getEqOpen()}
+  <EqualizerModal />
 {/if}
 
 {#if getMobileSyncUiOpen()}

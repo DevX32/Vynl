@@ -47,7 +47,6 @@ export interface Settings {
   displayName: string;
   eqEnabled: boolean;
   eqBands: number[];
-  pluginsAutoUpdate: boolean;
 }
 
 export interface EqDesign {
@@ -230,12 +229,7 @@ export type Page =
   | "catalogue:liked"
   | `catalogue:album:${string}`
   | `catalogue:artist:${string}`
-  | `catalogue:playlist:${string}`
-  | `plugin:${string}`;
-
-export function isPluginPage(page: Page): page is `plugin:${string}` {
-  return page.startsWith("plugin:");
-}
+  | `catalogue:playlist:${string}`;
 
 export interface PlaylistMeta {
   id: string;
@@ -275,6 +269,23 @@ export interface MobileSyncStatus {
   pairUrls: string[];
   hostname: string | null;
   qrSvg: string | null;
+}
+
+export interface CloudStatus {
+  signedIn: boolean;
+  email: string | null;
+  userId: string | null;
+}
+
+export interface CloudAuthResult {
+  needsConfirmation: boolean;
+  status: CloudStatus;
+}
+
+export interface CloudSyncResult {
+  pushed: number;
+  pulled: number;
+  deleted: number;
 }
 
 export interface TrackProgress {

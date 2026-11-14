@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.TravelExplore
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +63,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.ArtTile
+import com.vynl.vynl_mobile.ui.components.AccountAvatar
+import com.vynl.vynl_mobile.ui.components.AccountDialog
+import com.vynl.vynl_mobile.ui.components.AccountMenu
 import com.vynl.vynl_mobile.ui.components.PlaylistPickerSheet
 import com.vynl.vynl_mobile.ui.components.TrackActions
 import com.vynl.vynl_mobile.ui.components.TrackActionsSheet
@@ -93,6 +95,8 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
     }
     var playerOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var accountMenuOpen by remember { mutableStateOf(false) }
+    var accountOpen by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
@@ -132,12 +136,26 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     )
                 },
                 actions = {
-                    IconButton(onClick = { settingsOpen = true }) {
-                        Icon(
-                            Icons.Rounded.Tune,
-                            contentDescription = "Settings",
-                            tint = VynlColors.dim,
-                            modifier = Modifier.size(22.dp),
+                    val cloud = viewModel.cloudStatus
+                    val accountSeed = if (cloud.signedIn && !cloud.email.isNullOrBlank()) {
+                        cloud.email
+                    } else {
+                        viewModel.displayName.ifBlank { viewModel.nickname.ifBlank { "vynl" } }
+                    }
+                    Box {
+                        IconButton(onClick = { accountMenuOpen = true }) {
+                            AccountAvatar(seed = accountSeed.orEmpty(), signedIn = cloud.signedIn, size = 28.dp)
+                        }
+                        AccountMenu(
+                            expanded = accountMenuOpen,
+                            onDismiss = { accountMenuOpen = false },
+                            displayName = viewModel.displayName,
+                            email = cloud.email,
+                            signedIn = cloud.signedIn,
+                            onAccount = { accountOpen = true },
+                            onSync = { viewModel.syncCloud() },
+                            onSettings = { settingsOpen = true },
+                            onSignOut = { viewModel.cloudSignOut() },
                         )
                     }
                 },
@@ -212,6 +230,10 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
         exit = fadeOut(),
     ) {
         SettingsScreen(viewModel = viewModel, onClose = { settingsOpen = false })
+    }
+
+    if (accountOpen) {
+        AccountDialog(viewModel = viewModel, onDismiss = { accountOpen = false })
     }
 
     AnimatedVisibility(

@@ -24,6 +24,8 @@ import com.vynl.vynl_mobile.data.randomNickname
 import com.vynl.vynl_mobile.data.resolveDisplayName
 import com.vynl.vynl_mobile.playback.PlayerController
 import com.vynl.vynl_mobile.remote.Desktop
+import com.vynl.vynl_mobile.remote.Cloud
+import com.vynl.vynl_mobile.remote.CloudStatus
 import com.vynl.vynl_mobile.ui.theme.Accent
 import com.vynl.vynl_mobile.update.AppUpdate
 import com.vynl.vynl_mobile.update.Update
@@ -120,6 +122,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val settings = SettingsStore(application)
     private val updater = AppUpdate(application)
     val desktop = Desktop(application)
+    val cloud = Cloud(application)
+
+    var cloudStatus by mutableStateOf(cloud.status)
+        private set
+    var cloudBusy by mutableStateOf(false)
+        private set
+    var cloudSyncing by mutableStateOf(false)
+        private set
+    var cloudError by mutableStateOf<String?>(null)
+        private set
+    var cloudNotice by mutableStateOf<String?>(null)
+        private set
 
     var displayName by mutableStateOf(settings.displayName)
         private set
@@ -186,6 +200,139 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         measureDownloads()
         loadMix()
         refreshStore()
+        refreshCloudSession()
+    }
+
+    private fun refreshCloudSession() {
+        viewModelScope.launch {
+            cloudStatus = withContext(Dispatchers.IO) { cloud.status }
+            if (cloudStatus.signedIn) syncCloud(silent = true)
+        }
+    }
+
+    fun cloudSignIn(email: String, password: String) {
+        if (cloudBusy) return
+        val normalizedEmail = email.trim()
+        if (normalizedEmail.isEmpty() || password.isEmpty()) {
+            cloudError = "Enter your email and password before continuing."
+            cloudNotice = null
+            return
+        }
+        cloudBusy = true
+        cloudError = null
+        cloudNotice = null
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { cloud.signIn(normalizedEmail, password) }
+                cloudStatus = result.status
+                if (result.needsConfirmation) {
+                    cloudNotice = "Check your email to confirm your account, then sign in."
+                } else {
+                    cloudNotice = "Signed in — playlists are mirroring"
+                    syncCloud()
+                }
+            } catch (error: Exception) {
+                cloudError = friendly(error)
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    fun cloudSignUp(email: String, password: String) {
+        if (cloudBusy) return
+        val normalizedEmail = email.trim()
+        if (normalizedEmail.isEmpty() || password.isEmpty()) {
+            cloudError = "Enter your email and password before continuing."
+            cloudNotice = null
+            return
+        }
+        cloudBusy = true
+        cloudError = null
+        cloudNotice = null
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { cloud.signUp(normalizedEmail, password) }
+                cloudStatus = result.status
+                if (result.needsConfirmation) {
+                    cloudNotice = "Check your email to confirm your account, then sign in."
+                } else {
+                    cloudNotice = "Account created — playlists are mirroring"
+                    syncCloud()
+                }
+            } catch (error: Exception) {
+                cloudError = friendly(error)
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    fun cloudSignOut() {
+        if (cloudBusy) return
+        cloudBusy = true
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { cloud.signOut() }
+                cloudStatus = CloudStatus(false, null)
+                cloudError = null
+                cloudNotice = null
+                notice = "Signed out of Vynl Cloud"
+            } catch (error: Exception) {
+                cloudError = friendly(error)
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    fun syncCloud(silent: Boolean = false) {
+        if (cloudSyncing) return
+        if (!cloud.status.signedIn) {
+            if (!silent) notice = "Sign in to Vynl Cloud first"
+            return
+        }
+        cloudSyncing = true
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { cloud.sync(store) }
+                cloudStatus = withContext(Dispatchers.IO) { cloud.status }
+                refreshStore()
+                if (!silent) {
+                    notice = if (result.deleted > 0) {
+                        "Cloud sync — ${result.pulled} pulled, ${result.pushed} pushed, ${result.deleted} deleted"
+                    } else {
+                        "Cloud sync — ${result.pulled} pulled, ${result.pushed} pushed"
+                    }
+                }
+            } catch (error: Exception) {
+                cloudStatus = withContext(Dispatchers.IO) { cloud.status }
+                if (!silent) notice = friendly(error)
+            } finally {
+                cloudSyncing = false
+            }
+        }
+    }
+
+    private fun mirrorPlaylist(id: String) {
+        if (!cloud.status.signedIn) return
+        viewModelScope.launch {
+            try {
+                val payload = withContext(Dispatchers.IO) { store.cloudPayload(id) } ?: return@launch
+                withContext(Dispatchers.IO) { cloud.pushPlaylist(payload) }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun mirrorDelete(id: String) {
+        if (!cloud.status.signedIn) return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { cloud.tombstone(id.removePrefix("dt-")) }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     suspend fun pairDesktop(
@@ -679,6 +826,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun addToPlaylist(playlistId: String, track: CatalogueTrack) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { store.addToPlaylist(playlistId, track) }
+            mirrorPlaylist(playlistId)
             closePlaylistPicker()
             refreshStore()
             notice = "Added to ${_playlists.value.firstOrNull { it.id == playlistId }?.name ?: "the playlist"}"
@@ -720,6 +868,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { store.addToPlaylist(id, track) }
                 cacheTrackForOffline(track)
             }
+            mirrorPlaylist(id)
             closePlaylistPicker()
             refreshStore()
             notice = "Playlist created"
@@ -729,6 +878,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deletePlaylist(id: String) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { store.deletePlaylist(id) }
+            mirrorDelete(id)
             refreshStore()
         }
     }

@@ -135,8 +135,6 @@ pub struct Settings {
     pub eq_enabled: bool,
     #[serde(default = "default_eq_bands")]
     pub eq_bands: Vec<f32>,
-    #[serde(default = "default_true")]
-    pub plugins_auto_update: bool,
 }
 
 fn default_true() -> bool {
@@ -524,111 +522,6 @@ pub struct UpdateStatus {
     pub progress: Option<f64>,
     pub ready: Option<bool>,
     pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum PluginInstallationMethod {
-    Store,
-    Dev,
-    Sideload,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginEntry {
-    pub id: String,
-    pub version: String,
-    pub path: String,
-    pub installation_method: PluginInstallationMethod,
-    pub original_path: Option<String>,
-    pub enabled: bool,
-    pub installed_at: i64,
-    pub last_updated_at: i64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub author: Option<String>,
-    #[serde(default)]
-    pub categories: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_repo: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginManifestVynl {
-    #[serde(default)]
-    pub display_name: Option<String>,
-    #[serde(default)]
-    pub categories: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginManifest {
-    pub name: String,
-    pub version: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub author: Option<String>,
-    #[serde(default, rename = "vynl")]
-    pub vynl: Option<PluginManifestVynl>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StorePlugin {
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub author: String,
-    #[serde(default)]
-    pub repo: Option<String>,
-    #[serde(default)]
-    pub categories: Vec<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub download_url: Option<String>,
-    #[serde(default)]
-    pub homepage: Option<String>,
-    #[serde(default)]
-    pub added_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginStoreResult {
-    pub entries: Vec<StorePlugin>,
-    pub source_error: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginHttpOptions {
-    #[serde(default)]
-    pub method: Option<String>,
-    #[serde(default)]
-    pub headers: Option<std::collections::HashMap<String, String>>,
-    #[serde(default)]
-    pub body: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginHttpResponse {
-    pub status: u16,
-    pub ok: bool,
-    pub headers: std::collections::HashMap<String, String>,
-    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

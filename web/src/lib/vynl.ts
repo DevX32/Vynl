@@ -23,6 +23,9 @@ import type {
   ToolName,
   ToolStatus,
   MobileSyncStatus,
+  CloudStatus,
+  CloudAuthResult,
+  CloudSyncResult,
   UpdateStatus,
   EqDesign,
   MediaUpdate,
@@ -38,11 +41,6 @@ import type {
   CatalogueTrack,
   DeleteTracksResult,
 } from "../lib/types";
-import type {
-  PluginHttpInit,
-  PluginHttpResponse,
-  PluginStoreResult,
-} from "./plugins/types";
 
 async function cmd<T>(command: string, args?: InvokeArgs): Promise<T> {
   return invoke<T>(command, args);
@@ -192,6 +190,18 @@ export const vynl = {
     ext: string,
     data: number[],
   ): Promise<string> => cmd("save_playlist_cover", { id, ext, data }),
+
+  cloudStatus: (): Promise<CloudStatus> => cmd("cloud_status"),
+
+  cloudSignIn: (email: string, password: string): Promise<CloudAuthResult> =>
+    cmd("cloud_sign_in", { email, password }),
+
+  cloudSignUp: (email: string, password: string): Promise<CloudAuthResult> =>
+    cmd("cloud_sign_up", { email, password }),
+
+  cloudSignOut: (): Promise<void> => cmd("cloud_sign_out"),
+
+  cloudSync: (): Promise<CloudSyncResult> => cmd("cloud_sync"),
 
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>
     cmd("lyrics_local", { file }),
@@ -401,69 +411,6 @@ export const vynl = {
     }),
 
   clearAudioCache: (): Promise<void> => cmd("clear_audio_cache"),
-
-  pluginsList: (): Promise<import("./plugins/types").PluginEntry[]> =>
-    cmd("plugins_list"),
-
-  pluginsSetEnabled: (
-    id: string,
-    enabled: boolean,
-  ): Promise<import("./plugins/types").PluginEntry> =>
-    cmd("plugins_set_enabled", { id, enabled }),
-
-  pluginsRemove: (id: string): Promise<void> => cmd("plugins_remove", { id }),
-
-  pluginsInstallFromUrl: (
-    url: string,
-    repo: string | null,
-  ): Promise<import("./plugins/types").PluginEntry> =>
-    cmd("plugins_install_from_url", { url, repo }),
-
-  pluginsPickFolder: (): Promise<string | null> => cmd("plugins_pick_folder"),
-
-  pluginsInstallFromFolder: (
-    path: string,
-  ): Promise<import("./plugins/types").PluginEntry> =>
-    cmd("plugins_install_from_folder", { path }),
-
-  pluginsPickZip: (): Promise<string | null> => cmd("plugins_pick_zip"),
-
-  pluginsInstallFromZip: (
-    path: string,
-  ): Promise<import("./plugins/types").PluginEntry> =>
-    cmd("plugins_install_from_zip", { path }),
-
-  pluginsReloadDev: (
-    id: string,
-  ): Promise<import("./plugins/types").PluginEntry> =>
-    cmd("plugins_reload_dev", { id }),
-
-  pluginsReadFile: (id: string, path: string): Promise<string> =>
-    cmd("plugins_read_file", { id, path }),
-
-  pluginCompile: (
-    id: string,
-    entry: string,
-  ): Promise<{ code: string; deps: string[] }> =>
-    cmd("plugin_compile", { id, entry }),
-
-  pluginGetConfig: (id: string): Promise<Record<string, unknown>> =>
-    cmd("plugin_get_config", { id }),
-
-  pluginSetConfig: (id: string, config: Record<string, unknown>): Promise<void> =>
-    cmd("plugin_set_config", { id, config }),
-
-  pluginHttpFetch: (
-    url: string,
-    opts: PluginHttpInit | null,
-  ): Promise<PluginHttpResponse> =>
-    cmd("plugin_http_fetch", { url, opts }),
-
-  pluginValidateLocalMedia: (path: string, kind: string): Promise<string> =>
-    cmd("plugin_validate_local_media", { path, kind }),
-
-  pluginStoreFetch: (sources: string[]): Promise<PluginStoreResult> =>
-    cmd("plugin_store_fetch", { sources }),
 };
 
 function onEvent<T>(

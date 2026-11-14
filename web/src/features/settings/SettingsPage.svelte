@@ -3,7 +3,6 @@
   import SettingsPanel from "./SettingsPanel.svelte";
   import BackupPanel from "./BackupPanel.svelte";
   import DownloadsPanel from "./DownloadsPanel.svelte";
-  import PluginSettings from "./PluginSettings.svelte";
   import AboutPanel from "./AboutPanel.svelte";
 
   let { onOpenVault }: { onOpenVault?: () => void } = $props();
@@ -19,7 +18,6 @@
     <SettingsPanel />
     <BackupPanel {onOpenVault} />
     <DownloadsPanel />
-    <PluginSettings />
     <AboutPanel />
   </div>
 </section>

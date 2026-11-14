@@ -169,6 +169,19 @@ pub fn get_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
     read_playlist(output_dir, id)
 }
 
+pub fn upsert_playlist(output_dir: &Path, playlist: &Playlist) -> Result<(), String> {
+    if !validate_id(&playlist.id) {
+        return Err("invalid playlist id".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let mut order = read_order(output_dir);
+    if !order.iter().any(|id| id == &playlist.id) {
+        order.push(playlist.id.clone());
+        write_order(output_dir, &order)?;
+    }
+    write_playlist(output_dir, playlist)
+}
+
 fn to_base36(mut num: u64) -> String {
     const CHARS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     if num == 0 {

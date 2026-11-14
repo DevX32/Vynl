@@ -8,7 +8,6 @@
   import Switch from "@components/Switch.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
-  import { openPluginsUi } from "@state/plugins.svelte";
   import MobileSyncSettings from "./MobileSyncSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
   import TasteSettings from "./TasteSettings.svelte";
@@ -77,17 +76,6 @@
   <TasteSettings />
 
   <div class="group">
-    <SettingRow
-      label={t("plugins.title")}
-      hint={t("plugins.openHint")}
-    >
-      {#snippet control()}
-        <Button size="sm" onclick={openPluginsUi}>
-          {t("plugins.open")}
-        </Button>
-      {/snippet}
-    </SettingRow>
-
     <MobileSyncSettings />
   </div>
 

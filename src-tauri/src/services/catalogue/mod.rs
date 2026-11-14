@@ -602,7 +602,9 @@ pub async fn catalogue_save_to_playlist(
     };
     let (local, _) = local_file_for(&track, &settings, &output);
     let local_string = local.to_string_lossy().to_string();
-    playlists::add_stream_to_playlist(&output, &id, &track, Some(&local_string))
+    let playlist = playlists::add_stream_to_playlist(&output, &id, &track, Some(&local_string))?;
+    crate::commands::mirror_playlist(&app, &playlist);
+    Ok(playlist)
 }
 
 #[tauri::command]
@@ -618,7 +620,7 @@ pub async fn catalogue_add_to_playlist(
         .app_data_dir()
         .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
     let settings = crate::services::settings::get_settings(&user_data);
-    service
+    let result = service
         .add_to_playlist(
             &track,
             playlist_id,
@@ -627,7 +629,11 @@ pub async fn catalogue_add_to_playlist(
             &user_data,
             &app,
         )
-        .await
+        .await?;
+    if let Some(playlist) = &result.playlist {
+        crate::commands::mirror_playlist(&app, playlist);
+    }
+    Ok(result)
 }
 
 #[allow(dead_code)]

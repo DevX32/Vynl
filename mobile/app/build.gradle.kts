@@ -9,6 +9,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val supabaseProps = Properties().apply {
+    val file = rootProject.file("../supabase.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun supabaseField(key: String): String {
+    val value = supabaseProps.getProperty(key, "").replace("\\", "\\\\").replace("\"", "\\\"")
+    return "\"$value\""
+}
+
 android {
     namespace = "com.vynl.vynl_mobile"
     compileSdk = 37
@@ -20,6 +30,9 @@ android {
         targetSdk = 36
         versionCode = 2038
         versionName = "0.5.8"
+
+        buildConfigField("String", "SUPABASE_URL", supabaseField("url"))
+        buildConfigField("String", "SUPABASE_ANON_KEY", supabaseField("anonKey"))
     }
 
     signingConfigs {
@@ -74,6 +87,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -123,6 +137,7 @@ dependencies {
     implementation("androidx.media3:media3-session:1.11.1")
     implementation("io.coil-kt.coil3:coil-compose:3.6.3")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
+    implementation("io.coil-kt.coil3:coil-svg:3.6.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("androidx.camera:camera-core:1.5.1")

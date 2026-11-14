@@ -1,6 +1,5 @@
 import type { LyricsResult } from "@lib/types";
 import { vynl } from "@lib/vynl";
-import { runLyricsProviders } from "@lib/plugins/providers";
 import { getCurrentTrack, getCurrentId } from "@state/now-playing.svelte";
 import { getSmoothTime } from "@state/media-clock.svelte";
 
@@ -569,20 +568,6 @@ export function loadLyrics(id: string | null): void {
 
       if (!res && embeddedLyrics && embeddedKind && embeddedKind !== "txt") {
         res = { kind: embeddedKind, text: embeddedLyrics, source: "local" };
-      }
-
-      if (!res) {
-        const viaPlugin = await runLyricsProviders({
-          title: t.title,
-          artist: t.artist,
-          album: t.album,
-          duration: t.duration,
-        });
-        if (version !== _loadVersion) return;
-        if (viaPlugin) {
-          res = { kind: viaPlugin.kind, text: viaPlugin.text, source: "remote" };
-          tryParseEmbeddedLyrics(res, t);
-        }
       }
 
       if (!res) {

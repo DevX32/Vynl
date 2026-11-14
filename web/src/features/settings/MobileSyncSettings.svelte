@@ -13,7 +13,7 @@
 <SettingRow label={t("settings.mobileSync")} hint={t("settings.mobileSyncHint")}>
   {#snippet control()}
     <Button size="sm" onclick={openMobileSyncUi}>
-      {t("plugins.open")}
+      {t("common.open")}
     </Button>
   {/snippet}
 </SettingRow>

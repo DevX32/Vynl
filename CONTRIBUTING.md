@@ -152,14 +152,6 @@ Vynl/
   parsing and AAC, `symphonia-adapter-libopus` supplies libopus for Opus streams,
   and `mp3lame-encoder` (LAME) produces the mp3 output
 
-### Real-time Sync (Listen Along plugin)
-
-Listen Along now lives in the [vynl-store](https://github.com/DevX32/vynl-store)
-repo as a store plugin (`plugins/listen-along/`) and is developed there — it
-uses the plugin API (its own page, `api.Player` shared playback, lyrics
-provider) rather than app internals. Changes to the feature go to that repo,
-not here; the app only provides the host APIs it builds on.
-
 ## Pull Requests
 
 1. Ensure all tests pass

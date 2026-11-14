@@ -51,11 +51,6 @@ import type {
   MediaUpdate,
   PlaybackTick,
 } from "@lib/types";
-import type { PluginSharedState } from "@lib/plugins/types";
-
-export function isSharedPlayback(): boolean {
-  return (getCurrentTrack()?.id ?? "").startsWith("shared:");
-}
 
 function normalizeDuration(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -196,7 +191,7 @@ function handleTick(tick: PlaybackTick): void {
     if (np.playing) {
       updatePlaying(false);
       updateMediaSession();
-      if (!isSharedPlayback()) nextAutomatic();
+      nextAutomatic();
     }
     return;
   }
@@ -337,7 +332,7 @@ function scheduleRetry(failedId: string | null): void {
     pendingRetry = null;
     setPlayError(null);
     if ((getCurrentTrack()?.id ?? null) !== failedId) return;
-    if (!isSharedPlayback()) next();
+    next();
   }, 1600);
 }
 
@@ -422,7 +417,6 @@ export function playTrack(
   contextPaths?: string[],
   seekTo?: number,
 ): void {
-  invalidateSharedPlayback();
   const track = findTrackById(id);
   if (!track) return;
   clearRetry();
@@ -447,173 +441,10 @@ export function playTrack(
   loadAndPlayNative(track.path, gen, seekTo);
 }
 
-function playSharedFile(opts: {
-  path: string;
-  title: string;
-  artist: string;
-  album?: string;
-  duration?: number;
-  cover?: string | null;
-  lyrics?: string | null;
-  seekTo?: number;
-  playing?: boolean;
-}): void {
-  clearRetry();
-  setPlayError(null);
-  const duration = normalizeDuration(opts.duration);
-  const initialTime = normalizeDuration(opts.seekTo);
-  resetCrossfade();
-  cancelSeek(false);
-  const gen = ++playGeneration;
-  setNowPlaying({
-    id: `shared:${opts.path}`,
-    title: opts.title,
-    artist: opts.artist,
-    album: opts.album ?? "",
-    year: null,
-    duration,
-    path: opts.path,
-    trackNumber: null,
-    time: initialTime,
-    playing: false,
-    lyrics: opts.lyrics ?? null,
-    cover: opts.cover ?? null,
-  });
-  if (opts.playing === false) {
-    beginPlayReconcile(gen);
-    pauseIntent += 1;
-    void playNative(
-      opts.path,
-      initialTime > 0 ? initialTime : undefined,
-      gen,
-    ).then(() => {
-      if (gen !== playGeneration) return;
-      return vynl.playerPause(gen);
-    }).finally(() => {
-      pauseIntent -= 1;
-    }).then(() => {
-      if (gen !== playGeneration) return;
-      finishPlayReconcile(gen);
-      return vynl.playerGetPosition(gen);
-    }).then((position) => {
-      if (gen !== playGeneration || position === undefined) return;
-      updatePlaying(false);
-      updateMediaSession();
-      updateTime(Number.isFinite(position) ? position : initialTime, true);
-    }).catch((err) => {
-      finishPlayReconcile(gen);
-      if (gen !== playGeneration) return;
-      handlePlayReject(err);
-    });
-    return;
-  }
-  loadAndPlayNative(
-    opts.path,
-    gen,
-    initialTime > 0 ? initialTime : undefined,
-  );
-}
-
-let _sharedKey: string | null = null;
-let _sharedGen = 0;
-let _lastSharedSeekAt = 0;
-
-function invalidateSharedPlayback(): void {
-  _sharedGen += 1;
-  _sharedKey = null;
-  _lastSharedSeekAt = 0;
-}
-
-export async function playShared(s: PluginSharedState): Promise<void> {
-  const gen = ++_sharedGen;
-  const np = getCurrentTrack();
-  const following = (np?.id ?? "").startsWith("shared:");
-  const key = s.cacheKey ?? s.sourceUrl ?? null;
-
-  if (!following || (key !== null && key !== _sharedKey)) {
-    let path: string | null = null;
-    if (s.sourceUrl) {
-      try {
-        path = await vynl.cacheRemoteAudio(s.sourceUrl, key ?? s.sourceUrl);
-      } catch (e) {
-        console.warn("[player] shared audio download failed:", e);
-        return;
-      }
-      if (gen !== _sharedGen) return;
-    } else if (following && np?.path) {
-      path = np.path;
-    }
-    if (!path) return;
-    _sharedKey = key ?? _sharedKey;
-    playSharedFile({
-      path,
-      title: s.title,
-      artist: s.artist,
-      album: s.album,
-      duration: s.duration,
-      cover: s.coverUrl ?? null,
-      lyrics: s.lyrics ?? null,
-      seekTo: s.time,
-      playing: s.playing,
-    });
-    return;
-  }
-
-  const cur = np;
-  if (!cur) return;
-  const patch: Parameters<typeof patchNowPlaying>[0] = {};
-  if (cur.title !== s.title) patch.title = s.title;
-  if (cur.artist !== s.artist) patch.artist = s.artist;
-  if (s.album !== undefined && cur.album !== s.album) patch.album = s.album;
-  let duration = cur.duration;
-  if (s.duration !== undefined) {
-    duration = normalizeDuration(s.duration);
-    if (cur.duration !== duration) patch.duration = duration;
-  }
-  if ((cur.cover ?? null) !== (s.coverUrl ?? null)) {
-    patch.cover = s.coverUrl ?? null;
-  }
-  if ((cur.lyrics ?? null) !== (s.lyrics ?? null)) {
-    patch.lyrics = s.lyrics ?? null;
-  }
-  if (Object.keys(patch).length > 0) patchNowPlaying(patch);
-
-  const sharedTime = Number.isFinite(s.time)
-    ? Math.max(0, s.time)
-    : getCurrentTime();
-  const boundedTime = duration > 0 ? Math.min(sharedTime, duration) : sharedTime;
-  const drift = Math.abs(getCurrentTime() - boundedTime);
-  if (drift > 0.2 && Date.now() - _lastSharedSeekAt > 100) {
-    _lastSharedSeekAt = Date.now();
-    seekToTime(boundedTime);
-  } else {
-    updateTime(boundedTime);
-  }
-  if (s.playing !== cur.playing) {
-    if (s.playing && cur.path) {
-      void resumeOrPlay(cur.path, boundedTime, playGeneration, gen).catch(handlePlayReject);
-    } else {
-      pausePlayback(gen);
-    }
-  }
-}
-
-export function stopShared(): void {
-  const wasShared = isSharedPlayback();
-  invalidateSharedPlayback();
-  if (!wasShared) return;
-  cancelSeek(false);
-  const stopGeneration = ++playGeneration;
-  void vynl.playerStop(stopGeneration).catch(() => {});
-  updatePlaying(false);
-  updateMediaSession();
-}
-
 export async function resumeOrPlay(
   path: string,
   seekTo?: number,
   generation = playGeneration,
-  operationId?: number,
 ): Promise<void> {
   beginPlayReconcile(generation);
   try {
@@ -622,7 +453,6 @@ export async function resumeOrPlay(
       resumed = await vynl.playerResume(generation);
     } catch {}
     if (generation !== playGeneration) return;
-    if (operationId !== undefined && operationId !== _sharedGen) return;
     if (!resumed) {
       const duration = getCurrentTrack()?.duration ?? 0;
       const atEnd =
@@ -632,7 +462,6 @@ export async function resumeOrPlay(
       await playNative(path, atEnd ? undefined : seekTo, generation);
     }
     if (generation !== playGeneration) return;
-    if (operationId !== undefined && operationId !== _sharedGen) return;
     updatePlaying(true);
     updateMediaSession();
   } finally {
@@ -640,13 +469,12 @@ export async function resumeOrPlay(
   }
 }
 
-export function pausePlayback(operationId?: number): void {
+export function pausePlayback(): void {
   const generation = playGeneration;
   pauseIntent += 1;
   const finish = (): void => {
     pauseIntent -= 1;
     if (generation !== playGeneration) return;
-    if (operationId !== undefined && operationId !== _sharedGen) return;
     updatePlaying(false);
     updateMediaSession();
   };
@@ -703,7 +531,6 @@ function resolveNextTrack(
 }
 
 function consumeNextTrack(nextTrack: LibraryTrack): void {
-  invalidateSharedPlayback();
   if (getUserQueuePaths().includes(nextTrack.path)) {
     removeFromUserQueue(nextTrack.path);
   }
@@ -729,7 +556,7 @@ function maybeStartCrossfade(position: number): boolean {
   const np = getCurrentTrack();
   if (!np?.playing || !np.path || np.duration <= 0) return false;
   if (isSeekDragging() || seekPending) return false;
-  if (isSharedPlayback() || getCurrentLoop() === "one") return false;
+  if (getCurrentLoop() === "one") return false;
 
   const remaining = np.duration - position;
   if (remaining <= 0 || remaining > fade + CROSSFADE_TAIL) return false;
@@ -805,7 +632,6 @@ export function prev(): void {
   const prevTrack = findTrackById(prevId);
   if (!prevTrack) return;
 
-  invalidateSharedPlayback();
   if (getUserQueuePaths().includes(prevTrack.path)) {
     removeFromUserQueue(prevTrack.path);
   }

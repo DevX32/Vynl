@@ -1,6 +1,5 @@
 import type { LibraryTrack } from "@lib/types";
 import { vynl } from "@lib/vynl";
-import { emitAppEvent } from "@lib/plugins/events";
 
 let _library = $state<LibraryTrack[]>([]);
 let _libraryError = $state<string | null>(null);
@@ -90,7 +89,6 @@ function startListening(): Promise<void> {
       markLibraryLoaded();
       if (!libraryChanged(tracks)) return;
       applyLibrary(tracks);
-      emitAppEvent("library-updated", { count: tracks.length });
     }, resolve);
   });
   return _listenerReady;

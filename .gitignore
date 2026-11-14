@@ -9,6 +9,8 @@ out
 src-tauri/target
 src-tauri/gen
 
+supabase.properties
+
 mobile/rust/target
 mobile/app/src/main/jniLibs
 

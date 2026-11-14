@@ -22,7 +22,7 @@
     <div class="head">
       <span class="title display">{t("settings.equalizer")}</span>
       <button class="close" onclick={closeEq} aria-label={t("common.close")}>
-        <X size={16} stroke-width={1.5} />
+        <X size={12} stroke-width={1.6} />
       </button>
     </div>
     <div class="body">
@@ -82,8 +82,8 @@
   }
 
   .close {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: var(--radius-sm);
     background: var(--bg-raise);
     border: 1px solid var(--line);

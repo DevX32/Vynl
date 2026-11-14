@@ -34,16 +34,6 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 - Accent color theming
 - i18n support
 
-### Plugins
-
-- Plugin runtime (JavaScript/TypeScript) with `onLoad`/`onEnable`/`onDisable`/`onUnload` lifecycle hooks
-- Built-in plugin store: search, categories, one-click install, auto-updates
-- Providers for lyrics, artist info, and collection resolution
-- Plugin-contributed settings sections, Home page sections, and full pages
-- Player observation + shared playback control (gated by a `player` permission)
-- Dev folder installs with live reload, plus `.zip` sideloading
-- **Listen Along** real-time synchronized listening sessions (host a session, share a code, friends follow your playback) ships as a store plugin in [vynl-store](https://github.com/DevX32/vynl-store/tree/main/plugins/listen-along)
-
 ## Platform Support
 
 | Platform | Status |
