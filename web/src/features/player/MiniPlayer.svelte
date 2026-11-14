@@ -8,7 +8,6 @@
     SkipBack,
     SkipForward,
     Maximize2,
-    X,
     Volume2,
     VolumeOff,
     Music2,
@@ -203,7 +202,7 @@
         e.preventDefault();
         sendMiniCommand({ type: "toggle" });
       } else if (e.code === "Escape") {
-        close();
+        expand();
       } else if (duration > 0 && e.code === "ArrowRight") {
         e.preventDefault();
         time = Math.min(duration, time + 5);
@@ -259,10 +258,7 @@
     void win.hide();
   }
 
-  function close(): void {
-    sendMiniClosed();
-    void win.hide();
-  }
+
 
   function onHeadDoubleClick(e: MouseEvent): void {
     if (e.target === e.currentTarget) expand();
@@ -300,13 +296,6 @@
         aria-label={t("player.expandPlayer")}
       >
         <Maximize2 size={12} stroke-width={1.5} />
-      </button>
-      <button
-        class="mini-btn close"
-        onclick={close}
-        aria-label={t("player.closeMini")}
-      >
-        <X size={12} stroke-width={1.5} />
       </button>
     </div>
   </div>
@@ -567,11 +556,6 @@
   .mini-btn:active {
     transform: scale(0.9);
     background: rgba(255, 255, 255, 0.04);
-  }
-
-  .mini-btn.close:hover {
-    color: #fff;
-    background: var(--red);
   }
 
   .mini-body {

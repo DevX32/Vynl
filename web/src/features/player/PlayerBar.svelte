@@ -45,17 +45,25 @@
 
   async function toggleMini(): Promise<void> {
     try {
-      const win = (await getAllWebviewWindows()).find((w) => w.label === "mini");
+      const windows = await getAllWebviewWindows();
+      const win = windows.find((w) => w.label === "mini");
       if (!win) return;
       const visible = await win.isVisible();
       if (visible) {
         await win.hide();
         miniOpen = false;
-      } else {
-        await win.show();
-        await win.setFocus();
-        miniOpen = true;
+        const main = windows.find((w) => w.label === "main");
+        if (main) await main.unminimize();
+        return;
       }
+      await win.show();
+      await win.setFocus();
+      const main = windows.find((w) => w.label === "main");
+      if (main) {
+        const minimized = await main.isMinimized();
+        if (!minimized) await main.minimize();
+      }
+      miniOpen = true;
     } catch (e) {
       console.warn("mini toggle failed:", e);
     }
