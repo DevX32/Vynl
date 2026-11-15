@@ -1659,7 +1659,7 @@ pub async fn prepare(
             return Err(error);
         }
         if session.is_ready() {
-            if session.buffered_secs() >= 1.5 || session.is_finished() {
+            if session.buffered_secs() >= 0.6 || session.is_finished() {
                 break;
             }
             let duration = session.duration.unwrap_or(0.0);

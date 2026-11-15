@@ -88,7 +88,7 @@ interface PrebufferTarget {
 
 const prebufferState = new Map<string, PrebufferEntry>();
 const PREBUFFER_REFRESH_MS = 45_000;
-const PREBUFFER_CHECK_MS = 15_000;
+const PREBUFFER_CHECK_MS = 5_000;
 let lastPrebufferCheck = 0;
 let prebufferCandidates: string[] = [];
 
