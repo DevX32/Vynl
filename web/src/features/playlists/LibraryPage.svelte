@@ -331,16 +331,16 @@
       </div>
     </div>
 
-    <div class="tracks" bind:this={tracksEl}>
-      <div class="tbl-head">
-        <span class="h-num mono">#</span>
-        <span class="h-cover"></span>
-        <span class="h-title mono">{t("library.titleHeader")}</span>
-        <span class="h-artist mono">{t("library.artistHeader")}</span>
-        <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
-        <span class="h-actions"></span>
-      </div>
+    <div class="tbl-head">
+      <span class="h-num mono">#</span>
+      <span class="h-cover"></span>
+      <span class="h-title mono">{t("library.titleHeader")}</span>
+      <span class="h-artist mono">{t("library.artistHeader")}</span>
+      <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
+      <span class="h-actions"></span>
+    </div>
 
+    <div class="tracks" bind:this={tracksEl}>
       {#if hits.length === 0}
         <div class="tbl-empty">
           <ListMusic size={28} stroke-width={1.1} />
@@ -446,6 +446,11 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    --cover-size: 40px;
+    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px 28px;
+    --col-gap: 12px;
+    --row-px: 10px;
+    --row-py: 7px;
   }
 
   .hdr {
@@ -588,12 +593,6 @@
   }
 
   .tracks {
-    --cover-size: 40px;
-    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px 28px;
-    --col-gap: 12px;
-    --row-px: 10px;
-    --row-py: 7px;
-
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -612,17 +611,7 @@
   }
 
   .tbl-head {
-    display: grid;
     grid-template-columns: var(--track-cols);
-    align-items: center;
-    gap: var(--col-gap);
-    padding: 8px var(--row-px);
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 13px;
   }
 
   .h-num {
@@ -768,7 +757,7 @@
       margin-right: 10px;
     }
 
-    .tracks {
+    .view {
       --cover-size: 36px;
       --track-cols: 24px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 36px;
       --col-gap: 8px;
@@ -796,7 +785,7 @@
       margin-right: 0;
     }
 
-    .tracks {
+    .view {
       --track-cols: 20px minmax(0, 1fr) minmax(0, 1fr);
       --col-gap: 6px;
       --row-px: 8px;

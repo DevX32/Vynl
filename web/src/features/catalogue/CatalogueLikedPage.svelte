@@ -294,15 +294,15 @@
     </div>
   </div>
 
-  <div class="tracks">
-    <div class="tbl-head">
-      <span class="h-num mono">#</span>
-      <span class="h-cover"></span>
-      <span class="h-title mono">{t("library.titleHeader")}</span>
-      <span class="h-artist mono">{t("library.artistHeader")}</span>
-      <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
-    </div>
+  <div class="tbl-head">
+    <span class="h-num mono">#</span>
+    <span class="h-cover"></span>
+    <span class="h-title mono">{t("library.titleHeader")}</span>
+    <span class="h-artist mono">{t("library.artistHeader")}</span>
+    <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
+  </div>
 
+  <div class="tracks">
     {#if hits.length === 0}
       <div class="tbl-empty">
         <ListMusic size={30} stroke-width={1.1} />
@@ -423,6 +423,8 @@
     flex-direction: column;
     gap: 12px;
     min-height: 0;
+    --cover-size: 40px;
+    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px;
   }
 
   .hero {
@@ -583,8 +585,6 @@
   }
 
   .tracks {
-    --cover-size: 40px;
-    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -608,17 +608,7 @@
   }
 
   .tbl-head {
-    display: grid;
     grid-template-columns: var(--track-cols);
-    align-items: center;
-    gap: 12px;
-    padding: 0 10px 8px;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 13px;
   }
 
   .h-num {

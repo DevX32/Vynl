@@ -354,17 +354,7 @@
   }
 
   .tbl-head {
-    display: grid;
     grid-template-columns: 28px 40px minmax(0, 1.4fr) minmax(0, 1fr) 64px;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 13px;
   }
 
   .h-num {

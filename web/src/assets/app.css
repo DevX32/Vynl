@@ -247,6 +247,25 @@ select {
   transition: border-color 0.15s;
 }
 
+.tbl-head {
+  display: grid;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--col-gap, 12px);
+  padding: 8px var(--row-px, 10px);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--bg);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+html[data-theme="espresso"] .tbl-head {
+  background: transparent;
+}
+
 @keyframes blink {
   0%,
   49% {

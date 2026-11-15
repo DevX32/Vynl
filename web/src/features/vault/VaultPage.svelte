@@ -973,19 +973,8 @@
   }
 
   .tbl-head {
-    display: grid;
     grid-template-columns: var(--track-cols);
-    align-items: center;
-    gap: var(--col-gap);
-    padding: 8px var(--row-px);
     border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 13px;
   }
 
   .h-num {
