@@ -112,9 +112,10 @@ pub fn register_url_scheme() {
     let exe = std::env::current_exe().unwrap_or_default();
     let exe_path = exe.to_string_lossy().to_string();
 
-    if let Ok((classes_key, _)) =
-        hkcu.create_subkey_with_flags("Software\\Classes\\vynl", KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY)
-    {
+    if let Ok((classes_key, _)) = hkcu.create_subkey_with_flags(
+        "Software\\Classes\\vynl",
+        KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY,
+    ) {
         let _ = classes_key.set_value("", &"URL:vynl Protocol".to_string());
         let _ = classes_key.set_value("URL Protocol", &"".to_string());
         let _ = classes_key.set_value("DefaultIcon", &exe_path);
@@ -169,7 +170,10 @@ pub fn run() {
                 let _ = win.set_focus();
             }
             let state = app.state::<commands::AppState>();
-            let mut pending = state.pending_confirm.lock().unwrap_or_else(|e| e.into_inner());
+            let mut pending = state
+                .pending_confirm
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if let Some(url) = _argv.iter().find(|arg| arg.starts_with("vynl://")) {
                 *pending = Some(url.clone());
             }
@@ -182,7 +186,10 @@ pub fn run() {
             app.manage(commands::AppState::default());
             {
                 let state = app.state::<commands::AppState>();
-                let mut pending = state.pending_confirm.lock().unwrap_or_else(|e| e.into_inner());
+                let mut pending = state
+                    .pending_confirm
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 if let Some(url) = std::env::args().find(|arg| arg.starts_with("vynl://")) {
                     *pending = Some(url);
                 }
@@ -365,13 +372,13 @@ pub fn run() {
             commands::move_in_playlist,
             commands::set_playlist_cover,
             commands::save_playlist_cover,
-            commands::cloud_status,
-            commands::cloud_sign_in,
-            commands::cloud_sign_up,
-            commands::cloud_sign_out,
-            commands::cloud_confirm_email,
+            commands::sync_status,
+            commands::sync_sign_in,
+            commands::sync_sign_up,
+            commands::sync_sign_out,
+            commands::sync_confirm_email,
             commands::take_pending_confirm_url,
-            commands::cloud_sync,
+            commands::sync_now,
             commands::lyrics_local,
             commands::lyrics_fetch,
             commands::lyrics_embed,

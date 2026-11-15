@@ -21,10 +21,10 @@
   import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
   import {
-    getCloudStatus,
-    refreshCloudStatus,
-    setCloudStatus,
-  } from "@state/cloud.svelte";
+    getSyncStatus,
+    refreshSyncStatus,
+    setSyncStatus,
+  } from "@state/sync.svelte";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
   import { resolveDisplayName } from "@lib/nickname.svelte";
@@ -82,12 +82,12 @@
       (page.startsWith("catalogue:") && page !== "catalogue:liked"),
   );
 
-  const cloud = $derived(getCloudStatus());
+  const session = $derived(getSyncStatus());
   const displayName = $derived(
     resolveDisplayName(getCurrentSettings().displayName),
   );
   const avatarSrc = $derived(
-    blobatarUri(cloud.signedIn && cloud.email ? cloud.email : displayName, {
+    blobatarUri(session.signedIn && session.email ? session.email : displayName, {
       size: 80,
     }),
   );
@@ -112,7 +112,7 @@
       const bottom = Math.max(4, window.innerHeight - rect.bottom - 8);
       accountMenuStyle = `left: ${left}px; bottom: ${bottom}px;`;
     }
-    void refreshCloudStatus().catch(() => {});
+    void refreshSyncStatus().catch(() => {});
   }
 
   function closeAccountMenu(event: MouseEvent): void {
@@ -134,10 +134,10 @@
     onSettings();
   }
 
-  async function syncCloudNow(): Promise<void> {
+  async function syncNow(): Promise<void> {
     accountMenuOpen = false;
     try {
-      const result = await vynl.cloudSync();
+      const result = await vynl.syncNow();
       await refreshPlaylists();
       toasts.success(
         result.deleted > 0
@@ -162,11 +162,11 @@
     }
   }
 
-  async function signOutCloud(): Promise<void> {
+  async function signOutSync(): Promise<void> {
     accountMenuOpen = false;
     try {
-      await vynl.cloudSignOut();
-      setCloudStatus({ signedIn: false, email: null, userId: null });
+      await vynl.syncSignOut();
+      setSyncStatus({ signedIn: false, email: null, userId: null });
       toasts.success(t("account.signedOut"), 4000);
     } catch (e) {
       toasts.error(
@@ -342,11 +342,11 @@
             <div class="menu-head-text">
               <span class="menu-name display">{displayName}</span>
               <span class="menu-sub mono">
-                {cloud.signedIn ? cloud.email : t("account.notSignedIn")}
+                {session.signedIn ? session.email : t("account.notSignedIn")}
               </span>
             </div>
           </div>
-          {#if cloud.signedIn}
+          {#if session.signedIn}
             <button
               class="menu-item"
               role="menuitem"
@@ -358,7 +358,7 @@
             <button
               class="menu-item"
               role="menuitem"
-              onclick={() => void syncCloudNow()}
+              onclick={() => void syncNow()}
             >
               <RefreshCw size={14} stroke-width={1.5} />
               <span>{t("account.syncNow")}</span>
@@ -377,11 +377,11 @@
             <SettingsIcon size={14} stroke-width={1.5} />
             <span>{t("nav.settings")}</span>
           </button>
-          {#if cloud.signedIn}
+          {#if session.signedIn}
             <button
               class="menu-item danger"
               role="menuitem"
-              onclick={() => void signOutCloud()}
+              onclick={() => void signOutSync()}
             >
               <LogOut size={14} stroke-width={1.5} />
               <span>{t("account.signOut")}</span>
@@ -393,8 +393,8 @@
         class="account-btn"
         bind:this={accountButton}
         onclick={toggleAccountMenu}
-        aria-label={cloud.signedIn
-          ? `${t("account.signedInAs")} ${cloud.email ?? ""}`
+        aria-label={session.signedIn
+          ? `${t("account.signedInAs")} ${session.email ?? ""}`
           : t("account.signIn")}
         aria-haspopup="menu"
         aria-expanded={accountMenuOpen}
@@ -406,7 +406,7 @@
           <span class="account-meta">
             <span class="account-name">{displayName}</span>
             <span class="account-sub mono">
-              {cloud.signedIn ? cloud.email : t("account.notSignedIn")}
+              {session.signedIn ? session.email : t("account.notSignedIn")}
             </span>
           </span>
           <span class="account-chevron" class:open={accountMenuOpen}>

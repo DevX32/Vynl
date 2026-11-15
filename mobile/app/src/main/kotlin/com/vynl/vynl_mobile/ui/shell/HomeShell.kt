@@ -136,10 +136,10 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     )
                 },
                 actions = {
-                    val cloud = viewModel.cloudStatus
+                    val session = viewModel.syncStatus
                     val displayName = viewModel.greetingName
-                    val accountSeed = if (cloud.signedIn && !cloud.email.isNullOrBlank()) {
-                        cloud.email
+                    val accountSeed = if (session.signedIn && !session.email.isNullOrBlank()) {
+                        session.email
                     } else {
                         displayName
                     }
@@ -151,12 +151,12 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                             expanded = accountMenuOpen,
                             onDismiss = { accountMenuOpen = false },
                             displayName = displayName,
-                            email = cloud.email,
-                            signedIn = cloud.signedIn,
+                            email = session.email,
+                            signedIn = session.signedIn,
                             onAccount = { accountOpen = true },
-                            onSync = { viewModel.syncCloud() },
+                            onSync = { viewModel.syncNow() },
                             onSettings = { settingsOpen = true },
-                            onSignOut = { viewModel.cloudSignOut() },
+                            onSignOut = { viewModel.signOut() },
                         )
                     }
                 },

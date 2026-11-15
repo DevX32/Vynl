@@ -188,7 +188,7 @@ pub async fn import_stream_playlist(
         }
     }
 
-    crate::commands::mirror_playlist(&app, &playlist);
+    crate::commands::sync_playlist(&app, &playlist);
 
     Ok(StreamImportResult {
         playlist,

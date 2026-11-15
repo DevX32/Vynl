@@ -278,18 +278,18 @@ export interface MobileSyncStatus {
   qrSvg: string | null;
 }
 
-export interface CloudStatus {
+export interface SyncStatus {
   signedIn: boolean;
   email: string | null;
   userId: string | null;
 }
 
-export interface CloudAuthResult {
+export interface SyncAuthResult {
   needsConfirmation: boolean;
-  status: CloudStatus;
+  status: SyncStatus;
 }
 
-export interface CloudSyncResult {
+export interface SyncResult {
   pushed: number;
   pulled: number;
   deleted: number;

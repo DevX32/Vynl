@@ -10,7 +10,7 @@
   import { sendMiniState } from "@lib/mini-sync";
   import MiniPlayer from "./features/player/MiniPlayer.svelte";
   import { initSettings, getCurrentSettings } from "@state/settings.svelte";
-  import { refreshCloudStatus } from "@state/cloud.svelte";
+  import { refreshSyncStatus } from "@state/sync.svelte";
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
   import { playTrack } from "@lib/player.svelte";
@@ -191,14 +191,14 @@
     void initAppUpdate();
     void (async () => {
       try {
-        const cloud = await refreshCloudStatus();
-        if (!cloud.signedIn) return;
-        const result = await vynl.cloudSync();
+        const session = await refreshSyncStatus();
+        if (!session.signedIn) return;
+        const result = await vynl.syncNow();
         if (result.pulled > 0 || result.deleted > 0) {
           await refreshPlaylists();
         }
       } catch (e) {
-        console.warn("cloud sync failed", e);
+        console.warn("sync failed", e);
       }
     })();
     return () => { off(); offUpdate(); };
@@ -219,7 +219,7 @@
           const token = params.get("token_hash") ?? params.get("token");
           const type = params.get("type") ?? "signup";
           if (token) {
-            const ok = await vynl.cloudConfirmEmail(token, type);
+            const ok = await vynl.syncConfirmEmail(token, type);
             if (ok) toasts.success("Email confirmed. You can sign in now.");
             else toasts.error("Couldn't confirm this email — the link may have expired.");
           }

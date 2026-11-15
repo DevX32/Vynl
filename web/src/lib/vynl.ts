@@ -23,9 +23,9 @@ import type {
   ToolName,
   ToolStatus,
   MobileSyncStatus,
-  CloudStatus,
-  CloudAuthResult,
-  CloudSyncResult,
+  SyncStatus,
+  SyncAuthResult,
+  SyncResult,
   UpdateStatus,
   EqDesign,
   MediaUpdate,
@@ -192,23 +192,23 @@ export const vynl = {
     data: number[],
   ): Promise<string> => cmd("save_playlist_cover", { id, ext, data }),
 
-  cloudStatus: (): Promise<CloudStatus> => cmd("cloud_status"),
+  SyncStatus: (): Promise<SyncStatus> => cmd("sync_status"),
 
-  cloudSignIn: (email: string, password: string): Promise<CloudAuthResult> =>
-    cmd("cloud_sign_in", { email, password }),
+  syncSignIn: (email: string, password: string): Promise<SyncAuthResult> =>
+    cmd("sync_sign_in", { email, password }),
 
-  cloudSignUp: (email: string, password: string): Promise<CloudAuthResult> =>
-    cmd("cloud_sign_up", { email, password }),
+  syncSignUp: (email: string, password: string): Promise<SyncAuthResult> =>
+    cmd("sync_sign_up", { email, password }),
 
-  cloudConfirmEmail: (tokenHash: string, emailType: string): Promise<boolean> =>
-    cmd("cloud_confirm_email", { tokenHash, emailType }),
+  syncConfirmEmail: (tokenHash: string, emailType: string): Promise<boolean> =>
+    cmd("sync_confirm_email", { tokenHash, emailType }),
 
   takePendingConfirmUrl: (): Promise<string | null> =>
     cmd("take_pending_confirm_url"),
 
-  cloudSignOut: (): Promise<void> => cmd("cloud_sign_out"),
+  syncSignOut: (): Promise<void> => cmd("sync_sign_out"),
 
-  cloudSync: (): Promise<CloudSyncResult> => cmd("cloud_sync"),
+  syncNow: (): Promise<SyncResult> => cmd("sync_now"),
 
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>
     cmd("lyrics_local", { file }),

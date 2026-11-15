@@ -3,7 +3,7 @@ package com.vynl.vynl_mobile.remote
 import android.content.Context
 import com.vynl.vynl_mobile.BuildConfig
 import com.vynl.vynl_mobile.data.CatalogueTrack
-import com.vynl.vynl_mobile.data.CloudPlaylistPayload
+import com.vynl.vynl_mobile.data.SyncPlaylistPayload
 import com.vynl.vynl_mobile.data.Store
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,23 +17,23 @@ import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-data class CloudStatus(
+data class SyncStatus(
     val signedIn: Boolean,
     val email: String?,
 )
 
-data class CloudAuthResult(
+data class SyncAuthResult(
     val needsConfirmation: Boolean,
-    val status: CloudStatus,
+    val status: SyncStatus,
 )
 
-data class CloudSyncResult(
+data class SyncResult(
     val pushed: Int,
     val pulled: Int,
     val deleted: Int,
 )
 
-private data class CloudSession(
+private data class SyncSession(
     val email: String,
     val userId: String,
     val accessToken: String,
@@ -41,7 +41,7 @@ private data class CloudSession(
     val expiresAt: Long,
 )
 
-class Cloud(context: Context) {
+class Sync(context: Context) {
     private val prefs = context.getSharedPreferences("vynl_cloud", Context.MODE_PRIVATE)
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -53,13 +53,13 @@ class Cloud(context: Context) {
     private val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
     private val anonKey = BuildConfig.SUPABASE_ANON_KEY
 
-    val status: CloudStatus
+    val status: SyncStatus
         get() {
-            val session = session() ?: return CloudStatus(false, null)
-            return CloudStatus(signedIn = true, email = session.email)
+            val session = session() ?: return SyncStatus(false, null)
+            return SyncStatus(signedIn = true, email = session.email)
         }
 
-    suspend fun signIn(email: String, password: String): CloudAuthResult =
+    suspend fun signIn(email: String, password: String): SyncAuthResult =
         withContext(Dispatchers.IO) {
             val clean = email.trim().lowercase()
             if (!clean.contains('@')) throw IOException("Enter a valid email address.")
@@ -69,12 +69,12 @@ class Cloud(context: Context) {
                 .put("password", password)
             val response = post("$baseUrl/auth/v1/token?grant_type=password", body, token = null)
             val session = parseSession(response.second, clean)
-                ?: throw IOException("The cloud returned an empty session.")
+                ?: throw IOException("Vynl Sync returned an empty session.")
             saveSession(session)
-            CloudAuthResult(needsConfirmation = false, status = status)
+            SyncAuthResult(needsConfirmation = false, status = status)
         }
 
-    suspend fun signUp(email: String, password: String): CloudAuthResult =
+    suspend fun signUp(email: String, password: String): SyncAuthResult =
         withContext(Dispatchers.IO) {
             val clean = email.trim().lowercase()
             if (!clean.contains('@')) throw IOException("Enter a valid email address.")
@@ -85,10 +85,10 @@ class Cloud(context: Context) {
             val response = post("$baseUrl/auth/v1/signup", body, token = null)
             val session = parseSession(response.second, clean)
             if (session == null) {
-                CloudAuthResult(needsConfirmation = true, status = status)
+                SyncAuthResult(needsConfirmation = true, status = status)
             } else {
                 saveSession(session)
-                CloudAuthResult(needsConfirmation = false, status = status)
+                SyncAuthResult(needsConfirmation = false, status = status)
             }
         }
 
@@ -108,7 +108,7 @@ class Cloud(context: Context) {
         clearSession()
     }
 
-    suspend fun pushPlaylist(payload: CloudPlaylistPayload) = withContext(Dispatchers.IO) {
+    suspend fun pushPlaylist(payload: SyncPlaylistPayload) = withContext(Dispatchers.IO) {
         val session = validSession()
         val body = JSONArray().put(playlistJson(session, payload))
         val request = Request.Builder()
@@ -119,7 +119,7 @@ class Cloud(context: Context) {
             .header("Prefer", "resolution=merge-duplicates,return=minimal")
             .post(body.toString().toRequestBody(JSON))
             .build()
-        execute(request, "Could not save to the cloud")
+        execute(request, "Could not save to Vynl Sync")
     }
 
     suspend fun tombstone(localId: String) = withContext(Dispatchers.IO) {
@@ -135,10 +135,10 @@ class Cloud(context: Context) {
                 JSONObject().put("deleted_at", System.currentTimeMillis()).toString().toRequestBody(JSON),
             )
             .build()
-        execute(request, "Could not update the cloud")
+        execute(request, "Could not update Vynl Sync")
     }
 
-    suspend fun sync(store: Store): CloudSyncResult = withContext(Dispatchers.IO) {
+    suspend fun refresh(store: Store): SyncResult = withContext(Dispatchers.IO) {
         val session = validSession()
         val rows = fetchRows(session)
         var pushed = 0
@@ -151,7 +151,7 @@ class Cloud(context: Context) {
             if (canonical.isBlank()) continue
             known += canonical
             val deletedAt = if (row.isNull("deleted_at")) null else row.optLong("deleted_at")
-            val localId = store.localIdForCloud(canonical)
+            val localId = store.localIdForSync(canonical)
             val local = store.playlist(localId)
 
             if (deletedAt != null) {
@@ -162,53 +162,53 @@ class Cloud(context: Context) {
                         deleted += 1
                     }
                     else -> {
-                        store.cloudPayload(localId)?.let { pushPlaylist(it) }
+                        store.syncPayload(localId)?.let { pushPlaylist(it) }
                         pushed += 1
                     }
                 }
                 continue
             }
 
-            val cloudUpdated = row.optLong("updated_at")
+            val remoteUpdated = row.optLong("updated_at")
             when {
                 local == null -> {
-                    store.upsertCloudPlaylist(
+                    store.upsertSyncPlaylist(
                         localId = canonical,
                         name = row.optString("name", "Playlist"),
                         createdAt = row.optLong("created_at"),
-                        updatedAt = cloudUpdated,
+                        updatedAt = remoteUpdated,
                         tracks = parseTracks(row),
                     )
                     pulled += 1
                 }
-                local.updatedAt < cloudUpdated -> {
-                    store.upsertCloudPlaylist(
+                local.updatedAt < remoteUpdated -> {
+                    store.upsertSyncPlaylist(
                         localId = localId,
                         name = row.optString("name", local.name),
                         createdAt = row.optLong("created_at", local.createdAt),
-                        updatedAt = cloudUpdated,
+                        updatedAt = remoteUpdated,
                         tracks = parseTracks(row),
                     )
                     pulled += 1
                 }
-                local.updatedAt > cloudUpdated -> {
-                    store.cloudPayload(localId)?.let { pushPlaylist(it) }
+                local.updatedAt > remoteUpdated -> {
+                    store.syncPayload(localId)?.let { pushPlaylist(it) }
                     pushed += 1
                 }
             }
         }
 
         for (playlist in store.playlists()) {
-            val payload = store.cloudPayload(playlist.id) ?: continue
+            val payload = store.syncPayload(playlist.id) ?: continue
             if (known.contains(payload.localId)) continue
             pushPlaylist(payload)
             pushed += 1
         }
 
-        CloudSyncResult(pushed = pushed, pulled = pulled, deleted = deleted)
+        SyncResult(pushed = pushed, pulled = pulled, deleted = deleted)
     }
 
-    private fun fetchRows(session: CloudSession): List<JSONObject> {
+    private fun fetchRows(session: SyncSession): List<JSONObject> {
         val request = Request.Builder()
             .url(
                 "$baseUrl/rest/v1/playlists" +
@@ -224,7 +224,7 @@ class Cloud(context: Context) {
             val body = it.body?.string().orEmpty()
             if (!it.isSuccessful) {
                 throw IOException(
-                    "Could not load cloud playlists (${it.code}): ${body.trim().take(160)}",
+                    "Could not load synced playlists (${it.code}): ${body.trim().take(160)}",
                 )
             }
             val array = runCatching { JSONArray(body) }.getOrNull() ?: JSONArray()
@@ -234,7 +234,7 @@ class Cloud(context: Context) {
         }
     }
 
-    private fun playlistJson(session: CloudSession, payload: CloudPlaylistPayload): JSONObject =
+    private fun playlistJson(session: SyncSession, payload: SyncPlaylistPayload): JSONObject =
         JSONObject().apply {
             put("user_id", session.userId)
             put("local_id", payload.localId)
@@ -300,7 +300,7 @@ class Cloud(context: Context) {
         } catch (error: IOException) {
             throw error
         } catch (error: Exception) {
-            throw IOException("Could not reach the cloud: ${error.message}")
+            throw IOException("Could not reach Vynl Sync: ${error.message}")
         }
     }
 
@@ -332,14 +332,14 @@ class Cloud(context: Context) {
                 val message = json.optString("msg").ifBlank { json.optString("message") }
                 when {
                     message.isNotBlank() -> message
-                    code >= 500 -> "The cloud had a problem ($code). Try again later."
+                    code >= 500 -> "Vynl Sync had a problem ($code). Try again later."
                     else -> "$fallback ($code). ${raw.trim().take(120)}".trim()
                 }
             }
         }
     }
 
-    private fun parseSession(json: JSONObject, emailHint: String): CloudSession? {
+    private fun parseSession(json: JSONObject, emailHint: String): SyncSession? {
         val accessToken = json.optString("access_token")
         if (accessToken.isBlank()) return null
         val refreshToken = json.optString("refresh_token")
@@ -348,7 +348,7 @@ class Cloud(context: Context) {
         val userId = user.optString("id")
         if (userId.isBlank()) return null
         val email = user.optString("email").ifBlank { emailHint }
-        return CloudSession(
+        return SyncSession(
             email = email,
             userId = userId,
             accessToken = accessToken,
@@ -357,11 +357,11 @@ class Cloud(context: Context) {
         )
     }
 
-    private fun session(): CloudSession? {
+    private fun session(): SyncSession? {
         val token = prefs.getString(KEY_ACCESS, null) ?: return null
         val userId = prefs.getString(KEY_USER, null) ?: return null
         if (token.isBlank() || userId.isBlank()) return null
-        return CloudSession(
+        return SyncSession(
             email = prefs.getString(KEY_EMAIL, "") ?: "",
             userId = userId,
             accessToken = token,
@@ -370,7 +370,7 @@ class Cloud(context: Context) {
         )
     }
 
-    private fun saveSession(session: CloudSession) {
+    private fun saveSession(session: SyncSession) {
         prefs.edit()
             .putString(KEY_EMAIL, session.email)
             .putString(KEY_USER, session.userId)
@@ -384,7 +384,7 @@ class Cloud(context: Context) {
         prefs.edit().clear().apply()
     }
 
-    private fun validSession(): CloudSession {
+    private fun validSession(): SyncSession {
         val current = session() ?: throw IOException("Sign in to Vynl first.")
         if (current.expiresAt > System.currentTimeMillis() + 30_000) return current
         synchronized(refreshLock) {

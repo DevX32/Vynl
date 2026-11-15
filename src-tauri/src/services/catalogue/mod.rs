@@ -603,7 +603,7 @@ pub async fn catalogue_save_to_playlist(
     let (local, _) = local_file_for(&track, &settings, &output);
     let local_string = local.to_string_lossy().to_string();
     let playlist = playlists::add_stream_to_playlist(&output, &id, &track, Some(&local_string))?;
-    crate::commands::mirror_playlist(&app, &playlist);
+    crate::commands::sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
@@ -631,7 +631,7 @@ pub async fn catalogue_add_to_playlist(
         )
         .await?;
     if let Some(playlist) = &result.playlist {
-        crate::commands::mirror_playlist(&app, playlist);
+        crate::commands::sync_playlist(&app, playlist);
     }
     Ok(result)
 }

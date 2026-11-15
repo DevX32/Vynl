@@ -10,18 +10,18 @@
   import { getCurrentSettings } from "@state/settings.svelte";
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import {
-    getCloudStatus,
-    isCloudStatusLoaded,
-    refreshCloudStatus,
-    setCloudStatus,
-  } from "@state/cloud.svelte";
+    getSyncStatus,
+    isSyncStatusLoaded,
+    refreshSyncStatus,
+    setSyncStatus,
+  } from "@state/sync.svelte";
   import Button from "@components/Button.svelte";
   import SettingRow from "@features/settings/SettingRow.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
 
-  const status = $derived(getCloudStatus());
-  const loaded = $derived(isCloudStatusLoaded());
+  const status = $derived(getSyncStatus());
+  const loaded = $derived(isSyncStatusLoaded());
   const avatarSeed = $derived(
     status.signedIn && status.email
       ? status.email
@@ -54,14 +54,14 @@
 
   const modeHint = $derived(
     mode === "signin"
-      ? "Mirror playlists already saved to your account"
-      : "Create a playlist mirror for this device",
+      ? "Sync playlists already saved to your account"
+      : "Create an account to sync playlists from this device",
   );
 
   const canSubmit = $derived(email.trim().length > 0 && password.length > 0);
 
   onMount(() => {
-    void refreshCloudStatus().catch(() => {});
+    void refreshSyncStatus().catch(() => {});
   });
 
   function onKeydown(event: KeyboardEvent): void {
@@ -91,14 +91,14 @@
     try {
       const result =
         mode === "signin"
-          ? await vynl.cloudSignIn(trimmedEmail, password)
-          : await vynl.cloudSignUp(trimmedEmail, password);
+          ? await vynl.syncSignIn(trimmedEmail, password)
+          : await vynl.syncSignUp(trimmedEmail, password);
       if (result.needsConfirmation) {
         notice = t("account.confirmationNeeded");
         password = "";
         return;
       }
-      setCloudStatus(result.status);
+      setSyncStatus(result.status);
       email = "";
       password = "";
       await refreshPlaylists();
@@ -119,7 +119,7 @@
     if (syncing) return;
     syncing = true;
     try {
-      const result = await vynl.cloudSync();
+      const result = await vynl.syncNow();
       await refreshPlaylists();
       toasts.success(
         result.deleted > 0
@@ -150,8 +150,8 @@
     if (signingOut) return;
     signingOut = true;
     try {
-      await vynl.cloudSignOut();
-      setCloudStatus({ signedIn: false, email: null, userId: null });
+      await vynl.syncSignOut();
+      setSyncStatus({ signedIn: false, email: null, userId: null });
       notice = null;
       error = null;
       toasts.success(t("account.signedOut"), 4000);
@@ -210,7 +210,7 @@
           </span>
           <span class="banner-hint">
             {#if status.signedIn}
-              Playlist changes mirror automatically.
+              Playlist changes sync automatically.
             {:else}
               Keep everything on this device.
             {/if}
@@ -223,7 +223,7 @@
       {:else if status.signedIn}
         <div class="row-group">
           <SettingRow
-            label="Playlist mirror"
+            label="Playlist sync"
             hint="Audio files and cover art stay on this device."
           >
             {#snippet control()}
@@ -241,7 +241,7 @@
 
           <SettingRow
             label="Sign out"
-            hint="Stop mirroring playlists on this device."
+            hint="Stop syncing playlists on this device."
           >
             {#snippet control()}
               <Button

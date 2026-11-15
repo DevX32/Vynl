@@ -21,7 +21,7 @@ const TABLE: &str = "playlists";
 const SESSION_DIR: &str = "cloud";
 const SESSION_FILE: &str = "session.json";
 
-fn cloud_enabled() -> bool {
+fn sync_enabled() -> bool {
     !base_url().is_empty() && !anon_key().is_empty()
 }
 
@@ -45,7 +45,7 @@ pub struct Session {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CloudStatus {
+pub struct SyncStatus {
     pub signed_in: bool,
     pub email: Option<String>,
     pub user_id: Option<String>,
@@ -53,14 +53,14 @@ pub struct CloudStatus {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CloudAuthResult {
+pub struct SyncAuthResult {
     pub needs_confirmation: bool,
-    pub status: CloudStatus,
+    pub status: SyncStatus,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CloudSyncResult {
+pub struct SyncResult {
     pub pushed: usize,
     pub pulled: usize,
     pub deleted: usize,
@@ -68,7 +68,7 @@ pub struct CloudSyncResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CloudTrack {
+struct SyncTrack {
     id: String,
     title: String,
     artist: String,
@@ -78,11 +78,11 @@ struct CloudTrack {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CloudRow {
+struct SyncRow {
     local_id: String,
     name: String,
     #[serde(default)]
-    tracks: Vec<CloudTrack>,
+    tracks: Vec<SyncTrack>,
     created_at: i64,
     updated_at: i64,
     #[serde(default)]
@@ -113,13 +113,13 @@ fn clear_session(data_dir: &Path) {
 }
 
 fn http() -> Result<reqwest::Client, String> {
-    if !cloud_enabled() {
+    if !sync_enabled() {
         return Err("Vynl isn't configured.".into());
     }
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
-        .map_err(|e| format!("Could not reach the cloud: {e}"))
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))
 }
 
 fn auth_error(status: reqwest::StatusCode, body: &str) -> String {
@@ -153,7 +153,7 @@ fn auth_error(status: reqwest::StatusCode, body: &str) -> String {
                 .filter(|m| !m.is_empty());
             if status.is_server_error() {
                 format!(
-                    "The cloud had a problem ({}). Try again later.",
+                    "Vynl Sync had a problem ({}). Try again later.",
                     status.as_u16()
                 )
             } else {
@@ -211,14 +211,14 @@ async fn sign_in_with_password(email: &str, password: &str) -> Result<Session, S
         .json(&json!({ "email": email, "password": password }))
         .send()
         .await
-        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(auth_error(status, &body));
     }
     let value: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-    parse_session(&value, email).ok_or_else(|| "The cloud returned an empty session.".into())
+    parse_session(&value, email).ok_or_else(|| "Vynl Sync returned an empty session.".into())
 }
 
 async fn sign_up_with_password(email: &str, password: &str) -> Result<Option<Session>, String> {
@@ -229,7 +229,7 @@ async fn sign_up_with_password(email: &str, password: &str) -> Result<Option<Ses
         .json(&json!({ "email": email, "password": password }))
         .send()
         .await
-        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -254,7 +254,7 @@ async fn refresh_session(data_dir: &Path, session: &Session) -> Result<Session, 
         .json(&json!({ "refresh_token": session.refresh_token }))
         .send()
         .await
-        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -263,7 +263,7 @@ async fn refresh_session(data_dir: &Path, session: &Session) -> Result<Session, 
     }
     let value: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
     let mut fresh = parse_session(&value, &session.email)
-        .ok_or_else(|| "The cloud returned an empty session.".to_string())?;
+        .ok_or_else(|| "Vynl Sync returned an empty session.".to_string())?;
     if fresh.refresh_token.is_empty() {
         fresh.refresh_token = session.refresh_token.clone();
     }
@@ -284,14 +284,14 @@ async fn valid_session(data_dir: &Path) -> Result<Session, String> {
     refresh_session(data_dir, &session).await
 }
 
-pub fn status(data_dir: &Path) -> CloudStatus {
+pub fn status(data_dir: &Path) -> SyncStatus {
     match read_session(data_dir) {
-        Some(session) => CloudStatus {
+        Some(session) => SyncStatus {
             signed_in: true,
             email: Some(session.email),
             user_id: Some(session.user_id),
         },
-        None => CloudStatus {
+        None => SyncStatus {
             signed_in: false,
             email: None,
             user_id: None,
@@ -303,7 +303,7 @@ pub async fn sign_in(
     data_dir: &Path,
     email: &str,
     password: &str,
-) -> Result<CloudAuthResult, String> {
+) -> Result<SyncAuthResult, String> {
     let email = email.trim().to_lowercase();
     if !email.contains('@') {
         return Err("Enter a valid email address.".into());
@@ -313,7 +313,7 @@ pub async fn sign_in(
     }
     let session = sign_in_with_password(&email, password).await?;
     write_session(data_dir, &session)?;
-    Ok(CloudAuthResult {
+    Ok(SyncAuthResult {
         needs_confirmation: false,
         status: status(data_dir),
     })
@@ -323,7 +323,7 @@ pub async fn sign_up(
     data_dir: &Path,
     email: &str,
     password: &str,
-) -> Result<CloudAuthResult, String> {
+) -> Result<SyncAuthResult, String> {
     let email = email.trim().to_lowercase();
     if !email.contains('@') {
         return Err("Enter a valid email address.".into());
@@ -334,12 +334,12 @@ pub async fn sign_up(
     match sign_up_with_password(&email, password).await? {
         Some(session) => {
             write_session(data_dir, &session)?;
-            Ok(CloudAuthResult {
+            Ok(SyncAuthResult {
                 needs_confirmation: false,
                 status: status(data_dir),
             })
         }
-        None => Ok(CloudAuthResult {
+        None => Ok(SyncAuthResult {
             needs_confirmation: true,
             status: status(data_dir),
         }),
@@ -353,7 +353,7 @@ pub async fn confirm_email(token_hash: &str, email_type: &str) -> Result<(), Str
     if email_type.is_empty() {
         return Err("Missing type.".into());
     }
-    if !cloud_enabled() {
+    if !sync_enabled() {
         return Err("Vynl isn't configured.".into());
     }
     let response = http()?
@@ -366,7 +366,7 @@ pub async fn confirm_email(token_hash: &str, email_type: &str) -> Result<(), Str
         }))
         .send()
         .await
-        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -377,7 +377,7 @@ pub async fn confirm_email(token_hash: &str, email_type: &str) -> Result<(), Str
 
 pub async fn sign_out(data_dir: &Path) -> Result<(), String> {
     if let Some(session) = read_session(data_dir) {
-        if cloud_enabled() {
+        if sync_enabled() {
             let _ = http()?
                 .post(format!("{}/auth/v1/logout", base_url()))
                 .header("apikey", anon_key())
@@ -400,7 +400,7 @@ async fn rest_headers(
         .header("Authorization", format!("Bearer {}", session.access_token)))
 }
 
-async fn fetch_rows(data_dir: &Path) -> Result<Vec<CloudRow>, String> {
+async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
     let request = http()?
         .get(format!(
             "{}/rest/v1/{}?select=local_id,name,tracks,created_at,updated_at,deleted_at",
@@ -412,17 +412,17 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<CloudRow>, String> {
         .await?
         .send()
         .await
-        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!(
-            "Could not load cloud playlists ({}): {}",
+            "Could not load synced playlists ({}): {}",
             status.as_u16(),
             body.trim()
         ));
     }
-    serde_json::from_str(&body).map_err(|e| format!("Unexpected cloud response: {e}"))
+    serde_json::from_str(&body).map_err(|e| format!("Unexpected Vynl Sync response: {e}"))
 }
 
 async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
@@ -442,12 +442,12 @@ async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
         .await?
         .send()
         .await
-        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         return Err(format!(
-            "Could not save to the cloud ({}): {}",
+            "Could not save to Vynl Sync ({}): {}",
             status.as_u16(),
             body.trim()
         ));
@@ -455,8 +455,8 @@ async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
     Ok(())
 }
 
-fn track_dto(track: &CatalogueTrack) -> CloudTrack {
-    CloudTrack {
+fn track_dto(track: &CatalogueTrack) -> SyncTrack {
+    SyncTrack {
         id: track.id.clone(),
         title: track.title.clone(),
         artist: track.artist.clone(),
@@ -479,7 +479,7 @@ fn playlist_value(session: &Session, playlist: &Playlist) -> Value {
 }
 
 pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
-    if !cloud_enabled() {
+    if !sync_enabled() {
         return;
     }
     if read_session(data_dir).is_none() {
@@ -492,7 +492,7 @@ pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
 }
 
 pub async fn tombstone_playlist(data_dir: &Path, id: &str) {
-    if !cloud_enabled() {
+    if !sync_enabled() {
         return;
     }
     let Some(session) = read_session(data_dir) else {
@@ -523,7 +523,7 @@ pub async fn tombstone_playlist(data_dir: &Path, id: &str) {
     }
 }
 
-fn row_to_playlist(row: &CloudRow) -> Playlist {
+fn row_to_playlist(row: &SyncRow) -> Playlist {
     let mut playlist = Playlist {
         id: row.local_id.clone(),
         name: row.name.trim().to_string(),
@@ -558,13 +558,13 @@ fn row_to_playlist(row: &CloudRow) -> Playlist {
     playlist
 }
 
-pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<CloudSyncResult, String> {
-    if !cloud_enabled() {
+pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, String> {
+    if !sync_enabled() {
         return Err("Vynl isn't configured.".into());
     }
     let session = valid_session(data_dir).await?;
     let rows = fetch_rows(data_dir).await?;
-    let mut result = CloudSyncResult::default();
+    let mut result = SyncResult::default();
     let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for row in &rows {
@@ -584,14 +584,14 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<CloudSyncResult,
             },
             None => match local {
                 None => {
-                    let cloud = row_to_playlist(row);
-                    playlists::upsert_playlist(output_dir, &cloud)?;
+                    let synced = row_to_playlist(row);
+                    playlists::upsert_playlist(output_dir, &synced)?;
                     result.pulled += 1;
                 }
                 Some(playlist) if playlist.updated_at < row.updated_at => {
-                    let mut cloud = row_to_playlist(row);
-                    cloud.cover = playlist.cover.clone();
-                    playlists::upsert_playlist(output_dir, &cloud)?;
+                    let mut synced = row_to_playlist(row);
+                    synced.cover = playlist.cover.clone();
+                    playlists::upsert_playlist(output_dir, &synced)?;
                     result.pulled += 1;
                 }
                 Some(playlist) if playlist.updated_at > row.updated_at => {

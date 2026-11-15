@@ -453,10 +453,10 @@ class Store(context: Context) {
         return null
     }
 
-    fun cloudPayload(id: String): CloudPlaylistPayload? {
+    fun syncPayload(id: String): SyncPlaylistPayload? {
         val playlist = playlist(id) ?: return null
         val canonical = id.removePrefix("dt-")
-        return CloudPlaylistPayload(
+        return SyncPlaylistPayload(
             localId = canonical,
             name = playlist.name,
             createdAt = playlist.createdAt,
@@ -465,14 +465,14 @@ class Store(context: Context) {
         )
     }
 
-    fun localIdForCloud(canonical: String): String {
+    fun localIdForSync(canonical: String): String {
         if (playlist(canonical) != null) return canonical
         val synced = "dt-$canonical"
         if (playlist(synced) != null) return synced
         return canonical
     }
 
-    fun upsertCloudPlaylist(
+    fun upsertSyncPlaylist(
         localId: String,
         name: String,
         createdAt: Long,
@@ -583,7 +583,7 @@ data class LocalPlaylist(
     val trackCount: Int,
 )
 
-data class CloudPlaylistPayload(
+data class SyncPlaylistPayload(
     val localId: String,
     val name: String,
     val createdAt: Long,

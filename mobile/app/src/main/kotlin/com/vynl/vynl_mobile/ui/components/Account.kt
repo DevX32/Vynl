@@ -208,9 +208,9 @@ internal fun AccountDialog(
     viewModel: AppViewModel,
     onDismiss: () -> Unit,
 ) {
-    val cloud = viewModel.cloudStatus
-    val seed = if (cloud.signedIn && !cloud.email.isNullOrBlank()) {
-        cloud.email
+    val session = viewModel.syncStatus
+    val seed = if (session.signedIn && !session.email.isNullOrBlank()) {
+        session.email
     } else {
         viewModel.displayName.ifBlank { viewModel.nickname.ifBlank { "vynl" } }
     }
@@ -266,7 +266,7 @@ internal fun AccountDialog(
 
                 Spacer(Modifier.height(18.dp))
 
-                if (cloud.signedIn) {
+                if (session.signedIn) {
                     SignedInBody(viewModel, onDismiss)
                 } else {
                     SignedOutBody(viewModel, onDismiss)
@@ -305,7 +305,7 @@ private fun AccountBanner(seed: String, signedIn: Boolean, email: String?) {
                 maxLines = 1,
             )
             Text(
-                text = if (signedIn) "Playlist changes mirror automatically." else "Keep everything on this device.",
+                text = if (signedIn) "Playlist changes sync automatically." else "Keep everything on this device.",
                 color = VynlColors.faint,
                 fontSize = 10.5.sp,
                 lineHeight = 15.sp,
@@ -389,31 +389,31 @@ private fun ActionButton(
 
 @Composable
 private fun SignedInBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
-    val cloud = viewModel.cloudStatus
-    val seed = cloud.email ?: viewModel.displayName.ifBlank { viewModel.nickname }
+    val session = viewModel.syncStatus
+    val seed = session.email ?: viewModel.displayName.ifBlank { viewModel.nickname }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AccountBanner(seed = seed, signedIn = true, email = cloud.email)
+        AccountBanner(seed = seed, signedIn = true, email = session.email)
 
         ActionRow(
-            label = "Playlist mirror",
+            label = "Playlist sync",
             hint = "Audio files and cover art stay on this device.",
         ) {
             ActionButton(
-                label = if (viewModel.cloudSyncing) "Syncing" else "Sync now",
-                onClick = { viewModel.syncCloud() },
+                label = if (viewModel.syncBusy) "Syncing" else "Sync now",
+                onClick = { viewModel.syncNow() },
                 accent = true,
-                busy = viewModel.cloudSyncing,
+                busy = viewModel.syncBusy,
             )
         }
 
         ActionRow(
             label = "Sign out",
-            hint = "Stop mirroring playlists on this device.",
+            hint = "Stop syncing playlists on this device.",
         ) {
             ActionButton(
                 label = "Sign out",
-                onClick = { viewModel.cloudSignOut(); onDismiss() },
+                onClick = { viewModel.signOut(); onDismiss() },
                 danger = true,
             )
         }
@@ -453,7 +453,7 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
                 onValueChange = { email = it },
                 placeholder = { Text("you@example.com") },
                 singleLine = true,
-                enabled = !viewModel.cloudBusy,
+                enabled = !viewModel.authBusy,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next, keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(VynlRadius.control),
@@ -475,27 +475,27 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
                 onValueChange = { password = it },
                 placeholder = { Text("Your password") },
                 singleLine = true,
-                enabled = !viewModel.cloudBusy,
+                enabled = !viewModel.authBusy,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, keyboardType = KeyboardType.Password),
-                keyboardActions = KeyboardActions(onDone = { submitCloud(viewModel, signUp, email.trim(), password) }),
+                keyboardActions = KeyboardActions(onDone = { submitAuth(viewModel, signUp, email.trim(), password) }),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(VynlRadius.control),
                 colors = accountFieldColors(),
             )
         }
 
-        if (viewModel.cloudError != null) {
+        if (viewModel.authError != null) {
             Text(
-                text = viewModel.cloudError.orEmpty(),
+                text = viewModel.authError.orEmpty(),
                 color = VynlColors.danger,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
                 fontFamily = VynlFonts.display,
             )
-        } else if (viewModel.cloudNotice != null) {
+        } else if (viewModel.authNotice != null) {
             Text(
-                text = viewModel.cloudNotice.orEmpty(),
+                text = viewModel.authNotice.orEmpty(),
                 color = VynlColors.success,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
@@ -505,14 +505,14 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
 
         ActionRow(
             label = if (signUp) "Create account" else "Sign in",
-            hint = if (signUp) "Create a playlist mirror for this device" else "Mirror playlists already saved to your account",
+            hint = if (signUp) "Create an account to sync playlists from this device" else "Sync playlists already saved to your account",
         ) {
             ActionButton(
-                label = if (viewModel.cloudBusy) (if (signUp) "Creating" else "Signing in") else (if (signUp) "Create account" else "Sign in"),
-                onClick = { submitCloud(viewModel, signUp, email.trim(), password) },
+                label = if (viewModel.authBusy) (if (signUp) "Creating" else "Signing in") else (if (signUp) "Create account" else "Sign in"),
+                onClick = { submitAuth(viewModel, signUp, email.trim(), password) },
                 accent = true,
                 enabled = canSubmit,
-                busy = viewModel.cloudBusy,
+                busy = viewModel.authBusy,
             )
         }
 
@@ -521,7 +521,7 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
             color = VynlColors.dim,
             fontSize = 10.5.sp,
             fontFamily = VynlFonts.mono,
-            modifier = Modifier.clickable(enabled = !viewModel.cloudBusy) { signUp = !signUp },
+            modifier = Modifier.clickable(enabled = !viewModel.authBusy) { signUp = !signUp },
         )
 
         Text(
@@ -534,11 +534,11 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
     }
 }
 
-private fun submitCloud(viewModel: AppViewModel, signUp: Boolean, email: String, password: String) {
+private fun submitAuth(viewModel: AppViewModel, signUp: Boolean, email: String, password: String) {
     if (signUp) {
-        viewModel.cloudSignUp(email, password)
+        viewModel.signUp(email, password)
     } else {
-        viewModel.cloudSignIn(email, password)
+        viewModel.signIn(email, password)
     }
 }
 

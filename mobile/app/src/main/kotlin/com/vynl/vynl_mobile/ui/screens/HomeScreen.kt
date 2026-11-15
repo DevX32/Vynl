@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.MusicOff
@@ -160,7 +160,7 @@ fun HomeScreen(viewModel: AppViewModel) {
                         },
                     )
                     ActionPill(
-                        icon = Icons.Rounded.CloudSync,
+                        icon = Icons.Rounded.Sync,
                         label = if (viewModel.syncing) "Syncing" else "Sync",
                         enabled = !viewModel.syncing,
                         loading = viewModel.syncing,
@@ -280,7 +280,7 @@ private fun NothingYet(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                if (hasLibrary) Icons.Rounded.MusicOff else Icons.Rounded.CloudSync,
+                if (hasLibrary) Icons.Rounded.MusicOff else Icons.Rounded.Sync,
                 contentDescription = null,
                 tint = VynlColors.faint,
                 modifier = Modifier.size(34.dp),
@@ -311,7 +311,7 @@ private fun NothingYet(
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionPill(
-                icon = Icons.Rounded.CloudSync,
+                icon = Icons.Rounded.Sync,
                 label = if (hasLibrary) "Sync now" else "Sync now",
                 onClick = onSync,
             )

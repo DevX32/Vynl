@@ -494,7 +494,7 @@ pub async fn get_playlist(id: String, app: AppHandle) -> Result<Option<Playlist>
 pub async fn create_playlist(name: String, app: AppHandle) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
     let playlist = crate::services::playlists::create_playlist(&output, &name)?;
-    mirror_playlist(&app, &playlist);
+    sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
@@ -508,7 +508,7 @@ pub async fn reorder_playlists(ids: Vec<String>, app: AppHandle) -> Result<(), S
 pub async fn rename_playlist(id: String, name: String, app: AppHandle) -> Result<Playlist, String> {
     let output = output_dir_from_settings(&app)?;
     let playlist = crate::services::playlists::rename_playlist(&output, &id, &name)?;
-    mirror_playlist(&app, &playlist);
+    sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
@@ -585,7 +585,7 @@ pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksR
         }
     }
     crate::services::playlists::delete_playlist(&output, &user_data, &id);
-    mirror_delete(&app, &id);
+    sync_playlist_delete(&app, &id);
     Ok(DeleteTracksResult { deleted, failed })
 }
 
@@ -625,7 +625,7 @@ pub async fn add_to_playlist(
         .map(|p| require_path_in_output(p, &app).map(|c| c.to_string_lossy().to_string()))
         .collect::<Result<Vec<String>, String>>()?;
     let playlist = crate::services::playlists::add_to_playlist(&output, &id, &validated_paths)?;
-    mirror_playlist(&app, &playlist);
+    sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
@@ -639,7 +639,7 @@ pub async fn remove_from_playlist(
     let user_data = user_data_dir(&app)?;
     if track_path.starts_with("ytm:") {
         let playlist = crate::services::playlists::remove_from_playlist(&output, &id, &track_path)?;
-        mirror_playlist(&app, &playlist);
+        sync_playlist(&app, &playlist);
         return Ok(playlist);
     }
 
@@ -663,7 +663,7 @@ pub async fn remove_from_playlist(
     crate::services::playlists::remove_paths_from_all(&output, &stale);
     let playlist = crate::services::playlists::get_playlist(&output, &id)
         .ok_or_else(|| "playlist not found".to_string())?;
-    mirror_playlist(&app, &playlist);
+    sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
@@ -692,7 +692,7 @@ pub async fn move_in_playlist(
         from as usize,
         to as usize,
     )?;
-    mirror_playlist(&app, &playlist);
+    sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
@@ -705,101 +705,105 @@ pub async fn set_playlist_cover(
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
     let playlist = crate::services::playlists::set_playlist_cover(&output, &user_data, &id, cover)?;
-    mirror_playlist(&app, &playlist);
+    sync_playlist(&app, &playlist);
     Ok(playlist)
 }
 
-pub(crate) fn mirror_playlist(app: &AppHandle, playlist: &Playlist) {
+pub(crate) fn sync_playlist(app: &AppHandle, playlist: &Playlist) {
     let Ok(user_data) = user_data_dir(app) else {
         return;
     };
-    if crate::services::cloud::status(&user_data).signed_in {
+    if crate::services::sync::status(&user_data).signed_in {
         let playlist = playlist.clone();
         tauri::async_runtime::spawn(async move {
-            crate::services::cloud::push_playlist(&user_data, &playlist).await;
+            crate::services::sync::push_playlist(&user_data, &playlist).await;
         });
     }
 }
 
-pub(crate) fn mirror_delete(app: &AppHandle, id: &str) {
+pub(crate) fn sync_playlist_delete(app: &AppHandle, id: &str) {
     let Ok(user_data) = user_data_dir(app) else {
         return;
     };
-    if crate::services::cloud::status(&user_data).signed_in {
+    if crate::services::sync::status(&user_data).signed_in {
         let id = id.to_string();
         tauri::async_runtime::spawn(async move {
-            crate::services::cloud::tombstone_playlist(&user_data, &id).await;
+            crate::services::sync::tombstone_playlist(&user_data, &id).await;
         });
     }
 }
 
 #[tauri::command]
-pub async fn cloud_status(app: AppHandle) -> Result<crate::services::cloud::CloudStatus, String> {
+pub async fn sync_status(app: AppHandle) -> Result<crate::services::sync::SyncStatus, String> {
     let user_data = user_data_dir(&app)?;
-    Ok(crate::services::cloud::status(&user_data))
+    Ok(crate::services::sync::status(&user_data))
 }
 
-async fn cloud_auth(
+async fn sync_auth(
     app: &AppHandle,
     email: String,
     password: String,
     create: bool,
-) -> Result<crate::services::cloud::CloudAuthResult, String> {
+) -> Result<crate::services::sync::SyncAuthResult, String> {
     let user_data = user_data_dir(app)?;
     let output = output_dir_from_settings(app)?;
     let result = if create {
-        crate::services::cloud::sign_up(&user_data, &email, &password).await?
+        crate::services::sync::sign_up(&user_data, &email, &password).await?
     } else {
-        crate::services::cloud::sign_in(&user_data, &email, &password).await?
+        crate::services::sync::sign_in(&user_data, &email, &password).await?
     };
     if result.status.signed_in {
-        let _ = crate::services::cloud::sync(&user_data, &output).await;
+        let _ = crate::services::sync::sync(&user_data, &output).await;
     }
     Ok(result)
 }
 
 #[tauri::command]
-pub async fn cloud_sign_in(
+pub async fn sync_sign_in(
     email: String,
     password: String,
     app: AppHandle,
-) -> Result<crate::services::cloud::CloudAuthResult, String> {
-    cloud_auth(&app, email, password, false).await
+) -> Result<crate::services::sync::SyncAuthResult, String> {
+    sync_auth(&app, email, password, false).await
 }
 
 #[tauri::command]
-pub async fn cloud_sign_up(
+pub async fn sync_sign_up(
     email: String,
     password: String,
     app: AppHandle,
-) -> Result<crate::services::cloud::CloudAuthResult, String> {
-    cloud_auth(&app, email, password, true).await
+) -> Result<crate::services::sync::SyncAuthResult, String> {
+    sync_auth(&app, email, password, true).await
 }
 
 #[tauri::command]
-pub async fn cloud_sign_out(app: AppHandle) -> Result<(), String> {
+pub async fn sync_sign_out(app: AppHandle) -> Result<(), String> {
     let user_data = user_data_dir(&app)?;
-    crate::services::cloud::sign_out(&user_data).await
+    crate::services::sync::sign_out(&user_data).await
 }
 
 #[tauri::command]
-pub async fn cloud_confirm_email(token_hash: String, email_type: String) -> Result<bool, String> {
-    crate::services::cloud::confirm_email(&token_hash, &email_type).await
+pub async fn sync_confirm_email(token_hash: String, email_type: String) -> Result<bool, String> {
+    crate::services::sync::confirm_email(&token_hash, &email_type)
+        .await
         .map(|_| true)
 }
 
 #[tauri::command]
 pub fn take_pending_confirm_url(app: AppHandle) -> Result<Option<String>, String> {
     let state = app.state::<AppState>();
-    let mut pending = state.pending_confirm.lock().unwrap_or_else(|e| e.into_inner());
+    let mut pending = state
+        .pending_confirm
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     Ok(pending.take())
 }
 
 #[tauri::command]
-pub async fn cloud_sync(app: AppHandle) -> Result<crate::services::cloud::CloudSyncResult, String> {
+pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncResult, String> {
     let user_data = user_data_dir(&app)?;
     let output = output_dir_from_settings(&app)?;
-    crate::services::cloud::sync(&user_data, &output).await
+    crate::services::sync::sync(&user_data, &output).await
 }
 
 #[tauri::command]
