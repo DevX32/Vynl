@@ -91,11 +91,12 @@ fun TrackActionsSheet(
 }
 
 @Composable
-private fun ActionRow(
+internal fun ActionRow(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    destructive: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -116,14 +117,22 @@ private fun ActionRow(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (enabled) VynlColors.dim else VynlColors.faint,
+                tint = when {
+                    !enabled -> VynlColors.faint
+                    destructive -> VynlColors.danger
+                    else -> VynlColors.dim
+                },
                 modifier = Modifier.size(18.dp),
             )
         }
         Spacer(Modifier.width(14.dp))
         Text(
             text = title,
-            color = if (enabled) VynlColors.text else VynlColors.faint,
+            color = when {
+                !enabled -> VynlColors.faint
+                destructive -> VynlColors.danger
+                else -> VynlColors.text
+            },
             fontSize = 14.sp,
             fontWeight = FontWeight.W600,
             fontFamily = VynlFonts.display,

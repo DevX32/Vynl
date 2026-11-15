@@ -19,12 +19,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.PlaylistRemove
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,9 +40,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.ArtTile
 import com.vynl.vynl_mobile.ui.components.EmptyState
+import com.vynl.vynl_mobile.ui.components.LocalTrackAction
+import com.vynl.vynl_mobile.ui.components.LocalTrackActionsSheet
 import com.vynl.vynl_mobile.ui.components.TrackTile
 import com.vynl.vynl_mobile.ui.components.VynlControl
 import com.vynl.vynl_mobile.ui.components.VynlControlStyle
+import com.vynl.vynl_mobile.data.LocalTrack
 import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
@@ -50,6 +58,7 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     val playlist = playlists.firstOrNull { it.id == viewModel.openPlaylistId }
     val (localCover, remoteCover) = covers[viewModel.openPlaylistId.orEmpty()] ?: Pair(null, null)
+    var actionsFor by remember { mutableStateOf<LocalTrack?>(null) }
 
     BackHandler { onClose() }
 
@@ -139,7 +148,7 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
             if (playlistTracks.isEmpty()) {
                 item {
                     EmptyState(
-                        icon = Icons.Rounded.QueueMusic,
+                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
                         title = "Nothing here yet",
                         subtitle = "Play something and press the three dots to add songs to this playlist.",
                     )
@@ -152,8 +161,32 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                     coverPath = track.coverPath,
                     active = playback.track?.id == track.id,
                     onTap = { viewModel.playLocal(playlistTracks, index) },
+                    onMore = { actionsFor = track },
                 )
             }
+        }
+
+        val menuTrack = actionsFor
+        if (menuTrack != null) {
+            LocalTrackActionsSheet(
+                track = menuTrack.toCatalogue(),
+                actions = listOf(
+                    LocalTrackAction(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                        title = "Add to playlist",
+                        onClick = { viewModel.openPlaylistPicker(menuTrack.toCatalogue()) },
+                    ),
+                    LocalTrackAction(
+                        icon = Icons.Rounded.PlaylistRemove,
+                        title = "Remove from playlist",
+                        destructive = true,
+                        onClick = {
+                            viewModel.removeFromPlaylist(viewModel.openPlaylistId.orEmpty(), menuTrack.id)
+                        },
+                    ),
+                ),
+                onDismiss = { actionsFor = null },
+            )
         }
     }
 }

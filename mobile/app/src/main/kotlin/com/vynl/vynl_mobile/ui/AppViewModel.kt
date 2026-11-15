@@ -521,6 +521,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _syncProgress.value = 0f
                 syncProgressState = 0f
                 syncStage = "Syncing library"
+                measureDownloads()
             }
         }
     }
@@ -880,6 +881,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) { store.deletePlaylist(id) }
             mirrorDelete(id)
             refreshStore()
+        }
+    }
+
+    fun removeFromPlaylist(playlistId: String, trackId: String) {
+        if (playlistId.isBlank()) return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { store.removeFromPlaylist(playlistId, trackId) }
+            mirrorPlaylist(playlistId)
+            openPlaylistId?.let { id ->
+                if (id == playlistId) {
+                    _playlistTracks.value = withContext(Dispatchers.IO) { store.playlistTracks(id) }
+                }
+            }
+            refreshStore()
+            notice = "Removed from playlist"
+        }
+    }
+
+    fun removeFromLibrary(track: LocalTrack) {
+        viewModelScope.launch {
+            val affected = withContext(Dispatchers.IO) { store.deleteTrack(track.id) }
+            withContext(Dispatchers.IO) {
+                listOfNotNull(track.audioPath, track.coverPath).forEach { path ->
+                    runCatching { java.io.File(path).takeIf { it.isFile }?.delete() }
+                }
+            }
+            affected.forEach { mirrorPlaylist(it) }
+            openPlaylistId?.let { id ->
+                _playlistTracks.value = withContext(Dispatchers.IO) { store.playlistTracks(id) }
+            }
+            measureDownloads()
+            refreshStore()
+            notice = "Removed from library"
         }
     }
 

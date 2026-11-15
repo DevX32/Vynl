@@ -12,13 +12,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,13 +32,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vynl.vynl_mobile.data.LocalTrack
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.EmptyState
+import com.vynl.vynl_mobile.ui.components.LocalTrackAction
+import com.vynl.vynl_mobile.ui.components.LocalTrackActionsSheet
 import com.vynl.vynl_mobile.ui.components.SectionHeader
 import com.vynl.vynl_mobile.ui.components.TrackTile
 import com.vynl.vynl_mobile.ui.theme.VynlColors
@@ -44,6 +54,8 @@ fun LibraryScreen(viewModel: AppViewModel) {
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    var actionsFor by remember { mutableStateOf<LocalTrack?>(null) }
+    var confirmRemove by remember { mutableStateOf<LocalTrack?>(null) }
 
     val needle = query.trim().lowercase()
     val tracks = library.filter { track ->
@@ -151,8 +163,83 @@ fun LibraryScreen(viewModel: AppViewModel) {
                         val index = tracks.indexOf(track)
                         viewModel.playLocal(tracks, index)
                     },
+                    onMore = { actionsFor = track },
                 )
             }
+        }
+
+        val menuTrack = actionsFor
+        if (menuTrack != null) {
+            LocalTrackActionsSheet(
+                track = menuTrack.toCatalogue(),
+                actions = listOf(
+                    LocalTrackAction(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                        title = "Add to playlist",
+                        onClick = { viewModel.openPlaylistPicker(menuTrack.toCatalogue()) },
+                    ),
+                    LocalTrackAction(
+                        icon = Icons.Rounded.Delete,
+                        title = "Remove from library",
+                        destructive = true,
+                        onClick = { confirmRemove = menuTrack },
+                    ),
+                ),
+                onDismiss = { actionsFor = null },
+            )
+        }
+
+        val pendingRemove = confirmRemove
+        if (pendingRemove != null) {
+            AlertDialog(
+                onDismissRequest = { confirmRemove = null },
+                shape = RoundedCornerShape(VynlRadius.control),
+                title = {
+                    Text(
+                        text = "Remove from library?",
+                        color = VynlColors.text,
+                        fontFamily = VynlFonts.display,
+                        fontWeight = FontWeight.W800,
+                    )
+                },
+                text = {
+                    Text(
+                        text = "“${pendingRemove.title}” will be deleted from this phone and removed from your playlists. You can re-download it anytime.",
+                        color = VynlColors.dim,
+                        fontFamily = VynlFonts.display,
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.removeFromLibrary(pendingRemove)
+                            confirmRemove = null
+                        },
+                        shape = RoundedCornerShape(VynlRadius.control),
+                        colors = ButtonDefaults.buttonColors(containerColor = VynlColors.danger),
+                    ) {
+                        Text(
+                            text = "Remove",
+                            color = Color.White,
+                            fontWeight = FontWeight.W700,
+                            fontFamily = VynlFonts.display,
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { confirmRemove = null },
+                        shape = RoundedCornerShape(VynlRadius.control),
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = VynlColors.dim,
+                            fontFamily = VynlFonts.display,
+                        )
+                    }
+                },
+                containerColor = VynlColors.surface,
+            )
         }
     }
 }

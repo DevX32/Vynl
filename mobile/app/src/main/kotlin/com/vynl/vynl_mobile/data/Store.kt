@@ -375,6 +375,29 @@ class Store(context: Context) {
         touchPlaylist(playlistId)
     }
 
+    fun deleteTrack(trackId: String): List<String> {
+        val affected = mutableListOf<String>()
+        helper.readableDatabase.rawQuery(
+            "SELECT DISTINCT playlist_id FROM playlist_tracks WHERE track_id = ?",
+            arrayOf(trackId),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                affected += cursor.getString(0)
+            }
+        }
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("playlist_tracks", "track_id = ?", arrayOf(trackId))
+            db.delete("tracks", "id = ?", arrayOf(trackId))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        affected.forEach { touchPlaylist(it) }
+        return affected
+    }
+
     fun playlistTracks(playlistId: String): List<LocalTrack> {
         val result = mutableListOf<LocalTrack>()
         helper.readableDatabase.rawQuery(
