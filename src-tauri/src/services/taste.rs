@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -93,6 +94,6 @@ pub fn summary(entries: &[TasteEntry]) -> TasteSummary {
 
 pub fn liked(entries: &[TasteEntry]) -> Vec<&TasteEntry> {
     let mut liked: Vec<&TasteEntry> = entries.iter().filter(|entry| entry.liked).collect();
-    liked.sort_by(|a, b| b.liked_at.unwrap_or(0).cmp(&a.liked_at.unwrap_or(0)));
+    liked.sort_by_key(|entry| Reverse(entry.liked_at.unwrap_or(0)));
     liked
 }

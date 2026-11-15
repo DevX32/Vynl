@@ -376,15 +376,15 @@ pub async fn confirm_email(token_hash: &str, email_type: &str) -> Result<(), Str
 }
 
 pub async fn sign_out(data_dir: &Path) -> Result<(), String> {
-    if let Some(session) = read_session(data_dir) {
-        if sync_enabled() {
-            let _ = http()?
-                .post(format!("{}/auth/v1/logout", base_url()))
-                .header("apikey", anon_key())
-                .header("Authorization", format!("Bearer {}", session.access_token))
-                .send()
-                .await;
-        }
+    if let Some(session) = read_session(data_dir)
+        && sync_enabled()
+    {
+        let _ = http()?
+            .post(format!("{}/auth/v1/logout", base_url()))
+            .header("apikey", anon_key())
+            .header("Authorization", format!("Bearer {}", session.access_token))
+            .send()
+            .await;
     }
     clear_session(data_dir);
     Ok(())
@@ -515,11 +515,8 @@ pub async fn tombstone_playlist(data_dir: &Path, id: &str) {
         .header("Content-Type", "application/json")
         .header("Prefer", "return=minimal")
         .json(&json!({ "deleted_at": now_ms() }));
-    match rest_headers(data_dir, request).await {
-        Ok(request) => {
-            let _ = request.send().await;
-        }
-        Err(_) => {}
+    if let Ok(request) = rest_headers(data_dir, request).await {
+        let _ = request.send().await;
     }
 }
 

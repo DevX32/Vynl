@@ -647,7 +647,7 @@ pub async fn remove_from_playlist(
     let exists = canonical.as_ref().is_some_and(|path| path.exists());
     if exists {
         let canonical = canonical.as_ref().expect("canonical checked");
-        if !delete_track_file(&user_data, &track_path, &canonical) {
+        if !delete_track_file(&user_data, &track_path, canonical) {
             return Err(
                 "Could not delete the file, it may be in use. Stop playback and try again.".into(),
             );

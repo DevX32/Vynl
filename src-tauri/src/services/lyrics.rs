@@ -12,7 +12,7 @@ const DISK_CACHE_MAX: usize = 1000;
 const REMOTE_CACHE_MAX: usize = 500;
 const DISK_CACHE_FILE: &str = "lyrics-cache.json";
 const NEGATIVE_CACHE_TTL_MS: u64 = 6 * 60 * 60 * 1000;
-const LRC_TIMESTAMP_RE: Lazy<Regex> = Lazy::new(|| {
+static LRC_TIMESTAMP_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[ \t]*\[[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*\]").unwrap()
 });
 

@@ -98,6 +98,8 @@ const CSS_VARS: Record<keyof ThemeColors, string> = {
   placeholderGlow: "--placeholder-glow",
 };
 
+const CSS_VAR_ENTRIES = Object.entries(CSS_VARS) as [keyof ThemeColors, string][];
+
 function solidColor(color: string): string {
   const match = color.match(/^rgba?\(([^)]+)\)$/i);
   if (!match) return color;
@@ -109,7 +111,7 @@ export function isThemeId(value: string | null | undefined): value is ThemeId {
   return typeof value === "string" && THEME_BY_ID.has(value);
 }
 
-export function getTheme(id: string | null | undefined): Theme {
+function getTheme(id: string | null | undefined): Theme {
   return (isThemeId(id) ? THEME_BY_ID.get(id) : undefined) ?? THEMES[0];
 }
 
@@ -122,8 +124,8 @@ export function applyTheme(
   root.dataset.theme = theme.id;
   root.style.colorScheme = "dark";
 
-  for (const key of Object.keys(CSS_VARS) as (keyof ThemeColors)[]) {
-    root.style.setProperty(CSS_VARS[key], theme.colors[key]);
+  for (const [key, varName] of CSS_VAR_ENTRIES) {
+    root.style.setProperty(varName, theme.colors[key]);
   }
 
   root.style.setProperty("--bg-solid", solidColor(theme.colors.bg));

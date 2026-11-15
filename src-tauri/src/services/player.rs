@@ -688,6 +688,12 @@ where
     }
 }
 
+type DecodedStream = (
+    Box<dyn Source<Item = f32> + Send>,
+    Option<f64>,
+    Option<Arc<StreamSession>>,
+);
+
 enum TrackInput {
     File(PathBuf),
     CatalogueFile(PathBuf),
@@ -715,11 +721,7 @@ impl TrackSink {
         fade_secs: f64,
         position_offset: Duration,
     ) -> Result<(Self, Option<f64>), String> {
-        let (source, total, session): (
-            Box<dyn Source<Item = f32> + Send>,
-            Option<f64>,
-            Option<Arc<StreamSession>>,
-        ) = match input {
+        let (source, total, session): DecodedStream = match input {
             TrackInput::File(path) => {
                 let file = File::open(&path).map_err(|e| format!("open: {e}"))?;
                 let decoder =
@@ -1074,11 +1076,11 @@ fn reopen_output(
             track
                 .sink
                 .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
-            if let Some(time) = seek_to {
-                if let Err(e) = seek_sink(&track.sink, time) {
-                    eprintln!("device change: could not resume {path}: {e}");
-                    return;
-                }
+            if let Some(time) = seek_to
+                && let Err(e) = seek_sink(&track.sink, time)
+            {
+                eprintln!("device change: could not resume {path}: {e}");
+                return;
             }
             *seek_floor = seek_floor_for(pos);
             *sink = Some(track);

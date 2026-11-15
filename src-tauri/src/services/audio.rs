@@ -45,7 +45,7 @@ impl FileSource {
         let source = MediaSourceStream::new(Box::new(file), Default::default());
         let format_reader = symphonia::default::get_probe()
             .probe(
-                &Hint::new().with_extension(ext),
+                Hint::new().with_extension(ext),
                 source,
                 FormatOptions::default(),
                 MetadataOptions::default(),

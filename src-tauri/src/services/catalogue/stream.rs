@@ -1458,7 +1458,7 @@ fn decode_loop(
     };
     let source = MediaSourceStream::new(Box::new(reader), Default::default());
     let mut format_reader = match symphonia::default::get_probe().probe(
-        &Hint::new().with_extension(ext),
+        Hint::new().with_extension(ext),
         source,
         FormatOptions::default(),
         MetadataOptions::default(),

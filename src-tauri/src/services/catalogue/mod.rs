@@ -200,15 +200,15 @@ impl CatalogueService {
         {
             let mut map = self.prepared.lock().unwrap_or_else(|e| e.into_inner());
             let now = Instant::now();
-            if let Some(entry) = map.get_mut(video_id) {
-                if now.duration_since(entry.stored) < PREPARED_TTL {
-                    entry.stored = now;
-                    return Ok(CatalogueStreamInfo {
-                        video_id: video_id.to_string(),
-                        duration: entry.stream.duration.or(duration_hint),
-                        cached: entry.stream.cached,
-                    });
-                }
+            if let Some(entry) = map.get_mut(video_id)
+                && now.duration_since(entry.stored) < PREPARED_TTL
+            {
+                entry.stored = now;
+                return Ok(CatalogueStreamInfo {
+                    video_id: video_id.to_string(),
+                    duration: entry.stream.duration.or(duration_hint),
+                    cached: entry.stream.cached,
+                });
             }
         }
 
