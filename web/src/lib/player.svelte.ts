@@ -516,7 +516,8 @@ function resolveNextTrack(
 ): LibraryTrack | null {
   const np = getCurrentTrack();
   const selected = getCurrentLoop();
-  const loop: LoopMode = !automatic && selected === "one" ? "off" : selected;
+  let loop: LoopMode = !automatic && selected === "one" ? "off" : selected;
+  if (automatic && loop === "off") loop = "all";
   const args = [
     getUserQueuePaths(),
     getContextQueuePaths(),
