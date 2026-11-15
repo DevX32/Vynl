@@ -27,6 +27,7 @@
   import { fmtTime, toPascalCase } from "@lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
+  import type { Snippet } from "svelte";
   import TrackCover from "@components/TrackCover.svelte";
   import EqualizerBars from "@components/EqualizerBars.svelte";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
@@ -40,6 +41,7 @@
     onPlayTrack,
     onNavigateAlbum,
     onNavigateArtist,
+    children,
   }: {
     tracks: readonly CatalogueTrack[];
     showAlbum?: boolean;
@@ -48,6 +50,7 @@
     onPlayTrack: (track: CatalogueTrack) => void;
     onNavigateAlbum?: (id: string) => void;
     onNavigateArtist?: (id: string) => void;
+    children?: Snippet;
   } = $props();
 
   const nowPlaying = $derived(getCurrentTrack());
@@ -240,6 +243,7 @@
     <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
   </div>
 
+  <div class="tracks">
   {#if tracks.length === 0}
     <div class="tbl-empty">
       <ListMusic size={28} stroke-width={1.1} />
@@ -308,6 +312,10 @@
       </div>
     {/each}
   {/if}
+  {#if children}
+    {@render children()}
+  {/if}
+  </div>
 </div>
 
 {#if ctx}
@@ -351,10 +359,42 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    --cover-size: 40px;
+    --track-cols: 28px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 42px;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 12px;
+  }
+
+  .tracks {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding-right: 2px;
+    padding-bottom: 8px;
+  }
+
+  .tracks::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .tracks::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 3px;
+  }
+
+  .tracks::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+  }
+
+  .tracks::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   .tbl-head {
-    grid-template-columns: 28px 40px minmax(0, 1.4fr) minmax(0, 1fr) 64px;
+    grid-template-columns: var(--track-cols);
   }
 
   .h-num {
@@ -387,10 +427,10 @@
 
   .row {
     display: grid;
-    grid-template-columns: 28px 40px minmax(0, 1.4fr) minmax(0, 1fr) 64px;
+    grid-template-columns: var(--track-cols);
     align-items: center;
-    gap: 12px;
-    padding: 6px 10px;
+    gap: var(--col-gap, 12px);
+    padding: var(--row-py, 7px) var(--row-px, 10px);
     border-radius: var(--radius-sm);
     transition: background 0.12s;
     user-select: none;
@@ -505,6 +545,7 @@
   }
 
   .tbl-empty {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -525,42 +566,27 @@
     text-align: center;
   }
 
-  @container player (max-width: 760px) {
-    .tbl-head,
-    .row {
-      grid-template-columns: 24px 36px minmax(0, 1.4fr) minmax(0, 1fr) 58px;
-      gap: 8px;
-    }
-  }
-
-  @container player (max-width: 540px) {
-    .tbl-head,
-    .row {
-      grid-template-columns: 20px minmax(0, 1.5fr) minmax(0, 1fr) 54px;
-      gap: 6px;
-    }
-
-    .h-cover,
-    .c-cover {
-      display: none;
+  @container player (max-width: 620px) {
+    .track-list {
+      --cover-size: 36px;
+      --track-cols: 24px var(--cover-size) minmax(0, 1fr) minmax(0, 1fr) 36px;
+      --col-gap: 8px;
     }
   }
 
   @container player (max-width: 420px) {
-    .tbl-head,
-    .row {
-      grid-template-columns: 18px minmax(0, 1fr) 34px;
-      padding-left: 6px;
-      padding-right: 6px;
+    .track-list {
+      --track-cols: 20px minmax(0, 1fr) minmax(0, 1fr);
+      --col-gap: 6px;
+      --row-px: 8px;
+      --row-py: 6px;
     }
 
-    .h-artist,
-    .c-artists {
+    .c-cover,
+    .h-cover,
+    .c-dur,
+    .h-dur {
       display: none;
-    }
-
-    .c-end {
-      gap: 0;
     }
   }
 </style>

@@ -178,26 +178,10 @@
   .detail-scroll {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-bottom: 36px;
-  }
-
-  .detail-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .detail-scroll::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
-  .detail-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-hover);
-  }
-
-  .detail-scroll::-webkit-scrollbar-track {
-    background: transparent;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 12px;
   }
 
   .hero {
@@ -363,7 +347,7 @@
   }
 
   .description {
-    margin: 0 0 18px;
+    margin: 0;
     max-width: 720px;
     font-size: 12px;
     line-height: 1.6;

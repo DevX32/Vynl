@@ -177,20 +177,41 @@
     <div class="mix-heading mono">{t("catalogue.madeForYou")}</div>
   {/if}
 
-  <div class="page-scroll">
-    {#if error}
+  {#if results && results.songs.length > 0}
+    <section class="section songs">
+      <CatalogueTrackList
+        tracks={results.songs}
+        onPlayTrack={(track) => playTrack(track, results.songs)}
+        onNavigateAlbum={(id) => onNavigate(`catalogue:album:${id}`)}
+        onNavigateArtist={(id) => onNavigate(`catalogue:artist:${id}`)}
+      />
+    </section>
+  {:else if error}
+    <div class="page-scroll">
       <div class="state" role="alert">
         <AlertCircle size={26} stroke-width={1.2} />
         <span class="state-title display">{t("catalogue.searchFailed")}</span>
         <span class="state-sub mono">{friendlyError(error)}</span>
         <button class="retry-btn" onclick={retry}>{t("common.retry")}</button>
       </div>
-    {:else if searching && !results}
+    </div>
+  {:else if searching}
+    <div class="page-scroll">
       <div class="state">
         <span class="spin"><LoaderCircle size={22} stroke-width={1.5} /></span>
         <span class="state-sub mono">{t("common.loading")}</span>
       </div>
-    {:else if !requested.trim()}
+    </div>
+  {:else if requested.trim()}
+    <div class="page-scroll">
+      <div class="state">
+        <Search size={32} stroke-width={1.1} />
+        <span class="state-title display">{t("catalogue.noResults")}</span>
+        <span class="state-sub">{t("catalogue.noResultsHint")}</span>
+      </div>
+    </div>
+  {:else}
+    <div class="page-scroll">
       {#if summary.liked === 0 && summary.played === 0}
         <section class="fresh">
           <span class="state-title display">{t("catalogue.freshTitle")}</span>
@@ -233,29 +254,8 @@
           </section>
         {/if}
       {/if}
-    {:else if results}
-      {#if results.songs.length > 0}
-        <section class="section">
-          <CatalogueTrackList
-            tracks={results.songs}
-            onPlayTrack={(track) => playTrack(track, results.songs)}
-            onNavigateAlbum={(id) => onNavigate(`catalogue:album:${id}`)}
-            onNavigateArtist={(id) => onNavigate(`catalogue:artist:${id}`)}
-          />
-        </section>
-      {/if}
-
-      {#if results.songs.length === 0 &&
-        results.albums.length === 0 &&
-        results.playlists.length === 0}
-        <div class="state">
-          <Search size={32} stroke-width={1.1} />
-          <span class="state-title display">{t("catalogue.noResults")}</span>
-          <span class="state-sub">{t("catalogue.noResultsHint")}</span>
-        </div>
-      {/if}
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
 
 <CatalogueSongMenu
@@ -337,6 +337,15 @@
   .section {
     margin-bottom: 26px;
   }
+
+  .section.songs {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+  }
+
 
   .mix-heading {
     flex-shrink: 0;

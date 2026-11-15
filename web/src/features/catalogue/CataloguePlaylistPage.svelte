@@ -198,29 +198,12 @@
   .detail-scroll {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-bottom: 36px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 12px;
   }
-
-  .detail-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .detail-scroll::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
-  .detail-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-hover);
-  }
-
-  .detail-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .hero {
+.hero {
     display: flex;
     align-items: flex-end;
     gap: 20px;

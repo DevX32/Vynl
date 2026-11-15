@@ -124,62 +124,67 @@
         </button>
       </div>
     {:else if artist}
-      {#if artist.description}
-        <p class="description">{artist.description}</p>
+      {#if artist!.description}
+        <p class="description">{artist!.description}</p>
       {/if}
+
+      {#snippet belowTable()}
+        {#if artist!.albums.length > 0}
+          <section class="section">
+            <div class="section-head">
+              <span class="section-label">{t("catalogue.albums")}</span>
+            </div>
+            <div class="card-grid">
+              {#each artist!.albums as album (album.id)}
+                <CatalogueCard
+                  title={album.title}
+                  subtitle={album.year ? String(album.year) : ""}
+                  cover={album.cover}
+                  kind="album"
+                  openLabel={t("catalogue.openAlbum")}
+                  onopen={() => onNavigate(`catalogue:album:${album.id}`)}
+                />
+              {/each}
+            </div>
+          </section>
+        {/if}
+
+        {#if artist!.singles.length > 0}
+          <section class="section">
+            <div class="section-head">
+              <span class="section-label">{t("catalogue.singles")}</span>
+            </div>
+            <div class="card-grid">
+              {#each artist!.singles as album (album.id)}
+                <CatalogueCard
+                  title={album.title}
+                  subtitle={album.year ? String(album.year) : ""}
+                  cover={album.cover}
+                  kind="album"
+                  openLabel={t("catalogue.openAlbum")}
+                  onopen={() => onNavigate(`catalogue:album:${album.id}`)}
+                />
+              {/each}
+            </div>
+          </section>
+        {/if}
+      {/snippet}
 
       {#if topTracks.length > 0}
-        <section class="section">
-          <div class="section-head">
-            <span class="section-label">{t("catalogue.topSongs")}</span>
-          </div>
-          <CatalogueTrackList
-            tracks={topTracks}
-            showAlbum={true}
-            onPlayTrack={playTrack}
-            onNavigateAlbum={(albumId) => onNavigate(`catalogue:album:${albumId}`)}
-          />
-        </section>
-      {/if}
-
-      {#if artist.albums.length > 0}
-        <section class="section">
-          <div class="section-head">
-            <span class="section-label">{t("catalogue.albums")}</span>
-          </div>
-          <div class="card-grid">
-            {#each artist.albums as album (album.id)}
-              <CatalogueCard
-                title={album.title}
-                subtitle={album.year ? String(album.year) : ""}
-                cover={album.cover}
-                kind="album"
-                openLabel={t("catalogue.openAlbum")}
-                onopen={() => onNavigate(`catalogue:album:${album.id}`)}
-              />
-            {/each}
-          </div>
-        </section>
-      {/if}
-
-      {#if artist.singles.length > 0}
-        <section class="section">
-          <div class="section-head">
-            <span class="section-label">{t("catalogue.singles")}</span>
-          </div>
-          <div class="card-grid">
-            {#each artist.singles as album (album.id)}
-              <CatalogueCard
-                title={album.title}
-                subtitle={album.year ? String(album.year) : ""}
-                cover={album.cover}
-                kind="album"
-                openLabel={t("catalogue.openAlbum")}
-                onopen={() => onNavigate(`catalogue:album:${album.id}`)}
-              />
-            {/each}
-          </div>
-        </section>
+        <CatalogueTrackList
+          tracks={topTracks}
+          showAlbum={true}
+          onPlayTrack={playTrack}
+          onNavigateAlbum={(albumId) => onNavigate(`catalogue:album:${albumId}`)}
+        >
+          {#snippet children()}
+            {@render belowTable()}
+          {/snippet}
+        </CatalogueTrackList>
+      {:else}
+        <div class="below-scroll">
+          {@render belowTable()}
+        </div>
       {/if}
     {/if}
   </div>
@@ -196,29 +201,23 @@
   .detail-scroll {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 12px;
+  }
+
+  .below-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
-    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     padding-bottom: 36px;
+    padding-right: 2px;
   }
-
-  .detail-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .detail-scroll::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
-  .detail-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-hover);
-  }
-
-  .detail-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .hero {
+.hero {
     display: flex;
     align-items: flex-end;
     gap: 20px;
@@ -355,7 +354,7 @@
   }
 
   .description {
-    margin: 0 0 18px;
+    margin: 0;
     max-width: 720px;
     font-size: 12px;
     line-height: 1.6;
@@ -371,6 +370,7 @@
   .section {
     margin-bottom: 26px;
   }
+
 
   .section-head {
     display: flex;
