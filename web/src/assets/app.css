@@ -105,6 +105,12 @@ body {
   overflow: hidden;
 }
 
+html[data-platform="linux"] body {
+  --bg: var(--bg-solid);
+  --bg-raise: var(--bg-raise-solid);
+  --surface: var(--surface-solid);
+}
+
 #app {
   height: 100%;
 }
