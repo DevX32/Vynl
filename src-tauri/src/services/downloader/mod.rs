@@ -275,14 +275,20 @@ fn try_tag_with_lofty(
             if tagged_file.tag(tag_type).is_none() {
                 tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
             }
-            tagged_file.tag_mut(tag_type).unwrap()
+            tagged_file
+                .tag_mut(tag_type)
+                .ok_or_else(|| "could not update the audio tags".to_string())?
         } else {
-            tagged_file.primary_tag_mut().unwrap()
+            tagged_file
+                .primary_tag_mut()
+                .ok_or_else(|| "could not update the audio tags".to_string())?
         }
     } else {
         let new_tag = lofty::tag::Tag::new(tag_type);
         tagged_file.insert_tag(new_tag);
-        tagged_file.primary_tag_mut().unwrap()
+        tagged_file
+            .primary_tag_mut()
+            .ok_or_else(|| "could not create the audio tags".to_string())?
     };
 
     tag.set_title(track.title.clone());
@@ -917,7 +923,7 @@ async fn process_track(
         return TrackOutcome::Cancelled;
     }
 
-    if !result.ok || result.raw_path.is_none() {
+    if !result.ok {
         return TrackOutcome::Failed {
             message: result.message,
             used_url: result.used_url,
@@ -926,7 +932,15 @@ async fn process_track(
 
     emit_track(app, track, TrackStatus::Processing, 100.0, None);
 
-    let raw_path = PathBuf::from(result.raw_path.as_ref().unwrap());
+    let raw_path = match result.raw_path {
+        Some(path) => PathBuf::from(path),
+        None => {
+            return TrackOutcome::Failed {
+                message: "download finished but no file was produced".into(),
+                used_url: result.used_url,
+            };
+        }
+    };
     let used_url = result.used_url.clone();
 
     let cover_path = {

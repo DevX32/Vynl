@@ -782,7 +782,7 @@ impl RangeStore {
     }
 
     fn ensure(&self, start: u64, end: u64) -> Result<(), String> {
-        let end = end.min(self.state.lock().unwrap().total);
+        let end = end.min(self.state.lock().unwrap_or_else(|e| e.into_inner()).total);
         if start >= end {
             return Ok(());
         }

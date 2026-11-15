@@ -222,8 +222,9 @@ pub fn run() {
                     if let Some(win) = app_handle.get_webview_window("main") {
                         let _ = win.destroy();
                     }
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(crate::services::downloader::cancel_download());
+                    if let Ok(rt) = tokio::runtime::Runtime::new() {
+                        rt.block_on(crate::services::downloader::cancel_download());
+                    }
                     app_handle.exit(0);
                 });
             }

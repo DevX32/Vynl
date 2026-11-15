@@ -47,10 +47,11 @@ pub(super) fn last_error(stderr: &str) -> String {
         .filter(|l| l.starts_with("ERROR:") || l.to_lowercase().contains("error"))
         .copied()
         .collect();
-    if !error_lines.is_empty() {
-        let last = error_lines.last().unwrap();
-        if let Some(caps) = LAST_ERROR_RE.captures(last) {
-            return caps.get(1).unwrap().as_str().trim().to_string();
+    if let Some(last) = error_lines.last() {
+        if let Some(caps) = LAST_ERROR_RE.captures(last)
+            && let Some(detail) = caps.get(1)
+        {
+            return detail.as_str().trim().to_string();
         }
         return last.trim().to_string();
     }

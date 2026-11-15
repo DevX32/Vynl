@@ -355,7 +355,9 @@ async fn enrich_covers(client: &Client, tracks: &mut [TrackMeta]) {
         let semaphore = Arc::clone(&semaphore);
         let id = id.clone();
         handles.push(tokio::spawn(async move {
-            let _permit = semaphore.acquire().await.unwrap();
+            let Ok(_permit) = semaphore.acquire().await else {
+                return (id, None);
+            };
             let cover = track_cover(&client, &cache, &id).await;
             (id, cover)
         }));
@@ -391,7 +393,10 @@ async fn enrich_covers(client: &Client, tracks: &mut [TrackMeta]) {
 
 fn extract_embed_entity(body: &str) -> Result<EmbedResult, String> {
     let json_str = match NEXT_DATA_RE.captures(body) {
-        Some(caps) => caps.get(1).unwrap().as_str(),
+        Some(caps) => caps
+            .get(1)
+            .map(|m| m.as_str())
+            .ok_or_else(|| "Could not read the link data.".to_string())?,
         None => return Ok(EmbedResult::NoData),
     };
 
