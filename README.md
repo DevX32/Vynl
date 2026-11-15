@@ -40,7 +40,7 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 | -------- | ------ |
 | Windows  | Supported |
 | Linux    | Supported |
-| Android  | Supported — Companion App |
+| Android  | Supported |
 | macOS    | Not available |
 
 ## Development
@@ -78,7 +78,7 @@ Every contribution goes back into maintenance, fixes, and new features.
 
 ## Caution
 
-How you use the app is entirely up to you, and you are responsible for your own actions — including any content you download and any legal consequences that may follow. The Vynl maintainers take no responsibility for misuse, and the software is provided "as is", without warranty of any kind.
+How you use the app is entirely up to you, and you are responsible for your own actions including any content you download and any legal consequences that may follow. The Vynl maintainers take no responsibility for misuse, and the software is provided "as is", without warranty of any kind.
 
 If you enjoy a track, buy it. Purchasing directly from the artists is the best way to support them and keep their work going.
 
