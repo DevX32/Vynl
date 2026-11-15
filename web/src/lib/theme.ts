@@ -26,6 +26,7 @@ export interface Theme {
 }
 
 export const THEME_STORAGE_KEY = "vynl.theme";
+export const THEME_SOLID_STORAGE_KEY = "vynl.themeBgSolid";
 export const DEFAULT_THEME: ThemeId = "vynl";
 
 export const THEMES: readonly Theme[] = [
@@ -137,6 +138,10 @@ export function applyTheme(
     `radial-gradient(circle at 50% 50%, ${theme.colors.placeholderGlow} 0 14%, transparent 30%), ` +
       `repeating-radial-gradient(circle at 50% 50%, var(--bg-raise) 0 2px, var(--bg) 2px 4px)`,
   );
+
+  try {
+    localStorage.setItem(THEME_SOLID_STORAGE_KEY, solidColor(theme.colors.bg));
+  } catch {}
 
   if (
     persist &&

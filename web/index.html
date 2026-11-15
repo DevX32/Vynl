@@ -12,6 +12,15 @@
         }
       } catch (e) {}
     </script>
+    <script>
+      try {
+        var root = document.documentElement;
+        var bgSolid = localStorage.getItem("vynl.themeBgSolid");
+        var theme = localStorage.getItem("vynl.theme");
+        if (bgSolid) root.style.setProperty("--bg-solid", bgSolid);
+        if (theme) root.dataset.theme = theme;
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link
       rel="preload"

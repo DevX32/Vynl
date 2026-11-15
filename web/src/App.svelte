@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { vynl } from "./lib/vynl";
   import {
     restoreNowPlaying,
@@ -209,6 +210,8 @@
       hideSplash(200);
       return () => {};
     }
+
+    void getCurrentWindow().show().catch(() => {});
 
     void (async () => {
       try {

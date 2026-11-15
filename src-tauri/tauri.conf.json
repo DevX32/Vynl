@@ -22,7 +22,8 @@
         "maximizable": true,
         "decorations": false,
         "theme": "Dark",
-        "transparent": true
+        "transparent": true,
+        "visible": false
       },
       {
         "label": "mini",

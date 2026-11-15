@@ -241,6 +241,11 @@ pub fn run() {
 
             if let Some(win) = app.get_webview_window("main") {
                 apply_window_effects(&win);
+                let fallback = win.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    let _ = fallback.show();
+                });
             }
 
             crate::services::tools::remove_unused_binaries(&user_data);
