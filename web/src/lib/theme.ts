@@ -55,9 +55,9 @@ export const THEMES: readonly Theme[] = [
     id: "espresso",
     name: "Espresso",
     colors: {
-      bg: "rgba(0, 0, 0, 0.84)",
-      bgRaise: "rgba(18, 18, 18, 0.9)",
-      surface: "rgba(9, 9, 9, 0.82)",
+      bg: "rgba(0, 0, 0, 0.76)",
+      bgRaise: "rgba(18, 18, 18, 0.88)",
+      surface: "rgba(9, 9, 9, 0.86)",
       text: "#cad3f5",
       dim: "#a5adcb",
       faint: "#8087a2",
