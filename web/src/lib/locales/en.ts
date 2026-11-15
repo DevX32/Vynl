@@ -257,6 +257,11 @@ export const en = {
   },
   settings: {
     title: "Settings",
+    groupProfile: "Profile",
+    groupAppearance: "Appearance",
+    groupDownloads: "Downloads",
+    groupSystem: "System",
+    groupIntegrations: "Integrations",
     overwrite: "Overwrite Existing Files",
     overwriteHint: "If off, songs that are already downloaded are skipped.",
     overwriteToggle: "Overwrite toggle",
@@ -289,13 +294,13 @@ export const en = {
     nickname: "Nickname",
     nicknameHint:
       "Your name across Vynl. Leave blank for a random nickname.",
-    nicknameRoll: "Roll nickname",
+    nicknameRoll: "Roll",
     taste: "Your Taste",
     tasteHint:
       "Vynl builds your mixes from this, only on this device.",
     tasteEmpty:
       "Like a song or play a few tracks and Vynl will start building your mix.",
-    tasteReset: "Reset taste",
+    tasteReset: "Reset",
     mobileSync: "Mobile Sync",
     mobileSyncHint:
       "Share your library with the Vynl Android app over your local Wi‑Fi.",
@@ -368,7 +373,7 @@ export const en = {
       "Stay signed out and Vynl works exactly as it does today - everything stays on this device.",
   },
   backup: {
-    title: "Export & Backup",
+    title: "Export and Import",
     hint: "Save your whole library — every track, playlist and your settings — to one file you can keep or move to another machine.",
     contents: "Ready to export",
     contentsHint: "{tracks} tracks and {playlists} playlists from your library, always included.",
@@ -377,16 +382,17 @@ export const en = {
     cancel: "Cancel",
     saved: "Exported {tracks} tracks to {path}",
     savedPlaylists: "Exported {tracks} tracks and {playlists} playlists to {path}",
+    lastExport: "Last: {tracks} tracks{playlists} · {bytes} · {format}",
     nothingToExport: "There's nothing in your library yet. Download something first.",
     failed: "Export failed: {error}",
-    restoreTitle: "Re-download from a backup",
+    restoreTitle: "Import from a backup",
     restoreHint:
-      "Load a Vynl JSON backup and start downloading right away — no match review, it runs in the background. Tracks still on disk are skipped, the rest are fetched again.",
-    restore: "Load backup",
-    restoring: "Reading backup",
-    restoredTitle: "Restored backup",
+      "Import a Vynl JSON backup and start downloading right away — no match review, it runs in the background. Tracks still on disk are skipped, the rest are fetched again.",
+    restore: "Import",
+    restoring: "Importing",
+    restoredTitle: "Imported backup",
     restored: "Importing {tracks} tracks from your backup — downloading in the background ({known} already have a saved source).",
-    restoreFailed: "Couldn't read that backup: {error}",
+    restoreFailed: "Couldn't import that backup: {error}",
   },
   downloads: {
     title: "Downloads",
@@ -395,7 +401,7 @@ export const en = {
     removeAll: "Remove all downloaded songs",
     removeAllHint:
       "Deletes every audio file in your music folder, including songs you added yourself. Downloaded lyric files go too, and every playlist is cleaned of the deleted tracks. This cannot be undone.",
-    removeAllConfirm: "Remove all",
+    removeAllConfirm: "Remove",
     removeAllTitle: "Remove all downloaded songs?",
     removeAllBody:
       "Every audio file in your music folder will be permanently deleted. This action cannot be undone.",

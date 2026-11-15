@@ -29,6 +29,26 @@
 
   const busy = $derived(exporting || trackCount === null || trackCount === 0);
 
+  const exportHint = $derived.by(() => {
+    const base =
+      trackCount === null
+        ? t("common.loading")
+        : trackCount === 0
+          ? t("backup.nothingToExport")
+          : t("backup.contentsHint", {
+              tracks: trackCount,
+              playlists: playlistCount,
+            });
+    if (!lastExport) return base;
+    return `${base} ${t("backup.lastExport", {
+      tracks: lastExport.trackCount,
+      playlists:
+        lastExport.playlistCount > 0 ? ` and ${lastExport.playlistCount} playlists` : "",
+      bytes: fmtBytes(lastExport.bytes),
+      format: lastExport.format.toUpperCase(),
+    })}`;
+  });
+
   onMount(() => {
     let cancelled = false;
     void (async () => {
@@ -141,23 +161,15 @@
 </script>
 
 <div class="panel">
-  <div class="section">
-    <div class="label mono">{t("backup.title")}</div>
+  <div class="group-head first">
+    <span class="label mono">{t("backup.title")}</span>
+  </div>
+  <div class="section flush">
     <div class="hint mono">{t("backup.hint")}</div>
   </div>
 
-  <div class="group">
-    <SettingRow
-      label={t("backup.contents")}
-      hint={trackCount === null
-        ? t("common.loading")
-        : trackCount === 0
-          ? t("backup.nothingToExport")
-          : t("backup.contentsHint", {
-              tracks: trackCount,
-              playlists: playlistCount,
-            })}
-    >
+  <div class="rows">
+    <SettingRow label={t("backup.contents")} hint={exportHint}>
       {#snippet control()}
         <Button variant="primary" size="sm" disabled={busy} onclick={runExport}>
           <Download size={13} stroke-width={1.5} />
@@ -165,20 +177,7 @@
         </Button>
       {/snippet}
     </SettingRow>
-  </div>
 
-  {#if lastExport}
-    <div class="section">
-      <div class="last mono">
-        {lastExport.trackCount}
-        {lastExport.playlistCount > 0 ? ` · ${lastExport.playlistCount}` : ""}
-        · {fmtBytes(lastExport.bytes)} · {lastExport.format.toUpperCase()}
-      </div>
-      <div class="last-path mono">{lastExport.path}</div>
-    </div>
-  {/if}
-
-  <div class="group">
     <SettingRow
       label={t("backup.restoreTitle")}
       hint={t("backup.restoreHint")}
@@ -192,12 +191,7 @@
     </SettingRow>
   </div>
 
-  <div class="section border">
-    <div class="label mono">{t("downloads.title")}</div>
-    <div class="hint mono">{t("downloads.hint")}</div>
-  </div>
-
-  <div class="group">
+  <div class="danger-zone">
     <SettingRow
       label={t("downloads.removeAll")}
       hint={t("downloads.removeAllHint")}
@@ -242,11 +236,29 @@
     gap: 6px;
   }
 
-  .section.border {
+  .section.flush {
+    padding-top: 10px;
+  }
+
+  .group-head {
+    padding: 14px 16px 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .panel > .group-head.first {
+    padding-top: 16px;
+  }
+
+  .rows {
     border-top: 1px solid var(--line);
   }
 
-  .group {
+  .rows > :global(.row + .row) {
+    border-top: 1px solid var(--line);
+  }
+
+  .danger-zone {
     border-top: 1px solid var(--line);
   }
 
@@ -260,18 +272,5 @@
     font-size: 11px;
     color: var(--faint);
     line-height: 1.5;
-  }
-
-  .last {
-    font-size: 11px;
-    color: var(--dim);
-    letter-spacing: 0.04em;
-  }
-
-  .last-path {
-    font-size: 10.5px;
-    color: var(--faint);
-    line-height: 1.5;
-    overflow-wrap: anywhere;
   }
 </style>

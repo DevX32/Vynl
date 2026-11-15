@@ -53,7 +53,11 @@
 </script>
 
 <div class="panel">
-  <div class="section">
+  <div class="group-head first">
+    <span class="label mono">{t("settings.groupProfile")}</span>
+  </div>
+
+  <div class="section flush">
     <div class="label mono">{t("settings.nickname")}</div>
     <input
       class="text"
@@ -81,7 +85,10 @@
   </div>
 
   <div class="group">
-    <div class="section">
+    <div class="group-head">
+      <span class="label mono">{t("settings.groupAppearance")}</span>
+    </div>
+    <div class="section flush">
       <div class="label mono">{t("settings.theme")}</div>
       <ThemePicker
         value={settings.theme}
@@ -91,10 +98,8 @@
       />
       <div class="hint mono">{t("settings.themeHint")}</div>
     </div>
-  </div>
 
-  <div class="group">
-    <div class="section">
+    <div class="section flush divider">
       <div class="label mono">{t("settings.accentColor")}</div>
       <ColorPicker
         value={settings.accentColor}
@@ -105,108 +110,129 @@
       />
       <div class="hint mono">{t("settings.accentColorHint")}</div>
     </div>
+
+    <div class="divider">
+      <SettingRow
+        label={t("settings.dynamicAccent")}
+        hint={t("settings.dynamicAccentHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.dynamicAccent}
+            label={t("settings.dynamicAccentToggle")}
+            onclick={() =>
+              void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
+          />
+        {/snippet}
+      </SettingRow>
+    </div>
   </div>
 
   <div class="group">
-    <SettingRow
-      label={t("settings.dynamicAccent")}
-      hint={t("settings.dynamicAccentHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.dynamicAccent}
-          label={t("settings.dynamicAccentToggle")}
-          onclick={() =>
-            void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
-        />
-      {/snippet}
-    </SettingRow>
+    <div class="group-head">
+      <span class="label mono">{t("settings.groupDownloads")}</span>
+    </div>
+    <div class="rows">
+      <SettingRow
+        label={t("settings.overwrite")}
+        hint={t("settings.overwriteHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.overwrite}
+            label={t("settings.overwriteToggle")}
+            onclick={() =>
+              void patchSettings({ overwrite: !settings.overwrite })}
+          />
+        {/snippet}
+      </SettingRow>
 
-    <SettingRow
-      label={t("settings.overwrite")}
-      hint={t("settings.overwriteHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.overwrite}
-          label={t("settings.overwriteToggle")}
-          onclick={() =>
-            void patchSettings({ overwrite: !settings.overwrite })}
-        />
-      {/snippet}
-    </SettingRow>
+      <SettingRow
+        label={t("settings.confirmMatches")}
+        hint={t("settings.confirmMatchesHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.confirmMatches}
+            label={t("settings.confirmMatchesToggle")}
+            onclick={() =>
+              void patchSettings({ confirmMatches: !settings.confirmMatches })}
+          />
+        {/snippet}
+      </SettingRow>
+    </div>
+  </div>
 
-    <SettingRow
-      label={t("settings.discord")}
-      hint={t("settings.discordHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.discordRpc}
-          label={t("settings.discordToggle")}
-          onclick={() =>
-            void patchSettings({ discordRpc: !settings.discordRpc })}
-        />
-      {/snippet}
-    </SettingRow>
+  <div class="group">
+    <div class="group-head">
+      <span class="label mono">{t("settings.groupSystem")}</span>
+    </div>
+    <div class="rows">
+      <SettingRow
+        label={t("settings.minimizeToTray")}
+        hint={t("settings.minimizeToTrayHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.minimizeToTray}
+            label={t("settings.minimizeToTrayToggle")}
+            onclick={() =>
+              void patchSettings({ minimizeToTray: !settings.minimizeToTray })}
+          />
+        {/snippet}
+      </SettingRow>
 
-    <SettingRow
-      label={t("settings.confirmMatches")}
-      hint={t("settings.confirmMatchesHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.confirmMatches}
-          label={t("settings.confirmMatchesToggle")}
-          onclick={() =>
-            void patchSettings({ confirmMatches: !settings.confirmMatches })}
-        />
-      {/snippet}
-    </SettingRow>
+      <SettingRow
+        label={t("settings.hardwareAcceleration")}
+        hint={t("settings.hardwareAccelerationHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.hardwareAcceleration}
+            label={t("settings.hardwareAccelerationToggle")}
+            onclick={() =>
+              void patchSettings({
+                hardwareAcceleration: !settings.hardwareAcceleration,
+              })}
+          />
+        {/snippet}
+      </SettingRow>
 
-    <SettingRow
-      label={t("settings.minimizeToTray")}
-      hint={t("settings.minimizeToTrayHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.minimizeToTray}
-          label={t("settings.minimizeToTrayToggle")}
-          onclick={() =>
-            void patchSettings({ minimizeToTray: !settings.minimizeToTray })}
-        />
-      {/snippet}
-    </SettingRow>
+      <SettingRow
+        label={t("settings.launchAtStartup")}
+        hint={t("settings.launchAtStartupHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.launchAtStartup}
+            label={t("settings.launchAtStartupToggle")}
+            onclick={() =>
+              void patchSettings({ launchAtStartup: !settings.launchAtStartup })}
+          />
+        {/snippet}
+      </SettingRow>
+    </div>
+  </div>
 
-    <SettingRow
-      label={t("settings.hardwareAcceleration")}
-      hint={t("settings.hardwareAccelerationHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.hardwareAcceleration}
-          label={t("settings.hardwareAccelerationToggle")}
-          onclick={() =>
-            void patchSettings({
-              hardwareAcceleration: !settings.hardwareAcceleration,
-            })}
-        />
-      {/snippet}
-    </SettingRow>
-
-    <SettingRow
-      label={t("settings.launchAtStartup")}
-      hint={t("settings.launchAtStartupHint")}
-    >
-      {#snippet control()}
-        <Switch
-          on={settings.launchAtStartup}
-          label={t("settings.launchAtStartupToggle")}
-          onclick={() =>
-            void patchSettings({ launchAtStartup: !settings.launchAtStartup })}
-        />
-      {/snippet}
-    </SettingRow>
+  <div class="group">
+    <div class="group-head">
+      <span class="label mono">{t("settings.groupIntegrations")}</span>
+    </div>
+    <div class="rows">
+      <SettingRow
+        label={t("settings.discord")}
+        hint={t("settings.discordHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.discordRpc}
+            label={t("settings.discordToggle")}
+            onclick={() =>
+              void patchSettings({ discordRpc: !settings.discordRpc })}
+          />
+        {/snippet}
+      </SettingRow>
+    </div>
   </div>
 </div>
 
@@ -228,7 +254,29 @@
     gap: 8px;
   }
 
+  .section.flush {
+    padding-top: 10px;
+  }
+
   .group {
+    border-top: 1px solid var(--line);
+  }
+
+  .group-head {
+    padding: 14px 16px 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .panel > .group-head.first {
+    padding-top: 16px;
+  }
+
+  .divider {
+    border-top: 1px solid var(--line);
+  }
+
+  .rows > :global(.row + .row) {
     border-top: 1px solid var(--line);
   }
 
