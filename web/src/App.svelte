@@ -42,6 +42,8 @@
   import PlayerPage from "./features/player/PlayerPage.svelte";
   import PlayerBar from "./features/player/PlayerBar.svelte";
   import FullscreenPlayer from "./features/player/FullscreenPlayer.svelte";
+  import QueueList from "./features/queue/QueueList.svelte";
+  import { getQueueOpen } from "@state/queue.svelte";
   import LibraryPage from "./features/playlists/LibraryPage.svelte";
   import PlaylistDetail from "./features/playlists/PlaylistDetail.svelte";
   import SettingsPage from "./features/settings/SettingsPage.svelte";
@@ -517,6 +519,10 @@
         </div>
       </div>
     </main>
+
+    {#if getQueueOpen()}
+      <QueueList />
+    {/if}
   </div>
 
   <PlayerBar onOpenPlayer={openPlayer} fullscreen={showFullscreen} active={page === "player" || showFullscreen} onToggleFullscreen={() => { showFullscreen = !showFullscreen; }} />
@@ -633,6 +639,7 @@
     flex: 1;
     min-height: 0;
     display: flex;
+    position: relative;
   }
 
   main {

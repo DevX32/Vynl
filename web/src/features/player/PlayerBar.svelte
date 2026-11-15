@@ -10,6 +10,7 @@
     PictureInPicture2,
     Heart,
     Music2,
+    ListMusic,
   } from "lucide-svelte";
   import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
   import { listen } from "@tauri-apps/api/event";
@@ -30,6 +31,7 @@
   import VolumeSlider from "./VolumeSlider.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
   import { getEqOpen, openEq } from "@state/equalizer.svelte";
+  import { getQueueOpen, toggleQueue } from "@state/queue.svelte";
 
   let {
     onOpenPlayer,
@@ -232,6 +234,15 @@
       aria-pressed={getEqOpen()}
     >
       <SlidersHorizontal size={12} stroke-width={1.5} />
+    </button>
+    <button
+      class="icon-btn small"
+      class:on={getQueueOpen()}
+      onclick={toggleQueue}
+      aria-label={t("player.queue")}
+      aria-pressed={getQueueOpen()}
+    >
+      <ListMusic size={12} stroke-width={1.5} />
     </button>
     <span class="bar-sep"></span>
     <button

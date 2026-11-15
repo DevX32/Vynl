@@ -13,7 +13,6 @@
     closeLyrics,
   } from "@state/player.svelte";
   import NowPlayingArt from "./NowPlayingArt.svelte";
-  import QueueList from "../queue/QueueList.svelte";
   import LyricsOverlay from "./LyricsOverlay.svelte";
   import ArtBackdrop from "../../components/ArtBackdrop.svelte";
 
@@ -84,19 +83,16 @@
     </div>
   </div>
 
-  <QueueList />
 </section>
 
 <style>
   .player-page {
     height: 100%;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
     overflow: clip;
-    container-type: inline-size;
-    container-name: player;
     position: relative;
   }
 

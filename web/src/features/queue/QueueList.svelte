@@ -14,26 +14,15 @@
   import { fmtTime } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
   import { t } from "@lib/i18n";
-  import { fade } from "svelte/transition";
+  import { fade, slide } from "svelte/transition";
   import type { LibraryTrack } from "@lib/types";
   import ContextMenu from "../../components/ContextMenu.svelte";
   import VirtualList from "../../components/VirtualList.svelte";
   import TrackCover from "../../components/TrackCover.svelte";
-  import { ChevronLeft, ChevronRight, Trash2 } from "lucide-svelte";
+  import { ChevronRight, Trash2 } from "lucide-svelte";
+  import { setQueueOpen } from "@state/queue.svelte";
 
   type QueueSection = "user" | "context";
-
-  function loadCollapsed(): boolean {
-    if (typeof localStorage === "undefined") return false;
-    return localStorage.getItem("vynl.queueCollapsed") === "true";
-  }
-
-  let collapsed = $state(loadCollapsed());
-
-  function setCollapsed(value: boolean): void {
-    collapsed = value;
-    localStorage.setItem("vynl.queueCollapsed", String(value));
-  }
 
   let queueBodyEl: HTMLDivElement | undefined = $state();
   let ctx = $state<{ x: number; y: number; path: string } | null>(null);
@@ -90,7 +79,7 @@
 
 </script>
 
-<aside class="queue" class:collapsed>
+<aside class="queue" transition:slide={{ axis: "x", duration: 240 }}>
   <div class="expanded-content">
     {#snippet qrow(q: LibraryTrack, section: QueueSection, i: number)}
       <div
@@ -138,8 +127,8 @@
       <div class="queue-head-left">
         <button
           class="collapse-btn"
-          aria-label={t("player.collapseQueue")}
-          onclick={() => setCollapsed(true)}
+          aria-label={t("player.closeQueue")}
+          onclick={() => setQueueOpen(false)}
         >
           <ChevronRight size={13} stroke-width={1.5} />
         </button>
@@ -252,35 +241,24 @@
     {/if}
   </div>
 
-  <div class="collapsed-view">
-    <button
-      class="expand-btn"
-      aria-label={t("player.expandQueue")}
-      onclick={() => setCollapsed(false)}
-    >
-      <ChevronLeft size={18} stroke-width={1.5} />
-    </button>
-  </div>
 </aside>
 
 <style>
   .queue {
-    grid-column: 2;
-    grid-row: 1;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
     width: 320px;
-    min-height: 0;
-    min-width: 0;
     padding: 18px 14px;
-    position: relative;
-    z-index: 2;
+    min-height: 0;
     background: var(--bg);
     border-left: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transition:
-      width 0.28s ease-in-out,
-      padding 0.28s ease-in-out;
   }
 
   .expanded-content {
@@ -290,74 +268,12 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    opacity: 1;
-    transition: opacity 0.22s ease;
-  }
-
-  .queue.collapsed .expanded-content {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .queue.collapsed {
-    width: 28px;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .collapsed-view {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.22s ease;
-  }
-
-  .queue.collapsed .collapsed-view {
-    opacity: 1;
-    pointer-events: auto;
   }
 
   @container player (max-width: 560px) {
     .queue {
       display: none;
     }
-  }
-
-  .expand-btn {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    color: var(--text);
-    background: none;
-    border: none;
-    z-index: 3;
-    opacity: 1;
-    transition:
-      color 0.15s,
-      transform 0.15s,
-      opacity 0.18s ease-out,
-      background 0.15s;
-  }
-
-  .expand-btn:hover {
-    color: var(--accent);
-    transform: translate(-50%, -50%) scale(1.15);
-  }
-
-  .expand-btn:active {
-    transform: translate(-50%, -50%) scale(0.95);
   }
 
   .queue-head {
