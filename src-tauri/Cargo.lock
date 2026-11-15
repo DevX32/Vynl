@@ -6708,7 +6708,7 @@ dependencies = [
 
 [[package]]
 name = "vynl"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "axum",
  "ctrlc",
