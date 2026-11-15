@@ -124,6 +124,8 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     pub accent_color: String,
     #[serde(default)]
+    pub theme: String,
+    #[serde(default)]
     pub dynamic_accent: bool,
     #[serde(default = "default_true")]
     pub hardware_acceleration: bool,

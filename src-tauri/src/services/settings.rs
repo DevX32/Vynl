@@ -4,8 +4,16 @@ use std::path::Path;
 use crate::commands::types::Settings;
 use crate::services::util;
 const DEFAULT_ACCENT_COLOR: &str = "#a894e8";
+const DEFAULT_THEME: &str = "vynl";
 
 crate::declare_file_mutex!();
+
+fn is_valid_theme(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 32
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
 
 fn is_valid_hex_color(s: &str) -> bool {
     let hex = match s.strip_prefix('#') {
@@ -41,6 +49,7 @@ fn defaults() -> Settings {
         confirm_matches: false,
         minimize_to_tray: false,
         accent_color: DEFAULT_ACCENT_COLOR.into(),
+        theme: DEFAULT_THEME.into(),
         dynamic_accent: false,
         hardware_acceleration: true,
         launch_at_startup: false,
@@ -92,6 +101,11 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
         } else {
             current.accent_color
         },
+        theme: if is_valid_theme(&patch.theme) {
+            patch.theme
+        } else {
+            current.theme
+        },
         dynamic_accent: patch.dynamic_accent,
         hardware_acceleration: patch.hardware_acceleration,
         launch_at_startup: patch.launch_at_startup,
@@ -117,6 +131,9 @@ fn get_settings_unlocked(user_data_dir: &Path) -> Settings {
     }
     if !is_valid_hex_color(&loaded.accent_color) {
         loaded.accent_color = def.accent_color;
+    }
+    if !is_valid_theme(&loaded.theme) {
+        loaded.theme = def.theme;
     }
     loaded.eq_bands = crate::services::player::normalize_eq_bands(&loaded.eq_bands);
     loaded.bitrate = Some(FIXED_BITRATE);

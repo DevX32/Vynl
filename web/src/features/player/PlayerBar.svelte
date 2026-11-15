@@ -270,8 +270,8 @@
     padding: 18px 32px;
     background: linear-gradient(
       180deg,
-      var(--bg),
-      color-mix(in srgb, var(--bg) 94%, var(--accent) 2%)
+      transparent,
+      color-mix(in srgb, var(--accent) 2%, transparent)
     );
     border-top: 1px solid var(--line);
     display: grid;

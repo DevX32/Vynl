@@ -322,12 +322,12 @@
   }
 
   .page-scroll::-webkit-scrollbar-thumb {
-    background: rgba(240, 240, 236, 0.12);
+    background: var(--scrollbar);
     border-radius: 3px;
   }
 
   .page-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(240, 240, 236, 0.22);
+    background: var(--scrollbar-hover);
   }
 
   .page-scroll::-webkit-scrollbar-track {

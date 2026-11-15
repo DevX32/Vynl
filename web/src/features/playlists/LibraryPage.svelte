@@ -607,7 +607,7 @@
   }
 
   .tracks::-webkit-scrollbar-thumb {
-    background: rgba(240, 240, 236, 0.12);
+    background: var(--scrollbar);
     border-radius: 3px;
   }
 

@@ -1,6 +1,9 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
 import "./assets/app.css";
+import { applyStoredTheme } from "./lib/theme";
+
+applyStoredTheme();
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 

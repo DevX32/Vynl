@@ -23,7 +23,6 @@ with CMake.
 | --- | --- |
 | Windows | Visual Studio 2022 with the "Desktop development with C++" workload (CMake ships with it) |
 | Debian/Ubuntu | `sudo apt install build-essential cmake` |
-| macOS | `xcode-select --install` plus `brew install cmake` |
 
 On Windows, verify with `cmake --version`; the Visual Studio copy is not always on
 `PATH`. Without these, `cargo build` fails while compiling the audio dependencies.

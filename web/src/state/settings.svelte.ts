@@ -3,6 +3,7 @@ import { BITRATES } from "@lib/constants";
 import { eqFlat, loadEqDesign } from "@lib/eq.svelte";
 import { vynl } from "@lib/vynl";
 import { DEFAULT_ACCENT_COLOR, applyAccentColor } from "@lib/color";
+import { DEFAULT_THEME, applyTheme, isThemeId } from "@lib/theme";
 import { extractVibrantColor } from "@lib/art-color";
 import { getCurrentTrack } from "./now-playing.svelte";
 
@@ -16,6 +17,7 @@ function defaultSettings(): Settings {
     discordRpc: true,
     confirmMatches: false,
     minimizeToTray: false,
+    theme: DEFAULT_THEME,
     accentColor: DEFAULT_ACCENT_COLOR,
     dynamicAccent: false,
     hardwareAcceleration: true,
@@ -34,15 +36,16 @@ const currentSettings = $derived(_settings ?? defaultSettings());
 
 function normalizeSettings(s: Settings): Settings {
   const format: AudioFormat = "mp3";
+  const theme = isThemeId(s.theme) ? s.theme : DEFAULT_THEME;
   const br = BITRATES.mp3;
   if (br && s.bitrate != null && !br.includes(s.bitrate)) {
     console.warn(
       `[Settings] Bitrate ${s.bitrate} is not valid. ` +
         `Valid bitrates: ${br.join(", ")}. Using ${br[br.length - 1]} as fallback.`
     );
-    return { ...s, format, bitrate: br[br.length - 1] };
+    return { ...s, format, theme, bitrate: br[br.length - 1] };
   }
-  return { ...s, format };
+  return { ...s, format, theme };
 }
 
 export function getCurrentSettings(): Settings {
@@ -53,6 +56,7 @@ export async function initSettings(): Promise<void> {
   await loadEqDesign();
   const loaded = await vynl.getSettings();
   _settings = normalizeSettings(loaded);
+  applyTheme(_settings.theme);
   applyAccentColor(_settings.accentColor, false);
   startDynamicAccent();
   _tools = await vynl.getTools();
@@ -103,6 +107,7 @@ export async function patchSettings(patch: Partial<Settings>): Promise<void> {
   const next = normalizeSettings({ ..._settings, ...patch });
   const updated = await vynl.setSettings(next);
   _settings = updated;
+  if (patch.theme !== undefined) applyTheme(updated.theme);
   if (patch.accentColor !== undefined) applyAccentColor(updated.accentColor);
 }
 

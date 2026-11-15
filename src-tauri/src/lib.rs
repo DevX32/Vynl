@@ -153,6 +153,24 @@ pub fn sync_launch_at_startup(enabled: bool) {
 #[cfg(not(target_os = "windows"))]
 pub fn sync_launch_at_startup(_enabled: bool) {}
 
+#[cfg(target_os = "windows")]
+fn apply_window_effects(window: &tauri::WebviewWindow) {
+    use window_vibrancy::{apply_acrylic, apply_blur, apply_mica};
+
+    if let Err(error) = apply_acrylic(window, Some((0, 0, 0, 0))) {
+        eprintln!("acrylic unavailable: {error}");
+        if let Err(error) = apply_mica(window, Some(true)) {
+            eprintln!("mica unavailable: {error}");
+            if let Err(error) = apply_blur(window, Some((0, 0, 0, 0))) {
+                eprintln!("window blur unavailable: {error}");
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn apply_window_effects(_window: &tauri::WebviewWindow) {}
+
 pub fn run() {
     #[cfg(target_os = "windows")]
     register_aumid();
@@ -218,6 +236,10 @@ pub fn run() {
                     tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico"))
             {
                 let _ = win.set_icon(icon);
+            }
+
+            if let Some(win) = app.get_webview_window("main") {
+                apply_window_effects(&win);
             }
 
             crate::services::tools::remove_unused_binaries(&user_data);

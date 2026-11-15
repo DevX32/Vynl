@@ -15,6 +15,7 @@
   import { getLibrary, refreshLibrary } from "@state/library.svelte";
   import { vynl } from "@lib/vynl";
   import { applyAccentColor } from "@lib/color";
+  import { applyTheme, THEME_STORAGE_KEY } from "@lib/theme";
   import {
     MINI_STATE_EVENT,
     requestMiniState,
@@ -71,6 +72,11 @@
   function syncAccentFromStorage(): void {
     const hex = localStorage.getItem(ACCENT_KEY);
     if (hex) applyAccentColor(hex, false);
+  }
+
+  function syncThemeFromStorage(): void {
+    const id = localStorage.getItem(THEME_STORAGE_KEY);
+    if (id) applyTheme(id, false);
   }
 
   function setVolume(ratio: number): void {
@@ -172,6 +178,7 @@
     void (async () => {
       try {
         const settings = await vynl.getSettings();
+        applyTheme(settings.theme, false);
         applyAccentColor(settings.accentColor, false);
         syncAccentFromStorage();
       } catch {
@@ -219,6 +226,7 @@
     const onStorage = (): void => {
       syncVolumeFromStorage();
       syncAccentFromStorage();
+      syncThemeFromStorage();
     };
     window.addEventListener("storage", onStorage);
 
@@ -466,6 +474,10 @@
 
 <style>
   .mini {
+    --bg: var(--bg-solid);
+    --bg-raise: var(--bg-raise-solid);
+    --surface: var(--surface-solid);
+
     position: relative;
     height: 100vh;
     display: flex;
@@ -493,7 +505,7 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background: var(--bg);
+    background: transparent;
   }
 
   .backdrop {

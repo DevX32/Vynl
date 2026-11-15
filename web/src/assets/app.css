@@ -27,9 +27,13 @@
 }
 
 :root {
+  color-scheme: dark;
   --bg: #0e0e10;
   --bg-raise: #151519;
   --surface: #131317;
+  --bg-solid: #0e0e10;
+  --bg-raise-solid: #151519;
+  --surface-solid: #131317;
   --text: #f0f0ec;
   --dim: #a3a39b;
   --faint: #7a7a74;
@@ -47,10 +51,13 @@
   --accent-text: #161128;
   --vynl: #14141c;
   --vynl-disc: min(272px, 32vh);
+  --scrollbar: rgba(240, 240, 236, 0.12);
+  --scrollbar-hover: rgba(240, 240, 236, 0.22);
+  --placeholder-glow: rgba(185, 167, 255, 0.08);
   --placeholder-gradient:
     radial-gradient(
       circle at 50% 50%,
-      rgba(185, 167, 255, 0.08) 0 14%,
+      var(--placeholder-glow) 0 14%,
       transparent 30%
     ),
     repeating-radial-gradient(
@@ -127,7 +134,7 @@ select {
 
 ::selection {
   background: var(--accent);
-  color: var(--bg);
+  color: var(--accent-text);
 }
 
 ::-webkit-scrollbar {
@@ -135,13 +142,13 @@ select {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(240, 240, 236, 0.12);
+  background: var(--scrollbar);
   border-radius: 5px;
   border: 2px solid var(--bg);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(240, 240, 236, 0.22);
+  background: var(--scrollbar-hover);
 }
 
 ::-webkit-scrollbar-track {

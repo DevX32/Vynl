@@ -275,6 +275,10 @@ export const en = {
     dynamicAccent: "Dynamic Accent",
     dynamicAccentHint: "Match the accent color to the artwork of the currently playing track.",
     dynamicAccentToggle: "Dynamic accent toggle",
+    theme: "Theme",
+    themeHint:
+      "Choose Vynl's surfaces, Your accent color stays independent.",
+    themePicker: "Theme picker",
     hardwareAcceleration: "Hardware Acceleration",
     hardwareAccelerationHint: "Use GPU for rendering. Disable if you experience display issues. Requires restart.",
     hardwareAccelerationToggle: "Hardware acceleration toggle",

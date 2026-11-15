@@ -4,6 +4,7 @@
   import { t } from "@lib/i18n";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
   import ColorPicker from "@components/ColorPicker.svelte";
+  import ThemePicker from "@components/ThemePicker.svelte";
   import Button from "@components/Button.svelte";
   import Switch from "@components/Switch.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
@@ -79,16 +80,31 @@
     <MobileSyncSettings />
   </div>
 
-  <div class="section">
-    <div class="label mono">{t("settings.accentColor")}</div>
-    <ColorPicker
-      value={settings.accentColor}
-      presets={ACCENT_PRESETS}
-      label={t("settings.accentColorCustom")}
-      disabled={settings.dynamicAccent}
-      onchange={(hex) => void patchSettings({ accentColor: hex })}
-    />
-    <div class="hint mono">{t("settings.accentColorHint")}</div>
+  <div class="group">
+    <div class="section">
+      <div class="label mono">{t("settings.theme")}</div>
+      <ThemePicker
+        value={settings.theme}
+        accent={settings.accentColor}
+        label={t("settings.themePicker")}
+        onchange={(id) => void patchSettings({ theme: id })}
+      />
+      <div class="hint mono">{t("settings.themeHint")}</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="section">
+      <div class="label mono">{t("settings.accentColor")}</div>
+      <ColorPicker
+        value={settings.accentColor}
+        presets={ACCENT_PRESETS}
+        label={t("settings.accentColorCustom")}
+        disabled={settings.dynamicAccent}
+        onchange={(hex) => void patchSettings({ accentColor: hex })}
+      />
+      <div class="hint mono">{t("settings.accentColorHint")}</div>
+    </div>
   </div>
 
   <div class="group">

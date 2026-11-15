@@ -6743,6 +6743,7 @@ dependencies = [
  "tokio",
  "urlencoding",
  "uuid 1.27.0",
+ "window-vibrancy",
  "winreg",
  "ytmusic",
  "zip 2.4.2",

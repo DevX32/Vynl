@@ -21,7 +21,8 @@
         "resizable": true,
         "maximizable": true,
         "decorations": false,
-        "backgroundColor": "#0d0d0d"
+        "theme": "Dark",
+        "transparent": true
       },
       {
         "label": "mini",
@@ -34,13 +35,13 @@
         "resizable": false,
         "maximizable": false,
         "decorations": false,
+        "theme": "Dark",
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
         "focus": false,
         "transparent": true,
-        "shadow": false,
-        "backgroundColor": "#0d0d0d"
+        "shadow": false
       }
     ],
     "security": {

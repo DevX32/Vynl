@@ -31,7 +31,8 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 - System tray
 - Auto-updater
 - Launch at startup
-- Accent color theming
+- Theme system with Vynl and Catppuccin Espresso Blur
+- Accent color theming (independent from the theme)
 - i18n support
 
 ## Platform Support
@@ -40,8 +41,7 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 | -------- | ------ |
 | Windows  | Supported |
 | Linux    | Supported |
-| Android  | Supported — Companion App |
-| macOS    | Not available |
+| Android  | Supported |
 
 ## Development
 

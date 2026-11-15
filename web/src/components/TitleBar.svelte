@@ -163,7 +163,7 @@
     display: flex;
     align-items: center;
     height: 32px;
-    background: var(--bg);
+    background: transparent;
     border-bottom: 1px solid var(--line);
     user-select: none;
     flex-shrink: 0;

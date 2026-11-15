@@ -1,3 +1,5 @@
+import type { ThemeId } from "./theme";
+
 export type AudioFormat = "mp3";
 
 type TrackStatus =
@@ -40,6 +42,7 @@ export interface Settings {
   discordRpc: boolean;
   confirmMatches: boolean;
   minimizeToTray: boolean;
+  theme: ThemeId;
   accentColor: string;
   dynamicAccent: boolean;
   hardwareAcceleration: boolean;
