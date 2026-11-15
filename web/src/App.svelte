@@ -210,6 +210,25 @@
       return () => {};
     }
 
+    void (async () => {
+      try {
+        const url = await vynl.takePendingConfirmUrl();
+        if (url) {
+          const raw = url.replace(/^vynl:\/\/confirm[?&]/, "");
+          const params = new URLSearchParams(raw);
+          const token = params.get("token_hash") ?? params.get("token");
+          const type = params.get("type") ?? "signup";
+          if (token) {
+            const ok = await vynl.cloudConfirmEmail(token, type);
+            if (ok) toasts.success("Email confirmed. You can sign in now.");
+            else toasts.error("Couldn't confirm this email — the link may have expired.");
+          }
+        }
+      } catch (e) {
+        console.warn("pending confirm failed", e);
+      }
+    })();
+
     const offToast = vynl.onToast((summary) => {
       if (summary.cancelled) {
         toasts.info(t("vault.downloadCancelled"));

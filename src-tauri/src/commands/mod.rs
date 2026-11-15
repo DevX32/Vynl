@@ -12,12 +12,14 @@ const MAX_COLLECTION_TRACKS: usize = 10_000;
 
 pub struct AppState {
     pub settings: Mutex<Option<Settings>>,
+    pub pending_confirm: Mutex<Option<String>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             settings: Mutex::new(None),
+            pending_confirm: Mutex::new(None),
         }
     }
 }
@@ -778,6 +780,19 @@ pub async fn cloud_sign_up(
 pub async fn cloud_sign_out(app: AppHandle) -> Result<(), String> {
     let user_data = user_data_dir(&app)?;
     crate::services::cloud::sign_out(&user_data).await
+}
+
+#[tauri::command]
+pub async fn cloud_confirm_email(token_hash: String, email_type: String) -> Result<bool, String> {
+    crate::services::cloud::confirm_email(&token_hash, &email_type).await
+        .map(|_| true)
+}
+
+#[tauri::command]
+pub fn take_pending_confirm_url(app: AppHandle) -> Result<Option<String>, String> {
+    let state = app.state::<AppState>();
+    let mut pending = state.pending_confirm.lock().unwrap_or_else(|e| e.into_inner());
+    Ok(pending.take())
 }
 
 #[tauri::command]

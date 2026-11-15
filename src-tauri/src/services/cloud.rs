@@ -346,6 +346,35 @@ pub async fn sign_up(
     }
 }
 
+pub async fn confirm_email(token_hash: &str, email_type: &str) -> Result<(), String> {
+    if token_hash.is_empty() {
+        return Err("Missing token_hash.".into());
+    }
+    if email_type.is_empty() {
+        return Err("Missing type.".into());
+    }
+    if !cloud_enabled() {
+        return Err("Vynl isn't configured.".into());
+    }
+    let response = http()?
+        .post(format!("{}/auth/v1/verify", base_url()))
+        .header("apikey", anon_key())
+        .header("Content-Type", "application/json")
+        .json(&json!({
+            "type": email_type,
+            "token_hash": token_hash,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the cloud: {e}"))?;
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(auth_error(status, &body));
+    }
+    Ok(())
+}
+
 pub async fn sign_out(data_dir: &Path) -> Result<(), String> {
     if let Some(session) = read_session(data_dir) {
         if cloud_enabled() {

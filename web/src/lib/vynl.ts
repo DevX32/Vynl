@@ -200,6 +200,12 @@ export const vynl = {
   cloudSignUp: (email: string, password: string): Promise<CloudAuthResult> =>
     cmd("cloud_sign_up", { email, password }),
 
+  cloudConfirmEmail: (tokenHash: string, emailType: string): Promise<boolean> =>
+    cmd("cloud_confirm_email", { tokenHash, emailType }),
+
+  takePendingConfirmUrl: (): Promise<string | null> =>
+    cmd("take_pending_confirm_url"),
+
   cloudSignOut: (): Promise<void> => cmd("cloud_sign_out"),
 
   cloudSync: (): Promise<CloudSyncResult> => cmd("cloud_sync"),

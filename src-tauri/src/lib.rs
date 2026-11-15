@@ -104,6 +104,31 @@ fn register_aumid() {
 }
 
 #[cfg(target_os = "windows")]
+pub fn register_url_scheme() {
+    use winreg::RegKey;
+    use winreg::enums::*;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let exe = std::env::current_exe().unwrap_or_default();
+    let exe_path = exe.to_string_lossy().to_string();
+
+    if let Ok((classes_key, _)) =
+        hkcu.create_subkey_with_flags("Software\\Classes\\vynl", KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY)
+    {
+        let _ = classes_key.set_value("", &"URL:vynl Protocol".to_string());
+        let _ = classes_key.set_value("URL Protocol", &"".to_string());
+        let _ = classes_key.set_value("DefaultIcon", &exe_path);
+
+        if let Ok((shell_key, _)) = hkcu.create_subkey_with_flags(
+            "Software\\Classes\\vynl\\shell\\open\\command",
+            KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY,
+        ) {
+            let _ = shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path));
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 pub fn sync_launch_at_startup(enabled: bool) {
     use winreg::RegKey;
     use winreg::enums::*;
@@ -131,6 +156,9 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     register_aumid();
 
+    #[cfg(target_os = "windows")]
+    register_url_scheme();
+
     #[cfg(target_os = "linux")]
     gtk_log_filter::install();
 
@@ -140,6 +168,11 @@ pub fn run() {
                 let _ = win.show();
                 let _ = win.set_focus();
             }
+            let state = app.state::<commands::AppState>();
+            let mut pending = state.pending_confirm.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(url) = _argv.iter().find(|arg| arg.starts_with("vynl://")) {
+                *pending = Some(url.clone());
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -147,6 +180,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             app.manage(commands::AppState::default());
+            {
+                let state = app.state::<commands::AppState>();
+                let mut pending = state.pending_confirm.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(url) = std::env::args().find(|arg| arg.starts_with("vynl://")) {
+                    *pending = Some(url);
+                }
+            }
             app.manage(crate::services::update::UpdateState::default());
 
             app.manage(crate::services::media_controls::start(app.handle().clone()));
@@ -329,6 +369,8 @@ pub fn run() {
             commands::cloud_sign_in,
             commands::cloud_sign_up,
             commands::cloud_sign_out,
+            commands::cloud_confirm_email,
+            commands::take_pending_confirm_url,
             commands::cloud_sync,
             commands::lyrics_local,
             commands::lyrics_fetch,
