@@ -145,7 +145,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     }
                     Box {
                         IconButton(onClick = { accountMenuOpen = true }) {
-                            AccountAvatar(seed = accountSeed.orEmpty(), signedIn = cloud.signedIn, size = 28.dp)
+                            AccountAvatar(seed = accountSeed.orEmpty(), size = 28.dp)
                         }
                         AccountMenu(
                             expanded = accountMenuOpen,

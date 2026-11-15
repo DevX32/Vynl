@@ -1,4 +1,4 @@
-﻿package com.vynl.vynl_mobile.ui.screens
+package com.vynl.vynl_mobile.ui.screens
 
 import android.Manifest
 import android.net.Uri
@@ -377,7 +377,7 @@ fun PairScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 when {
                     busy -> Text(
-                        text = "Pairing…",
+                        text = "Pairing",
                         color = VynlColors.accent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.W700,
@@ -393,7 +393,7 @@ fun PairScreen(
                         fontFamily = VynlFonts.display,
                     )
                     else -> Text(
-                        text = "Scanning for a code…",
+                        text = "Scanning for a code",
                         color = VynlColors.faint,
                         fontSize = 12.sp,
                         letterSpacing = 0.2.sp,

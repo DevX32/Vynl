@@ -338,7 +338,6 @@
           <div class="account-menu-head">
             <span class="menu-avatar">
               <img src={avatarSrc} alt="" draggable="false" />
-              {#if cloud.signedIn}<span class="avatar-dot"></span>{/if}
             </span>
             <div class="menu-head-text">
               <span class="menu-name display">{displayName}</span>
@@ -402,7 +401,6 @@
       >
         <span class="avatar">
           <img src={avatarSrc} alt="" />
-          {#if cloud.signedIn}<span class="avatar-dot"></span>{/if}
         </span>
         {#if sidebarOpen}
           <span class="account-meta">
@@ -794,17 +792,6 @@
     border-radius: 50%;
     transform: scale(1.3);
     user-select: none;
-  }
-
-  .avatar-dot {
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--surface);
   }
 
   .account-meta {

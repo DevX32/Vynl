@@ -69,7 +69,6 @@ internal fun blobatarUrl(seed: String, size: Int): String {
 @Composable
 internal fun AccountAvatar(
     seed: String,
-    signedIn: Boolean,
     size: Dp,
     modifier: Modifier = Modifier,
 ) {
@@ -81,18 +80,6 @@ internal fun AccountAvatar(
                 .fillMaxSize()
                 .clip(CircleShape),
         )
-        if (signedIn) {
-            Box(
-                modifier = Modifier
-                    .size(size * 0.28f)
-                    .align(Alignment.BottomEnd)
-                    .clip(CircleShape)
-                    .background(VynlColors.bg)
-                    .padding(2.dp)
-                    .clip(CircleShape)
-                    .background(VynlColors.success),
-            )
-        }
     }
 }
 
@@ -127,7 +114,7 @@ internal fun AccountMenu(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
                 val seed = if (signedIn && !email.isNullOrBlank()) email else displayName
-                AccountAvatar(seed = seed, signedIn = signedIn, size = 34.dp)
+                AccountAvatar(seed = seed, size = 34.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = displayName,
@@ -300,7 +287,7 @@ private fun AccountBanner(seed: String, signedIn: Boolean, email: String?) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AccountAvatar(seed = seed, signedIn = signedIn, size = 46.dp)
+        AccountAvatar(seed = seed, size = 46.dp)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "ACCOUNT",
@@ -413,7 +400,7 @@ private fun SignedInBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
             hint = "Audio files and cover art stay on this device.",
         ) {
             ActionButton(
-                label = if (viewModel.cloudSyncing) "Syncing…" else "Sync now",
+                label = if (viewModel.cloudSyncing) "Syncing" else "Sync now",
                 onClick = { viewModel.syncCloud() },
                 accent = true,
                 busy = viewModel.cloudSyncing,
@@ -521,7 +508,7 @@ private fun SignedOutBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
             hint = if (signUp) "Create a playlist mirror for this device" else "Mirror playlists already saved to your account",
         ) {
             ActionButton(
-                label = if (viewModel.cloudBusy) (if (signUp) "Creating…" else "Signing in…") else (if (signUp) "Create account" else "Sign in"),
+                label = if (viewModel.cloudBusy) (if (signUp) "Creating" else "Signing in") else (if (signUp) "Create account" else "Sign in"),
                 onClick = { submitCloud(viewModel, signUp, email.trim(), password) },
                 accent = true,
                 enabled = canSubmit,
