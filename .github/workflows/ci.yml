@@ -92,5 +92,7 @@ jobs:
             librsvg2-dev libxdo-dev libssl-dev libasound2-dev
       - name: rustfmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo check
         working-directory: src-tauri
