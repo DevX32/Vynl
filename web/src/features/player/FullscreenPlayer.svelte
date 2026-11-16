@@ -126,6 +126,11 @@
     max-width: 600px;
     height: 100vh;
     overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .fs-content::-webkit-scrollbar {
+    display: none;
   }
 
   .fs-close {

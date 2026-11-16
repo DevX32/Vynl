@@ -224,6 +224,11 @@
     min-height: 0;
     padding: 16px 18px 18px;
     overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .body::-webkit-scrollbar {
+    display: none;
   }
 
   .empty {

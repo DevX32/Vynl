@@ -137,9 +137,14 @@
   .body {
     padding: 14px 18px;
     overflow-y: auto;
+    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  .body::-webkit-scrollbar {
+    display: none;
   }
 
   .cat {

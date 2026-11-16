@@ -50,6 +50,11 @@
     padding-top: 16px;
     overflow-x: hidden;
     overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .body::-webkit-scrollbar {
+    display: none;
   }
 
 </style>

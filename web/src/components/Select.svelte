@@ -269,10 +269,15 @@
     padding: 6px 0;
     max-height: 240px;
     overflow-y: auto;
+    scrollbar-width: none;
     background: var(--bg-raise);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-lg);
     animation: select-in 0.1s ease-out;
+  }
+
+  .select-list::-webkit-scrollbar {
+    display: none;
   }
 
   @keyframes select-in {

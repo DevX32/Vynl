@@ -892,8 +892,10 @@ import { toggleLyrics } from "@state/player.svelte";
     overflow-y: auto;
     overflow-x: hidden;
     overflow-anchor: none;
+    scrollbar-width: none;
     position: relative;
     display: flex;
+    flex-direction: column;
     flex-direction: column;
     padding: calc(var(--lyr-fade-top) + 28px) 20px 8vh;
     mask-image: linear-gradient(
@@ -910,6 +912,10 @@ import { toggleLyrics } from "@state/player.svelte";
       black calc(100% - var(--lyr-fade-bottom)),
       transparent 100%
     );
+  }
+
+  .lyrics-scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .lyrics-scroll.synced {

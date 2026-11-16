@@ -629,6 +629,7 @@
       {/if}
     </VaultHero>
 
+    <div class="page-body">
     {#if error}
       <div class="page-error" role="alert">
         <AlertCircle size={16} stroke-width={1.5} />
@@ -777,6 +778,7 @@
       onSaveToPlaylist={saveToPlaylist}
       onDone={clearAll}
     />
+    </div>
   </div>
 </div>
 
@@ -817,10 +819,20 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
+  }
+
+  .page-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
   }
 
   .page-error {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -860,6 +872,7 @@
   }
 
   .coll-header {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -956,6 +969,7 @@
   }
 
   .review-note {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -968,6 +982,7 @@
   }
 
   .tbl-head {
+    flex-shrink: 0;
     grid-template-columns: var(--track-cols);
     border-top: 1px solid var(--line);
   }
@@ -997,9 +1012,16 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .list::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 
   .pagination {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;

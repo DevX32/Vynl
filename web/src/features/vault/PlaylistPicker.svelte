@@ -250,6 +250,11 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .list::-webkit-scrollbar {
+    width: 0;
   }
 
   .item {
