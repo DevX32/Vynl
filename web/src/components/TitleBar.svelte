@@ -9,7 +9,7 @@
     Copy,
     X,
     Home,
-    CircleQuestionMark,
+    MessageCircleQuestionMark,
     PanelLeftClose,
     PanelLeftOpen,
   } from "lucide-svelte";
@@ -126,7 +126,7 @@
       title={t("shortcuts.actions.showShortcuts")}
       onclick={onShowShortcuts}
     >
-      <CircleQuestionMark size={14} stroke-width={1.5} />
+      <MessageCircleQuestionMark size={15} stroke-width={1.5} />
     </button>
     <span class="controls-divider" aria-hidden="true"></span>
     <button
@@ -188,7 +188,7 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border-radius: 3px;
+    border-radius: 4px;
     color: var(--faint);
     transition:
       color 0.1s,
@@ -264,7 +264,7 @@
 
   .controls {
     position: absolute;
-    right: 0;
+    right: 6px;
     top: 0;
     display: flex;
     align-items: center;
@@ -279,7 +279,7 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border-radius: 3px;
+    border-radius: 4px;
     color: var(--faint);
     transition:
       color 0.1s,
@@ -306,8 +306,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 100%;
+    width: 32px;
+    height: 26px;
+    border-radius: 4px;
     color: var(--faint);
     transition:
       color 0.1s,
@@ -324,7 +325,12 @@
   }
 
   .close-btn:hover {
-    background: var(--red);
-    color: #fff;
+    background: color-mix(in srgb, var(--red) 14%, transparent);
+    color: var(--red);
+  }
+
+  .close-btn:active {
+    background: color-mix(in srgb, var(--red) 22%, transparent);
+    color: var(--red);
   }
 </style>
