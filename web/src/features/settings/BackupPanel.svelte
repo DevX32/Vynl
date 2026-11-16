@@ -171,7 +171,7 @@
   <div class="rows">
     <SettingRow label={t("backup.contents")} hint={exportHint}>
       {#snippet control()}
-        <Button variant="primary" size="sm" disabled={busy} onclick={runExport}>
+        <Button size="sm" disabled={busy} onclick={runExport}>
           <Download size={13} stroke-width={1.5} />
           {exporting ? t("backup.exporting") : t("backup.export")}
         </Button>
