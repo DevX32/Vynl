@@ -417,9 +417,8 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!(
-            "Could not load synced playlists ({}): {}",
-            status.as_u16(),
-            body.trim()
+            "Could not load synced playlists ({}).",
+            status.as_u16()
         ));
     }
     serde_json::from_str(&body).map_err(|e| format!("Unexpected Vynl Sync response: {e}"))
@@ -445,11 +444,9 @@ async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
         .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
     let status = response.status();
     if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
         return Err(format!(
-            "Could not save to Vynl Sync ({}): {}",
-            status.as_u16(),
-            body.trim()
+            "Could not save to Vynl Sync ({}).",
+            status.as_u16()
         ));
     }
     Ok(())
@@ -504,13 +501,16 @@ pub async fn tombstone_playlist(data_dir: &Path, id: &str) {
     let Ok(client) = http() else {
         return;
     };
+    if !crate::services::playlists::validate_id(id) {
+        return;
+    }
     let request = client
         .patch(format!(
             "{}/rest/v1/{}?user_id=eq.{}&local_id=eq.{}",
             base_url(),
             TABLE,
             session.user_id,
-            id
+            urlencoding::encode(id),
         ))
         .header("Content-Type", "application/json")
         .header("Prefer", "return=minimal")

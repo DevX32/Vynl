@@ -41,6 +41,7 @@ import {
 } from "@state/player.svelte";
 import type { LoopMode } from "@state/player.svelte";
 import { vynl } from "@lib/vynl";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { clamp01 } from "@lib/pointer";
 import { friendlyError } from "@lib/errors";
 import { t } from "@lib/i18n";
@@ -60,6 +61,8 @@ function normalizeDuration(value: number | undefined): number {
 
 let playGeneration = Date.now();
 let pendingRetry: ReturnType<typeof setTimeout> | null = null;
+let consecutivePlayFailures = 0;
+const MAX_CONSECUTIVE_PLAY_FAILURES = 3;
 let seekPending = false;
 let seekRequestId = 0;
 let pendingPlayGeneration: number | null = null;
@@ -67,6 +70,7 @@ let lastPositionCheckpoint = Date.now();
 let reconcilePending = false;
 
 let pauseIntent = 0;
+let resumeToken = 0;
 
 const CATALOGUE_PREFIX = "ytm:";
 
@@ -114,6 +118,7 @@ function requestPrebuffer(target: PrebufferTarget, force: boolean): void {
 
 function schedulePrebuffers(force = false): void {
   if (typeof window === "undefined") return;
+  if (getCurrentLoop() === "one") return;
   const currentId = getCurrentTrack()?.id ?? null;
 
   const nextTrack = findTrackById(
@@ -200,13 +205,15 @@ function handleTick(tick: PlaybackTick): void {
     return;
   }
 
-  if (tick.playing && pauseIntent > 0) return;
-
   if (tick.playing) {
+    if (consecutivePlayFailures > 0) {
+      consecutivePlayFailures = 0;
+    }
+
     if (pendingPlayGeneration === playGeneration) {
       finishPlayReconcile(playGeneration);
     }
-    if (!np.playing) {
+    if (pauseIntent === 0 && !np.playing) {
       updatePlaying(true);
       updateMediaSession();
     }
@@ -304,7 +311,9 @@ function updateMediaSession(): void {
     album: np.album || undefined,
   };
   if (np.cover) {
-    meta.artwork = [{ src: np.cover }];
+    meta.artwork = [
+      { src: /^https?:\/\//i.test(np.cover) ? np.cover : convertFileSrc(np.cover) },
+    ];
   }
   navigator.mediaSession.metadata = new MediaMetadata(meta);
   navigator.mediaSession.playbackState = getIsTrackPlaying()
@@ -330,8 +339,14 @@ function scheduleRetry(failedId: string | null): void {
   clearRetry();
   pendingRetry = window.setTimeout(() => {
     pendingRetry = null;
-    setPlayError(null);
+    if (pauseIntent > 0) return;
     if ((getCurrentTrack()?.id ?? null) !== failedId) return;
+    if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
+      updatePlaying(false);
+      updateMediaSession();
+      return;
+    }
+    setPlayError(null);
     next();
   }, 1600);
 }
@@ -341,6 +356,11 @@ function handlePlayReject(err: unknown): void {
   console.error("[vynl] native play failed:", err);
   updatePlaying(false);
   updateMediaSession();
+  consecutivePlayFailures += 1;
+  if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
+    setPlayError(t("error.couldNotPlay"));
+    return;
+  }
   setPlayError(friendlyError(err, t("error.couldNotPlay")));
   const failedId = getCurrentTrack()?.id ?? null;
   scheduleRetry(failedId);
@@ -435,6 +455,7 @@ export function playTrack(
 
   setPlayError(null);
   resetCrossfade();
+  consecutivePlayFailures = 0;
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying(nowPlayingFromTrack(track, seekTo ?? 0));
@@ -471,10 +492,12 @@ export async function resumeOrPlay(
 
 export function pausePlayback(): void {
   const generation = playGeneration;
+  const token = resumeToken;
   pauseIntent += 1;
   const finish = (): void => {
     pauseIntent -= 1;
     if (generation !== playGeneration) return;
+    if (token !== resumeToken) return;
     updatePlaying(false);
     updateMediaSession();
   };
@@ -495,6 +518,7 @@ export function toggle(): void {
   } else {
     const seekTo = getCurrentTime() || 0;
     if (np.path) {
+      resumeToken += 1;
       void resumeOrPlay(
         np.path,
         seekTo > 0 ? seekTo : undefined,
@@ -516,8 +540,7 @@ function resolveNextTrack(
 ): LibraryTrack | null {
   const np = getCurrentTrack();
   const selected = getCurrentLoop();
-  let loop: LoopMode = !automatic && selected === "one" ? "off" : selected;
-  if (automatic && loop === "off") loop = "all";
+  const loop: LoopMode = !automatic && selected === "one" ? "off" : selected;
   const args = [
     getUserQueuePaths(),
     getContextQueuePaths(),
@@ -544,6 +567,7 @@ function startTrack(nextTrack: LibraryTrack): void {
   clearRetry();
   setPlayError(null);
   resetCrossfade();
+  consecutivePlayFailures = 0;
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying(nowPlayingFromTrack(nextTrack));
@@ -555,11 +579,12 @@ function maybeStartCrossfade(position: number): boolean {
   if (fade <= 0 || crossfadeTried) return false;
 
   const np = getCurrentTrack();
-  if (!np?.playing || !np.path || np.duration <= 0) return false;
+  if (!np?.playing || !np.path || !Number.isFinite(np.duration) || np.duration <= 0) return false;
   if (isSeekDragging() || seekPending) return false;
   if (getCurrentLoop() === "one") return false;
 
   const remaining = np.duration - position;
+  if (!Number.isFinite(remaining)) return false;
   if (remaining <= 0 || remaining > fade + CROSSFADE_TAIL) return false;
 
   const nextTrack = resolveNextTrack(true, true);

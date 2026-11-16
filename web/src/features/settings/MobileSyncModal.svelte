@@ -20,7 +20,10 @@
   const loading = $derived(getMobileSyncLoading());
 
   function onKeydown(e: KeyboardEvent): void {
-    if (e.key === "Escape") closeMobileSyncUi();
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      e.preventDefault();
+      closeMobileSyncUi();
+    }
   }
 </script>
 
@@ -73,7 +76,12 @@
 
           <div class="qr-wrap">
               {#if status.qrSvg}
-                <div class="qr">{@html status.qrSvg}</div>
+                <img
+                  class="qr"
+                  alt={t("settings.mobileSyncQr")}
+                  draggable="false"
+                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(status.qrSvg)}`}
+                />
                 <div class="qr-cap mono">{t("settings.mobileSyncQr")}</div>
               {:else}
                 <div class="qr qr-empty mono">
@@ -290,14 +298,9 @@
     background: #ffffff;
     border-radius: var(--radius-sm);
     padding: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .qr :global(svg) {
-    width: 100%;
-    height: 100%;
+    display: block;
+    object-fit: contain;
+    box-sizing: border-box;
   }
 
   .qr-empty {

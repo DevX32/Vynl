@@ -80,6 +80,9 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
             return Err("output directory must be an absolute path".into());
         }
         let canonical = fs::canonicalize(&abs).unwrap_or(abs);
+        if canonical.parent().is_none() {
+            return Err("output directory must not be a filesystem root".into());
+        }
         canonical.to_string_lossy().to_string()
     };
 

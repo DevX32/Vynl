@@ -386,6 +386,22 @@ struct ProcessResult {
     used_url: Option<String>,
 }
 
+fn sanitize_key_component(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(64)
+        .collect()
+}
+
+fn is_safe_candidate_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    if trimmed.is_empty() || trimmed.starts_with('-') {
+        return false;
+    }
+    trimmed.starts_with("https://") || trimmed.starts_with("http://")
+}
+
 fn base_args(format: &AudioFormat) -> Vec<String> {
     let audio_format = if keep_native(format) {
         "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio".into()
@@ -468,7 +484,7 @@ async fn download_track(
     let ext = audio_format_ext(&settings.format);
     let download_key = format!(
         "{}-{}",
-        track.id,
+        sanitize_key_component(&track.id),
         TEMP_KEY_GEN.fetch_add(1, Ordering::Relaxed)
     );
     let raw_path = tmp.join(format!("{}.{}", download_key, ext));
@@ -515,6 +531,11 @@ async fn download_track(
                 .to_string_lossy()
                 .to_string(),
         );
+        if !is_safe_candidate_url(&cand.url) {
+            failures.push(format!("rejected unsafe source URL: {}", cand.url));
+            continue;
+        }
+        args.push("--".into());
         args.push(cand.url.clone());
 
         let mut command = sysproc::hidden_tokio(Command::new(&ytdlp));
@@ -782,7 +803,7 @@ fn start_cover_prefetch(
                     Ok(p) => p,
                     Err(_) => return,
                 };
-                let cp = tmp.join(format!("cover-{}.jpg", track_id));
+                let cp = tmp.join(format!("cover-{}.jpg", sanitize_key_component(&track_id)));
                 let _ = std::fs::remove_file(&cp);
                 let success = fetch_cover(&url, &cp.to_string_lossy()).await;
                 let mut map = covers.lock().unwrap_or_else(|e| e.into_inner());
@@ -814,7 +835,7 @@ async fn fetch_cover_now(
     tmp: &Path,
 ) -> Option<PathBuf> {
     let url = track.cover.as_ref().or(collection.cover.as_ref())?;
-    let cp = tmp.join(format!("cover-late-{}.jpg", track.id));
+    let cp = tmp.join(format!("cover-late-{}.jpg", sanitize_key_component(&track.id)));
     if fetch_cover(url, &cp.to_string_lossy()).await {
         Some(cp)
     } else {
@@ -1492,8 +1513,14 @@ async fn move_tagged_to_output(
         .await
         .map_err(|e| e.to_string())?;
 
+    let overwrite = crate::services::settings::get_settings(user_data_dir).overwrite;
     if final_path.exists() {
-        let _ = std::fs::remove_file(final_path);
+        if overwrite {
+            let _ = std::fs::remove_file(final_path);
+        } else {
+            let _ = std::fs::remove_file(tagged_file);
+            return Err("track already exists".to_string());
+        }
     }
 
     move_file(tagged_file, final_path)?;

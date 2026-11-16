@@ -42,8 +42,12 @@ async function fetchAll(): Promise<void> {
   const map: Record<string, Playlist> = {};
   await Promise.all(
     _meta.map(async (pl) => {
-      const p = await vynl.getPlaylist(pl.id);
-      if (p) map[p.id] = p;
+      try {
+        const p = await vynl.getPlaylist(pl.id);
+        if (p) map[p.id] = p;
+      } catch (error) {
+        console.warn("failed to load playlist", pl.id, error);
+      }
     }),
   );
   if (gen === _fetchAllGeneration) {
@@ -90,6 +94,7 @@ export async function selectPlaylist(id: string | null): Promise<void> {
 
 export async function createPlaylist(name: string): Promise<Playlist> {
   const pl = await vynl.createPlaylist(name);
+  _selectGeneration += 1;
   _selected = pl.id;
   _current = pl;
   await refreshPlaylists();
@@ -137,6 +142,7 @@ async function refreshMeta(): Promise<void> {
 
 export async function deletePlaylist(id: string): Promise<DeleteTracksResult> {
   const result = await vynl.deletePlaylist(id);
+  _selectGeneration += 1;
   await refreshMeta();
   const next = { ..._all };
   delete next[id];
@@ -226,7 +232,10 @@ function streamTrackOf(track: CatalogueTrack): LibraryTrack {
     artist: track.artist,
     album: track.album?.name ?? "",
     year: null,
-    duration: track.duration ?? 0,
+    duration:
+      Number.isFinite(track.duration) && (track.duration ?? 0) >= 0
+        ? (track.duration ?? 0)
+        : 0,
     cover: track.cover,
     trackNumber: null,
     lyrics: null,

@@ -325,11 +325,11 @@ export function getPlayToken(): number {
   return _playToken;
 }
 
-export function setNowPlaying(t: NowPlaying): void {
+export function setNowPlaying(t: NowPlaying, opts: { skipTaste?: boolean } = {}): void {
   _state = t;
   _currentTime = t.time;
   _playToken += 1;
-  if (t.time < 1) {
+  if (!opts.skipTaste && t.time < 1) {
     const catalogueId = catalogueIdFromPath(t.path);
     if (catalogueId) {
       recordTastePlay({
@@ -622,6 +622,9 @@ export function pickNextId(
   }
 
   const start = Math.min(Math.max(0, contextIndex), total - 1);
+  if (loop === "all" && total === 1) {
+    return trackAt(scope[0])?.id ?? null;
+  }
   const stop = loop === "all" ? start + total : total;
   for (let i = start + 1; i < stop; i += 1) {
     const idx = i % total;
@@ -684,6 +687,9 @@ export function peekNextId(
   }
 
   const start = Math.min(Math.max(0, contextIndex), total - 1);
+  if (loop === "all" && total === 1) {
+    return trackAt(scope[0])?.id ?? null;
+  }
   const stop = loop === "all" ? start + total : total;
   for (let i = start + 1; i < stop; i += 1) {
     const idx = i % total;
@@ -795,7 +801,10 @@ export async function restoreNowPlaying(): Promise<{
   queue: string[];
 } | null> {
   const [saved] = await Promise.all([
-    vynl.loadNowPlaying(),
+    vynl.loadNowPlaying().catch((error) => {
+      console.warn("restoreNowPlaying load failed:", error);
+      return null;
+    }),
     whenLibraryLoaded(),
   ]);
   void hydrateTaste();
@@ -809,15 +818,24 @@ export async function restoreNowPlaying(): Promise<{
     return null;
   }
   setSeekDragging(false);
-  setNowPlaying(nowPlayingFromTrack(track, saved.time ?? 0));
+  const savedTime =
+    Number.isFinite(saved.time) && (saved.time as number) >= 0
+      ? Math.min(saved.time as number, track.duration > 0 ? track.duration : Number.MAX_VALUE)
+      : 0;
+  setNowPlaying(nowPlayingFromTrack(track, savedTime), { skipTaste: true });
   if (saved.userQueue && saved.userQueue.length > 0) {
-    _userQueue = saved.userQueue;
+    _userQueue = saved.userQueue.filter((p): p is string => typeof p === "string");
   }
   if (saved.contextQueue && saved.contextQueue.length > 0) {
-    _contextQueue = saved.contextQueue;
-    _contextIndex = saved.contextIndex ?? 0;
+    _contextQueue = saved.contextQueue.filter((p): p is string => typeof p === "string");
+    const maxIdx = _contextQueue.length - 1;
+    const idx = saved.contextIndex;
+    _contextIndex =
+      typeof idx === "number" && Number.isFinite(idx)
+        ? Math.min(Math.max(0, Math.floor(idx)), maxIdx)
+        : 0;
   } else if (saved.queue && saved.queue.length > 0) {
-    _contextQueue = saved.queue;
+    _contextQueue = saved.queue.filter((p): p is string => typeof p === "string");
     _contextIndex = 0;
   }
   refreshQueues();

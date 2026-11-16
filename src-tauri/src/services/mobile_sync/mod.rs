@@ -357,6 +357,7 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         pin: Mutex::new(pin),
         token: Mutex::new(token),
         attempts: Mutex::new(HashMap::new()),
+        global_pair_failures: Mutex::new((0, 0)),
         tracks: RwLock::new(None),
         tracks_load: Mutex::new(()),
         manifest: RwLock::new(None),

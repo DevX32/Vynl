@@ -384,6 +384,14 @@ fn service() -> Result<Arc<CatalogueService>, String> {
     get().ok_or_else(|| "The catalogue is not ready yet.".to_string())
 }
 
+pub(crate) fn valid_video_id(video_id: &str) -> bool {
+    !video_id.is_empty()
+        && video_id.len() <= 64
+        && video_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 pub async fn prepare_for_playback(
     video_id: &str,
     start: f64,
@@ -456,11 +464,17 @@ pub async fn catalogue_prebuffer(
     video_id: String,
     duration: Option<f64>,
 ) -> Result<CatalogueStreamInfo, String> {
+    if !valid_video_id(&video_id) {
+        return Err("invalid video id".into());
+    }
     service()?.prebuffer(&video_id, duration).await
 }
 
 #[tauri::command]
 pub async fn catalogue_discard_prebuffer(video_id: String) -> Result<(), String> {
+    if !valid_video_id(&video_id) {
+        return Err("invalid video id".into());
+    }
     discard_prebuffered(&video_id);
     Ok(())
 }
@@ -472,6 +486,9 @@ pub async fn catalogue_stream(
     duration: Option<f64>,
     generation: u64,
 ) -> Result<CatalogueStreamInfo, String> {
+    if !valid_video_id(&video_id) {
+        return Err("invalid video id".into());
+    }
     let start = start
         .filter(|time| time.is_finite() && *time > 0.0)
         .unwrap_or(0.0);
@@ -508,6 +525,9 @@ pub async fn catalogue_crossfade_stream(
     generation: u64,
     fade_secs: f64,
 ) -> Result<(), String> {
+    if !valid_video_id(&video_id) {
+        return Err("invalid video id".into());
+    }
     let prepared =
         take_prebuffered(&video_id).ok_or_else(|| "the stream is not prebuffered".to_string())?;
     let path = format!("ytm:{video_id}");
@@ -541,6 +561,9 @@ pub async fn catalogue_seek_stream(
     playing: bool,
     request_id: u64,
 ) -> Result<(), String> {
+    if !valid_video_id(&video_id) {
+        return Err("invalid video id".into());
+    }
     if !time.is_finite() || time < 0.0 {
         return Err("invalid seek time".into());
     }

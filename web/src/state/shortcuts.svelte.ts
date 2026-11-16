@@ -249,10 +249,23 @@ const ACTIVATION_KEYS = new Set(["space", "enter"]);
 const NAVIGATION_ROLES =
   '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="switch"], [role="combobox"]';
 
+const MODAL_ROLES = '[role="dialog"], [aria-modal="true"], [role="alertdialog"]';
+
+const CONTEXT_MENU = '.ctx-menu, [role="listbox"], [role="menu"]';
+
 export function shouldYieldToTarget(e: KeyboardEvent): boolean {
+  if (
+    typeof document !== "undefined" &&
+    e.key !== "Escape" &&
+    document.querySelector('[role="dialog"], [aria-modal="true"], [role="alertdialog"], .ctx-menu, [role="menu"]') !== null
+  ) {
+    return true;
+  }
   if (isInputField(e.target)) return true;
   const el = e.target as HTMLElement | null;
   if (!el || typeof el.closest !== "function") return false;
+  if (el.closest(MODAL_ROLES) !== null) return true;
+  if (el.closest(CONTEXT_MENU) !== null) return true;
   if (el.closest('[role="slider"]') !== null) {
     return SLIDER_OWNED_KEYS.has(normalizeKey(e.key));
   }

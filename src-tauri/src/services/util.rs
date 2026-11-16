@@ -31,7 +31,14 @@ pub fn write_json<T: serde::Serialize>(path: &Path, data: &T) -> Result<(), Stri
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, &json).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
+    }
+    fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
 #[macro_export]

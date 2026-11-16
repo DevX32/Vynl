@@ -65,7 +65,8 @@
   }
 
   function handleKey(e: KeyboardEvent): void {
-    if (e.key === "Escape") {
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      e.preventDefault();
       if (creating) {
         creating = false;
       } else {

@@ -75,9 +75,10 @@ export function fmtTime(
 }
 
 export function fmtDuration(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
+  const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = Math.floor(safe % 60);
   if (h > 0) {
     return `${h}${t("format.h")} ${m}${t("format.m")} ${s}${t("format.s")}`;
   }
@@ -88,15 +89,19 @@ export function fmtDuration(sec: number): string {
 }
 
 export function fmtTotalDuration(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
+  const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
   return h > 0
     ? `${h} ${t("format.hr")} ${m} ${t("format.min")}`
     : `${m} ${t("format.min")}`;
 }
 
 export function totalSeconds(tracks: { duration?: number | null }[]): number {
-  return tracks.reduce((acc, t) => acc + (t.duration ?? 0), 0);
+  return tracks.reduce((acc, t) => {
+    const d = t.duration;
+    return acc + (typeof d === "number" && Number.isFinite(d) ? d : 0);
+  }, 0);
 }
 
 export function matchesQuery(query: string, text: string): boolean {

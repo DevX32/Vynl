@@ -54,7 +54,10 @@ export function getCurrentSettings(): Settings {
 
 export async function initSettings(): Promise<void> {
   await loadEqDesign();
-  const loaded = await vynl.getSettings();
+  const loaded = await vynl.getSettings().catch((e) => {
+    console.warn("settings load failed, using defaults:", e);
+    return defaultSettings();
+  });
   _settings = normalizeSettings(loaded);
   applyTheme(_settings.theme);
   applyAccentColor(_settings.accentColor, false);

@@ -592,7 +592,12 @@ impl StreamCache {
         total: u64,
     ) -> Result<(PathBuf, String), String> {
         let serial = FILE_SERIAL.fetch_add(1, Ordering::Relaxed);
-        let file_name = format!("{}-{}-{}.{}", video_id, now_secs(), serial, ext);
+        let safe_id: String = video_id
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+            .take(64)
+            .collect();
+        let file_name = format!("{}-{}-{}.{}", safe_id, now_secs(), serial, ext);
         let path = self.dir.join(&file_name);
         let file = OpenOptions::new()
             .create(true)

@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::commands::types::{CatalogueTrack, Playlist, PlaylistMeta};
@@ -64,6 +64,25 @@ pub fn remove_playlist_covers(user_data_dir: &Path, id: &str) {
             let _ = fs::remove_file(entry.path());
         }
     }
+}
+
+fn cover_path_allowed(cover: &str, user_data_dir: &Path, id: &str) -> bool {
+    let canon = match PathBuf::from(cover).canonicalize() {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    let covers = covers_dir(user_data_dir);
+    let Ok(covers) = covers.canonicalize() else {
+        return false;
+    };
+    if !canon.starts_with(&covers) {
+        return false;
+    }
+    let name = canon
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    name.starts_with(&format!("pl-{id}."))
 }
 
 pub fn validate_id(id: &str) -> bool {
@@ -475,6 +494,11 @@ pub fn set_playlist_cover(
     }
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
+    if let Some(cover) = cover.as_ref()
+        && !cover_path_allowed(cover, user_data_dir, id)
+    {
+        return Err("cover is not a file from the covers directory".into());
+    }
     pl.cover = cover;
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;

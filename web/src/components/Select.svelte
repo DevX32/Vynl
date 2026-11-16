@@ -106,8 +106,9 @@
         e.preventDefault();
         if (!open) {
           void openList();
-        } else if (activeIndex >= 0) {
-          commit(options[activeIndex]);
+        } else {
+          const opt = options[activeIndex];
+          if (opt) commit(opt);
         }
         break;
       case "Escape":

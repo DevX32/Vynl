@@ -169,11 +169,16 @@
 
   async function bootApp(): Promise<(() => void) | undefined> {
     setPlayHandler((id, queue) => playTrack(id, queue));
-    await initSettings();
     onboarded = wasOnboarded();
-    void vynl.rpcUpdate(null);
-    await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
-    hideSplash();
+    try {
+      await initSettings();
+      void vynl.rpcUpdate(null);
+      await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
+    } catch (e) {
+      console.warn("boot failed", e);
+    } finally {
+      hideSplash();
+    }
     const off = vynl.onDownloadEvent((e) => {
       if (e.type === "finished") {
         void refreshPlaylists();

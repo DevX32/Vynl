@@ -171,7 +171,7 @@ async fn stream_audio(
     headers: HeaderMap,
 ) -> Response {
     let video_id = id.trim();
-    if video_id.is_empty() {
+    if !catalogue::valid_video_id(video_id) {
         return error(StatusCode::BAD_REQUEST, "This track has no video id.");
     }
     if video_id.starts_with(CATALOGUE_PREFIX) {

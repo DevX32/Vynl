@@ -2,6 +2,7 @@ import type { CatalogueTrack, TasteEntry } from "@lib/types";
 import { vynl } from "@lib/vynl";
 
 const TASTE_KEY = "vynl.taste.v1";
+const TASTE_SYNCED_KEY = "vynl.taste.synced";
 const MAX_ENTRIES = 160;
 
 function isArtistRef(value: unknown): boolean {
@@ -65,16 +66,35 @@ function loadTaste(): TasteEntry[] {
 
 let _entries = $state<TasteEntry[]>(loadTaste());
 
-function persist(): void {
+function persistLocal(): void {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(TASTE_KEY, JSON.stringify(_entries));
   } catch (error) {
     console.warn("taste profile save failed:", error);
   }
-  void vynl.tasteSave(_entries).catch((error) => {
-    console.warn("taste profile sync failed:", error);
-  });
+}
+
+function markSynced(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(TASTE_SYNCED_KEY, "1");
+  } catch {}
+}
+
+function hasSynced(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(TASTE_SYNCED_KEY) === "1";
+}
+
+function persist(): void {
+  persistLocal();
+  void vynl
+    .tasteSave(_entries)
+    .then(() => markSynced())
+    .catch((error) => {
+      console.warn("taste profile sync failed:", error);
+    });
 }
 
 function commit(next: TasteEntry[]): void {
@@ -82,16 +102,39 @@ function commit(next: TasteEntry[]): void {
   persist();
 }
 
+function preferEntry(a: TasteEntry, b: TasteEntry): TasteEntry {
+  const aStamp = a.likedAt ?? a.lastPlayed;
+  const bStamp = b.likedAt ?? b.lastPlayed;
+  return aStamp >= bStamp ? a : b;
+}
+
+function mergeEntries(stored: TasteEntry[], local: TasteEntry[]): TasteEntry[] {
+  const byId = new Map<string, TasteEntry>();
+  for (const entry of stored) byId.set(entry.track.id, entry);
+  for (const entry of local) {
+    const existing = byId.get(entry.track.id);
+    byId.set(entry.track.id, existing ? preferEntry(existing, entry) : entry);
+  }
+  return [...byId.values()];
+}
+
 export async function hydrateTaste(): Promise<void> {
   try {
     const stored = await vynl.tasteLoad();
     if (stored.length > 0) {
-      _entries = stored;
-      persist();
+      _entries = mergeEntries(stored, _entries);
+      markSynced();
+      persistLocal();
       return;
     }
-    if (_entries.length > 0) {
+    if (!hasSynced() && _entries.length > 0) {
       await vynl.tasteSave(_entries);
+      markSynced();
+      return;
+    }
+    if (hasSynced() && _entries.length > 0) {
+      _entries = [];
+      persistLocal();
     }
   } catch (error) {
     console.warn("taste profile hydrate failed:", error);
@@ -180,16 +223,18 @@ export function toggleTasteLike(track: CatalogueTrack): boolean {
   const now = Date.now();
   const existing = _entries.find((entry) => entry.track.id === track.id);
   if (!existing) {
-    commit([
-      ..._entries,
-      {
-        track,
-        plays: 0,
-        lastPlayed: 0,
-        liked: true,
-        likedAt: now,
-      },
-    ]);
+    commit(
+      trim([
+        ..._entries,
+        {
+          track,
+          plays: 0,
+          lastPlayed: 0,
+          liked: true,
+          likedAt: now,
+        },
+      ]),
+    );
     return true;
   }
 

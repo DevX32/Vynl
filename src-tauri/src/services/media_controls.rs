@@ -1,6 +1,7 @@
 use crate::commands::types::{MediaControlAction, MediaUpdate};
 use std::sync::Mutex;
 use std::sync::mpsc::{self, Sender};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 enum MediaCommand {
@@ -155,8 +156,9 @@ fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpda
     };
 
     let cover = update.cover.as_deref().map(cover_url);
-    let duration =
-        (update.duration > 0.0).then(|| std::time::Duration::from_secs_f64(update.duration));
+    let max_secs = Duration::from_secs(60 * 60 * 24 * 365 * 30).as_secs_f64();
+    let duration = (update.duration > 0.0 && update.duration.is_finite())
+        .then(|| std::time::Duration::from_secs_f64(update.duration.min(max_secs)));
     let album = if cfg!(target_os = "windows") {
         Some(update.album.as_str())
     } else {
@@ -180,9 +182,9 @@ fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpda
         let _ = controls.set_metadata(build_metadata(&update, album, artist, None, duration));
     }
 
-    let progress = Some(souvlaki::MediaPosition(std::time::Duration::from_secs_f64(
-        update.position.max(0.0),
-    )));
+    let progress = Some(souvlaki::MediaPosition(
+        std::time::Duration::from_secs_f64(update.position.clamp(0.0, max_secs)),
+    ));
     let playback = if update.title.trim().is_empty() {
         souvlaki::MediaPlayback::Stopped
     } else if update.playing {

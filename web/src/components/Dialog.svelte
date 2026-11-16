@@ -35,7 +35,8 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") {
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      e.preventDefault();
       e.stopPropagation();
       oncancel();
     }

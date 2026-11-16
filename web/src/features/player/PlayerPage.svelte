@@ -6,7 +6,7 @@
     getIsTrackPlaying,
   } from "@state/now-playing.svelte";
   import { clearPlayError, seekOffset } from "@lib/player.svelte";
-  import { isInputField } from "@state/shortcuts.svelte";
+  import { isInputField, shouldYieldToTarget } from "@state/shortcuts.svelte";
   import { getCurrentPlayError } from "@state/player.svelte";
   import {
     getLyricsOpen,
@@ -47,7 +47,7 @@
   onMount(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!active || e.repeat || e.defaultPrevented) return;
-      if (isInputField(e.target)) return;
+      if (isInputField(e.target) || shouldYieldToTarget(e)) return;
       if (e.key === "Escape" && getLyricsOpen()) {
         if (fullscreen) return;
         closeLyrics();

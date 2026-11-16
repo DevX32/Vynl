@@ -29,6 +29,7 @@ pub struct AppStateInner {
     pub pin: Mutex<String>,
     pub token: Mutex<String>,
     pub attempts: Mutex<HashMap<String, Attempt>>,
+    pub global_pair_failures: Mutex<(u64, u32)>,
     pub tracks: RwLock<Option<Arc<TrackSnapshot>>>,
     pub tracks_load: Mutex<()>,
     pub manifest: RwLock<Option<Arc<ManifestSnapshot>>>,
@@ -48,6 +49,9 @@ pub(crate) type SharedState = Arc<AppStateInner>;
 const MAX_PAIR_FAILURES: u32 = 5;
 const LOCKOUT_SECS: u64 = 30;
 const LOCKOUT_MAX_SECS: u64 = 900;
+const MAX_PAIR_FAILURES_GLOBAL: u32 = 60;
+const GLOBAL_PAIR_WINDOW_SECS: u64 = 300;
+const MAX_ATTEMPT_ENTRIES: usize = 1000;
 const SNAPSHOT_TTL: Duration = Duration::from_secs(10);
 const STREAM_CHUNK: usize = 128 * 1024;
 const CATALOGUE_PATH_PREFIX: &str = "ytm:";
@@ -300,7 +304,69 @@ pub async fn serve(
     .map_err(|e| e.to_string())
 }
 
+fn path_in_output(state: &SharedState, path: &Path) -> bool {
+    let settings = crate::services::settings::get_settings(&state.user_data);
+    let Ok(output) = PathBuf::from(&settings.output_dir).canonicalize() else {
+        return false;
+    };
+    match path.canonicalize() {
+        Ok(canon) => canon.starts_with(&output),
+        Err(_) => false,
+    }
+}
+
+fn cover_in_covers_dirs(user_data: &Path, path: &Path) -> bool {
+    let canon = match path.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    let roots = [
+        user_data.join("covers"),
+        user_data.join("catalogue").join("covers"),
+    ];
+    roots.iter().any(|root| match root.canonicalize() {
+        Ok(r) => canon.starts_with(&r),
+        Err(_) => canon.starts_with(root),
+    })
+}
+
+fn is_lan_ip(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local() || v6.is_unicast_link_local(),
+    }
+}
+
+fn lan_request(req: &Request) -> bool {
+    req.extensions()
+        .get::<ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| is_lan_ip(c.0.ip()))
+        .unwrap_or(false)
+}
+
+async fn pair_global_allowed(state: &SharedState) -> bool {
+    let mut global = state.global_pair_failures.lock().await;
+    let now = now_secs();
+    if now.saturating_sub(global.0) > GLOBAL_PAIR_WINDOW_SECS {
+        *global = (now, 0);
+    }
+    global.1 < MAX_PAIR_FAILURES_GLOBAL
+}
+
+async fn record_global_failure(state: &SharedState) {
+    let mut global = state.global_pair_failures.lock().await;
+    let now = now_secs();
+    if now.saturating_sub(global.0) > GLOBAL_PAIR_WINDOW_SECS {
+        *global = (now, 0);
+    }
+    global.1 = global.1.saturating_add(1);
+}
+
 async fn auth_middleware(State(state): State<SharedState>, req: Request, next: Next) -> Response {
+    if !lan_request(&req) {
+        return (StatusCode::FORBIDDEN, "forbidden").into_response();
+    }
     let path = req.uri().path();
     if path == "/pair" || path == "/health" {
         return next.run(req).await;
@@ -328,6 +394,10 @@ async fn pair(
 ) -> Result<Json<PairResponse>, (StatusCode, &'static str)> {
     let key = addr.ip().to_string();
 
+    if !pair_global_allowed(&state).await {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "too many attempts"));
+    }
+
     if lockout_for(&state, &key).await {
         return Err((StatusCode::TOO_MANY_REQUESTS, "too many attempts"));
     }
@@ -335,6 +405,7 @@ async fn pair(
     let pin = state.pin.lock().await.clone();
     if !secret_eq(body.pin.trim(), &pin) {
         record_failure(&state, &key).await;
+        record_global_failure(&state).await;
         return Err((StatusCode::FORBIDDEN, "wrong pin"));
     }
 
@@ -365,6 +436,9 @@ async fn lockout_for(state: &SharedState, key: &str) -> bool {
 
 async fn record_failure(state: &SharedState, key: &str) {
     let mut attempts = state.attempts.lock().await;
+    if attempts.len() >= MAX_ATTEMPT_ENTRIES {
+        attempts.clear();
+    }
     let entry = attempts.entry(key.to_string()).or_insert(Attempt {
         failures: 0,
         locked_until: None,
@@ -498,6 +572,9 @@ async fn track_audio(
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     };
     let path = PathBuf::from(&track.path);
+    if !path_in_output(&state, &path) {
+        return (StatusCode::NOT_FOUND, "track not found").into_response();
+    }
     let ext = track.ext.clone();
 
     serve_file_with_range(path, headers, content_type_for_ext(&ext)).await
@@ -514,6 +591,9 @@ async fn track_cover(State(state): State<SharedState>, AxumPath(id): AxumPath<St
     };
     let ct = image_content_type(Path::new(cover));
     let path = PathBuf::from(cover);
+    if !cover_in_covers_dirs(&state.user_data, &path) {
+        return (StatusCode::NOT_FOUND, "no cover").into_response();
+    }
     serve_file_with_range(path, HeaderMap::new(), ct).await
 }
 
@@ -536,6 +616,9 @@ async fn playlist_cover(
     let Some(path) = cover else {
         return (StatusCode::NOT_FOUND, "cover not found").into_response();
     };
+    if !cover_in_covers_dirs(&state.user_data, &path) {
+        return (StatusCode::NOT_FOUND, "cover not found").into_response();
+    }
 
     let ct = image_content_type(&path);
     serve_file_with_range(path, HeaderMap::new(), ct).await
@@ -715,7 +798,14 @@ pub(crate) async fn serve_file_with_range(
     let range = headers
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
-        .and_then(parse_bytes_range);
+        .and_then(parse_bytes_range)
+        .map(|range| match range {
+            ByteRange::From(start, end) => (start, end),
+            ByteRange::Suffix(suffix) => {
+                let start = len.saturating_sub(suffix);
+                (start, Some(len.saturating_sub(1)))
+            }
+        });
 
     let mut file = match File::open(&path).await {
         Ok(f) => f,
@@ -733,6 +823,14 @@ pub(crate) async fn serve_file_with_range(
                     .into_response();
             }
             let end = end_inclusive.unwrap_or(len - 1).min(len - 1);
+            if end < start {
+                return (
+                    StatusCode::RANGE_NOT_SATISFIABLE,
+                    [(header::CONTENT_RANGE, format!("bytes */{len}"))],
+                    "range not satisfiable",
+                )
+                    .into_response();
+            }
             if file.seek(SeekFrom::Start(start)).await.is_err() {
                 return (StatusCode::INTERNAL_SERVER_ERROR, "seek failed").into_response();
             }
@@ -762,14 +860,31 @@ pub(crate) async fn serve_file_with_range(
     res
 }
 
-fn parse_bytes_range(header: &str) -> Option<(u64, Option<u64>)> {
+enum ByteRange {
+    From(u64, Option<u64>),
+    Suffix(u64),
+}
+
+fn parse_bytes_range(header: &str) -> Option<ByteRange> {
     let s = header.strip_prefix("bytes=")?;
     let (start_s, end_s) = s.split_once('-')?;
-    let start: u64 = start_s.parse().ok()?;
-    let end = if end_s.is_empty() {
+    if start_s.is_empty() {
+        let suffix: u64 = end_s.trim().parse().ok()?;
+        if suffix == 0 {
+            return None;
+        }
+        return Some(ByteRange::Suffix(suffix));
+    }
+    let start: u64 = start_s.trim().parse().ok()?;
+    let end = if end_s.trim().is_empty() {
         None
     } else {
-        Some(end_s.parse().ok()?)
+        Some(end_s.trim().parse().ok()?)
     };
-    Some((start, end))
+    if let Some(e) = end
+        && e < start
+    {
+        return None;
+    }
+    Some(ByteRange::From(start, end))
 }

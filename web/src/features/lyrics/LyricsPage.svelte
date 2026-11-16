@@ -326,7 +326,7 @@ import { toggleLyrics } from "@state/player.svelte";
 
   $effect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
       if (overlay) {
         e.preventDefault();
         closeOverlay();

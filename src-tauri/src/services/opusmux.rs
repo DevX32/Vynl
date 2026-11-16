@@ -177,7 +177,7 @@ impl<'a> Walk<'a> {
             };
             let size = size as usize;
             let start = c.pos;
-            if start + size > body.len() {
+            if start.saturating_add(size) > body.len() {
                 break;
             }
             match id {
@@ -199,12 +199,12 @@ impl<'a> Walk<'a> {
                     }
                 }
                 ID_TRACK_ENTRY => {
-                    let nested = &body[start..start + size];
+                    let nested = &body[start..start.saturating_add(size)];
                     self.track_entry(nested);
                 }
                 _ => {}
             }
-            c.pos = start + size;
+            c.pos = start.saturating_add(size);
         }
     }
 
@@ -240,10 +240,15 @@ impl<'a> Walk<'a> {
             };
             let start = c.pos;
             if id == ID_BLOCK {
-                let nested = &body[start..start + size as usize];
-                self.block(nested, cluster_ts);
+                let end = start.saturating_add(size as usize);
+                if end <= body.len() {
+                    let nested = &body[start..end];
+                    self.block(nested, cluster_ts);
+                } else {
+                    return;
+                }
             }
-            c.pos = start + size as usize;
+            c.pos = start.saturating_add(size as usize);
         }
     }
 
@@ -257,7 +262,7 @@ impl<'a> Walk<'a> {
             };
             let size = size as usize;
             let start = c.pos;
-            if start + size > body.len() {
+            if start.saturating_add(size) > body.len() {
                 break;
             }
             match id {
@@ -267,16 +272,16 @@ impl<'a> Walk<'a> {
                     }
                 }
                 ID_SIMPLE_BLOCK => {
-                    let nested = &body[start..start + size];
+                    let nested = &body[start..start.saturating_add(size)];
                     self.block(nested, cluster_ts);
                 }
                 ID_BLOCK_GROUP => {
-                    let nested = &body[start..start + size];
+                    let nested = &body[start..start.saturating_add(size)];
                     self.block_group(nested, cluster_ts);
                 }
                 _ => {}
             }
-            c.pos = start + size;
+            c.pos = start.saturating_add(size);
         }
     }
 
@@ -290,7 +295,7 @@ impl<'a> Walk<'a> {
                 None => break,
             };
             let start = c.pos;
-            if start + size > body.len() {
+            if start.saturating_add(size) > body.len() {
                 break;
             }
             match id {
@@ -300,16 +305,16 @@ impl<'a> Walk<'a> {
                     }
                 }
                 ID_TRACKS => {
-                    let nested = &body[start..start + size];
+                    let nested = &body[start..start.saturating_add(size)];
                     self.track_entry(nested);
                 }
                 ID_CLUSTER => {
-                    let nested = &body[start..start + size];
+                    let nested = &body[start..start.saturating_add(size)];
                     self.cluster(nested);
                 }
                 _ => {}
             }
-            c.pos = start + size;
+            c.pos = start.saturating_add(size);
         }
     }
 }

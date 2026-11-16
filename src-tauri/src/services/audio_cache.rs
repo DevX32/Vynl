@@ -34,6 +34,9 @@ fn safe_name(key: &str) -> String {
 }
 
 pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("audio URL must use http(s)".into());
+    }
     let dir = cache_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("cache dir: {e}"))?;
     prune_cache();

@@ -485,20 +485,60 @@ async fn promote(staged: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) async fn verify_github_asset_sha256(
+    client: &reqwest::Client,
+    repo: &str,
+    filename: &str,
+    path: &Path,
+) -> Result<(), String> {
+    use sha2::Digest;
+
+    let release = latest_release(client, repo).await?;
+    let asset = release
+        .get("assets")
+        .and_then(|a| a.as_array())
+        .and_then(|assets| {
+            assets.iter().find(|a| {
+                a.get("name")
+                    .and_then(|n| n.as_str())
+                    .is_some_and(|n| n == filename)
+            })
+        })
+        .ok_or_else(|| format!("GitHub release for {repo} does not contain {filename}"))?;
+    let digest = asset
+        .get("digest")
+        .and_then(|d| d.as_str())
+        .ok_or_else(|| format!("GitHub release for {repo} does not publish a digest for {filename}"))?;
+    let expected = digest
+        .strip_prefix("sha256:")
+        .ok_or_else(|| format!("unsupported digest format for {filename}: {digest}"))?;
+
+    let data = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&data);
+    let actual = format!("{:x}", hasher.finalize());
+    if !actual.eq_ignore_ascii_case(expected) {
+        return Err(format!("checksum mismatch for {filename} (expected {expected}, got {actual})"));
+    }
+    Ok(())
+}
+
 async fn install_ytdlp(
     client: &reqwest::Client,
     bd: &Path,
     td: &Path,
     app_handle: &AppHandle,
 ) -> Result<(), String> {
-    let url = if cfg!(target_os = "windows") {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+    let filename = if cfg!(target_os = "windows") {
+        "yt-dlp.exe"
     } else {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+        "yt-dlp"
     };
+    let url = format!("https://github.com/yt-dlp/yt-dlp/releases/latest/download/{filename}");
     let scratch = ScratchDir::create(td)?;
     let staged = scratch.path().join(tool_exe(ToolNameEnum::YtDlp));
-    download_file(client, url, &staged, app_handle, ToolNameEnum::YtDlp).await?;
+    download_file(client, &url, &staged, app_handle, ToolNameEnum::YtDlp).await?;
+    verify_github_asset_sha256(client, "yt-dlp/yt-dlp", filename, &staged).await?;
     promote(&staged, &bd.join(tool_exe(ToolNameEnum::YtDlp))).await
 }
 

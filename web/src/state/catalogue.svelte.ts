@@ -52,7 +52,8 @@ function loadRegistry(): LibraryTrack[] {
       artist: track.artist,
       album: track.album,
       year: null,
-      duration: track.duration,
+      duration:
+        Number.isFinite(track.duration) && track.duration >= 0 ? track.duration : 0,
       cover: track.cover,
       trackNumber: null,
       lyrics: null,
@@ -104,7 +105,10 @@ function libraryTrackOf(track: CatalogueTrack): LibraryTrack {
     artist: track.artist,
     album: track.album?.name ?? "",
     year: null,
-    duration: track.duration ?? 0,
+    duration:
+      Number.isFinite(track.duration) && (track.duration ?? 0) >= 0
+        ? (track.duration ?? 0)
+        : 0,
     cover: track.cover,
     trackNumber: null,
     lyrics: null,
@@ -294,6 +298,17 @@ export async function loadCatalogueTaste(
   }
 }
 
+const DETAIL_CACHE_CAP = 48;
+
+function cappedSet<K, V>(map: Map<K, V>, key: K, value: V, cap: number): void {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  while (map.size > cap) {
+    const oldest = map.keys().next().value as K;
+    map.delete(oldest);
+  }
+}
+
 const albumCache = new Map<string, CatalogueAlbumDetail>();
 const artistCache = new Map<string, CatalogueArtist>();
 const playlistCache = new Map<string, CataloguePlaylistDetail>();
@@ -319,7 +334,7 @@ export async function loadCatalogueAlbum(
     if (cached) return cached;
   }
   const detail = await vynl.catalogueAlbum(id);
-  albumCache.set(id, detail);
+  cappedSet(albumCache, id, detail, DETAIL_CACHE_CAP);
   registerCatalogueTracks(detail.tracks);
   return detail;
 }
@@ -333,7 +348,7 @@ export async function loadCatalogueArtist(
     if (cached) return cached;
   }
   const artist = await vynl.catalogueArtist(id);
-  artistCache.set(id, artist);
+  cappedSet(artistCache, id, artist, DETAIL_CACHE_CAP);
   registerCatalogueTracks([...artist.topTracks]);
   return artist;
 }
@@ -352,7 +367,7 @@ export async function loadCataloguePlaylist(
 }
 
 function mergePlaylistDetail(detail: CataloguePlaylistDetail): void {
-  playlistCache.set(detail.playlist.id, detail);
+  cappedSet(playlistCache, detail.playlist.id, detail, DETAIL_CACHE_CAP);
   registerCatalogueTracks(detail.tracks);
 }
 
