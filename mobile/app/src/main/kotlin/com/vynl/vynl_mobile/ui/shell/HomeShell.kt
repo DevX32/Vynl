@@ -259,6 +259,10 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     viewModel.openArtist(actionsTrack.artistId.orEmpty())
                 },
                 onAddToPlaylist = { viewModel.openPlaylistPicker(actionsTrack) },
+                onDownload = {
+                    viewModel.closeActions()
+                    viewModel.downloadTrackForOffline(actionsTrack)
+                },
             ),
             onDismiss = { viewModel.closeActions() },
         )

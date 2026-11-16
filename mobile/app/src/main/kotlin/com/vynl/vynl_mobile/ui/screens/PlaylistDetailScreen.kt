@@ -2,6 +2,7 @@ package com.vynl.vynl_mobile.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
@@ -186,14 +188,26 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                     )
                     Spacer(Modifier.height(18.dp))
                     if (playlistTracks.isNotEmpty()) {
-                        VynlControl(
-                            onTap = { viewModel.playLocal(playlistTracks, 0) },
-                            icon = Icons.Rounded.PlayArrow,
-                            style = VynlControlStyle.accent,
-                            color = VynlColors.accent,
-                            size = 52.dp,
-                            iconSize = 30.dp,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        ) {
+                            VynlControl(
+                                onTap = { viewModel.playLocal(playlistTracks, 0) },
+                                icon = Icons.Rounded.PlayArrow,
+                                style = VynlControlStyle.accent,
+                                color = VynlColors.accent,
+                                size = 52.dp,
+                                iconSize = 30.dp,
+                            )
+                            VynlControl(
+                                onTap = { viewModel.downloadOpenPlaylist() },
+                                icon = Icons.Rounded.Download,
+                                style = VynlControlStyle.raised,
+                                size = 44.dp,
+                                iconSize = 22.dp,
+                            )
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                 }

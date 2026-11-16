@@ -862,6 +862,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun downloadTrackForOffline(track: CatalogueTrack) {
+        if (track.id.isBlank()) return
+        cacheTrackForOffline(track)
+        notice = "Caching ${track.title} for offline"
+    }
+
+    fun downloadOpenPlaylist() {
+        val id = openPlaylistId ?: return
+        viewModelScope.launch {
+            val tracks = withContext(Dispatchers.IO) { store.playlistTracks(id) }
+            val missing = tracks.filter { track ->
+                track.audioPath.isNullOrEmpty() || !java.io.File(track.audioPath).exists()
+            }
+            if (missing.isEmpty()) {
+                notice = "Everything here is already offline-ready"
+                return@launch
+            }
+            notice = if (missing.size == 1) {
+                "Caching 1 song for offline"
+            } else {
+                "Caching ${missing.size} songs for offline"
+            }
+            missing.forEach { cacheTrackForOffline(it.toCatalogue()) }
+        }
+    }
+
     fun createPlaylist(name: String, track: CatalogueTrack?) {
         viewModelScope.launch {
             val id = withContext(Dispatchers.IO) { store.createPlaylist(name) }

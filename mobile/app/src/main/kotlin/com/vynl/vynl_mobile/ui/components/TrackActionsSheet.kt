@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,7 @@ data class TrackActions(
     val onGoToAlbum: () -> Unit,
     val onGoToArtist: () -> Unit,
     val onAddToPlaylist: () -> Unit,
+    val onDownload: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,6 +87,11 @@ fun TrackActionsSheet(
                 icon = Icons.Rounded.PlaylistAdd,
                 title = "Add to playlist",
                 onClick = actions.onAddToPlaylist,
+            )
+            ActionRow(
+                icon = Icons.Rounded.Download,
+                title = "Download for offline",
+                onClick = actions.onDownload,
             )
         }
     }
