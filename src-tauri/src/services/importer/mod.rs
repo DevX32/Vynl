@@ -6,8 +6,6 @@ use tauri::{AppHandle, Manager};
 use crate::commands::types::*;
 use crate::services::{cover_cache, downloader, playlists};
 
-const MAX_IMPORT_TRACKS: usize = 1000;
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnmatchedImport {
@@ -103,11 +101,6 @@ pub async fn import_stream_playlist(
     }
     if collection.tracks.is_empty() {
         return Err("That playlist has no tracks.".into());
-    }
-    if collection.tracks.len() > MAX_IMPORT_TRACKS {
-        return Err(format!(
-            "That playlist is too large to import (max {MAX_IMPORT_TRACKS} tracks)."
-        ));
     }
 
     let output = crate::commands::output_dir_from_settings(&app)?;

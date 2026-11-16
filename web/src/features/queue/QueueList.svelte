@@ -253,7 +253,7 @@
     width: 320px;
     padding: 18px 14px;
     min-height: 0;
-    background: var(--bg);
+    background: var(--surface);
     border-left: 1px solid var(--line);
     box-shadow: var(--shadow-lg);
     overflow: hidden;
