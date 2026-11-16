@@ -181,12 +181,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: none;
     padding-bottom: 18px;
-  }
-
-  .add-body::-webkit-scrollbar {
-    display: none;
   }
 
   .add-empty {

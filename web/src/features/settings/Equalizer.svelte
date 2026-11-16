@@ -388,12 +388,7 @@
     display: flex;
     gap: 4px;
     overflow-x: auto;
-    scrollbar-width: none;
     padding-bottom: 2px;
-  }
-
-  .bands::-webkit-scrollbar {
-    display: none;
   }
 
   .band {

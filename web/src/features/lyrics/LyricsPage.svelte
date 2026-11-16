@@ -892,7 +892,6 @@ import { toggleLyrics } from "@state/player.svelte";
     overflow-y: auto;
     overflow-x: hidden;
     overflow-anchor: none;
-    scrollbar-width: none;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -911,9 +910,6 @@ import { toggleLyrics } from "@state/player.svelte";
       black calc(100% - var(--lyr-fade-bottom)),
       transparent 100%
     );
-  }
-  .lyrics-scroll::-webkit-scrollbar {
-    display: none;
   }
 
   .lyrics-scroll.synced {

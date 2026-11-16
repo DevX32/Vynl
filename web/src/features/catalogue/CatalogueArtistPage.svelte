@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Play, Shuffle, User, AlertCircle, LoaderCircle } from "lucide-svelte";
-  import type { CatalogueArtist, CatalogueTrack, Page } from "@lib/types";
+  import type { CatalogueAlbum, CatalogueArtist, CatalogueTrack, Page } from "@lib/types";
   import { cataloguePath, loadCatalogueArtist } from "@state/catalogue.svelte";
   import { requestPlay } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
@@ -9,6 +9,7 @@
   import { friendlyError } from "@lib/errors";
   import CatalogueTrackList from "./CatalogueTrackList.svelte";
   import CatalogueCard from "./CatalogueCard.svelte";
+  import BioModal from "./BioModal.svelte";
 
   let {
     id,
@@ -22,8 +23,105 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let loadToken = 0;
+  let bioEl = $state<HTMLParagraphElement | null>(null);
+  let bioClamped = $state(false);
+  let bioOpen = $state(false);
+
+  function checkBioClamp(): void {
+    if (!bioEl) return;
+    bioClamped = bioEl.scrollHeight > bioEl.clientHeight + 1;
+  }
+
+  $effect(() => {
+    if (!bioEl) return;
+    const observer = new ResizeObserver(checkBioClamp);
+    observer.observe(bioEl);
+    checkBioClamp();
+    return () => observer.disconnect();
+  });
 
   const topTracks = $derived(artist?.topTracks ?? []);
+
+  interface EditionGroup {
+    key: string;
+    base: string;
+    year: number | null;
+    cover: string | null;
+    items: CatalogueAlbum[];
+  }
+
+  const LANGUAGES =
+    "telugu|tamil|kannada|malayalam|hindi|english|bengali|marathi|punjabi|urdu|sinhala|nepali|oriya|odia|gujarati|sanskrit|thai|chinese|korean|japanese|spanish|french|german|italian|portuguese";
+
+  function baseKey(title: string): string {
+    let text = title.toLowerCase();
+    text = text.replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
+    text = text.replace(
+      new RegExp(`[-–—]\\s*(${LANGUAGES})\\b`, "gi"),
+      " ",
+    );
+    return text.replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function baseTitle(title: string): string {
+    let text = title.replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
+    text = text.replace(
+      new RegExp(`[-–—]\\s*(${LANGUAGES})\\b`, "gi"),
+      " ",
+    );
+    text = text.replace(/\s{2,}/g, " ");
+    text = text.replace(/(?:\s*[-–—·:]\s*)+$/g, "").trim();
+    return text || title.trim();
+  }
+
+  function franchise(title: string): string {
+    const base = baseTitle(title);
+    return base.split("|")[0].trim() || base;
+  }
+
+  function franchiseKey(title: string): string {
+    return (
+      franchise(title)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim() || baseKey(title)
+    );
+  }
+
+  function groupEditions(releases: readonly CatalogueAlbum[]): EditionGroup[] {
+    const map = new Map<string, EditionGroup>();
+    for (const release of releases) {
+      const key = franchiseKey(release.title) || release.id;
+      const existing = map.get(key);
+      if (existing) {
+        existing.items.push(release);
+        if (existing.cover === null && release.cover) {
+          existing.cover = release.cover;
+        }
+        if (release.year !== null) {
+          existing.year = Math.max(existing.year ?? 0, release.year);
+        }
+        continue;
+      }
+      map.set(key, {
+        key,
+        base: franchise(release.title),
+        year: release.year,
+        cover: release.cover,
+        items: [release],
+      });
+    }
+    return [...map.values()];
+  }
+
+  const albumGroups = $derived(groupEditions(artist?.albums ?? []));
+  const singleGroups = $derived(groupEditions(artist?.singles ?? []));
+
+  function defaultEdition(group: EditionGroup): CatalogueAlbum {
+    return (
+      group.items.find((item) => /telugu/i.test(item.title)) ?? group.items[0]
+    );
+  }
 
   async function load(artistId: string, force = false): Promise<void> {
     if (!artistId) return;
@@ -80,10 +178,25 @@
       </div>
 
       <div class="hero-meta">
-        <div class="kicker mono">{t("catalogue.openArtist")}</div>
         <div class="hero-title display">{artist.name}</div>
-        {#if artist.subscribers}
-          <div class="hero-sub mono">{artist.subscribers}</div>
+        {#if artist.description}
+          <div class="bio">
+            <div class="bio-head">
+              <span class="bio-label mono">{t("catalogue.description")}</span>
+              {#if bioClamped}
+                <button
+                  class="bio-toggle mono"
+                  aria-haspopup="dialog"
+                  onclick={() => (bioOpen = true)}
+                >
+                  {t("catalogue.showMore")}
+                </button>
+              {/if}
+            </div>
+            <p class="description" bind:this={bioEl}>
+              {artist.description}
+            </p>
+          </div>
         {/if}
       </div>
 
@@ -124,45 +237,57 @@
         </button>
       </div>
     {:else if artist}
-      {#if artist!.description}
-        <p class="description">{artist!.description}</p>
-      {/if}
-
       {#snippet belowTable()}
-        {#if artist!.albums.length > 0}
+        {#if albumGroups.length > 0}
           <section class="section">
             <div class="section-head">
               <span class="section-label">{t("catalogue.albums")}</span>
             </div>
             <div class="card-grid">
-              {#each artist!.albums as album (album.id)}
+              {#each albumGroups as group (group.key)}
+                {@const multi = group.items.length > 1}
+                {@const subtitle = multi
+                  ? `${group.year ? `${group.year} · ` : ""}${t("catalogue.editionCount", { n: group.items.length })}`
+                  : group.year
+                    ? String(group.year)
+                    : ""}
                 <CatalogueCard
-                  title={album.title}
-                  subtitle={album.year ? String(album.year) : ""}
-                  cover={album.cover}
+                  title={multi ? group.base : group.items[0].title}
+                  {subtitle}
+                  cover={group.cover}
                   kind="album"
+                  badge={multi ? `×${group.items.length}` : null}
                   openLabel={t("catalogue.openAlbum")}
-                  onopen={() => onNavigate(`catalogue:album:${album.id}`)}
+                  onopen={() =>
+                    onNavigate(`catalogue:album:${defaultEdition(group).id}`)}
                 />
               {/each}
             </div>
           </section>
         {/if}
 
-        {#if artist!.singles.length > 0}
+        {#if singleGroups.length > 0}
           <section class="section">
             <div class="section-head">
               <span class="section-label">{t("catalogue.singles")}</span>
             </div>
             <div class="card-grid">
-              {#each artist!.singles as album (album.id)}
+              {#each singleGroups as group (group.key)}
+                {@const multi = group.items.length > 1}
+                {@const subtitle = multi
+                  ? `${group.year ? `${group.year} · ` : ""}${t("catalogue.editionCount", { n: group.items.length })}`
+                  : group.year
+                    ? String(group.year)
+                    : ""}
                 <CatalogueCard
-                  title={album.title}
-                  subtitle={album.year ? String(album.year) : ""}
-                  cover={album.cover}
+                  title={multi ? group.base : group.items[0].title}
+                  {subtitle}
+                  cover={group.cover}
                   kind="album"
+                  badge={multi ? `×${group.items.length}` : null}
                   openLabel={t("catalogue.openAlbum")}
-                  onopen={() => onNavigate(`catalogue:album:${album.id}`)}
+                  onopen={() =>
+                    onNavigate(`catalogue:album:${defaultEdition(group).id}`)}
                 />
               {/each}
             </div>
@@ -189,6 +314,14 @@
     {/if}
   </div>
 </div>
+
+{#if bioOpen && artist?.description}
+  <BioModal
+    heading={t("catalogue.description")}
+    text={artist.description}
+    onClose={() => (bioOpen = false)}
+  />
+{/if}
 
 <style>
   .detail-page {
@@ -219,7 +352,7 @@
   }
 .hero {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 20px;
     padding: 24px 0 16px;
     padding-right: 10px;
@@ -259,28 +392,17 @@
   .hero-meta {
     flex: 1;
     min-width: 0;
-  }
-
-  .kicker {
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    color: var(--faint);
-    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
   .hero-title {
     font-size: 38px;
     line-height: 1.05;
     letter-spacing: -0.02em;
-    margin-top: 5px;
     overflow-wrap: anywhere;
-  }
-
-  .hero-sub {
-    margin-top: 7px;
-    font-size: 11px;
-    color: var(--faint);
-    letter-spacing: 0.04em;
   }
 
   .hero-actions {
@@ -288,7 +410,6 @@
     align-items: center;
     gap: 18px;
     flex-shrink: 0;
-    margin-bottom: 2px;
   }
 
   .play-big {
@@ -353,9 +474,48 @@
     cursor: default;
   }
 
+  .bio {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 720px;
+    flex-shrink: 0;
+  }
+
+  .bio-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .bio-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .bio-toggle {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    cursor: pointer;
+    padding: 0;
+    border: none;
+    background: none;
+    transition: color 0.12s;
+  }
+
+  .bio-toggle:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .description {
     margin: 0;
-    max-width: 720px;
     font-size: 12px;
     line-height: 1.6;
     color: var(--dim);
@@ -365,12 +525,12 @@
     line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
   }
 
   .section {
     margin-bottom: 26px;
   }
-
 
   .section-head {
     display: flex;
@@ -378,11 +538,7 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 8px;
-    position: sticky;
-    top: 0;
-    z-index: 2;
     padding: 8px 0;
-    background: var(--bg);
   }
 
   .section-label {

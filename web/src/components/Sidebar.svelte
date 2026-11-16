@@ -543,15 +543,9 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 2px;
-  }
-
-  .rail::-webkit-scrollbar {
-    width: 0;
-    height: 0;
   }
 
   .rail-item {

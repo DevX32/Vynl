@@ -7,6 +7,8 @@
     Clock,
     ListPlus,
     X,
+    Download,
+    LoaderCircle,
   } from "lucide-svelte";
   import type { CatalogueTrack, Page } from "@lib/types";
   import {
@@ -39,6 +41,7 @@
   import EqualizerBars from "@components/EqualizerBars.svelte";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
   import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
+  import DownloadLikedOverlay from "./DownloadLikedOverlay.svelte";
 
   let {
     onNavigate,
@@ -52,6 +55,11 @@
   let pickerBusy = $state(false);
   let streamTarget = $state<CatalogueTrack | null>(null);
   let streamBusy = $state(false);
+  let bulkTracks = $state<readonly CatalogueTrack[]>([]);
+  let bulkOpen = $state(false);
+  let bulkBusy = $state(false);
+  let bulkDone = $state(0);
+  let downloadOpen = $state(false);
 
   const tracks = $derived(getLikedTracks());
   const totalDur = $derived(totalSeconds(tracks));
@@ -161,6 +169,51 @@
     return items;
   }
 
+  function openDownload(list: CatalogueTrack[]): void {
+    if (list.length === 0 || bulkBusy) return;
+    downloadOpen = false;
+    bulkTracks = list;
+    bulkOpen = true;
+  }
+
+  async function runBulkDownload(playlistId: string | null, playlistName: string | null): Promise<void> {
+    const list = bulkTracks;
+    if (bulkBusy || list.length === 0) return;
+    bulkBusy = true;
+    bulkDone = 0;
+    let done = 0;
+    let failed = 0;
+    for (const track of list) {
+      try {
+        await saveCatalogueTrack(track, playlistId, playlistName ?? undefined);
+        done += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn("catalogue bulk download failed for", track.id, error);
+      }
+      bulkDone = done + failed;
+    }
+    try {
+      await refreshAfterCatalogueSave();
+    } catch (error) {
+      console.warn("catalogue bulk download: refresh failed:", error);
+    }
+    bulkBusy = false;
+    bulkDone = 0;
+    bulkTracks = [];
+    if (failed === 0) {
+      const name =
+        playlistName ??
+        playlists.find((playlist) => playlist.id === playlistId)?.name ??
+        "";
+      toasts.success(
+        t("catalogue.downloadDone", { n: done, name: toPascalCase(name) }),
+      );
+    } else {
+      toasts.error(t("catalogue.downloadPartial", { done, failed }));
+    }
+  }
+
   async function addToSelectedPlaylist(playlistId: string): Promise<void> {
     const target = pickerTarget;
     if (!target || pickerBusy) return;
@@ -262,9 +315,11 @@
           {tracks.length}
           {tracks.length === 1 ? t("library.song") : t("library.songsPlural")} ·
           {t("playlist.about")}
-          {fmtTotalDuration(totalDur)}
-        {:else}
+          {fmtTotalDuration(totalDur)}{:else}
           {t("playlist.zeroSongs")}
+        {/if}
+        {#if bulkBusy}
+          · {t("catalogue.downloading", { done: bulkDone, total: bulkTracks.length })}
         {/if}
       </div>
     </div>
@@ -290,6 +345,19 @@
         aria-label={t("player.shuffle")}
       >
         <Shuffle size={14} stroke-width={1.5} />
+      </button>
+      <button
+        class="icon-btn round"
+        onclick={() => (downloadOpen = true)}
+        disabled={tracks.length === 0 || bulkBusy}
+        aria-label={t("catalogue.downloadSongs")}
+        title={t("catalogue.downloadSongs")}
+      >
+        {#if bulkBusy}
+          <span class="spin"><LoaderCircle size={14} stroke-width={1.5} /></span>
+        {:else}
+          <Download size={14} stroke-width={1.5} />
+        {/if}
       </button>
     </div>
   </div>
@@ -352,7 +420,7 @@
           </div>
           <div class="c-artists">
             {#each track.artists as artist, idx (artist.id ?? `${artist.name}:${idx}`)}
-              {#if idx > 0}<span class="comma">, </span>{/if}
+              {#if idx > 0}<span class="comma">{", "}</span>{/if}
               {#if artist.id}
                 <button
                   type="button"
@@ -382,6 +450,36 @@
     y={ctx.y}
     items={ctxItems()}
     onclose={() => (ctx = null)}
+  />
+{/if}
+
+{#if downloadOpen}
+  <DownloadLikedOverlay
+    {tracks}
+    busy={bulkBusy}
+    onClose={() => (downloadOpen = false)}
+    onDownload={openDownload}
+  />
+{/if}
+
+{#if bulkOpen}
+  <PlaylistPicker
+    suggestedName={t("catalogue.likedSongs")}
+    trackCount={bulkTracks.length}
+    {playlists}
+    busy={bulkBusy}
+    onAddExisting={(id) => {
+      bulkOpen = false;
+      void runBulkDownload(id, null);
+    }}
+    onCreate={(name) => {
+      bulkOpen = false;
+      void runBulkDownload(null, name);
+    }}
+    onSkip={() => {
+      if (bulkBusy) return;
+      bulkOpen = false;
+    }}
   />
 {/if}
 
@@ -491,6 +589,17 @@
     min-width: 0;
   }
 
+  .spin {
+    display: inline-flex;
+    animation: spin 0.85s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .hero-name {
     width: 100%;
     font-size: 32px;
@@ -592,19 +701,6 @@
     flex-direction: column;
     padding-right: 2px;
     padding-bottom: 8px;
-  }
-
-  .tracks::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .tracks::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
-  .tracks::-webkit-scrollbar-track {
-    background: transparent;
   }
 
   .tbl-head {

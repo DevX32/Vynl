@@ -231,12 +231,7 @@
   .home-scroll {
     height: 100%;
     overflow-y: auto;
-    scrollbar-width: none;
     padding: 28px 0 40px;
-  }
-
-  .home-scroll::-webkit-scrollbar {
-    display: none;
   }
 
   .home-hdr {

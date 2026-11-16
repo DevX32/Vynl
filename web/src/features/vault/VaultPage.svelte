@@ -818,11 +818,6 @@
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    scrollbar-width: none;
-  }
-
-  .page::-webkit-scrollbar {
-    display: none;
   }
 
   .page-error {
@@ -1002,12 +997,6 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: none;
-  }
-
-  .list::-webkit-scrollbar {
-    width: 0;
-    height: 0;
   }
 
   .pagination {

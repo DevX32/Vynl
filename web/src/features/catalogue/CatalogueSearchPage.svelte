@@ -6,6 +6,7 @@
     Shuffle,
     AlertCircle,
     LoaderCircle,
+    RefreshCw,
   } from "lucide-svelte";
   import type { CatalogueTrack, Page } from "@lib/types";
   import {
@@ -174,7 +175,19 @@
   </header>
 
   {#if showMixHeading}
-    <div class="mix-heading mono">{t("catalogue.madeForYou")}</div>
+    <div class="mix-heading mono">
+      <span>{t("catalogue.madeForYou")}</span>
+      <button
+        class="mix-refresh"
+        class:busy={tasteLoading}
+        onclick={retryTaste}
+        disabled={tasteLoading}
+        aria-label={t("catalogue.refreshMix")}
+        title={t("catalogue.refreshMix")}
+      >
+        <RefreshCw size={13} stroke-width={1.6} />
+      </button>
+    </div>
   {/if}
 
   {#if results && results.songs.length > 0}
@@ -317,23 +330,6 @@
     padding-bottom: 36px;
   }
 
-  .page-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .page-scroll::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
-  .page-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-hover);
-  }
-
-  .page-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
   .section {
     margin-bottom: 26px;
   }
@@ -346,12 +342,42 @@
     margin-bottom: 0;
   }
 
-
   .mix-heading {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     font-size: 13px;
     color: var(--dim);
     padding: 0 0 10px;
+  }
+
+  .mix-refresh {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--faint);
+    cursor: pointer;
+    transition:
+      color 0.12s,
+      background 0.12s;
+  }
+
+  .mix-refresh:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+
+  .mix-refresh:disabled {
+    cursor: default;
+  }
+
+  .mix-refresh.busy {
+    animation: spin 0.85s linear infinite;
   }
 
   .fresh {

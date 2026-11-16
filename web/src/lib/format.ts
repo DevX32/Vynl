@@ -64,6 +64,25 @@ export function blobSrc(
   };
 }
 
+export function stripAlbumSuffix(
+  title: string,
+  albumName: string | null | undefined,
+): string {
+  if (!albumName) return title;
+  const cut = title.lastIndexOf(" (");
+  if (cut <= 0 || !title.endsWith(")")) return title;
+  const inner = title.slice(cut + 2, -1);
+  if (
+    albumName === inner ||
+    albumName.startsWith(`${inner} `) ||
+    albumName.startsWith(`${inner}|`) ||
+    albumName.startsWith(`${inner} (`)
+  ) {
+    return title.slice(0, cut).trim();
+  }
+  return title;
+}
+
 export function fmtTime(
   sec: number | null | undefined,
   fallback = "0:00",

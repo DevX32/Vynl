@@ -24,7 +24,7 @@
     refreshAfterCatalogueSave,
     saveCatalogueTrack,
   } from "@state/catalogue.svelte";
-  import { fmtTime, toPascalCase } from "@lib/format";
+  import { fmtTime, toPascalCase, stripAlbumSuffix } from "@lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import type { Snippet } from "svelte";
@@ -259,7 +259,7 @@
         class:playing={isCurrent(track)}
         role="button"
         tabindex="0"
-        aria-label={`${track.title} - ${track.artist}`}
+        aria-label={`${stripAlbumSuffix(track.title, track.album?.name)} - ${track.artist}`}
         onclick={() => rowAction(track)}
         onkeydown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -281,7 +281,7 @@
         </div>
         <div class="c-meta">
           <span class="c-title" class:accent={isCurrent(track)}>
-            {track.title}
+            {stripAlbumSuffix(track.title, track.album?.name)}
           </span>
           {#if showAlbum && track.album}
             <span class="c-album">{track.album.name}</span>
@@ -289,7 +289,7 @@
         </div>
         <div class="c-artists">
           {#each track.artists as artist, idx (artist.id ?? `${artist.name}:${idx}`)}
-            {#if idx > 0}<span class="comma">, </span>{/if}
+            {#if idx > 0}<span class="comma">{", "}</span>{/if}
             {#if artist.id && onNavigateArtist}
               <button
                 type="button"
@@ -374,23 +374,6 @@
     flex-direction: column;
     padding-right: 2px;
     padding-bottom: 8px;
-  }
-
-  .tracks::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .tracks::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
-  .tracks::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-hover);
-  }
-
-  .tracks::-webkit-scrollbar-track {
-    background: transparent;
   }
 
   .tbl-head {

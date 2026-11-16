@@ -7,6 +7,7 @@
     subtitle = "",
     cover = null,
     kind = "album",
+    badge = null,
     onopen,
     openLabel,
   }: {
@@ -14,6 +15,7 @@
     subtitle?: string;
     cover?: string | null;
     kind?: "album" | "playlist";
+    badge?: string | null;
     onopen: () => void;
     openLabel: string;
   } = $props();
@@ -31,6 +33,9 @@
           <Disc3 size={26} stroke-width={1} />
         {/if}
       </span>
+    {/if}
+    {#if badge}
+      <span class="art-badge mono">{badge}</span>
     {/if}
   </span>
   <span class="meta">
@@ -62,12 +67,28 @@
 
   .art {
     display: block;
+    position: relative;
     width: 100%;
     aspect-ratio: 1;
     border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg-raise);
     box-shadow: var(--shadow-sm);
+  }
+
+  .art-badge {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    background: rgba(10, 10, 12, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 3px;
+    padding: 2px 6px;
+    backdrop-filter: blur(6px);
+    pointer-events: none;
   }
 
   .art-img {
@@ -99,9 +120,14 @@
   .title {
     font-size: 12.5px;
     color: var(--text);
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    min-height: 2.7em;
   }
 
   .subtitle {

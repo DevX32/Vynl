@@ -64,12 +64,6 @@
     gap: 4px;
     flex-shrink: 0;
     overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .filter-tabs::-webkit-scrollbar {
-    width: 0;
-    height: 0;
   }
 
   .filter-tab {

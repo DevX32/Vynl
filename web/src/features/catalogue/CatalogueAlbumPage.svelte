@@ -8,6 +8,7 @@
   import { t } from "@lib/i18n";
   import { friendlyError } from "@lib/errors";
   import CatalogueTrackList from "./CatalogueTrackList.svelte";
+  import BioModal from "./BioModal.svelte";
 
   let {
     id,
@@ -21,6 +22,22 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let loadToken = 0;
+  let bioEl = $state<HTMLParagraphElement | null>(null);
+  let bioClamped = $state(false);
+  let bioOpen = $state(false);
+
+  function checkBioClamp(): void {
+    if (!bioEl) return;
+    bioClamped = bioEl.scrollHeight > bioEl.clientHeight + 1;
+  }
+
+  $effect(() => {
+    if (!bioEl) return;
+    const observer = new ResizeObserver(checkBioClamp);
+    observer.observe(bioEl);
+    checkBioClamp();
+    return () => observer.disconnect();
+  });
 
   const album = $derived(detail?.album ?? null);
   const tracks = $derived(detail?.tracks ?? []);
@@ -94,7 +111,7 @@
         <div class="hero-title display">{album.title}</div>
         <div class="hero-artists">
           {#each album.artists as artist, i (artist.id ?? `${artist.name}:${i}`)}
-            {#if i > 0}<span class="comma">, </span>{/if}
+            {#if i > 0}<span class="comma">{", "}</span>{/if}
             {#if artist.id}
               <button
                 type="button"
@@ -154,7 +171,23 @@
       </div>
     {:else if detail && album}
       {#if detail.description}
-        <p class="description">{detail.description}</p>
+        <div class="bio">
+          <div class="bio-head">
+            <span class="bio-label mono">{t("catalogue.description")}</span>
+            {#if bioClamped}
+              <button
+                class="bio-toggle mono"
+                aria-haspopup="dialog"
+                onclick={() => (bioOpen = true)}
+              >
+                {t("catalogue.showMore")}
+              </button>
+            {/if}
+          </div>
+          <p class="description" bind:this={bioEl}>
+            {detail.description}
+          </p>
+        </div>
       {/if}
 
       <CatalogueTrackList
@@ -166,6 +199,14 @@
     {/if}
   </div>
 </div>
+
+{#if bioOpen && detail?.description}
+  <BioModal
+    heading={t("catalogue.description")}
+    text={detail.description}
+    onClose={() => (bioOpen = false)}
+  />
+{/if}
 
 <style>
   .detail-page {
@@ -346,9 +387,48 @@
     cursor: default;
   }
 
+  .bio {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 720px;
+    flex-shrink: 0;
+  }
+
+  .bio-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .bio-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .bio-toggle {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    cursor: pointer;
+    padding: 0;
+    border: none;
+    background: none;
+    transition: color 0.12s;
+  }
+
+  .bio-toggle:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .description {
     margin: 0;
-    max-width: 720px;
     font-size: 12px;
     line-height: 1.6;
     color: var(--dim);
@@ -358,6 +438,7 @@
     line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
   }
 
   .state {

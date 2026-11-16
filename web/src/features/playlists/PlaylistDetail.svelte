@@ -682,15 +682,6 @@
     padding-bottom: 8px;
   }
 
-  .tracks::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .tracks::-webkit-scrollbar-thumb {
-    background: var(--scrollbar);
-    border-radius: 3px;
-  }
-
   .tbl-head {
     grid-template-columns: var(--track-cols);
   }
