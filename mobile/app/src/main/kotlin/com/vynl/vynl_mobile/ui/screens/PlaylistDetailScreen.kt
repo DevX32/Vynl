@@ -22,8 +22,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistRemove
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,6 +62,15 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
     val playlist = playlists.firstOrNull { it.id == viewModel.openPlaylistId }
     val (localCover, remoteCover) = covers[viewModel.openPlaylistId.orEmpty()] ?: Pair(null, null)
     var actionsFor by remember { mutableStateOf<LocalTrack?>(null) }
+    var query by remember { mutableStateOf("") }
+
+    val needle = query.trim().lowercase()
+    val shown = playlistTracks.filter { track ->
+        needle.isEmpty() ||
+            track.title.lowercase().contains(needle) ||
+            track.artist.lowercase().contains(needle) ||
+            track.album.orEmpty().lowercase().contains(needle)
+    }
 
     BackHandler { onClose() }
 
@@ -94,6 +106,48 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                 fontFamily = VynlFonts.display,
             )
             Spacer(Modifier.width(48.dp))
+        }
+
+        if (playlistTracks.isNotEmpty()) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontSize = 14.sp,
+                    color = VynlColors.text,
+                    fontFamily = VynlFonts.display,
+                ),
+                placeholder = {
+                    Text(
+                        "Search this playlist",
+                        color = VynlColors.faint,
+                        fontSize = 14.sp,
+                        fontFamily = VynlFonts.display,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = VynlColors.faint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                shape = RoundedCornerShape(VynlRadius.control),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = VynlColors.surface,
+                    unfocusedContainerColor = VynlColors.surface,
+                    focusedBorderColor = VynlColors.line,
+                    unfocusedBorderColor = VynlColors.line,
+                    cursorColor = VynlColors.accent,
+                    focusedTextColor = VynlColors.text,
+                    unfocusedTextColor = VynlColors.text,
+                ),
+            )
         }
 
         LazyColumn(
@@ -153,14 +207,22 @@ fun PlaylistDetailScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                         subtitle = "Play something and press the three dots to add songs to this playlist.",
                     )
                 }
+            } else if (shown.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = Icons.Rounded.Search,
+                        title = "No matches",
+                        subtitle = "No songs in this playlist match “${query.trim()}”.",
+                    )
+                }
             }
 
-            itemsIndexed(playlistTracks, key = { index, track -> "$index-${track.id}" }) { index, track ->
+            itemsIndexed(shown, key = { index, track -> "$index-${track.id}" }) { index, track ->
                 TrackTile(
                     track = track.toCatalogue(),
                     coverPath = track.coverPath,
                     active = playback.track?.id == track.id,
-                    onTap = { viewModel.playLocal(playlistTracks, index) },
+                    onTap = { viewModel.playLocal(shown, index) },
                     onMore = { actionsFor = track },
                 )
             }
