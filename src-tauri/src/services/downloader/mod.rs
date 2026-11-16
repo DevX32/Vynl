@@ -835,7 +835,10 @@ async fn fetch_cover_now(
     tmp: &Path,
 ) -> Option<PathBuf> {
     let url = track.cover.as_ref().or(collection.cover.as_ref())?;
-    let cp = tmp.join(format!("cover-late-{}.jpg", sanitize_key_component(&track.id)));
+    let cp = tmp.join(format!(
+        "cover-late-{}.jpg",
+        sanitize_key_component(&track.id)
+    ));
     if fetch_cover(url, &cp.to_string_lossy()).await {
         Some(cp)
     } else {

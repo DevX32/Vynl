@@ -508,7 +508,9 @@ pub(crate) async fn verify_github_asset_sha256(
     let digest = asset
         .get("digest")
         .and_then(|d| d.as_str())
-        .ok_or_else(|| format!("GitHub release for {repo} does not publish a digest for {filename}"))?;
+        .ok_or_else(|| {
+            format!("GitHub release for {repo} does not publish a digest for {filename}")
+        })?;
     let expected = digest
         .strip_prefix("sha256:")
         .ok_or_else(|| format!("unsupported digest format for {filename}: {digest}"))?;
@@ -518,7 +520,9 @@ pub(crate) async fn verify_github_asset_sha256(
     hasher.update(&data);
     let actual = format!("{:x}", hasher.finalize());
     if !actual.eq_ignore_ascii_case(expected) {
-        return Err(format!("checksum mismatch for {filename} (expected {expected}, got {actual})"));
+        return Err(format!(
+            "checksum mismatch for {filename} (expected {expected}, got {actual})"
+        ));
     }
     Ok(())
 }

@@ -182,9 +182,9 @@ fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpda
         let _ = controls.set_metadata(build_metadata(&update, album, artist, None, duration));
     }
 
-    let progress = Some(souvlaki::MediaPosition(
-        std::time::Duration::from_secs_f64(update.position.clamp(0.0, max_secs)),
-    ));
+    let progress = Some(souvlaki::MediaPosition(std::time::Duration::from_secs_f64(
+        update.position.clamp(0.0, max_secs),
+    )));
     let playback = if update.title.trim().is_empty() {
         souvlaki::MediaPlayback::Stopped
     } else if update.playing {
