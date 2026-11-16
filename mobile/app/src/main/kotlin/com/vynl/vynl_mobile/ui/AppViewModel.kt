@@ -843,11 +843,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val existing = withContext(Dispatchers.IO) { store.findPrivateTrack(track.id) }
                 val cached = existing?.audioPath?.takeIf { it.isNotEmpty() }
-                if (cached != null && withContext(Dispatchers.IO) { java.io.File(cached).exists() }) {
-                    return@launch
-                }
-                val cover = downloader.cover(track)
+                val hasFile = cached != null &&
+                    withContext(Dispatchers.IO) { java.io.File(cached).exists() }
+                if (hasFile) return@launch
                 val audio = downloader.audio(track) { }
+                val cover = downloader.cover(track)
                 withContext(Dispatchers.IO) {
                     store.addTrack(track)
                     store.setAudioPath(track.id, audio)
@@ -855,7 +855,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 refreshStore()
             } catch (error: Exception) {
-                notice = "Could not cache ${track.title}"
+                notice = "Could not cache ${track.title} for offline"
             } finally {
                 cachingTracks.remove(track.id)
             }

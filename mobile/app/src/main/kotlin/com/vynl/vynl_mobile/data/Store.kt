@@ -90,19 +90,37 @@ class Store(context: Context) {
         mtime: Long? = null,
         lyrics: String? = null,
     ) {
-        val values = ContentValues().apply {
-            put("id", track.id)
-            put("title", track.title)
-            put("artist", track.artist)
-            put("album", track.album)
-            put("duration", track.duration)
-            put("cover", track.cover)
-            put("ext", ext)
-            put("mtime", mtime)
-            put("lyrics", lyrics)
-            put("added_at", System.currentTimeMillis())
+        val db = helper.writableDatabase
+        val exists = db.rawQuery("SELECT 1 FROM tracks WHERE id = ?", arrayOf(track.id)).use {
+            it.moveToFirst()
         }
-        helper.writableDatabase.insertWithOnConflict("tracks", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        if (exists) {
+            val values = ContentValues().apply {
+                put("title", track.title)
+                put("artist", track.artist)
+                put("album", track.album)
+                put("duration", track.duration)
+                put("cover", track.cover)
+                if (ext != null) put("ext", ext)
+                if (mtime != null) put("mtime", mtime)
+                if (lyrics != null) put("lyrics", lyrics)
+            }
+            db.update("tracks", values, "id = ?", arrayOf(track.id))
+        } else {
+            val values = ContentValues().apply {
+                put("id", track.id)
+                put("title", track.title)
+                put("artist", track.artist)
+                put("album", track.album)
+                put("duration", track.duration)
+                put("cover", track.cover)
+                put("ext", ext)
+                put("mtime", mtime)
+                put("lyrics", lyrics)
+                put("added_at", System.currentTimeMillis())
+            }
+            db.insertWithOnConflict("tracks", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        }
     }
 
     fun setAudioPath(trackId: String, path: String, mtime: Long? = null) {
@@ -461,7 +479,7 @@ class Store(context: Context) {
             name = playlist.name,
             createdAt = playlist.createdAt,
             updatedAt = playlist.updatedAt.takeIf { it > 0 } ?: playlist.createdAt,
-            tracks = playlistTracks(id).map { it.toCatalogue() },
+            tracks = playlistTracks(id).map { it.toCatalogue().copy(cover = it.cover) },
         )
     }
 
