@@ -6,7 +6,7 @@
     VolumeOff,
     Expand,
     Shrink,
-    SlidersHorizontal,
+    AudioLines,
     PictureInPicture2,
     Heart,
     Music2,
@@ -181,7 +181,7 @@
       >
         <Heart
           size={14}
-          stroke-width={1.6}
+          stroke-width={2}
           fill={currentLiked ? "currentColor" : "none"}
         />
       </button>
@@ -233,7 +233,7 @@
       aria-label={t("player.equalizer")}
       aria-pressed={getEqOpen()}
     >
-      <SlidersHorizontal size={12} stroke-width={1.5} />
+      <AudioLines size={14} stroke-width={1.5} />
     </button>
     <button
       class="icon-btn small"

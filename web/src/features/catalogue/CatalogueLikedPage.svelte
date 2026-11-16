@@ -249,7 +249,7 @@
   <div class="hero">
     <div class="hero-cover-wrap">
       <div class="hero-cover placeholder">
-        <Heart size={22} stroke-width={1} />
+        <Heart size={24} stroke-width={1.75} fill="currentColor" />
       </div>
     </div>
 

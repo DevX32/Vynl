@@ -248,7 +248,7 @@
           aria-label={sidebarOpen ? undefined : t("catalogue.likedSongs")}
         >
           <div class="rail-cover liked-cover">
-            <Heart size={15} stroke-width={1} />
+            <Heart size={16} stroke-width={1.75} fill="currentColor" />
           </div>
 
           {#if sidebarOpen}
