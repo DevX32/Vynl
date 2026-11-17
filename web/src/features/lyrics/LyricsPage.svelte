@@ -546,8 +546,6 @@ import { toggleLyrics } from "@state/player.svelte";
             class:hidden-line={instrumental && !active}
             inert={instrumental && !active}
             class:bg={!!line.bg}
-            class:duet-left={line.agent === "v1"}
-            class:duet-right={line.agent === "v2"}
             bind:this={lineEls[i]}
             onclick={(e) => onLineClick(e, i)}
             oncontextmenu={(e) => onLineContextMenu(e, i)}
@@ -1002,20 +1000,6 @@ import { toggleLyrics } from "@state/player.svelte";
   .lyr-line.bg.active {
     color: var(--dim);
   }
-  .lyr-line.duet-left,
-  .lyr-line.duet-right {
-    max-width: 46%;
-    text-align: left;
-  }
-  .lyr-line.duet-right {
-    margin-left: auto;
-    margin-right: 0;
-  }
-  .lyr-line.duet-left {
-    margin-left: 0;
-    margin-right: auto;
-  }
-
   .lyr-roman {
     display: grid;
     grid-template-rows: 0fr;

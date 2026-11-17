@@ -415,6 +415,8 @@ function parseTtml(text: string): LyricLine[] {
       .trim();
     if (!lineText) return;
 
+    const wordTimed = spans.some((span) => span.time !== null);
+
     if (romanRole) {
       romans.push({ time: start, text: lineText });
       return;
@@ -423,7 +425,7 @@ function parseTtml(text: string): LyricLine[] {
     out.push({
       time: start,
       text: lineText,
-      words: words.length > 0 ? words : undefined,
+      ...(wordTimed && words.length > 0 ? { words } : {}),
       ...(end !== null ? { end } : {}),
       ...(bgRole.test(role) ? { bg: true } : {}),
       ...(attr(p, "ttm:agent") ? { agent: attr(p, "ttm:agent")! } : {}),
@@ -464,7 +466,7 @@ function parseTtml(text: string): LyricLine[] {
     }
   }
 
-  return out.sort((a, b) => a.time - b.time);
+  return finalizeLrcLines(out);
 }
 
 function plainLine(line: string): string {

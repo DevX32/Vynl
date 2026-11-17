@@ -123,7 +123,11 @@ data class Lyrics(
                     if (begin == null) continue
                     words += LyricWord(begin, spanText, end)
                 }
-                val clean = words.joinToString(" ") { it.text }.trim()
+                val clean = if (words.isNotEmpty()) {
+                    words.joinToString(" ") { it.text }.trim()
+                } else {
+                    stripTags(body).trim()
+                }
                 val roman = romanParts.joinToString(" ").trim().ifBlank { null }
                 if (clean.isBlank() && words.isEmpty()) continue
                 lines += LyricLine(time, clean, words, roman)
