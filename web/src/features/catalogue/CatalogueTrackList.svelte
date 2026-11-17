@@ -24,7 +24,7 @@
     refreshAfterCatalogueSave,
     saveCatalogueTrack,
   } from "@state/catalogue.svelte";
-  import { fmtTime, toPascalCase, stripAlbumSuffix } from "@lib/format";
+  import { fmtTime,  stripAlbumSuffix } from "@lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import type { Snippet } from "svelte";
@@ -160,7 +160,7 @@
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
       toasts.success(
-        t("catalogue.addedToPlaylist", { name: toPascalCase(name) }),
+        t("catalogue.addedToPlaylist", { name: name }),
       );
     } catch (error) {
       console.warn("catalogue add to playlist failed:", error);
@@ -181,7 +181,7 @@
       const playlistName = result.playlist?.name ?? name;
       toasts.success(
         t("catalogue.addedToPlaylist", {
-          name: toPascalCase(playlistName),
+          name: playlistName,
         }),
       );
     } catch (error) {
@@ -202,7 +202,7 @@
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
       toasts.success(
-        t("catalogue.savedToPlaylist", { name: toPascalCase(name) }),
+        t("catalogue.savedToPlaylist", { name: name }),
       );
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
@@ -221,7 +221,7 @@
       const playlist = await saveStreamToPlaylist(target, null, name);
       toasts.success(
         t("catalogue.savedToPlaylist", {
-          name: toPascalCase(playlist.name),
+          name: playlist.name,
         }),
       );
     } catch (error) {

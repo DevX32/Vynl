@@ -25,7 +25,6 @@
     fmtTime,
     totalSeconds,
     matchesQuery,
-    toPascalCase,
   } from "../../lib/format";
   import { blobSrc } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
@@ -139,7 +138,7 @@
     const target = removeTarget;
     if (!target || !pl || removeBusy) return;
     removeBusy = true;
-    const playlistName = toPascalCase(pl.name);
+    const playlistName = pl.name;
     try {
       await removeFromPlaylist(pl.id, target.path);
       toasts.success(
@@ -274,7 +273,7 @@
 
       <div class="hero-meta">
         <div class="hero-name display" aria-label={t("playlist.playlistName")}>
-          {toPascalCase(pl.name)}
+          {pl.name}
         </div>
         <div class="hero-sub mono">
           {#if currentTracks.length > 0}

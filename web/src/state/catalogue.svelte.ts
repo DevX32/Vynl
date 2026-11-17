@@ -263,6 +263,18 @@ export function resetCatalogueTaste(): void {
   _tasteError = null;
 }
 
+const TASTE_KEEP = 30;
+const TASTE_TOTAL = 60;
+
+function shuffle<T>(items: readonly T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export async function loadCatalogueTaste(
   seeds: readonly string[],
   force = false,
@@ -280,6 +292,7 @@ export async function loadCatalogueTaste(
     return;
   }
 
+  const previous = force ? _taste : [];
   const generation = ++_tasteGeneration;
   _tasteKey = key;
   _tasteLoading = true;
@@ -287,8 +300,17 @@ export async function loadCatalogueTaste(
   try {
     const tracks = await vynl.catalogueTaste([...seeds]);
     if (generation !== _tasteGeneration) return;
-    _taste = tracks;
-    registerCatalogueTracks(tracks);
+    if (previous.length > 0) {
+      const kept = shuffle(previous).slice(0, TASTE_KEEP);
+      const keptIds = new Set(kept.map((track) => track.id));
+      const fresh = tracks
+        .filter((track) => !keptIds.has(track.id))
+        .slice(0, TASTE_TOTAL - kept.length);
+      _taste = shuffle([...kept, ...fresh]);
+    } else {
+      _taste = tracks;
+    }
+    registerCatalogueTracks(_taste);
   } catch (error) {
     if (generation !== _tasteGeneration) return;
     _tasteError = error instanceof Error ? error.message : String(error);

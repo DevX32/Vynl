@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::commands::types::{CatalogueTrack, Playlist, PlaylistMeta};
+use crate::commands::types::{CatalogueTrack, Playlist, PlaylistMark, PlaylistMeta};
 use crate::services::util;
 
 crate::declare_file_mutex!();
@@ -49,6 +49,45 @@ pub fn covers_dir(user_data_dir: &Path) -> std::path::PathBuf {
 
 fn cover_prefix(id: &str) -> String {
     format!("pl-{id}.")
+}
+
+pub(crate) fn record_marks(pl: &mut Playlist, adds: &[String], removals: &[String]) {
+    const MAX_MARKS: usize = 500;
+    let now = util::now_ms();
+    let touch = |marks: &mut Vec<PlaylistMark>, key: &str| {
+        if let Some(mark) = marks.iter_mut().find(|m| m.track_id == key) {
+            if now > mark.at {
+                mark.at = now;
+            }
+        } else {
+            marks.push(PlaylistMark {
+                track_id: key.to_string(),
+                at: now,
+            });
+        }
+    };
+    for key in adds {
+        if !key.is_empty() {
+            touch(&mut pl.adds, key);
+        }
+    }
+    for key in removals {
+        if !key.is_empty() {
+            touch(&mut pl.removals, key);
+        }
+    }
+    pl.adds
+        .sort_by(|x, y| x.at.cmp(&y.at).then_with(|| x.track_id.cmp(&y.track_id)));
+    pl.removals
+        .sort_by(|x, y| x.at.cmp(&y.at).then_with(|| x.track_id.cmp(&y.track_id)));
+    let overflow = pl.adds.len().saturating_sub(MAX_MARKS);
+    if overflow > 0 {
+        pl.adds.drain(..overflow);
+    }
+    let overflow = pl.removals.len().saturating_sub(MAX_MARKS);
+    if overflow > 0 {
+        pl.removals.drain(..overflow);
+    }
 }
 
 pub fn remove_playlist_covers(user_data_dir: &Path, id: &str) {
@@ -201,6 +240,61 @@ pub fn upsert_playlist(output_dir: &Path, playlist: &Playlist) -> Result<(), Str
     write_playlist(output_dir, playlist)
 }
 
+pub fn rekey_playlist(
+    output_dir: &Path,
+    user_data_dir: &Path,
+    old_id: &str,
+    new_id: &str,
+) -> Result<Playlist, String> {
+    if !validate_id(old_id) || !validate_id(new_id) {
+        return Err("invalid playlist id".into());
+    }
+    if old_id == new_id {
+        return get_playlist(output_dir, old_id).ok_or_else(|| "playlist not found".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let mut pl = read_playlist(output_dir, old_id).ok_or("playlist not found")?;
+    if playlist_file(output_dir, new_id).exists() {
+        return Err("a playlist with that id already exists".into());
+    }
+    if let Some(cover) = pl.cover.clone()
+        && let Some(name) = Path::new(&cover)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(str::to_string)
+        && name.starts_with(&format!("pl-{old_id}."))
+    {
+        let ext = Path::new(&name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg");
+        let renamed = covers_dir(user_data_dir).join(format!("pl-{new_id}.{ext}"));
+        match fs::rename(&cover, &renamed) {
+            Ok(()) => pl.cover = Some(renamed.to_string_lossy().to_string()),
+            Err(_) => pl.cover = None,
+        }
+    }
+    pl.id = new_id.to_string();
+    write_playlist(output_dir, &pl)?;
+    let _ = fs::remove_file(playlist_file(output_dir, old_id));
+    let order = read_order(output_dir);
+    let mut seen = std::collections::HashSet::new();
+    let next: Vec<String> = order
+        .into_iter()
+        .map(|id| if id == old_id { new_id.to_string() } else { id })
+        .filter(|id| seen.insert(id.clone()))
+        .collect();
+    let next = if next.iter().any(|id| id == new_id) {
+        next
+    } else {
+        let mut next = next;
+        next.push(new_id.to_string());
+        next
+    };
+    write_order(output_dir, &next)?;
+    Ok(pl)
+}
+
 fn to_base36(mut num: u64) -> String {
     const CHARS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     if num == 0 {
@@ -249,6 +343,8 @@ pub fn create_playlist(output_dir: &Path, name: &str) -> Result<Playlist, String
         cover: None,
         created_at: now,
         updated_at: now,
+        adds: Vec::new(),
+        removals: Vec::new(),
     };
     write_playlist(output_dir, &pl)?;
     Ok(pl)
@@ -303,8 +399,15 @@ pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {
             continue;
         };
         let before = pl.paths.len();
+        let removed: Vec<String> = pl
+            .paths
+            .iter()
+            .filter(|p| paths.iter().any(|stale| stale == *p))
+            .cloned()
+            .collect();
         pl.paths.retain(|p| !paths.iter().any(|stale| stale == p));
         if pl.paths.len() != before {
+            record_marks(&mut pl, &[], &removed);
             touch(&mut pl);
             let _ = write_playlist(output_dir, &pl);
         }
@@ -328,6 +431,9 @@ pub fn find_playlist_by_name(output_dir: &Path, name: &str) -> Option<Playlist> 
     files.sort();
     for file in files {
         let id = &file[..file.len() - 5];
+        if id == crate::services::sync::LIKED_PLAYLIST_ID {
+            continue;
+        }
         if let Some(pl) = read_playlist(output_dir, id)
             && pl.name.trim().eq_ignore_ascii_case(wanted)
         {
@@ -344,11 +450,14 @@ pub fn add_to_playlist(output_dir: &Path, id: &str, paths: &[String]) -> Result<
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
     let mut existing: std::collections::HashSet<String> = pl.paths.iter().cloned().collect();
+    let mut added: Vec<String> = Vec::new();
     for p in paths {
         if existing.insert(p.clone()) {
             pl.paths.push(p.clone());
+            added.push(p.clone());
         }
     }
+    record_marks(&mut pl, &added, &[]);
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
     Ok(pl)
@@ -366,11 +475,17 @@ pub fn add_local_replacing_stream(
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
     let stream_path = format!("{CATALOGUE_PREFIX}{video_id}");
+    let mut removed: Vec<String> = Vec::new();
+    if pl.paths.iter().any(|p| p == &stream_path) {
+        removed.push(stream_path.clone());
+    }
     pl.paths.retain(|p| p != &stream_path);
     pl.streams.retain(|t| t.id != video_id);
     if !pl.paths.iter().any(|p| p == path) {
         pl.paths.push(path.to_string());
+        record_marks(&mut pl, &[path.to_string()], &[]);
     }
+    record_marks(&mut pl, &[], &removed);
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
     Ok(pl)
@@ -395,6 +510,7 @@ pub fn add_stream_to_playlist(
     if let Some(local) = local_path
         && pl.paths.iter().any(|p| p == local)
     {
+        record_marks(&mut pl, &[], &[path.clone()]);
         pl.paths.retain(|p| p != &path);
         pl.streams.retain(|t| t.id != video_id);
         touch(&mut pl);
@@ -402,7 +518,8 @@ pub fn add_stream_to_playlist(
         return Ok(pl);
     }
     if !pl.paths.contains(&path) {
-        pl.paths.push(path);
+        pl.paths.push(path.clone());
+        record_marks(&mut pl, &[path], &[]);
     }
     match pl.streams.iter_mut().find(|t| t.id == video_id) {
         Some(existing) => *existing = track.clone(),
@@ -423,6 +540,7 @@ pub fn add_streams_to_playlist(
     }
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
+    let mut added: Vec<String> = Vec::new();
     for track in tracks {
         let video_id = track.id.trim();
         if video_id.is_empty() {
@@ -430,13 +548,15 @@ pub fn add_streams_to_playlist(
         }
         let path = format!("{CATALOGUE_PREFIX}{video_id}");
         if !pl.paths.iter().any(|p| p == &path) {
-            pl.paths.push(path);
+            pl.paths.push(path.clone());
+            added.push(path);
         }
         match pl.streams.iter_mut().find(|t| t.id == video_id) {
             Some(existing) => *existing = track.clone(),
             None => pl.streams.push(track.clone()),
         }
     }
+    record_marks(&mut pl, &added, &[]);
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
     Ok(pl)
@@ -456,6 +576,7 @@ pub fn remove_from_playlist(
     if let Some(video_id) = track_path.strip_prefix(CATALOGUE_PREFIX) {
         pl.streams.retain(|t| t.id != video_id);
     }
+    record_marks(&mut pl, &[], &[track_path.to_string()]);
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
     Ok(pl)

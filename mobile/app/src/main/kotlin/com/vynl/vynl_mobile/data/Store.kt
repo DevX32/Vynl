@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.vynl.vynl_mobile.remote.DesktopPlaylist
 import java.io.File
 
-private const val SCHEMA_VERSION = 3
+private const val SCHEMA_VERSION = 5
 
 class Store(context: Context) {
     private val files = File(context.filesDir, "music")
@@ -67,6 +67,24 @@ class Store(context: Context) {
                 )
                 """.trimIndent(),
             )
+            db.execSQL(
+                """
+                CREATE TABLE desktop_playlists (
+                    playlist_id TEXT NOT NULL PRIMARY KEY
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE playlist_marks (
+                    playlist_id TEXT NOT NULL,
+                    track_id TEXT NOT NULL,
+                    add_at INTEGER NOT NULL DEFAULT 0,
+                    remove_at INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (playlist_id, track_id)
+                )
+                """.trimIndent(),
+            )
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -78,6 +96,32 @@ class Store(context: Context) {
             if (oldVersion < 3) {
                 db.execSQL("ALTER TABLE playlists ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("UPDATE playlists SET updated_at = created_at")
+            }
+            if (oldVersion < 4) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS desktop_playlists (
+                        playlist_id TEXT NOT NULL PRIMARY KEY
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "INSERT OR IGNORE INTO desktop_playlists (playlist_id) " +
+                        "SELECT id FROM playlists WHERE id LIKE 'dt-%'",
+                )
+            }
+            if (oldVersion < 5) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS playlist_marks (
+                        playlist_id TEXT NOT NULL,
+                        track_id TEXT NOT NULL,
+                        add_at INTEGER NOT NULL DEFAULT 0,
+                        remove_at INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY (playlist_id, track_id)
+                    )
+                    """.trimIndent(),
+                )
             }
         }
     }
@@ -195,7 +239,8 @@ class Store(context: Context) {
             SELECT pt.playlist_id, t.cover_path, t.cover
             FROM playlist_tracks pt
             JOIN tracks t ON t.id = pt.track_id
-            WHERE pt.position = (
+            WHERE pt.playlist_id != 'liked'
+            AND pt.position = (
                 SELECT MIN(position) FROM playlist_tracks WHERE playlist_id = pt.playlist_id
             )
             """.trimIndent(),
@@ -321,45 +366,455 @@ class Store(context: Context) {
         val db = helper.writableDatabase
         db.delete("playlist_tracks", "playlist_id = ?", arrayOf(id))
         db.delete("playlists", "id = ?", arrayOf(id))
+        db.delete("desktop_playlists", "playlist_id = ?", arrayOf(id))
+        db.delete("playlist_marks", "playlist_id = ?", arrayOf(id))
     }
 
-    fun replaceDesktopPlaylists(lists: List<DesktopPlaylist>) {
+    @Synchronized
+    @Suppress("LongMethod")
+    fun rekeyLegacyDtPlaylists() {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
-            db.delete("playlist_tracks", "playlist_id LIKE ?", arrayOf("dt-%"))
-            db.delete("playlists", "id LIKE ?", arrayOf("dt-%"))
+            val dtIds = mutableListOf<String>()
+            db.rawQuery("SELECT id FROM playlists WHERE id LIKE 'dt-%'", null).use { cursor ->
+                while (cursor.moveToNext()) dtIds += cursor.getString(0)
+            }
+            for (dtId in dtIds) {
+                val canonical = dtId.removePrefix("dt-")
+                val exists = db.rawQuery(
+                    "SELECT 1 FROM playlists WHERE id = ?",
+                    arrayOf(canonical),
+                ).use { it.moveToFirst() }
+                if (!exists) {
+                    db.update(
+                        "playlists",
+                        ContentValues().apply { put("id", canonical) },
+                        "id = ?",
+                        arrayOf(dtId),
+                    )
+                    db.update(
+                        "playlist_tracks",
+                        ContentValues().apply { put("playlist_id", canonical) },
+                        "playlist_id = ?",
+                        arrayOf(dtId),
+                    )
+                    db.update(
+                        "playlist_marks",
+                        ContentValues().apply { put("playlist_id", canonical) },
+                        "playlist_id = ?",
+                        arrayOf(dtId),
+                    )
+                    db.update(
+                        "desktop_playlists",
+                        ContentValues().apply { put("playlist_id", canonical) },
+                        "playlist_id = ?",
+                        arrayOf(dtId),
+                    )
+                    continue
+                }
+                val dtName = db.rawQuery(
+                    "SELECT name, created_at, updated_at FROM playlists WHERE id = ?",
+                    arrayOf(dtId),
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        Triple(cursor.getString(0), cursor.getLong(1), cursor.getLong(2))
+                    } else {
+                        null
+                    }
+                }
+                if (dtName == null) {
+                    deletePlaylist(dtId, db)
+                    continue
+                }
+                val dtTracks = playlistTracks(dtId).map { it.toCatalogue().copy(cover = it.cover) }
+                val dtMarks = readMarks(db, dtId)
+                val dtAdds = dtMarks.map { (trackId, pair) -> SyncMark(trackId, pair.first) }
+                val dtRemovals = dtMarks.map { (trackId, pair) -> SyncMark(trackId, pair.second) }
+                mergePlaylistInTransaction(
+                    db,
+                    canonical,
+                    dtName.first,
+                    dtName.second,
+                    dtName.third,
+                    dtTracks,
+                    dtAdds,
+                    dtRemovals,
+                )
+                deletePlaylist(dtId, db)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun deletePlaylist(id: String, db: SQLiteDatabase) {
+        db.delete("playlist_tracks", "playlist_id = ?", arrayOf(id))
+        db.delete("playlists", "id = ?", arrayOf(id))
+        db.delete("desktop_playlists", "playlist_id = ?", arrayOf(id))
+        db.delete("playlist_marks", "playlist_id = ?", arrayOf(id))
+    }
+
+    private fun readMarks(
+        db: SQLiteDatabase,
+        playlistId: String,
+    ): Map<String, Pair<Long, Long>> {
+        val marks = mutableMapOf<String, Pair<Long, Long>>()
+        db.rawQuery(
+            "SELECT track_id, add_at, remove_at FROM playlist_marks WHERE playlist_id = ?",
+            arrayOf(playlistId),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                marks[cursor.getString(0)] = cursor.getLong(1) to cursor.getLong(2)
+            }
+        }
+        return marks
+    }
+
+    private fun readTrackKeys(db: SQLiteDatabase, playlistId: String): List<String> {
+        val ids = mutableListOf<String>()
+        db.rawQuery(
+            "SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC",
+            arrayOf(playlistId),
+        ).use { cursor ->
+            while (cursor.moveToNext()) ids += cursor.getString(0)
+        }
+        return ids.map { "ytm:$it" }
+    }
+
+    private fun trackKey(track: CatalogueTrack): String = "ytm:${track.id.trim()}"
+
+    fun replaceDesktopPlaylists(lists: List<DesktopPlaylist>) {
+        rekeyLegacyDtPlaylists()
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            val owned = mutableSetOf<String>()
+            db.rawQuery("SELECT playlist_id FROM desktop_playlists", null).use { cursor ->
+                while (cursor.moveToNext()) owned += cursor.getString(0)
+            }
+            db.rawQuery("SELECT id FROM playlists WHERE id LIKE 'dt-%'", null).use { cursor ->
+                while (cursor.moveToNext()) owned += cursor.getString(0)
+            }
+            val incoming = lists.map { it.id }.toSet()
+            for (id in owned) {
+                val stale = id.startsWith("dt-") || id !in incoming
+                if (!stale) continue
+                deletePlaylist(id, db)
+            }
+            db.delete("desktop_playlists", null, null)
+
+            val now = System.currentTimeMillis()
             for (list in lists) {
-                val id = "dt-${list.id}"
+                val id = list.id
+                val existingMarks = readMarks(db, id)
+                val incomingKeys = list.trackIds.map { "ytm:$it" }
+
+                val visibleOrder = mutableListOf<String>()
+                for (key in incomingKeys) {
+                    val (add, remove) = existingMarks[key] ?: (0L to 0L)
+                    if (add == 0L && remove == 0L) {
+                        visibleOrder += key
+                    } else if (add >= remove) {
+                        visibleOrder += key
+                    }
+                }
+
+                val created = list.createdAt.takeIf { it > 0 } ?: now
+                val updated = list.updatedAt.takeIf { it > 0 } ?: now
                 db.insertWithOnConflict(
                     "playlists",
                     null,
                     ContentValues().apply {
                         put("id", id)
                         put("name", list.name)
-                        put("created_at", list.createdAt)
-                        put("updated_at", list.updatedAt.takeIf { it > 0 } ?: list.createdAt)
+                        put("created_at", created)
+                        put("updated_at", updated)
                     },
                     SQLiteDatabase.CONFLICT_REPLACE,
                 )
+                db.insertWithOnConflict(
+                    "desktop_playlists",
+                    null,
+                    ContentValues().apply { put("playlist_id", id) },
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+                db.delete("playlist_tracks", "playlist_id = ?", arrayOf(id))
                 var position = 0
-                list.trackIds.forEach { trackId ->
+                for (key in visibleOrder) {
                     db.insertWithOnConflict(
                         "playlist_tracks",
                         null,
                         ContentValues().apply {
                             put("playlist_id", id)
-                            put("track_id", trackId)
+                            put("track_id", key.removePrefix("ytm:"))
                             put("position", position++)
                         },
                         SQLiteDatabase.CONFLICT_REPLACE,
                     )
+                }
+                for (key in incomingKeys) {
+                    val existing = existingMarks[key]
+                    val add = existing?.first ?: 0L
+                    val remove = existing?.second ?: 0L
+                    if (add == 0L && remove == 0L) {
+                        upsertMark(db, id, key, add_at = now, remove_at = 0L)
+                    }
                 }
             }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
         }
+    }
+
+    private fun upsertMark(
+        db: SQLiteDatabase,
+        playlistId: String,
+        trackKey: String,
+        add_at: Long,
+        remove_at: Long,
+    ) {
+        db.insertWithOnConflict(
+            "playlist_marks",
+            null,
+            ContentValues().apply {
+                put("playlist_id", playlistId)
+                put("track_id", trackKey)
+                put("add_at", add_at)
+                put("remove_at", remove_at)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun mergePlaylist(
+        localId: String,
+        name: String,
+        createdAt: Long,
+        updatedAt: Long,
+        tracks: List<CatalogueTrack>,
+        adds: List<SyncMark>,
+        removals: List<SyncMark>,
+    ) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            mergePlaylistInTransaction(
+                db,
+                localId,
+                name,
+                createdAt,
+                updatedAt,
+                tracks,
+                adds,
+                removals,
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun mergePlaylistInTransaction(
+        db: SQLiteDatabase,
+        localId: String,
+        name: String,
+        createdAt: Long,
+        updatedAt: Long,
+        tracks: List<CatalogueTrack>,
+        adds: List<SyncMark>,
+        removals: List<SyncMark>,
+    ) {
+        val localRow = db.rawQuery(
+            "SELECT name, created_at, updated_at FROM playlists WHERE id = ?",
+            arrayOf(localId),
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                Triple(cursor.getString(0), cursor.getLong(1), cursor.getLong(2))
+            } else {
+                null
+            }
+        }
+        val localName = localRow?.first ?: name
+        val localCreated = localRow?.second ?: createdAt
+        val localUpdated = localRow?.third ?: 0L
+        val localFirst = localUpdated >= updatedAt
+
+        val addMap = mutableMapOf<String, Long>()
+        val remMap = mutableMapOf<String, Long>()
+        for ((key, pair) in readMarks(db, localId)) {
+            addMap[key] = pair.first
+            remMap[key] = pair.second
+        }
+        for (mark in adds) {
+            addMap[mark.trackId] = maxOf(addMap[mark.trackId] ?: 0L, mark.at)
+        }
+        for (mark in removals) {
+            remMap[mark.trackId] = maxOf(remMap[mark.trackId] ?: 0L, mark.at)
+        }
+        val allKeys = addMap.keys + remMap.keys
+        fun markVisible(key: String): Boolean =
+                (addMap[key] ?: 0L) >= (remMap[key] ?: 0L)
+
+        val remoteKeys = tracks.map(::trackKey)
+        val localKeys = readTrackKeys(db, localId)
+        val ordered = mutableListOf<String>()
+        if (localFirst) {
+            for (key in localKeys) if (key !in ordered) ordered += key
+            for (key in remoteKeys) if (key !in ordered) ordered += key
+        } else {
+            for (key in remoteKeys) if (key !in ordered) ordered += key
+            for (key in localKeys) if (key !in ordered) ordered += key
+        }
+        val orderedFiltered = ordered.filter(::markVisible).distinct()
+
+        val finalName = if (localFirst) localName else name
+        db.insertWithOnConflict(
+            "playlists",
+            null,
+            ContentValues().apply {
+                put("id", localId)
+                put("name", finalName.ifBlank { "Playlist" })
+                put("created_at", minOf(localCreated, createdAt))
+                put("updated_at", maxOf(localUpdated, updatedAt))
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+        for (track in tracks) {
+            if (track.id.isBlank()) continue
+            upsertTrackDisplay(db, track)
+        }
+        db.delete("playlist_tracks", "playlist_id = ?", arrayOf(localId))
+        var position = 0
+        for (key in orderedFiltered) {
+            db.insertWithOnConflict(
+                "playlist_tracks",
+                null,
+                ContentValues().apply {
+                    put("playlist_id", localId)
+                    put("track_id", key.removePrefix("ytm:"))
+                    put("position", position++)
+                },
+                SQLiteDatabase.CONFLICT_REPLACE,
+            )
+        }
+        for (key in allKeys) {
+            upsertMark(
+                db,
+                localId,
+                key,
+                add_at = addMap[key] ?: 0L,
+                remove_at = remMap[key] ?: 0L,
+            )
+        }
+    }
+
+    private fun upsertTrackDisplay(db: SQLiteDatabase, track: CatalogueTrack) {
+        val exists = db.rawQuery("SELECT 1 FROM tracks WHERE id = ?", arrayOf(track.id)).use {
+            it.moveToFirst()
+        }
+        val values = ContentValues().apply {
+            put("title", track.title)
+            put("artist", track.artist)
+            put("album", track.album)
+            put("duration", track.duration)
+            put("cover", track.cover)
+        }
+        if (exists) {
+            db.update("tracks", values, "id = ?", arrayOf(track.id))
+        } else {
+            values.put("id", track.id)
+            values.put("ext", "m4a")
+            values.put("mtime", 0L)
+            values.put("lyrics", "")
+            values.put("added_at", System.currentTimeMillis())
+            db.insertWithOnConflict("tracks", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+    }
+
+    fun findEquivalentPlaylist(name: String, trackIds: Set<String>): LocalPlaylist? {
+        val wanted = name.trim().lowercase()
+        var best: LocalPlaylist? = null
+        helper.readableDatabase.rawQuery(
+            "SELECT p.id, p.name, p.created_at, p.updated_at, (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id) AS cnt FROM playlists p",
+            null,
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val id = cursor.getString(0)
+                val name = cursor.getString(1)
+                if (!name.trim().lowercase().equals(wanted)) continue
+                val ids = mutableSetOf<String>()
+                helper.readableDatabase.rawQuery(
+                    "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?",
+                    arrayOf(id),
+                ).use { inner ->
+                    while (inner.moveToNext()) ids += inner.getString(0)
+                }
+                if (ids == trackIds || (ids.isEmpty() && trackIds.isEmpty())) {
+                    val candidate = LocalPlaylist(
+                        id = id,
+                        name = name,
+                        createdAt = cursor.getLong(2),
+                        updatedAt = cursor.getLong(3),
+                        trackCount = cursor.getInt(4),
+                    )
+                    val current = best
+                    if (current == null || candidate.updatedAt > current.updatedAt) {
+                        best = candidate
+                    }
+                }
+            }
+        }
+        return best
+    }
+
+    fun renamePlaylistId(oldId: String, newId: String) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.update(
+                "playlists",
+                ContentValues().apply { put("id", newId) },
+                "id = ?",
+                arrayOf(oldId),
+            )
+            db.update(
+                "playlist_tracks",
+                ContentValues().apply { put("playlist_id", newId) },
+                "playlist_id = ?",
+                arrayOf(oldId),
+            )
+            db.update(
+                "playlist_marks",
+                ContentValues().apply { put("playlist_id", newId) },
+                "playlist_id = ?",
+                arrayOf(oldId),
+            )
+            db.update(
+                "desktop_playlists",
+                ContentValues().apply { put("playlist_id", newId) },
+                "playlist_id = ?",
+                arrayOf(oldId),
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun snapshot(id: String): PlaylistSnapshot? {
+        val pl = playlist(id) ?: return null
+        val db = helper.readableDatabase
+        val marks = readMarks(db, id)
+        val ordered = readTrackKeys(db, id)
+        return PlaylistSnapshot(
+            name = pl.name,
+            updatedAt = pl.updatedAt,
+            orderedTrackIds = ordered,
+            marks = marks,
+        )
     }
 
     fun addToPlaylist(playlistId: String, track: CatalogueTrack) {
@@ -381,6 +836,14 @@ class Store(context: Context) {
             },
             SQLiteDatabase.CONFLICT_REPLACE,
         )
+        val now = System.currentTimeMillis()
+        upsertMark(
+            db,
+            playlistId,
+            "ytm:${track.id}",
+            add_at = now,
+            remove_at = readMarks(db, playlistId)["ytm:${track.id}"]?.second ?: 0L,
+        )
         touchPlaylist(playlistId)
     }
 
@@ -389,6 +852,14 @@ class Store(context: Context) {
             "playlist_tracks",
             "playlist_id = ? AND track_id = ?",
             arrayOf(playlistId, trackId),
+        )
+        val now = System.currentTimeMillis()
+        upsertMark(
+            helper.writableDatabase,
+            playlistId,
+            "ytm:$trackId",
+            add_at = readMarks(helper.readableDatabase, playlistId)["ytm:$trackId"]?.first ?: 0L,
+            remove_at = now,
         )
         touchPlaylist(playlistId)
     }
@@ -473,98 +944,19 @@ class Store(context: Context) {
 
     fun syncPayload(id: String): SyncPlaylistPayload? {
         val playlist = playlist(id) ?: return null
-        val canonical = id.removePrefix("dt-")
+        val db = helper.readableDatabase
+        val marks = readMarks(db, id)
         return SyncPlaylistPayload(
-            localId = canonical,
+            localId = id,
             name = playlist.name,
             createdAt = playlist.createdAt,
             updatedAt = playlist.updatedAt.takeIf { it > 0 } ?: playlist.createdAt,
             tracks = playlistTracks(id).map { it.toCatalogue().copy(cover = it.cover) },
+            adds = marks.map { (key, pair) -> SyncMark(key, pair.first) },
+            removals = marks.map { (key, pair) -> SyncMark(key, pair.second) },
         )
     }
 
-    fun localIdForSync(canonical: String): String {
-        if (playlist(canonical) != null) return canonical
-        val synced = "dt-$canonical"
-        if (playlist(synced) != null) return synced
-        return canonical
-    }
-
-    fun upsertSyncPlaylist(
-        localId: String,
-        name: String,
-        createdAt: Long,
-        updatedAt: Long,
-        tracks: List<CatalogueTrack>,
-    ) {
-        val db = helper.writableDatabase
-        db.beginTransaction()
-        try {
-            db.insertWithOnConflict(
-                "playlists",
-                null,
-                ContentValues().apply {
-                    put("id", localId)
-                    put("name", name.trim().ifEmpty { "Playlist" })
-                    put("created_at", createdAt)
-                    put("updated_at", updatedAt)
-                },
-                SQLiteDatabase.CONFLICT_REPLACE,
-            )
-            db.delete("playlist_tracks", "playlist_id = ?", arrayOf(localId))
-            var position = 0
-            for (track in tracks) {
-                upsertTrackMetadata(db, track)
-                db.insertWithOnConflict(
-                    "playlist_tracks",
-                    null,
-                    ContentValues().apply {
-                        put("playlist_id", localId)
-                        put("track_id", track.id)
-                        put("position", position++)
-                    },
-                    SQLiteDatabase.CONFLICT_REPLACE,
-                )
-            }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
-    }
-
-    private fun upsertTrackMetadata(db: SQLiteDatabase, track: CatalogueTrack) {
-        val exists = db.rawQuery("SELECT 1 FROM tracks WHERE id = ?", arrayOf(track.id)).use {
-            it.moveToFirst()
-        }
-        if (!exists) {
-            db.insertOrThrow(
-                "tracks",
-                null,
-                ContentValues().apply {
-                    put("id", track.id)
-                    put("title", track.title)
-                    put("artist", track.artist)
-                    put("album", track.album)
-                    put("duration", track.duration)
-                    put("cover", track.cover)
-                    put("added_at", System.currentTimeMillis())
-                },
-            )
-        } else {
-            db.update(
-                "tracks",
-                ContentValues().apply {
-                    put("title", track.title)
-                    put("artist", track.artist)
-                    put("album", track.album)
-                    if (track.duration > 0) put("duration", track.duration)
-                    put("cover", track.cover)
-                },
-                "id = ?",
-                arrayOf(track.id),
-            )
-        }
-    }
 }
 data class LocalTrack(
     val id: String,
@@ -607,4 +999,18 @@ data class SyncPlaylistPayload(
     val createdAt: Long,
     val updatedAt: Long,
     val tracks: List<CatalogueTrack>,
+    val adds: List<SyncMark> = emptyList(),
+    val removals: List<SyncMark> = emptyList(),
+)
+
+data class SyncMark(
+    val trackId: String,
+    val at: Long,
+)
+
+data class PlaylistSnapshot(
+    val name: String,
+    val updatedAt: Long,
+    val orderedTrackIds: List<String>,
+    val marks: Map<String, Pair<Long, Long>>,
 )

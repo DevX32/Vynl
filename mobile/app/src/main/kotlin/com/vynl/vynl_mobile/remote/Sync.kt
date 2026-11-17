@@ -4,6 +4,7 @@ import android.content.Context
 import com.vynl.vynl_mobile.BuildConfig
 import com.vynl.vynl_mobile.data.CatalogueTrack
 import com.vynl.vynl_mobile.data.SyncPlaylistPayload
+import com.vynl.vynl_mobile.data.SyncMark
 import com.vynl.vynl_mobile.data.Store
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -110,16 +111,38 @@ class Sync(context: Context) {
 
     suspend fun pushPlaylist(payload: SyncPlaylistPayload) = withContext(Dispatchers.IO) {
         val session = validSession()
-        val body = JSONArray().put(playlistJson(session, payload))
+        pushPlaylist(session, payload)
+    }
+
+    private fun pushPlaylist(session: SyncSession, payload: SyncPlaylistPayload) {
+        val body = playlistJson(session, payload, marksSupported)
         val request = Request.Builder()
             .url("$baseUrl/rest/v1/playlists?on_conflict=user_id,local_id")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer ${session.accessToken}")
             .header("Content-Type", "application/json")
             .header("Prefer", "resolution=merge-duplicates,return=minimal")
-            .post(body.toString().toRequestBody(JSON))
+            .post(JSONArray().put(body).toString().toRequestBody(JSON))
             .build()
-        execute(request, "Could not save to Vynl Sync")
+        try {
+            execute(request, "Could not save to Vynl Sync")
+        } catch (error: IOException) {
+            if (marksSupported && bodyMissingMarks(error.message.orEmpty())) {
+                marksSupported = false
+                val stripped = playlistJson(session, payload, false)
+                val retry = Request.Builder()
+                    .url("$baseUrl/rest/v1/playlists?on_conflict=user_id,local_id")
+                    .header("apikey", anonKey)
+                    .header("Authorization", "Bearer ${session.accessToken}")
+                    .header("Content-Type", "application/json")
+                    .header("Prefer", "resolution=merge-duplicates,return=minimal")
+                    .post(JSONArray().put(stripped).toString().toRequestBody(JSON))
+                    .build()
+                execute(retry, "Could not save to Vynl Sync")
+                return
+            }
+            throw error
+        }
     }
 
     suspend fun tombstone(localId: String) = withContext(Dispatchers.IO) {
@@ -138,20 +161,25 @@ class Sync(context: Context) {
         execute(request, "Could not update Vynl Sync")
     }
 
+    @Volatile
+    private var marksSupported = true
+
     suspend fun refresh(store: Store): SyncResult = withContext(Dispatchers.IO) {
+        store.rekeyLegacyDtPlaylists()
         val session = validSession()
         val rows = fetchRows(session)
         var pushed = 0
         var pulled = 0
         var deleted = 0
         val known = mutableSetOf<String>()
+        val consumed = mutableSetOf<String>()
 
         for (row in rows) {
             val canonical = row.optString("local_id")
             if (canonical.isBlank()) continue
             known += canonical
             val deletedAt = if (row.isNull("deleted_at")) null else row.optLong("deleted_at")
-            val localId = store.localIdForSync(canonical)
+            val localId = resolveLocalId(store, canonical, row, consumed)
             val local = store.playlist(localId)
 
             if (deletedAt != null) {
@@ -170,31 +198,28 @@ class Sync(context: Context) {
             }
 
             val remoteUpdated = row.optLong("updated_at")
-            when {
-                local == null -> {
-                    store.upsertSyncPlaylist(
-                        localId = canonical,
-                        name = row.optString("name", "Playlist"),
-                        createdAt = row.optLong("created_at"),
-                        updatedAt = remoteUpdated,
-                        tracks = parseTracks(row),
-                    )
-                    pulled += 1
-                }
-                local.updatedAt < remoteUpdated -> {
-                    store.upsertSyncPlaylist(
-                        localId = localId,
-                        name = row.optString("name", local.name),
-                        createdAt = row.optLong("created_at", local.createdAt),
-                        updatedAt = remoteUpdated,
-                        tracks = parseTracks(row),
-                    )
-                    pulled += 1
-                }
-                local.updatedAt > remoteUpdated -> {
-                    store.syncPayload(localId)?.let { pushPlaylist(it) }
-                    pushed += 1
-                }
+            val remoteName = row.optString("name", "Playlist")
+            val remoteTracks = parseTracks(row)
+            val remoteAdds = parseMarks(row, "adds")
+            val remoteRemovals = parseMarks(row, "removals")
+            val before = store.snapshot(localId)
+            store.mergePlaylist(
+                localId = localId,
+                name = remoteName,
+                createdAt = row.optLong("created_at"),
+                updatedAt = remoteUpdated,
+                tracks = remoteTracks,
+                adds = remoteAdds,
+                removals = remoteRemovals,
+            )
+            val after = store.snapshot(localId)
+            if (before == after) {
+                store.syncPayload(localId)?.let { pushPlaylist(it) }
+                pushed += 1
+            } else {
+                store.syncPayload(localId)?.let { pushPlaylist(it) }
+                pushed += 1
+                pulled += 1
             }
         }
 
@@ -208,11 +233,32 @@ class Sync(context: Context) {
         SyncResult(pushed = pushed, pulled = pulled, deleted = deleted)
     }
 
+    private fun resolveLocalId(
+        store: Store,
+        canonical: String,
+        row: JSONObject,
+        consumed: MutableSet<String>,
+    ): String {
+        if (store.playlist(canonical) != null) return canonical
+        val trackIds = mutableSetOf<String>()
+        val array = row.optJSONArray("tracks") ?: JSONArray()
+        for (index in 0 until array.length()) {
+            array.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }?.let(trackIds::add)
+        }
+        val match = store.findEquivalentPlaylist(row.optString("name", ""), trackIds)
+        if (match != null && match.id !in consumed) {
+            consumed += match.id
+            store.renamePlaylistId(match.id, canonical)
+            return canonical
+        }
+        return canonical
+    }
+
     private fun fetchRows(session: SyncSession): List<JSONObject> {
         val request = Request.Builder()
             .url(
-                "$baseUrl/rest/v1/playlists" +
-                    "?select=local_id,name,tracks,created_at,updated_at,deleted_at",
+                "$baseUrl/rest/v1/playlists?select=local_id,name,tracks,created_at,updated_at,deleted_at" +
+                    (if (marksSupported) ",adds,removals" else ""),
             )
             .header("apikey", anonKey)
             .header("Authorization", "Bearer ${session.accessToken}")
@@ -223,6 +269,10 @@ class Sync(context: Context) {
         response.use {
             val body = it.body?.string().orEmpty()
             if (!it.isSuccessful) {
+                if (marksSupported && bodyMissingMarks(body)) {
+                    marksSupported = false
+                    return fetchRows(session)
+                }
                 throw IOException(
                     "Could not load synced playlists (${it.code}): ${body.trim().take(160)}",
                 )
@@ -234,7 +284,28 @@ class Sync(context: Context) {
         }
     }
 
-    private fun playlistJson(session: SyncSession, payload: SyncPlaylistPayload): JSONObject =
+    private fun bodyMissingMarks(body: String): Boolean {
+        val lowered = body.lowercase()
+        val mentionsMark = lowered.contains("adds") || lowered.contains("removals")
+        val schemaError = lowered.contains("column") || lowered.contains("schema cache")
+        return mentionsMark && schemaError
+    }
+
+    private fun parseMarks(row: JSONObject, key: String): List<SyncMark> {
+        val array = row.optJSONArray(key) ?: return emptyList()
+        return (0 until array.length()).mapNotNull { index ->
+            val mark = array.optJSONObject(index) ?: return@mapNotNull null
+            val trackId = mark.optString("trackId").ifBlank { mark.optString("track_id") }
+            if (trackId.isBlank()) return@mapNotNull null
+            SyncMark(trackId, mark.optLong("at"))
+        }
+    }
+
+    private fun playlistJson(
+        session: SyncSession,
+        payload: SyncPlaylistPayload,
+        includeMarks: Boolean = true,
+    ): JSONObject =
         JSONObject().apply {
             put("user_id", session.userId)
             put("local_id", payload.localId)
@@ -259,6 +330,22 @@ class Sync(context: Context) {
             put("created_at", payload.createdAt)
             put("updated_at", payload.updatedAt)
             put("deleted_at", JSONObject.NULL)
+            if (includeMarks) {
+                put("adds", marksJson(payload.adds))
+                put("removals", marksJson(payload.removals))
+            }
+        }
+
+    private fun marksJson(marks: List<SyncMark>): JSONArray =
+        JSONArray().apply {
+            for (mark in marks) {
+                put(
+                    JSONObject().apply {
+                        put("trackId", mark.trackId)
+                        put("at", mark.at)
+                    },
+                )
+            }
         }
 
     private fun parseTracks(row: JSONObject): List<CatalogueTrack> {

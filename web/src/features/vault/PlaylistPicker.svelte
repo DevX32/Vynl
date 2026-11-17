@@ -1,7 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { Search, Plus, ListMusic, Check } from "lucide-svelte";
-  import { toPascalCase } from "../../lib/format";
   import { t } from "@lib/i18n";
 
   type Playlist = { id: string; name: string; trackCount: number };
@@ -97,7 +96,7 @@
             ? t("playlistPicker.track")
             : t("playlistPicker.tracks")}
           {#if suggestedName}
-            · {toPascalCase(suggestedName)}{/if}
+            · {suggestedName}{/if}
         </span>
       </div>
     </header>
@@ -129,7 +128,7 @@
               <ListMusic size={13} />
             {/if}
           </span>
-          <span class="name">{toPascalCase(pl.name)}</span>
+          <span class="name">{pl.name}</span>
           {#if existingMatch?.id === pl.id}
             <span class="tag mono">{t("playlistPicker.sameName")}</span>
           {/if}

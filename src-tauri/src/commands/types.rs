@@ -295,6 +295,13 @@ pub struct PlaylistMeta {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistMark {
+    pub track_id: String,
+    pub at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Playlist {
@@ -303,6 +310,10 @@ pub struct Playlist {
     pub paths: Vec<String>,
     #[serde(default)]
     pub streams: Vec<CatalogueTrack>,
+    #[serde(default)]
+    pub adds: Vec<PlaylistMark>,
+    #[serde(default)]
+    pub removals: Vec<PlaylistMark>,
     pub cover: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,

@@ -15,7 +15,7 @@
     UserRound,
     Import,
   } from "lucide-svelte";
-  import { blobSrc, toPascalCase } from "../lib/format";
+  import { blobSrc } from "../lib/format";
   import { avatarUri, avatarRevision } from "@lib/blobatar";
   import { t } from "@lib/i18n";
   import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
@@ -317,7 +317,7 @@
 
           {#if sidebarOpen}
             <span class="rail-meta">
-              <span class="rail-name display">{toPascalCase(p.name)}</span>
+              <span class="rail-name display">{p.name}</span>
               <span class="rail-desc mono">
                 {`${t("playlists.playlist")} · ${resolveDisplayName(getCurrentSettings().displayName)}`}
               </span>

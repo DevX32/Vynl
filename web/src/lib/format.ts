@@ -164,9 +164,3 @@ export function isSameSong(
   if (Math.abs(a.duration - b.duration) > SONG_MATCH_TOLERANCE) return false;
   return songKey(a.title, a.artist) === songKey(b.title, b.artist);
 }
-
-export function toPascalCase(text: string): string {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return text;
-  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
-}

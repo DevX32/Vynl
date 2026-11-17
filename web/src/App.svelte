@@ -12,6 +12,7 @@
   import MiniPlayer from "./features/player/MiniPlayer.svelte";
   import { initSettings, getCurrentSettings } from "@state/settings.svelte";
   import { refreshSyncStatus } from "@state/sync.svelte";
+  import { hydrateTaste } from "@state/taste.svelte";
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
   import { playTrack } from "@lib/player.svelte";
@@ -22,7 +23,6 @@
   import Onboarding from "./features/onboarding/Onboarding.svelte";
   import { initAppUpdate } from "@state/app-update.svelte";
   import { toasts } from "./lib/toast";
-  import { toPascalCase } from "./lib/format";
   import {
     getCurrentPlaylists,
     getPlaylistCustomCover,
@@ -205,8 +205,15 @@
         if (result.pulled > 0 || result.deleted > 0) {
           await refreshPlaylists();
         }
+        await hydrateTaste();
       } catch (e) {
         console.warn("sync failed", e);
+        toasts.error(
+          t("account.syncFailed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+          6000,
+        );
       }
     })();
     return () => { off(); offUpdate(); };
@@ -294,7 +301,7 @@
   function onMovedToVynl(result: StreamImportResult): void {
     moveToVynlOpen = false;
     void refreshPlaylists();
-    const name = toPascalCase(result.playlist.name);
+    const name = result.playlist.name;
     if (result.unmatched.length === 0) {
       toasts.success(t("moveToVynl.done", { n: result.matched, name }));
     } else {
@@ -376,7 +383,7 @@
         toasts.error(t("playlists.deletePartial", { failed: result.failed }));
       } else {
         toasts.success(
-          t("playlists.deleteDone", { name: toPascalCase(target.name), deleted: result.deleted }),
+          t("playlists.deleteDone", { name: target.name, deleted: result.deleted }),
         );
       }
       if (wasViewing) navigate("library");
@@ -568,7 +575,7 @@
   <Dialog
     open
     title={t("playlists.deleteTitle")}
-    description={t("playlists.deleteBody", { name: toPascalCase(deleteTarget.name) })}
+    description={t("playlists.deleteBody", { name: deleteTarget.name })}
     confirmLabel={t("playlists.deleteConfirm")}
     danger
     onconfirm={() => {

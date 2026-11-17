@@ -6,8 +6,10 @@ use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
 use crate::catalogue::types::{CatalogueAlbumRef, CatalogueArtistRef, CatalogueTrack};
-use crate::commands::types::Playlist;
+use crate::commands::types::{Playlist, PlaylistMark};
 use crate::services::{playlists, util};
+
+pub const LIKED_PLAYLIST_ID: &str = "liked";
 
 const SUPABASE_URL: &str = match option_env!("SUPABASE_URL") {
     Some(value) => value,
@@ -20,6 +22,321 @@ const SUPABASE_ANON_KEY: &str = match option_env!("SUPABASE_ANON_KEY") {
 const TABLE: &str = "playlists";
 const SESSION_DIR: &str = "cloud";
 const SESSION_FILE: &str = "session.json";
+
+enum LocalResolution {
+    Present(Playlist),
+    Duplicate,
+    Missing,
+}
+
+fn catalogue_signature(playlist: &Playlist) -> std::collections::BTreeSet<String> {
+    playlist
+        .paths
+        .iter()
+        .filter_map(|p| p.strip_prefix("ytm:").map(|id| id.to_string()))
+        .collect()
+}
+
+fn row_signature(row: &SyncRow) -> std::collections::BTreeSet<String> {
+    row.tracks
+        .iter()
+        .map(|track| track.id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect()
+}
+
+fn resolve_local(
+    output_dir: &Path,
+    data_dir: &Path,
+    row: &SyncRow,
+    consumed: &mut std::collections::HashSet<String>,
+) -> LocalResolution {
+    if let Some(playlist) = playlists::get_playlist(output_dir, &row.local_id) {
+        return LocalResolution::Present(playlist);
+    }
+    let wanted = row.name.trim().to_lowercase();
+    let target = row_signature(row);
+    let mut best: Option<Playlist> = None;
+    let mut has_consumed = false;
+    for meta in playlists::list_playlists(output_dir) {
+        if consumed.contains(&meta.id) {
+            has_consumed = true;
+            continue;
+        }
+        let Some(playlist) = playlists::get_playlist(output_dir, &meta.id) else {
+            continue;
+        };
+        if !playlist.name.trim().eq_ignore_ascii_case(&wanted) {
+            continue;
+        }
+        if catalogue_signature(&playlist) != target {
+            continue;
+        }
+        if best
+            .as_ref()
+            .is_none_or(|b| playlist.updated_at > b.updated_at)
+        {
+            best = Some(playlist);
+        }
+    }
+    let Some(best) = best else {
+        return if has_consumed {
+            LocalResolution::Duplicate
+        } else {
+            LocalResolution::Missing
+        };
+    };
+    consumed.insert(best.id.clone());
+    match playlists::rekey_playlist(output_dir, data_dir, &best.id, &row.local_id) {
+        Ok(playlist) => LocalResolution::Present(playlist),
+        Err(_) => match playlists::get_playlist(output_dir, &row.local_id) {
+            Some(playlist) => LocalResolution::Present(playlist),
+            None => LocalResolution::Missing,
+        },
+    }
+}
+
+fn mark_map(marks: &[PlaylistMark]) -> std::collections::HashMap<&str, i64> {
+    let mut map = std::collections::HashMap::new();
+    for mark in marks {
+        map.entry(mark.track_id.as_str())
+            .and_modify(|at: &mut i64| {
+                if mark.at > *at {
+                    *at = mark.at;
+                }
+            })
+            .or_insert(mark.at);
+    }
+    map
+}
+
+fn merge_marks(a: &[PlaylistMark], b: &[PlaylistMark]) -> Vec<PlaylistMark> {
+    let combined: Vec<PlaylistMark> = a.iter().chain(b.iter()).cloned().collect();
+    let map = mark_map(&combined);
+    let mut merged: Vec<PlaylistMark> = map
+        .into_iter()
+        .map(|(track_id, at)| PlaylistMark {
+            track_id: track_id.to_string(),
+            at,
+        })
+        .collect();
+    merged.sort_by(|x, y| y.at.cmp(&x.at).then_with(|| x.track_id.cmp(&y.track_id)));
+    const MAX_MARKS: usize = 500;
+    merged.truncate(MAX_MARKS);
+    merged
+}
+
+fn remote_track_to_catalogue(track: &SyncTrack) -> CatalogueTrack {
+    CatalogueTrack {
+        id: track.id.clone(),
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        artists: vec![CatalogueArtistRef {
+            name: track.artist.clone(),
+            id: None,
+        }],
+        album: track.album.as_ref().map(|name| CatalogueAlbumRef {
+            name: name.clone(),
+            id: None,
+        }),
+        duration: track.duration,
+        cover: track.cover.clone(),
+        explicit: false,
+    }
+}
+
+fn union_playlist(local: &Playlist, row: &SyncRow) -> Playlist {
+    let adds = merge_marks(&local.adds, &row.adds);
+    let removals = merge_marks(&local.removals, &row.removals);
+    let add_map = mark_map(&adds);
+    let rem_map = mark_map(&removals);
+    let visible = |key: &str| {
+        let add = add_map.get(key).copied().unwrap_or(0);
+        let removal = rem_map.get(key).copied().unwrap_or(0);
+        add >= removal
+    };
+
+    let local_first = local.updated_at >= row.updated_at;
+    let remote_keys: Vec<String> = row
+        .tracks
+        .iter()
+        .filter(|t| !t.id.trim().is_empty())
+        .map(|t| format!("ytm:{}", t.id.trim()))
+        .collect();
+    let mut ordered: Vec<String> = Vec::with_capacity(local.paths.len() + remote_keys.len());
+    if local_first {
+        ordered.extend(local.paths.iter().cloned());
+        for key in &remote_keys {
+            if !ordered.contains(key) {
+                ordered.push(key.clone());
+            }
+        }
+    } else {
+        ordered.extend(remote_keys.iter().cloned());
+        for key in &local.paths {
+            if !ordered.contains(key) {
+                ordered.push(key.clone());
+            }
+        }
+    }
+    let ordered: Vec<String> = ordered.into_iter().filter(|k| visible(k)).collect();
+
+    let local_streams: std::collections::HashMap<&str, &CatalogueTrack> =
+        local.streams.iter().map(|t| (t.id.as_str(), t)).collect();
+    let remote_tracks: std::collections::HashMap<&str, &SyncTrack> =
+        row.tracks.iter().map(|t| (t.id.as_str(), t)).collect();
+    let mut streams: Vec<CatalogueTrack> = Vec::new();
+    for key in &ordered {
+        let Some(id) = key.strip_prefix("ytm:") else {
+            continue;
+        };
+        if let Some(track) = local_streams.get(id) {
+            streams.push((*track).clone());
+        } else if let Some(track) = remote_tracks.get(id) {
+            streams.push(remote_track_to_catalogue(track));
+        }
+    }
+
+    let local_newer = local.updated_at >= row.updated_at;
+    let name = if local_newer {
+        local.name.clone()
+    } else {
+        row.name.trim().to_string()
+    };
+    Playlist {
+        id: row.local_id.clone(),
+        name: if name.is_empty() {
+            "Untitled".into()
+        } else {
+            name
+        },
+        paths: ordered,
+        streams,
+        adds,
+        removals,
+        cover: local.cover.clone(),
+        created_at: local.created_at.min(row.created_at),
+        updated_at: local.updated_at.max(row.updated_at),
+    }
+}
+
+fn merge_signature(pl: &Playlist) -> String {
+    serde_json::json!({
+        "paths": pl.paths,
+        "streams": pl.streams.iter().map(|t| &t.id).collect::<Vec<_>>(),
+        "adds": pl.adds,
+        "removals": pl.removals,
+        "name": pl.name,
+        "createdAt": pl.created_at,
+        "updatedAt": pl.updated_at,
+    })
+    .to_string()
+}
+
+pub(crate) fn ensure_hidden_liked(
+    output_dir: &Path,
+    user_data_dir: &Path,
+) -> Result<Option<Playlist>, String> {
+    if let Some(existing) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {
+        return Ok(Some(existing));
+    }
+    let entries = crate::services::taste::load(user_data_dir);
+    let liked: Vec<_> = entries.iter().filter(|entry| entry.liked).collect();
+    if liked.is_empty() {
+        return Ok(None);
+    }
+    let now = util::now_ms();
+    let created_at = liked
+        .iter()
+        .filter_map(|entry| entry.liked_at)
+        .min()
+        .map(|at| at.min(i64::MAX as u64) as i64)
+        .unwrap_or(now);
+    let playlist = Playlist {
+        id: LIKED_PLAYLIST_ID.to_string(),
+        name: "Liked Songs".to_string(),
+        paths: liked
+            .iter()
+            .map(|entry| format!("ytm:{}", entry.track.id))
+            .collect(),
+        streams: liked.iter().map(|entry| entry.track.clone()).collect(),
+        adds: liked
+            .iter()
+            .map(|entry| PlaylistMark {
+                track_id: format!("ytm:{}", entry.track.id),
+                at: entry
+                    .liked_at
+                    .map(|at| at.min(i64::MAX as u64) as i64)
+                    .unwrap_or(now),
+            })
+            .collect(),
+        removals: Vec::new(),
+        cover: None,
+        created_at,
+        updated_at: now,
+    };
+    playlists::upsert_playlist(output_dir, &playlist)?;
+    Ok(Some(playlist))
+}
+
+fn reconcile_taste(user_data_dir: &Path, liked: &Playlist) -> Result<(), String> {
+    let mut next = crate::services::taste::load(user_data_dir);
+    let add_map = mark_map(&liked.adds);
+    let rem_map = mark_map(&liked.removals);
+    let stream_by_id: std::collections::HashMap<&str, &CatalogueTrack> = liked
+        .streams
+        .iter()
+        .map(|track| (track.id.as_str(), track))
+        .collect();
+    let mut changed = false;
+
+    for entry in next.iter_mut() {
+        if !entry.liked {
+            continue;
+        }
+        let key = format!("ytm:{}", entry.track.id);
+        let removal = rem_map.get(key.as_str()).copied().unwrap_or(0);
+        if removal == 0 {
+            continue;
+        }
+        let add = add_map.get(key.as_str()).copied().unwrap_or(0);
+        if removal > add {
+            entry.liked = false;
+            changed = true;
+        }
+    }
+
+    for key in &liked.paths {
+        let Some(id) = key.strip_prefix("ytm:") else {
+            continue;
+        };
+        if let Some(entry) = next.iter_mut().find(|entry| entry.track.id == id) {
+            if entry.liked {
+                continue;
+            }
+            entry.liked = true;
+            entry.liked_at = add_map.get(key.as_str()).copied().map(|at| at as u64);
+            changed = true;
+            continue;
+        }
+        let Some(track) = stream_by_id.get(id) else {
+            continue;
+        };
+        next.push(crate::services::taste::TasteEntry {
+            track: (*track).clone(),
+            plays: 0,
+            last_played: 0,
+            liked: true,
+            liked_at: add_map.get(key.as_str()).copied().map(|at| at as u64),
+        });
+        changed = true;
+    }
+
+    if changed {
+        crate::services::taste::save(user_data_dir, &next)?;
+    }
+    Ok(())
+}
 
 fn sync_enabled() -> bool {
     !base_url().is_empty() && !anon_key().is_empty()
@@ -87,6 +404,10 @@ struct SyncRow {
     updated_at: i64,
     #[serde(default)]
     deleted_at: Option<i64>,
+    #[serde(default)]
+    adds: Vec<PlaylistMark>,
+    #[serde(default)]
+    removals: Vec<PlaylistMark>,
 }
 
 fn now_ms() -> i64 {
@@ -400,21 +721,59 @@ async fn rest_headers(
         .header("Authorization", format!("Bearer {}", session.access_token)))
 }
 
-async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
+static MARKS_SUPPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+fn marks_supported() -> bool {
+    MARKS_SUPPORTED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn set_marks_supported(supported: bool) {
+    MARKS_SUPPORTED.store(supported, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn body_missing_marks(body: &str) -> bool {
+    let lowered = body.to_lowercase();
+    (lowered.contains("column") && (lowered.contains("adds") || lowered.contains("removals")))
+        || lowered.contains("schema cache") && lowered.contains("playlists")
+}
+
+fn select_query() -> &'static str {
+    if marks_supported() {
+        "select=local_id,name,tracks,created_at,updated_at,deleted_at,adds,removals"
+    } else {
+        "select=local_id,name,tracks,created_at,updated_at,deleted_at"
+    }
+}
+
+async fn fetch_rows_once(
+    data_dir: &Path,
+    query: &'static str,
+) -> Result<reqwest::Response, String> {
     let request = http()?
-        .get(format!(
-            "{}/rest/v1/{}?select=local_id,name,tracks,created_at,updated_at,deleted_at",
-            base_url(),
-            TABLE
-        ))
+        .get(format!("{}/rest/v1/{}?{}", base_url(), TABLE, query))
         .header("Accept", "application/json");
-    let response = rest_headers(data_dir, request)
+    rest_headers(data_dir, request)
         .await?
         .send()
         .await
-        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
-    let status = response.status();
-    let body = response.text().await.unwrap_or_default();
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))
+}
+
+async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
+    let query = select_query();
+    let mut response = fetch_rows_once(data_dir, query).await?;
+    let mut status = response.status();
+    let mut body = response.text().await.unwrap_or_default();
+    if !status.is_success() && query.contains("adds") && body_missing_marks(&body) {
+        set_marks_supported(false);
+        response = fetch_rows_once(
+            data_dir,
+            "select=local_id,name,tracks,created_at,updated_at,deleted_at",
+        )
+        .await?;
+        status = response.status();
+        body = response.text().await.unwrap_or_default();
+    }
     if !status.is_success() {
         return Err(format!(
             "Could not load synced playlists ({}).",
@@ -424,10 +783,7 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
     serde_json::from_str(&body).map_err(|e| format!("Unexpected Vynl Sync response: {e}"))
 }
 
-async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
-    if rows.is_empty() {
-        return Ok(());
-    }
+async fn upsert_rows_once(data_dir: &Path, rows: &[Value]) -> Result<reqwest::Response, String> {
     let request = http()?
         .post(format!(
             "{}/rest/v1/{}?on_conflict=user_id,local_id",
@@ -437,13 +793,40 @@ async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
         .header("Content-Type", "application/json")
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
         .json(rows);
-    let response = rest_headers(data_dir, request)
+    rest_headers(data_dir, request)
         .await?
         .send()
         .await
-        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))
+}
+
+async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let payload = if marks_supported() {
+        rows.to_vec()
+    } else {
+        rows.iter().map(strip_marks).collect()
+    };
+    let response = upsert_rows_once(data_dir, &payload).await?;
     let status = response.status();
     if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        if marks_supported() {
+            if body_missing_marks(&body) {
+                set_marks_supported(false);
+                let stripped: Vec<Value> = rows.iter().map(strip_marks).collect();
+                let response = upsert_rows_once(data_dir, &stripped).await?;
+                if !response.status().is_success() {
+                    return Err(format!(
+                        "Could not save to Vynl Sync ({}).",
+                        response.status().as_u16()
+                    ));
+                }
+                return Ok(());
+            }
+        }
         return Err(format!(
             "Could not save to Vynl Sync ({}).",
             status.as_u16()
@@ -472,7 +855,18 @@ fn playlist_value(session: &Session, playlist: &Playlist) -> Value {
         "created_at": playlist.created_at,
         "updated_at": playlist.updated_at,
         "deleted_at": Value::Null,
+        "adds": playlist.adds,
+        "removals": playlist.removals,
     })
+}
+
+fn strip_marks(row: &Value) -> Value {
+    let mut row = row.clone();
+    if let Some(object) = row.as_object_mut() {
+        object.remove("adds");
+        object.remove("removals");
+    }
+    row
 }
 
 pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
@@ -529,28 +923,18 @@ fn row_to_playlist(row: &SyncRow) -> Playlist {
         cover: None,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        adds: row.adds.clone(),
+        removals: row.removals.clone(),
     };
     if playlist.name.is_empty() {
         playlist.name = "Untitled".into();
     }
     for track in &row.tracks {
+        if track.id.trim().is_empty() {
+            continue;
+        }
         playlist.paths.push(format!("ytm:{}", track.id));
-        playlist.streams.push(CatalogueTrack {
-            id: track.id.clone(),
-            title: track.title.clone(),
-            artist: track.artist.clone(),
-            artists: vec![CatalogueArtistRef {
-                name: track.artist.clone(),
-                id: None,
-            }],
-            album: track.album.as_ref().map(|name| CatalogueAlbumRef {
-                name: name.clone(),
-                id: None,
-            }),
-            duration: track.duration,
-            cover: track.cover.clone(),
-            explicit: false,
-        });
+        playlist.streams.push(remote_track_to_catalogue(track));
     }
     playlist
 }
@@ -564,9 +948,16 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     let mut result = SyncResult::default();
     let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
 
+    let _ = ensure_hidden_liked(output_dir, data_dir);
+
+    let mut consumed: std::collections::HashSet<String> = std::collections::HashSet::new();
     for row in &rows {
         known.insert(row.local_id.clone());
-        let local = playlists::get_playlist(output_dir, &row.local_id);
+        let local = match resolve_local(output_dir, data_dir, row, &mut consumed) {
+            LocalResolution::Present(playlist) => Some(playlist),
+            LocalResolution::Duplicate => continue,
+            LocalResolution::Missing => None,
+        };
         match row.deleted_at {
             Some(deleted_at) => match local {
                 Some(playlist) if playlist.updated_at <= deleted_at => {
@@ -585,17 +976,26 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                     playlists::upsert_playlist(output_dir, &synced)?;
                     result.pulled += 1;
                 }
-                Some(playlist) if playlist.updated_at < row.updated_at => {
-                    let mut synced = row_to_playlist(row);
-                    synced.cover = playlist.cover.clone();
-                    playlists::upsert_playlist(output_dir, &synced)?;
-                    result.pulled += 1;
+                Some(playlist) => {
+                    let merged = union_playlist(&playlist, row);
+                    if merge_signature(&merged) != merge_signature(&playlist) {
+                        playlists::upsert_playlist(output_dir, &merged)?;
+                        let remote_change =
+                            merged.paths.iter().any(|p| !playlist.paths.contains(p))
+                                || merged.removals.iter().any(|m| {
+                                    playlist
+                                        .removals
+                                        .iter()
+                                        .all(|r| r.track_id != m.track_id || r.at < m.at)
+                                });
+                        if remote_change {
+                            result.pulled += 1;
+                        } else {
+                            result.pushed += 1;
+                        }
+                    }
+                    upsert_rows(data_dir, &[playlist_value(&session, &merged)]).await?;
                 }
-                Some(playlist) if playlist.updated_at > row.updated_at => {
-                    upsert_rows(data_dir, &[playlist_value(&session, &playlist)]).await?;
-                    result.pushed += 1;
-                }
-                Some(_) => {}
             },
         }
     }
@@ -608,6 +1008,10 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
             upsert_rows(data_dir, &[playlist_value(&session, &playlist)]).await?;
             result.pushed += 1;
         }
+    }
+
+    if let Some(liked) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {
+        let _ = reconcile_taste(data_dir, &liked);
     }
 
     Ok(result)

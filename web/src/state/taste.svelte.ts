@@ -102,27 +102,11 @@ function commit(next: TasteEntry[]): void {
   persist();
 }
 
-function preferEntry(a: TasteEntry, b: TasteEntry): TasteEntry {
-  const aStamp = a.likedAt ?? a.lastPlayed;
-  const bStamp = b.likedAt ?? b.lastPlayed;
-  return aStamp >= bStamp ? a : b;
-}
-
-function mergeEntries(stored: TasteEntry[], local: TasteEntry[]): TasteEntry[] {
-  const byId = new Map<string, TasteEntry>();
-  for (const entry of stored) byId.set(entry.track.id, entry);
-  for (const entry of local) {
-    const existing = byId.get(entry.track.id);
-    byId.set(entry.track.id, existing ? preferEntry(existing, entry) : entry);
-  }
-  return [...byId.values()];
-}
-
 export async function hydrateTaste(): Promise<void> {
   try {
     const stored = await vynl.tasteLoad();
     if (stored.length > 0) {
-      _entries = mergeEntries(stored, _entries);
+      _entries = stored;
       markSynced();
       persistLocal();
       return;

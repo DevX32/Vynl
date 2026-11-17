@@ -248,6 +248,7 @@ function streamTrackOf(track: CatalogueTrack): LibraryTrack {
 export function getPlaylistStreamTracks(): LibraryTrack[] {
   const seen = new Map<string, LibraryTrack>();
   for (const pl of Object.values(_all)) {
+    if (pl.id === "liked") continue;
     const at = pl.updatedAt || pl.createdAt;
     for (const track of pl.streams) {
       const known = seen.get(track.id);

@@ -401,7 +401,87 @@ pub async fn taste_save(
     app: AppHandle,
 ) -> Result<(), String> {
     let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+    mirror_taste_to_liked(&output, &user_data, &entries, &app)?;
     crate::services::taste::save(&user_data, &entries)
+}
+
+fn mirror_taste_to_liked(
+    output_dir: &std::path::Path,
+    user_data_dir: &std::path::Path,
+    entries: &[crate::services::taste::TasteEntry],
+    app: &AppHandle,
+) -> Result<(), String> {
+    let stored = crate::services::taste::load(user_data_dir);
+    let before: std::collections::HashSet<String> = stored
+        .iter()
+        .filter(|entry| entry.liked)
+        .map(|entry| format!("ytm:{}", entry.track.id))
+        .collect();
+    let after: std::collections::HashSet<String> = entries
+        .iter()
+        .filter(|entry| entry.liked)
+        .map(|entry| format!("ytm:{}", entry.track.id))
+        .collect();
+    let adds: Vec<String> = after.difference(&before).cloned().collect();
+    let removals: Vec<String> = before.difference(&after).cloned().collect();
+    if adds.is_empty() && removals.is_empty() {
+        return Ok(());
+    }
+    let now = crate::services::util::now_ms();
+    let id = crate::services::sync::LIKED_PLAYLIST_ID;
+    let mut playlist = match crate::services::playlists::get_playlist(output_dir, id) {
+        Some(found) => found,
+        None => {
+            let streams: Vec<crate::commands::types::CatalogueTrack> = entries
+                .iter()
+                .filter(|entry| entry.liked)
+                .map(|entry| entry.track.clone())
+                .collect();
+            let paths: Vec<String> = streams
+                .iter()
+                .map(|track| format!("ytm:{}", track.id))
+                .collect();
+            let created_at = entries
+                .iter()
+                .filter_map(|entry| entry.liked_at)
+                .min()
+                .map(|at| at.min(i64::MAX as u64) as i64)
+                .unwrap_or(now);
+            crate::commands::types::Playlist {
+                id: id.to_string(),
+                name: "Liked Songs".to_string(),
+                paths,
+                streams,
+                adds: Vec::new(),
+                removals: Vec::new(),
+                cover: None,
+                created_at,
+                updated_at: now,
+            }
+        }
+    };
+    for key in &adds {
+        let Some(id) = key.strip_prefix("ytm:") else {
+            continue;
+        };
+        let Some(entry) = entries.iter().find(|entry| entry.track.id == id) else {
+            continue;
+        };
+        let path = format!("ytm:{id}");
+        if !playlist.paths.contains(&path) {
+            playlist.paths.push(path);
+        }
+        match playlist.streams.iter_mut().find(|track| track.id == id) {
+            Some(existing) => *existing = entry.track.clone(),
+            None => playlist.streams.push(entry.track.clone()),
+        }
+    }
+    crate::services::playlists::record_marks(&mut playlist, &adds, &removals);
+    playlist.updated_at = now;
+    crate::services::playlists::upsert_playlist(output_dir, &playlist)?;
+    sync_playlist(app, &playlist);
+    Ok(())
 }
 
 #[tauri::command]
@@ -481,7 +561,11 @@ pub async fn get_library(app: AppHandle) -> Result<Vec<LibraryTrack>, String> {
 #[tauri::command]
 pub async fn list_playlists(app: AppHandle) -> Result<Vec<PlaylistMeta>, String> {
     let output = output_dir_from_settings(&app)?;
-    Ok(crate::services::playlists::list_playlists(&output))
+    let playlists = crate::services::playlists::list_playlists(&output)
+        .into_iter()
+        .filter(|meta| meta.id != crate::services::sync::LIKED_PLAYLIST_ID)
+        .collect();
+    Ok(playlists)
 }
 
 #[tauri::command]

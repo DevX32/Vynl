@@ -91,7 +91,11 @@ fun PlaylistsScreen(viewModel: AppViewModel) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            if (playlist.id == "dt-liked") Icons.Rounded.Favorite else Icons.Rounded.QueueMusic,
+                            if (playlist.id == "liked") {
+                                Icons.Rounded.Favorite
+                            } else {
+                                Icons.Rounded.QueueMusic
+                            },
                             contentDescription = null,
                             tint = VynlColors.accent,
                             modifier = Modifier.size(22.dp),

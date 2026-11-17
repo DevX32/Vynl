@@ -253,7 +253,10 @@ type RawSpan = {
   end: number | null;
   bg: boolean;
   sep: boolean;
+  roman: boolean;
 };
+
+const ROMAN_SPAN_RE = /translat|roman|romaji|translit/i;
 
 function collectSpans(
   node: Node,
@@ -265,6 +268,8 @@ function collectSpans(
   bgRole: RegExp,
 ): boolean {
   let separated = sep;
+  const spanRole = (el: Element): boolean =>
+    ROMAN_SPAN_RE.test((attr(el, "ttm:role") ?? attr(el, "role") ?? "").toLowerCase());
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === 3) {
       const raw = child.textContent ?? "";
@@ -277,6 +282,7 @@ function collectSpans(
           end: null,
           bg,
           sep: separated || /^\s/.test(raw),
+          roman: false,
         });
       }
       separated = /\s$/.test(raw);
@@ -289,6 +295,7 @@ function collectSpans(
     }
 
     const childBg = bg || bgRole.test(attr(el, "ttm:role") ?? attr(el, "role") ?? "");
+    const spanRoman = spanRole(el);
     const beginRaw = attr(el, "begin");
 
     if (el.nodeName === "span" && beginRaw !== null) {
@@ -307,6 +314,7 @@ function collectSpans(
         end: endNum !== null && endNum > time ? endNum : null,
         bg: childBg,
         sep: separated || /^\s/.test(raw),
+        roman: spanRoman,
       });
       separated = / $/.test(raw);
       continue;
@@ -358,14 +366,22 @@ function parseTtml(text: string): LyricLine[] {
     const end = endRawNum !== null && endRawNum > start ? endRawNum : null;
 
     const role = roleOf(p);
-    const romanRole = /translation|romanization|romaji|translit/.test(role);
+    const romanRole = /translation|romanization|romaji|translit|roman/.test(role);
     const bgRole = /(^|[-_])bg$|background/;
 
     const spans: RawSpan[] = [];
     collectSpans(p, spans, false, false, parseTime, attr, bgRole);
 
+    const usable = spans.filter((span) => !span.roman);
+    const inlineRoman = spans
+      .filter((span) => span.roman)
+      .map((span) => span.text)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
     const words: Word[] = [];
-    for (const span of spans) {
+    for (const span of usable) {
       const last = words[words.length - 1];
       const time = span.time ?? (last ? last.end ?? last.time : start);
       if (span.bg) {
@@ -392,11 +408,9 @@ function parseTtml(text: string): LyricLine[] {
       });
     }
 
-    const lineNode = p.cloneNode(true) as Element;
-    lineNode.querySelectorAll("br").forEach((br) => {
-      br.replaceWith(doc.createTextNode(" "));
-    });
-    const lineText = decodeEntities(lineNode.textContent ?? "")
+    const lineText = words
+      .map((word) => word.text)
+      .join(" ")
       .replace(/\s+/g, " ")
       .trim();
     if (!lineText) return;
@@ -413,6 +427,7 @@ function parseTtml(text: string): LyricLine[] {
       ...(end !== null ? { end } : {}),
       ...(bgRole.test(role) ? { bg: true } : {}),
       ...(attr(p, "ttm:agent") ? { agent: attr(p, "ttm:agent")! } : {}),
+      ...(inlineRoman ? { roman: inlineRoman } : {}),
     });
   };
 
@@ -438,6 +453,7 @@ function parseTtml(text: string): LyricLine[] {
       let best: LyricLine | null = null;
       let bestDist = Infinity;
       for (const line of out) {
+        if (line.roman) continue;
         const d = Math.abs(line.time - r.time);
         if (d < bestDist) {
           bestDist = d;

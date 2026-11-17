@@ -11,6 +11,7 @@ data class LyricLine(
     val timeMs: Long,
     val text: String,
     val words: List<LyricWord>,
+    val roman: String? = null,
 )
 
 data class LyricWord(
@@ -77,6 +78,7 @@ data class Lyrics(
         private val P_REGEX = Regex("<p\\b([^>]*)>(.*?)</p>", RegexOption.DOT_MATCHES_ALL)
         private val SPAN_REGEX = Regex("<span\\b([^>]*)>(.*?)</span>", RegexOption.DOT_MATCHES_ALL)
         private val ATTR_REGEX = { name: String -> Regex("\\b$name\\s*=\\s*\"([^\"]*)\"") }
+        private val ROMAN_ROLE = Regex("translat|roman|romaji|translit", RegexOption.IGNORE_CASE)
 
         private fun ttmlAttr(attrs: String, name: String): String? =
             ATTR_REGEX(name).find(attrs)?.groupValues?.get(1)
@@ -102,16 +104,29 @@ data class Lyrics(
                 val attrs = match.groupValues[1]
                 val time = ttmlTime(ttmlAttr(attrs, "begin")) ?: continue
                 val body = match.groupValues[2]
-                val words = SPAN_REGEX.findAll(body).mapNotNull { span ->
+                val words = mutableListOf<LyricWord>()
+                val romanParts = mutableListOf<String>()
+                for (span in SPAN_REGEX.findAll(body)) {
                     val spanAttrs = span.groupValues[1]
-                    val begin = ttmlTime(ttmlAttr(spanAttrs, "begin")) ?: return@mapNotNull null
-                    val end = ttmlTime(ttmlAttr(spanAttrs, "end"))
-                    val text2 = stripTags(span.groupValues[2]).trim()
-                    if (text2.isEmpty()) null else LyricWord(begin, text2, end)
-                }.toList()
-                val clean = stripTags(body)
+                    val role = ttmlAttr(spanAttrs, "ttm:role")
+                        ?: ttmlAttr(spanAttrs, "role")
+                        ?: ""
+                    val isRoman = ROMAN_ROLE.containsMatchIn(role.lowercase())
+                    val begin = if (isRoman) null else ttmlTime(ttmlAttr(spanAttrs, "begin"))
+                    val end = if (isRoman) null else ttmlTime(ttmlAttr(spanAttrs, "end"))
+                    val spanText = stripTags(span.groupValues[2]).trim()
+                    if (spanText.isEmpty()) continue
+                    if (isRoman) {
+                        romanParts += spanText
+                        continue
+                    }
+                    if (begin == null) continue
+                    words += LyricWord(begin, spanText, end)
+                }
+                val clean = words.joinToString(" ") { it.text }.trim()
+                val roman = romanParts.joinToString(" ").trim().ifBlank { null }
                 if (clean.isBlank() && words.isEmpty()) continue
-                lines += LyricLine(time, clean, words)
+                lines += LyricLine(time, clean, words, roman)
             }
             return lines.sortedBy { it.timeMs }
         }

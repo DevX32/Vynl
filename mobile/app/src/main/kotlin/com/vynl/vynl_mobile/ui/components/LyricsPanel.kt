@@ -226,15 +226,30 @@ private fun SyncedLineRow(
             },
         contentAlignment = Alignment.Center,
     ) {
-        when {
-            instrumental -> InstrumentalDots(active = isActive)
-            isActive && line.words.isNotEmpty() -> KaraokeLine(
-                line = line,
-                positionMs = positionMs ?: 0L,
-                playing = playing,
-                style = baseStyle,
-            )
-            else -> Text(text = line.text, textAlign = TextAlign.Center, style = baseStyle)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            when {
+                instrumental -> InstrumentalDots(active = isActive)
+                isActive && line.words.isNotEmpty() -> KaraokeLine(
+                    line = line,
+                    positionMs = positionMs ?: 0L,
+                    playing = playing,
+                    style = baseStyle,
+                )
+                else -> Text(text = line.text, textAlign = TextAlign.Center, style = baseStyle)
+            }
+            if (isActive && line.roman != null) {
+                Text(
+                    text = line.roman,
+                    textAlign = TextAlign.Center,
+                    style = baseStyle.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        fontWeight = FontWeight(500),
+                        color = VynlColors.faint,
+                    ),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
     }
 }

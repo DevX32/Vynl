@@ -201,7 +201,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _installedVersion.value = name.ifEmpty { "$build" }
         measureDownloads()
         loadMix()
-        refreshStore()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { store.rekeyLegacyDtPlaylists() }
+            refreshStore()
+        }
         refreshSyncSession()
     }
 
@@ -331,7 +334,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (!sync.status.signedIn) return
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { sync.tombstone(id.removePrefix("dt-")) }
+                withContext(Dispatchers.IO) { sync.tombstone(id) }
             } catch (_: Exception) {
             }
         }
@@ -751,8 +754,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             mixLoading = true
             try {
+                val previous = _mix.value
                 val seeds = repository.search(DISCOVERY_QUERY).songs.take(6).map { it.id }
-                _mix.value = repository.taste(seeds)
+                val fresh = repository.taste(seeds)
+                val kept = previous.shuffled().take(30)
+                val keptIds = kept.map { it.id }.toSet()
+                val merged = if (previous.isEmpty()) {
+                    fresh
+                } else {
+                    (kept + fresh.filter { it.id !in keptIds }.take(60 - kept.size)).shuffled()
+                }
+                _mix.value = merged
             } catch (error: Exception) {
                 mixError = friendly(error)
             } finally {

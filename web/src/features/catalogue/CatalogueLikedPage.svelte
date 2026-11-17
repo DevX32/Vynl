@@ -31,7 +31,6 @@
     fmtTime,
     fmtTotalDuration,
     matchesQuery,
-    toPascalCase,
     totalSeconds,
   } from "@lib/format";
   import { t } from "@lib/i18n";
@@ -207,7 +206,7 @@
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
       toasts.success(
-        t("catalogue.addedToPlaylist", { name: toPascalCase(name) }),
+        t("catalogue.addedToPlaylist", { name: name }),
       );
     } else {
       toasts.error(t("catalogue.addPartial", { done, failed }));
@@ -245,7 +244,7 @@
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
       toasts.success(
-        t("catalogue.downloadDone", { n: done, name: toPascalCase(name) }),
+        t("catalogue.downloadDone", { n: done, name: name }),
       );
     } else {
       toasts.error(t("catalogue.downloadPartial", { done, failed }));
@@ -264,7 +263,7 @@
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
       toasts.success(
-        t("catalogue.addedToPlaylist", { name: toPascalCase(name) }),
+        t("catalogue.addedToPlaylist", { name: name }),
       );
     } catch (error) {
       console.warn("catalogue add to playlist failed:", error);
@@ -284,7 +283,7 @@
       await refreshAfterCatalogueSave();
       const playlistName = result.playlist?.name ?? name;
       toasts.success(
-        t("catalogue.addedToPlaylist", { name: toPascalCase(playlistName) }),
+        t("catalogue.addedToPlaylist", { name: playlistName }),
       );
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);
@@ -304,7 +303,7 @@
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
       toasts.success(
-        t("catalogue.savedToPlaylist", { name: toPascalCase(name) }),
+        t("catalogue.savedToPlaylist", { name: name }),
       );
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
@@ -323,7 +322,7 @@
       const playlist = await saveStreamToPlaylist(target, null, name);
       toasts.success(
         t("catalogue.savedToPlaylist", {
-          name: toPascalCase(playlist.name),
+          name: playlist.name,
         }),
       );
     } catch (error) {

@@ -3,11 +3,19 @@ create table if not exists public.playlists (
   local_id text not null,
   name text not null,
   tracks jsonb not null default '[]'::jsonb,
+  adds jsonb not null default '[]'::jsonb,
+  removals jsonb not null default '[]'::jsonb,
   created_at bigint not null,
   updated_at bigint not null,
   deleted_at bigint,
   primary key (user_id, local_id)
 );
+
+alter table public.playlists
+  add column if not exists adds jsonb not null default '[]'::jsonb;
+
+alter table public.playlists
+  add column if not exists removals jsonb not null default '[]'::jsonb;
 
 alter table public.playlists enable row level security;
 
