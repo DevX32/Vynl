@@ -1,4 +1,4 @@
-import type { CatalogueTrack, TasteEntry } from "@lib/types";
+import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
 import { vynl } from "@lib/vynl";
 
 const TASTE_KEY = "vynl.taste.v1";
@@ -261,6 +261,33 @@ export function getLikedTracks(): CatalogueTrack[] {
     .filter((entry) => entry.liked)
     .sort((a, b) => (b.likedAt ?? 0) - (a.likedAt ?? 0))
     .map((entry) => entry.track);
+}
+
+export function getLikedStreamTracks(): LibraryTrack[] {
+  return _entries
+    .filter((entry) => entry.liked)
+    .sort((a, b) => (b.likedAt ?? 0) - (a.likedAt ?? 0))
+    .map((entry) => {
+      const track = entry.track;
+      return {
+        id: track.id,
+        path: `ytm:${track.id}`,
+        title: track.title,
+        artist: track.artist,
+        album: track.album?.name ?? "",
+        year: null,
+        duration:
+          Number.isFinite(track.duration) && (track.duration ?? 0) >= 0
+            ? (track.duration ?? 0)
+            : 0,
+        cover: track.cover,
+        trackNumber: null,
+        lyrics: null,
+        ext: "webm",
+        mtime: null,
+        addedAt: entry.likedAt,
+      };
+    });
 }
 
 export function getTasteSeeds(limit = 6): string[] {

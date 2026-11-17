@@ -2,6 +2,7 @@
   import { Play, Shuffle, Link2, Music2, Library, Compass } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
   import { getPlaylistStreamTracks } from "@state/playlists.svelte";
+  import { getLikedStreamTracks } from "@state/taste.svelte";
   import type { LibraryTrack } from "@lib/types";
   import {
     requestPlay,
@@ -23,6 +24,7 @@
 
   const library = $derived(getLibrary());
   const playlistStreams = $derived(getPlaylistStreamTracks());
+  const likedStreams = $derived(getLikedStreamTracks());
   const currentId = $derived(getCurrentId());
 
   function isCurrent(track: {
@@ -69,7 +71,7 @@
 
   const allTracks = $derived.by(() => {
     const seen: LibraryTrack[] = [];
-    for (const track of [...library, ...playlistStreams]) {
+    for (const track of [...library, ...playlistStreams, ...likedStreams]) {
       if (seen.some((known) => known.id === track.id || isSameSong(known, track)))
         continue;
       seen.push(track);
