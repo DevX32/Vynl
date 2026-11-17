@@ -510,7 +510,7 @@ pub fn add_stream_to_playlist(
     if let Some(local) = local_path
         && pl.paths.iter().any(|p| p == local)
     {
-        record_marks(&mut pl, &[], &[path.clone()]);
+        record_marks(&mut pl, &[], std::slice::from_ref(&path));
         pl.paths.retain(|p| p != &path);
         pl.streams.retain(|t| t.id != video_id);
         touch(&mut pl);

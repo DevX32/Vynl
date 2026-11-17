@@ -208,8 +208,9 @@ impl Default for CatalogueClient {
 }
 
 pub fn cover_of(thumbnails: &[ytmusic::Thumbnail]) -> Option<String> {
-    ytmusic::best_thumbnail(thumbnails)
-        .map(|thumbnail| crate::services::cover_cache::normalize_cover_url(&thumbnail.url).into_owned())
+    ytmusic::best_thumbnail(thumbnails).map(|thumbnail| {
+        crate::services::cover_cache::normalize_cover_url(&thumbnail.url).into_owned()
+    })
 }
 
 pub fn artist_names(artists: &[ytmusic::ArtistRef]) -> String {

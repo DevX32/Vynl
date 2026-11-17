@@ -813,19 +813,17 @@ async fn upsert_rows(data_dir: &Path, rows: &[Value]) -> Result<(), String> {
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        if marks_supported() {
-            if body_missing_marks(&body) {
-                set_marks_supported(false);
-                let stripped: Vec<Value> = rows.iter().map(strip_marks).collect();
-                let response = upsert_rows_once(data_dir, &stripped).await?;
-                if !response.status().is_success() {
-                    return Err(format!(
-                        "Could not save to Vynl Sync ({}).",
-                        response.status().as_u16()
-                    ));
-                }
-                return Ok(());
+        if marks_supported() && body_missing_marks(&body) {
+            set_marks_supported(false);
+            let stripped: Vec<Value> = rows.iter().map(strip_marks).collect();
+            let response = upsert_rows_once(data_dir, &stripped).await?;
+            if !response.status().is_success() {
+                return Err(format!(
+                    "Could not save to Vynl Sync ({}).",
+                    response.status().as_u16()
+                ));
             }
+            return Ok(());
         }
         return Err(format!(
             "Could not save to Vynl Sync ({}).",

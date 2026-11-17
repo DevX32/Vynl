@@ -63,7 +63,10 @@ pub fn normalize_cover_url(url: &str) -> std::borrow::Cow<'_, str> {
 
     let new_width = width.max(512);
     let new_height = height.max(512);
-    if new_width == width && new_height == height && params.len() == url[h_end..].matches('-').count() {
+    if new_width == width
+        && new_height == height
+        && params.len() == url[h_end..].matches('-').count()
+    {
         return std::borrow::Cow::Borrowed(url);
     }
 
