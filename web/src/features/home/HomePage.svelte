@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Play, Shuffle, Link2, Music2, Library } from "lucide-svelte";
+  import { Play, Shuffle, Link2, Music2, Library, Compass } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
   import { getPlaylistStreamTracks } from "@state/playlists.svelte";
   import type { LibraryTrack } from "@lib/types";
@@ -18,7 +18,7 @@
   let {
     onNavigate,
   }: {
-    onNavigate: (page: "player" | "vault" | "library") => void;
+    onNavigate: (page: "player" | "vault" | "library" | "catalogue") => void;
   } = $props();
 
   const library = $derived(getLibrary());
@@ -211,9 +211,9 @@
         <Music2 size={32} stroke-width={1} />
         <span class="empty-title display">{t("home.emptyTitle")}</span>
         <span class="empty-sub">{t("home.emptySub")}</span>
-        <button class="action-btn" onclick={() => onNavigate("vault")}>
-          <Link2 size={14} stroke-width={1.5} />
-          <span>{t("home.openVault")}</span>
+        <button class="action-btn" onclick={() => onNavigate("catalogue")}>
+          <Compass size={14} stroke-width={1.5} />
+          <span>{t("home.openBrowse")}</span>
         </button>
       </div>
     {/if}

@@ -20,8 +20,8 @@ export const en = {
     recentlyAdded: "Recently Added",
     viewAll: "View All",
     emptyTitle: "Your library is empty",
-    emptySub: "Paste a link in Vault to start building your collection",
-    openVault: "Open Vault",
+    emptySub: "Find something new to stream in Browse",
+    openBrowse: "Open Browse",
     jumpBackIn: "Jump Back In",
   },
   catalogue: {
