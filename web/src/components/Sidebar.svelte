@@ -16,7 +16,7 @@
     Import,
   } from "lucide-svelte";
   import { blobSrc, toPascalCase } from "../lib/format";
-  import { blobatarUri } from "blobatar/uri";
+  import { avatarUri, avatarRevision } from "@lib/blobatar";
   import { t } from "@lib/i18n";
   import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
@@ -86,11 +86,13 @@
   const displayName = $derived(
     resolveDisplayName(getCurrentSettings().displayName),
   );
-  const avatarSrc = $derived(
-    blobatarUri(session.signedIn && session.email ? session.email : displayName, {
-      size: 80,
-    }),
-  );
+  const avatarSrc = $derived.by(() => {
+    void avatarRevision();
+    return avatarUri(
+      session.signedIn && session.email ? session.email : displayName,
+      { size: 80 },
+    );
+  });
 
   let accountMenuOpen = $state(false);
   let accountMenuStyle = $state("");

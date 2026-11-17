@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
-  import { LoaderCircle, RefreshCw, X } from "lucide-svelte";
-  import { blobatarUri } from "blobatar/uri";
+  import { LoaderCircle, RefreshCw, X, Dices } from "lucide-svelte";
+  import { avatarUri, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar";
   import { t } from "@lib/i18n";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
@@ -22,16 +22,19 @@
 
   const status = $derived(getSyncStatus());
   const loaded = $derived(isSyncStatusLoaded());
+  let custom = $state(getAvatarCustom());
+
   const avatarSeed = $derived(
     status.signedIn && status.email
       ? status.email
       : resolveDisplayName(getCurrentSettings().displayName),
   );
-  const avatarSrc = $derived(
-    blobatarUri(avatarSeed, {
-      size: 96,
-    }),
-  );
+  const customSeed = $derived(custom.seed.trim());
+  const effectiveSeed = $derived(customSeed || avatarSeed);
+  const avatarSrc = $derived.by(() => {
+    void avatarRevision();
+    return avatarUri(effectiveSeed, { size: 96 });
+  });
 
   let mode = $state<"signin" | "signup">("signin");
   let email = $state("");
@@ -51,6 +54,11 @@
         ? t("account.signIn")
         : t("account.signUp"),
   );
+
+  function rerollAvatar(): void {
+    custom = { ...custom, seed: randomAvatarSeed() };
+    saveAvatarCustom(custom);
+  }
 
   const modeHint = $derived(
     mode === "signin"
@@ -217,6 +225,15 @@
             {/if}
           </span>
         </div>
+        <button
+          type="button"
+          class="reroll-btn"
+          onclick={rerollAvatar}
+          aria-label={t("account.avatarReroll")}
+          title={t("account.avatarReroll")}
+        >
+          <Dices size={15} stroke-width={1.6} />
+        </button>
       </div>
 
       {#if !loaded}
@@ -439,6 +456,35 @@
     border-radius: 50%;
     transform: scale(1.16);
   }
+
+  .reroll-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    align-self: center;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--faint);
+    transform: rotate(45deg);
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background 0.15s;
+  }
+
+  .reroll-btn :global(svg) {
+    transform: rotate(-45deg);
+  }
+
+  .reroll-btn:hover {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+
 
   .banner-copy {
     display: flex;

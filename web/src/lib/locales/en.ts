@@ -381,6 +381,9 @@ export const en = {
     signUpSuccess: "Account created. Your playlists are syncing.",
     staysLocal:
       "Stay signed out and Vynl works exactly as it does today - everything stays on this device.",
+    avatarTitle: "Avatar",
+    avatarReroll: "Reroll",
+    avatarReset: "Reset",
   },
   backup: {
     title: "Export and Import",
