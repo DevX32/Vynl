@@ -1,5 +1,7 @@
 <script lang="ts">
   import { X } from "lucide-svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import { t } from "@lib/i18n";
 
   let {
@@ -27,10 +29,17 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="overlay" onclick={onClose} role="presentation">
+<div
+  class="overlay"
+  transition:fade={{ duration: 150 }}
+  onclick={onClose}
+  role="presentation"
+>
   <div
     class="dialog"
     bind:this={dialogEl}
+    in:fly={{ y: 14, duration: 220, easing: cubicOut }}
+    out:fly={{ y: 10, duration: 160, easing: cubicIn }}
     onclick={(e) => e.stopPropagation()}
     onkeydown={handleKey}
     role="dialog"
