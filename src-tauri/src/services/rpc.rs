@@ -92,11 +92,17 @@ fn build_activity(p: &RpcPresence) -> Activity<'static> {
         activity
     };
 
-    let public_cover = p.cover.as_deref().filter(|cover| is_public_cover(cover));
-    let img = public_cover.unwrap_or("vynl").to_string();
+    let public_cover = p
+        .cover
+        .as_deref()
+        .filter(|cover| is_public_cover(cover))
+        .map(crate::services::cover_cache::normalize_cover_url)
+        .map(|cover| cover.into_owned());
+    let has_cover = public_cover.is_some();
+    let img = public_cover.unwrap_or_else(|| "vynl".to_string());
     let mut assets = Assets::new().large_image(img);
 
-    if public_cover.is_some() {
+    if has_cover {
         assets = assets.small_image("vynl").small_text("Vynl");
     }
     if !p.album.is_empty() {

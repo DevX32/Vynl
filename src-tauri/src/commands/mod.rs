@@ -1295,3 +1295,25 @@ pub async fn cache_remote_audio(url: String, key: String) -> Result<String, Stri
 pub async fn clear_audio_cache() -> Result<(), String> {
     crate::services::audio_cache::clear_cache()
 }
+
+#[tauri::command]
+pub async fn clear_cache(app: AppHandle) -> Result<u64, String> {
+    let user_data = user_data_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(crate::services::storage::clear_caches(&user_data))
+    })
+    .await
+    .map_err(|e| format!("Could not clear the cache: {e}"))?
+}
+
+#[tauri::command]
+pub async fn downloads_stats(
+    app: AppHandle,
+) -> Result<crate::services::storage::DownloadsStats, String> {
+    let output = output_dir_from_settings(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(crate::services::storage::downloads_stats(&output))
+    })
+    .await
+    .map_err(|e| format!("Could not read the downloads folder: {e}"))?
+}

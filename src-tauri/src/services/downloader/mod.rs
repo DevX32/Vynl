@@ -208,6 +208,7 @@ async fn probe_duration(file: &Path) -> Option<f64> {
 }
 
 async fn fetch_cover(url: &str, dest: &str) -> bool {
+    let url = crate::services::cover_cache::normalize_cover_url(url).into_owned();
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return false;
     }

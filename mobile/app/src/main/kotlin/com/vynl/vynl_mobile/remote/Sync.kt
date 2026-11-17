@@ -6,6 +6,7 @@ import com.vynl.vynl_mobile.data.CatalogueTrack
 import com.vynl.vynl_mobile.data.SyncPlaylistPayload
 import com.vynl.vynl_mobile.data.SyncMark
 import com.vynl.vynl_mobile.data.Store
+import com.vynl.vynl_mobile.data.highResCover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -321,7 +322,7 @@ class Sync(context: Context) {
                                 put("artist", track.artist)
                                 put("album", track.album ?: JSONObject.NULL)
                                 put("duration", track.duration)
-                                put("cover", track.cover ?: JSONObject.NULL)
+                                put("cover", highResCover(track.cover) ?: JSONObject.NULL)
                             },
                         )
                     }
@@ -360,7 +361,7 @@ class Sync(context: Context) {
                 artist = track.optString("artist", ""),
                 album = track.optString("album").takeIf { it.isNotBlank() },
                 duration = track.optDouble("duration", 0.0),
-                cover = track.optString("cover").takeIf { it.isNotBlank() },
+                cover = highResCover(track.optString("cover").takeIf { it.isNotBlank() }),
                 explicit = false,
             )
         }

@@ -323,6 +323,11 @@ export const vynl = {
   cacheRemoteAudio: (url: string, key: string): Promise<string> =>
     cmd("cache_remote_audio", { url, key }),
 
+  clearCache: (): Promise<number> => cmd("clear_cache"),
+
+  downloadsStats: (): Promise<{ files: number; bytes: number }> =>
+    cmd("downloads_stats"),
+
   catalogueSearch: (query: string): Promise<CatalogueSearchResults> =>
     cmd("catalogue_search", { query }),
 

@@ -5,6 +5,39 @@ import { vynl } from "@lib/vynl";
 const remote = new Map<string, Promise<string>>();
 const resolved = new Map<string, string>();
 
+export function upsizeCover(url: string): string {
+  const trimmed = url.trim();
+  const start = trimmed.indexOf("=w");
+  if (start < 0) return trimmed;
+
+  let i = start + 2;
+  while (i < trimmed.length && trimmed[i] >= "0" && trimmed[i] <= "9") i++;
+  const width = Number.parseInt(trimmed.slice(start + 2, i), 10);
+  if (!Number.isFinite(width) || !trimmed.slice(i).startsWith("-h")) return trimmed;
+
+  let j = i + 2;
+  const hStart = j;
+  while (j < trimmed.length && trimmed[j] >= "0" && trimmed[j] <= "9") j++;
+  if (j === hStart) return trimmed;
+  const height = Number.parseInt(trimmed.slice(hStart, j), 10);
+  if (!Number.isFinite(height)) return trimmed;
+
+  const seen = new Set<string>();
+  const params: string[] = [];
+  for (const part of trimmed.slice(j).split("-")) {
+    if (part === "" || seen.has(part)) continue;
+    seen.add(part);
+    params.push(part);
+  }
+
+  const nw = Math.max(width, 512);
+  const nh = Math.max(height, 512);
+  const dashCount = (trimmed.slice(j).match(/-/g) ?? []).length;
+  if (nw === width && nh === height && params.length === dashCount) return trimmed;
+
+  return `${trimmed.slice(0, start)}=w${nw}-h${nh}${params.map((p) => `-${p}`).join("")}`;
+}
+
 function cacheRemote(url: string): Promise<string> {
   let pending = remote.get(url);
   if (!pending) {
@@ -30,16 +63,17 @@ export function blobSrc(
       return;
     }
     if (/^https?:\/\//i.test(p)) {
-      const known = resolved.get(p);
+      const src = upsizeCover(p);
+      const known = resolved.get(src);
       if (known) {
         node.src = convertFileSrc(known);
         return;
       }
       node.referrerPolicy = "no-referrer";
-      node.src = p;
-      void cacheRemote(p).then(
+      node.src = src;
+      void cacheRemote(src).then(
         (local) => {
-          resolved.set(p, local);
+          resolved.set(src, local);
         },
         () => {},
       );

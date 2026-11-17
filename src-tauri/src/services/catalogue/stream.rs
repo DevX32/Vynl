@@ -550,6 +550,52 @@ impl StreamCache {
         self.save_locked(&mut state);
     }
 
+    pub fn clear(&self) -> u64 {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut freed = 0u64;
+
+        let to_remove: Vec<(String, String)> = state
+            .index
+            .entries
+            .iter()
+            .filter(|(id, _)| !state.active.contains(*id))
+            .map(|(id, entry)| (id.clone(), entry.file.clone()))
+            .collect();
+        for (id, file) in to_remove {
+            let path = self.dir.join(&file);
+            let size = path.metadata().map(|m| m.len()).unwrap_or(0);
+            let deleted = if path.exists() {
+                std::fs::remove_file(&path).is_ok()
+            } else {
+                true
+            };
+            if deleted {
+                freed += size;
+                state.index.entries.remove(&id);
+            }
+        }
+
+        if let Ok(read) = std::fs::read_dir(&self.dir) {
+            for entry in read.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name == "index.json" || !entry.path().is_file() {
+                    continue;
+                }
+                if state.index.entries.values().any(|e| e.file == name) {
+                    continue;
+                }
+                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                if std::fs::remove_file(entry.path()).is_ok() {
+                    freed += size;
+                }
+            }
+        }
+
+        state.dirty = true;
+        self.save_locked(&mut state);
+        freed
+    }
+
     fn index_path(&self) -> PathBuf {
         self.dir.join("index.json")
     }

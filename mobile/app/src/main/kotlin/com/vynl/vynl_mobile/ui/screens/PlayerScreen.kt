@@ -83,6 +83,7 @@ import com.vynl.vynl_mobile.ui.components.LyricsPanel
 import com.vynl.vynl_mobile.ui.components.VynlSeekBar
 import com.vynl.vynl_mobile.data.Lyrics
 import com.vynl.vynl_mobile.data.LyricsStatus
+import com.vynl.vynl_mobile.data.highResCover
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -115,7 +116,7 @@ fun PlayerScreen(
             .background(VynlColors.bg),
     ) {
         ArtBackdrop(
-            coverUrl = track?.cover,
+            coverUrl = highResCover(track?.cover),
             lyricsOn = lyricsOpen,
             modifier = Modifier.fillMaxSize(),
         )
@@ -203,7 +204,7 @@ fun PlayerScreen(
                             )
                         } else {
                             AsyncImage(
-                                model = track?.cover,
+                                model = highResCover(track?.cover),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -474,7 +475,7 @@ private fun ArtBackdrop(coverUrl: String?, lyricsOn: Boolean, modifier: Modifier
     Box(modifier = modifier) {
         if (!coverUrl.isNullOrEmpty()) {
             AsyncImage(
-                model = coverUrl,
+                model = highResCover(coverUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

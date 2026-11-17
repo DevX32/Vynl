@@ -23,6 +23,60 @@ fn cache_dir(user_data: &Path) -> PathBuf {
     user_data.join("catalogue").join("covers")
 }
 
+pub fn normalize_cover_url(url: &str) -> std::borrow::Cow<'_, str> {
+    fn digits(url: &str, start: usize) -> (usize, usize) {
+        let bytes = url.as_bytes();
+        let mut end = start;
+        while bytes.get(end).is_some_and(|b| b.is_ascii_digit()) {
+            end += 1;
+        }
+        (start, end)
+    }
+
+    let url = url.trim();
+    let Some(start) = url.find("=w") else {
+        return std::borrow::Cow::Borrowed(url);
+    };
+
+    let (w_start, w_end) = digits(url, start + 2);
+    let Ok(width) = url[w_start..w_end].parse::<u64>() else {
+        return std::borrow::Cow::Borrowed(url);
+    };
+    if w_end == w_start || !url[w_end..].starts_with("-h") {
+        return std::borrow::Cow::Borrowed(url);
+    }
+
+    let (h_start, h_end) = digits(url, w_end + 2);
+    let Ok(height) = url[h_start..h_end].parse::<u64>() else {
+        return std::borrow::Cow::Borrowed(url);
+    };
+    if h_end == h_start {
+        return std::borrow::Cow::Borrowed(url);
+    }
+
+    let mut params: Vec<&str> = Vec::new();
+    for part in url[h_end..].split('-') {
+        if !part.is_empty() && !params.contains(&part) {
+            params.push(part);
+        }
+    }
+
+    let new_width = width.max(512);
+    let new_height = height.max(512);
+    if new_width == width && new_height == height && params.len() == url[h_end..].matches('-').count() {
+        return std::borrow::Cow::Borrowed(url);
+    }
+
+    let mut out = String::with_capacity(url.len() + 16);
+    out.push_str(&url[..start]);
+    out.push_str(&format!("=w{new_width}-h{new_height}"));
+    for param in params {
+        out.push('-');
+        out.push_str(param);
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 fn ext_for(content_type: &str) -> &'static str {
     if content_type.starts_with("image/png") {
         "png"
@@ -65,7 +119,8 @@ async fn fetch(url: &str) -> Result<reqwest::Response, String> {
 }
 
 pub async fn cache_cover(user_data: &Path, url: &str) -> Result<String, String> {
-    let url = url.trim();
+    let url = normalize_cover_url(url);
+    let url = url.as_ref();
     if !url.starts_with("https://") && !url.starts_with("http://") {
         return Err("unsupported cover URL".into());
     }

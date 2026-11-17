@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.vynl.vynl_mobile.data.LocalTrack
+import com.vynl.vynl_mobile.data.highResCover
 import com.vynl.vynl_mobile.ui.AppViewModel
 import com.vynl.vynl_mobile.ui.components.ArtTile
 import com.vynl.vynl_mobile.ui.components.SectionHeader
@@ -385,7 +386,7 @@ private fun FeaturedCard(track: LocalTrack, onTap: () -> Unit) {
             .clickable { onTap() },
     ) {
         val local = track.coverPath?.takeIf { it.isNotEmpty() && File(it).exists() }?.let { File(it) }
-        val model: Any? = local ?: track.cover?.takeIf { it.isNotEmpty() }
+        val model: Any? = local ?: highResCover(track.cover?.takeIf { it.isNotEmpty() })
         if (model != null) {
             AsyncImage(
                 model = model,

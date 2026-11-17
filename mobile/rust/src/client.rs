@@ -208,35 +208,61 @@ impl Default for CatalogueClient {
 }
 
 pub fn cover_of(thumbnails: &[ytmusic::Thumbnail]) -> Option<String> {
-    ytmusic::best_thumbnail(thumbnails).map(|thumbnail| full_quality_cover(&thumbnail.url))
+    ytmusic::best_thumbnail(thumbnails).map(|thumbnail| normalize_cover_url(&thumbnail.url))
 }
 
-fn full_quality_cover(url: &str) -> String {
+pub fn normalize_cover_url(url: &str) -> String {
+    fn digits(url: &str, start: usize) -> (usize, usize) {
+        let bytes = url.as_bytes();
+        let mut end = start;
+        while bytes.get(end).is_some_and(|b| b.is_ascii_digit()) {
+            end += 1;
+        }
+        (start, end)
+    }
+
+    let url = url.trim();
     let Some(start) = url.find("=w") else {
         return url.to_string();
     };
-    let digits_start = start + 2;
-    let mut i = digits_start;
-    while url.as_bytes().get(i).is_some_and(|b| b.is_ascii_digit()) {
-        i += 1;
-    }
-    if i == digits_start || !url[i..].starts_with("-h") {
+
+    let (w_start, w_end) = digits(url, start + 2);
+    let Ok(width) = url[w_start..w_end].parse::<u64>() else {
         return url.to_string();
-    }
-    let mut j = i + 2;
-    let height_start = j;
-    while url.as_bytes().get(j).is_some_and(|b| b.is_ascii_digit()) {
-        j += 1;
-    }
-    if j == height_start {
-        return url.to_string();
-    }
-    let rest = &url[j..];
-    let suffix = match rest.find("-rj") {
-        Some(at) => &rest[at..],
-        None => "",
     };
-    format!("{}=w512-h512-l100-rj{}", &url[..start], suffix)
+    if w_end == w_start || !url[w_end..].starts_with("-h") {
+        return url.to_string();
+    }
+
+    let (h_start, h_end) = digits(url, w_end + 2);
+    let Ok(height) = url[h_start..h_end].parse::<u64>() else {
+        return url.to_string();
+    };
+    if h_end == h_start {
+        return url.to_string();
+    }
+
+    let mut params: Vec<&str> = Vec::new();
+    for part in url[h_end..].split('-') {
+        if !part.is_empty() && !params.contains(&part) {
+            params.push(part);
+        }
+    }
+
+    let new_width = width.max(512);
+    let new_height = height.max(512);
+    if new_width == width && new_height == height && params.len() == url[h_end..].matches('-').count() {
+        return url.to_string();
+    }
+
+    let mut out = String::with_capacity(url.len() + 16);
+    out.push_str(&url[..start]);
+    out.push_str(&format!("=w{new_width}-h{new_height}"));
+    for param in params {
+        out.push('-');
+        out.push_str(param);
+    }
+    out
 }
 
 pub fn artist_names(artists: &[ytmusic::ArtistRef]) -> String {

@@ -367,6 +367,18 @@ pub fn init(user_data: &Path) -> Result<Arc<CatalogueService>, String> {
     Ok(service)
 }
 
+pub fn clear_stream_cache() -> u64 {
+    let Some(service) = get() else {
+        return 0;
+    };
+    service
+        .prepared
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
+    service.cache.clear()
+}
+
 pub fn get() -> Option<Arc<CatalogueService>> {
     SERVICE.get().cloned()
 }

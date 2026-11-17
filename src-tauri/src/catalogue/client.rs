@@ -208,35 +208,8 @@ impl Default for CatalogueClient {
 }
 
 pub fn cover_of(thumbnails: &[ytmusic::Thumbnail]) -> Option<String> {
-    ytmusic::best_thumbnail(thumbnails).map(|thumbnail| full_quality_cover(&thumbnail.url))
-}
-
-fn full_quality_cover(url: &str) -> String {
-    let Some(start) = url.find("=w") else {
-        return url.to_string();
-    };
-    let digits_start = start + 2;
-    let mut i = digits_start;
-    while url.as_bytes().get(i).is_some_and(|b| b.is_ascii_digit()) {
-        i += 1;
-    }
-    if i == digits_start || !url[i..].starts_with("-h") {
-        return url.to_string();
-    }
-    let mut j = i + 2;
-    let height_start = j;
-    while url.as_bytes().get(j).is_some_and(|b| b.is_ascii_digit()) {
-        j += 1;
-    }
-    if j == height_start {
-        return url.to_string();
-    }
-    let rest = &url[j..];
-    let suffix = match rest.find("-rj") {
-        Some(at) => &rest[at..],
-        None => "",
-    };
-    format!("{}=w512-h512-l100-rj{}", &url[..start], suffix)
+    ytmusic::best_thumbnail(thumbnails)
+        .map(|thumbnail| crate::services::cover_cache::normalize_cover_url(&thumbnail.url).into_owned())
 }
 
 pub fn artist_names(artists: &[ytmusic::ArtistRef]) -> String {

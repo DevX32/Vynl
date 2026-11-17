@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
@@ -7,13 +7,105 @@
   import ThemePicker from "@components/ThemePicker.svelte";
   import Button from "@components/Button.svelte";
   import Switch from "@components/Switch.svelte";
+  import Dialog from "@components/Dialog.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
   import { ACCENT_PRESETS } from "@lib/color";
+  import { vynl } from "@lib/vynl";
+  import { toasts } from "@lib/toast";
+  import { refreshLibrary } from "@state/library.svelte";
+  import { refreshPlaylists } from "@state/playlists.svelte";
   import MobileSyncSettings from "./MobileSyncSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
   import TasteSettings from "./TasteSettings.svelte";
 
   const settings = $derived(getCurrentSettings());
+
+  let _clearingCache = $state(false);
+  let _confirmingClear = $state(false);
+  let _downloads = $state<{ files: number; bytes: number } | null>(null);
+  let _downloadsLoading = $state(false);
+  let _confirmingRemove = $state(false);
+  let _removingDownloads = $state(false);
+
+  function errText(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+  }
+
+  function fmtBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+
+  const downloadsHint = $derived.by(() => {
+    if (_downloads === null) return t("settings.downloadedSongsReading");
+    if (_downloads.files === 0) return t("settings.downloadedSongsNone");
+    return t("settings.downloadedSongsHint", {
+      count: _downloads.files,
+      size: fmtBytes(_downloads.bytes),
+    });
+  });
+
+  const canRemoveDownloads = $derived(
+    (_downloads?.files ?? 0) > 0 && !_removingDownloads,
+  );
+
+  async function refreshDownloads(): Promise<void> {
+    if (_downloadsLoading) return;
+    _downloadsLoading = true;
+    try {
+      _downloads = await vynl.downloadsStats();
+    } catch (error) {
+      console.warn("[settings] failed to read downloads:", error);
+      _downloads = null;
+    } finally {
+      _downloadsLoading = false;
+    }
+  }
+
+  async function removeDownloads(): Promise<void> {
+    _confirmingRemove = false;
+    if (_removingDownloads) return;
+    _removingDownloads = true;
+    try {
+      const result = await vynl.deleteAllLibraryTracks();
+      await Promise.all([refreshLibrary(), refreshPlaylists(), refreshDownloads()]);
+      if (result.failed > 0) {
+        toasts.error(
+          t("downloads.removeDownloadedPartial", { failed: result.failed }),
+        );
+      }
+      toasts.success(
+        t("downloads.removeDownloadedDone", { deleted: result.deleted }),
+      );
+    } catch (error) {
+      toasts.error(
+        t("downloads.removeDownloadedFailed", { error: errText(error) }),
+      );
+    } finally {
+      _removingDownloads = false;
+    }
+  }
+
+  onMount(() => {
+    void refreshDownloads();
+  });
+
+  async function clearCache(): Promise<void> {
+    _confirmingClear = false;
+    if (_clearingCache) return;
+    _clearingCache = true;
+    try {
+      const freed = await vynl.clearCache();
+      const mb = Math.round(freed / (1024 * 1024));
+      toasts.success(t("settings.cacheCleared", { mb }));
+    } catch (error) {
+      toasts.error(t("settings.cacheClearFailed", { error: errText(error) }));
+    } finally {
+      _clearingCache = false;
+    }
+  }
 
   let _displayNameTimer: ReturnType<typeof setTimeout> | null = null;
   let _displayNameInput: HTMLInputElement | undefined = $state();
@@ -234,7 +326,68 @@
       </SettingRow>
     </div>
   </div>
+
+  <div class="group">
+    <div class="group-head">
+      <span class="label mono">{t("settings.groupStorage")}</span>
+    </div>
+    <div class="rows">
+      <SettingRow
+        label={t("settings.downloadedSongs")}
+        hint={downloadsHint}
+      >
+        {#snippet control()}
+          <Button
+            size="sm"
+            disabled={!canRemoveDownloads}
+            onclick={() => (_confirmingRemove = true)}
+          >
+            {_removingDownloads
+              ? t("downloads.removing")
+              : t("downloads.removeAllButton")}
+          </Button>
+        {/snippet}
+      </SettingRow>
+
+      <SettingRow
+        label={t("settings.clearCache")}
+        hint={t("settings.clearCacheHint")}
+      >
+        {#snippet control()}
+          <Button size="sm" disabled={_clearingCache} onclick={() => (_confirmingClear = true)}>
+            {_clearingCache
+              ? t("settings.cacheClearing")
+              : t("settings.clearCacheButton")}
+          </Button>
+        {/snippet}
+      </SettingRow>
+    </div>
+  </div>
 </div>
+
+{#if _confirmingClear}
+  <Dialog
+    open
+    title={t("settings.clearCacheTitle")}
+    description={t("settings.clearCacheBody")}
+    confirmLabel={t("settings.clearCacheButton")}
+    danger
+    onconfirm={() => void clearCache()}
+    oncancel={() => (_confirmingClear = false)}
+  />
+{/if}
+
+{#if _confirmingRemove}
+  <Dialog
+    open
+    title={t("downloads.removeAllTitle")}
+    description={t("downloads.removeAllBody")}
+    confirmLabel={t("downloads.removeAllConfirm")}
+    danger
+    onconfirm={() => void removeDownloads()}
+    oncancel={() => (_confirmingRemove = false)}
+  />
+{/if}
 
 <style>
   .panel {

@@ -273,6 +273,11 @@ export const en = {
     groupAppearance: "Appearance",
     groupDownloads: "Downloads",
     groupSystem: "System",
+    groupStorage: "Storage",
+    downloadedSongs: "Downloaded Songs",
+    downloadedSongsHint: "{count} songs taking {size}",
+    downloadedSongsReading: "Reading your music folder...",
+    downloadedSongsNone: "Nothing downloaded yet",
     groupIntegrations: "Integrations",
     overwrite: "Overwrite Existing Files",
     overwriteHint: "If off, songs that are already downloaded are skipped.",
@@ -347,6 +352,16 @@ export const en = {
     support: "Support Vynl",
     supportHint: "If you like the app, a coffee helps keep it going.",
     supportButton: "Support on Ko-fi",
+    clearCache: "Clear Cache",
+    clearCacheHint:
+      "Delete cached cover art, streamed audio and lookup data. Your library and downloads stay intact.",
+    clearCacheButton: "Clear",
+    clearCacheTitle: "Clear cache?",
+    clearCacheBody:
+      "Cached cover art, streamed audio and lookup data will be deleted and fetched again as needed. Your library and downloads are not affected.",
+    cacheClearing: "Clearing...",
+    cacheCleared: "Cache cleared. {mb} MB freed.",
+    cacheClearFailed: "Couldn't clear the cache: {error}",
   },
   account: {
     title: "Vynl",
@@ -414,13 +429,14 @@ export const en = {
     hint:
       "Songs stored in your music folder. Streaming from the catalogue does not count as a download — only files on disk.",
     removeAll: "Remove all downloaded songs",
+    removeAllButton: "Delete",
     removeAllHint:
       "Deletes every audio file in your music folder, including songs you added yourself. Downloaded lyric files go too, and every playlist is cleaned of the deleted tracks. This cannot be undone.",
-    removeAllConfirm: "Remove",
+    removeAllConfirm: "Delete All",
     removeAllTitle: "Remove all downloaded songs?",
     removeAllBody:
       "Every audio file in your music folder will be permanently deleted. This action cannot be undone.",
-    removing: "Removing",
+    removing: "Deleting",
     removeDownloadedDone: "Deleted {deleted} songs",
     removeDownloadedPartial:
       "{failed} songs could not be deleted because they were in use",

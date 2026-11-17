@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.vynl.vynl_mobile.data.CatalogueTrack
+import com.vynl.vynl_mobile.data.highResCover
 import com.vynl.vynl_mobile.ui.theme.VynlColors
 import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
@@ -85,7 +86,7 @@ fun ArtTile(
             }
         } else if (!coverUrl.isNullOrEmpty()) {
             AsyncImage(
-                model = coverUrl,
+                model = highResCover(coverUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

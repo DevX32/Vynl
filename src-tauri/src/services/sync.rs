@@ -842,7 +842,11 @@ fn track_dto(track: &CatalogueTrack) -> SyncTrack {
         artist: track.artist.clone(),
         album: track.album.as_ref().map(|album| album.name.clone()),
         duration: track.duration,
-        cover: track.cover.clone(),
+        cover: track
+            .cover
+            .as_deref()
+            .map(crate::services::cover_cache::normalize_cover_url)
+            .map(|cover| cover.into_owned()),
     }
 }
 
