@@ -651,7 +651,7 @@
 
   .disc {
     position: relative;
-    width: 182px;
+    width: 198px;
     aspect-ratio: 1 / 1;
     isolation: isolate;
   }
@@ -746,8 +746,8 @@
     z-index: 2;
     left: 50%;
     top: 50%;
-    width: 72%;
-    height: 72%;
+    width: 84%;
+    height: 84%;
     transform: translate(-50%, -50%) translateX(-10px);
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -801,7 +801,7 @@
   }
 
   .ph-initial {
-    font-size: 42px;
+    font-size: 46px;
     line-height: 1;
     opacity: 0.7;
   }
