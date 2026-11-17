@@ -1,12 +1,10 @@
-use std::fs::File;
-use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::time::{Duration, Instant};
 
 use rodio::source::SeekError;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -722,14 +720,7 @@ impl TrackSink {
         position_offset: Duration,
     ) -> Result<(Self, Option<f64>), String> {
         let (source, total, session): DecodedStream = match input {
-            TrackInput::File(path) => {
-                let file = File::open(&path).map_err(|e| format!("open: {e}"))?;
-                let decoder =
-                    Decoder::new(BufReader::new(file)).map_err(|e| format!("decode: {e}"))?;
-                let total = decoder.total_duration().map(|d| d.as_secs_f64());
-                (Box::new(decoder.convert_samples::<f32>()), total, None)
-            }
-            TrackInput::CatalogueFile(path) => {
+            TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
                 let source = crate::services::audio::FileSource::open(&path)?;
                 let total = source.total_duration().map(|d| d.as_secs_f64());
                 (Box::new(source), total, None)
@@ -1330,20 +1321,44 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Ok
                         } else {
                             playback_generation = generation;
-                            match sink.as_ref() {
-                                Some(track) if generation == active_generation => {
-                                    match seek_sink(&track.sink, time) {
-                                        Ok(()) => {
-                                            seek_floor = seek_floor_for(time);
-                                            PlayerResp::Ok
+                            let active = generation == active_generation && sink.is_some();
+                            let ended =
+                                active && sink.as_ref().is_some_and(|track| track.sink.empty());
+                            if active && !ended {
+                                match seek_sink(&sink.as_ref().expect("active sink").sink, time) {
+                                    Ok(()) => {
+                                        seek_floor = seek_floor_for(time);
+                                        PlayerResp::Ok
+                                    }
+                                    Err(e) => PlayerResp::Err(e),
+                                }
+                            } else if ended {
+                                match current_path.clone() {
+                                    Some(path) if !path.starts_with("ytm:") => {
+                                        match install_source(
+                                            &handle,
+                                            &mut sink,
+                                            &mut fading,
+                                            TrackInput::File(PathBuf::from(&path)),
+                                            time,
+                                            true,
+                                        ) {
+                                            Ok(total) => {
+                                                duration_secs = total;
+                                                seek_floor = seek_floor_for(time);
+                                                PlayerResp::Ok
+                                            }
+                                            Err(e) => PlayerResp::Err(e),
                                         }
-                                        Err(e) => PlayerResp::Err(e),
+                                    }
+                                    _ => {
+                                        pending_seek = Some((time, generation));
+                                        PlayerResp::Ok
                                     }
                                 }
-                                _ => {
-                                    pending_seek = Some((time, generation));
-                                    PlayerResp::Ok
-                                }
+                            } else {
+                                pending_seek = Some((time, generation));
+                                PlayerResp::Ok
                             }
                         }
                     }

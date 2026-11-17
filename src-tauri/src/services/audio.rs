@@ -138,6 +138,13 @@ impl rodio::Source for FileSource {
     }
 
     fn try_seek(&mut self, to: Duration) -> Result<(), rodio::source::SeekError> {
+        let to = match self.duration {
+            Some(total) if total > Duration::ZERO => {
+                let margin = (total / 4).min(Duration::from_millis(250));
+                to.min(total.saturating_sub(margin))
+            }
+            _ => to,
+        };
         let time = Time::try_from_secs_f64(to.as_secs_f64()).ok_or(
             rodio::source::SeekError::NotSupported {
                 underlying_source: "Vynl file",
