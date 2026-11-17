@@ -18,7 +18,6 @@ export const en = {
     shuffleAll: "Shuffle All",
     addMusic: "Add Music",
     recentlyAdded: "Recently Added",
-    viewAll: "View All",
     emptyTitle: "Your library is empty",
     emptySub: "Find something new to stream in Browse",
     openBrowse: "Open Browse",

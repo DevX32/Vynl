@@ -177,9 +177,6 @@
         <div class="section">
           <div class="section-head">
             <span class="section-label">{t("home.recentlyAdded")}</span>
-            <button class="see-all" onclick={() => onNavigate("library")}
-              >{t("home.viewAll")}</button
-            >
           </div>
           <div class="recent-grid">
             {#each recentTracks as track (track.id)}
@@ -407,16 +404,6 @@
   .section-label {
     font-size: 13px;
     color: var(--dim);
-  }
-
-  .see-all {
-    font-size: 11px;
-    color: var(--faint);
-    transition: color 0.15s;
-  }
-
-  .see-all:hover {
-    color: var(--text);
   }
 
   .actions {
