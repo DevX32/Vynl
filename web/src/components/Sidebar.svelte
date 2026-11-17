@@ -646,7 +646,8 @@
     align-items: center;
     justify-content: center;
     color: var(--accent);
-    border: 1px solid var(--line);
+    border: none;
+    box-shadow: none;
     background: var(--bg-raise);
   }
 
