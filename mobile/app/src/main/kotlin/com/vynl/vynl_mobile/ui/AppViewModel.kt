@@ -24,6 +24,8 @@ import com.vynl.vynl_mobile.data.randomNickname
 import com.vynl.vynl_mobile.data.resolveDisplayName
 import com.vynl.vynl_mobile.playback.PlayerController
 import com.vynl.vynl_mobile.remote.Desktop
+import com.vynl.vynl_mobile.remote.DesktopPlaylist
+import com.vynl.vynl_mobile.remote.DesktopStreamed
 import com.vynl.vynl_mobile.remote.Sync
 import com.vynl.vynl_mobile.remote.SyncStatus
 import com.vynl.vynl_mobile.ui.theme.Accent
@@ -506,13 +508,52 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                store.replaceDesktopPlaylists(playlists)
+                syncStage = "Updating liked songs"
+                val liked = desktop.taste()
+                for (track in liked) {
+                    store.addTrack(
+                        CatalogueTrack(
+                            id = track.id,
+                            title = track.title,
+                            artist = track.artist,
+                            album = track.album,
+                            duration = track.duration,
+                            cover = track.cover,
+                            explicit = false,
+                        ),
+                    )
+                }
+
+                val syncLists = if (liked.isNotEmpty()) {
+                    playlists + DesktopPlaylist(
+                        id = "liked",
+                        name = "Liked Songs",
+                        trackIds = liked.map { it.id },
+                        streamed = liked.map {
+                            DesktopStreamed(
+                                id = it.id,
+                                title = it.title,
+                                artist = it.artist,
+                                album = it.album,
+                                duration = it.duration.takeIf { d -> d > 0.0 },
+                                cover = it.cover,
+                            )
+                        },
+                        createdAt = 0L,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                } else {
+                    playlists
+                }
+
+                store.replaceDesktopPlaylists(syncLists)
                 refreshStore()
+                val likedNote = if (liked.isNotEmpty()) " and liked songs" else ""
                 notice = when {
                     catalog.isEmpty() -> "The desktop has nothing to share"
-                    toFetch.isEmpty() -> "Already up to date — ${catalog.size} songs, synced lyrics and playlists"
+                    toFetch.isEmpty() -> "Already up to date — ${catalog.size} songs, synced lyrics and playlists$likedNote"
                     failed > 0 -> "$done of ${toFetch.size} songs came over, $failed failed — tap Sync to retry"
-                    else -> "$done new songs came over, with lyrics and playlists"
+                    else -> "$done new songs came over, with lyrics and playlists$likedNote"
                 }
             } catch (error: Exception) {
                 notice = friendly(error)

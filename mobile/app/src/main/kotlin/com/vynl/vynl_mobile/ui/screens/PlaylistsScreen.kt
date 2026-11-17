@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,7 +91,7 @@ fun PlaylistsScreen(viewModel: AppViewModel) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Rounded.QueueMusic,
+                            if (playlist.id == "dt-liked") Icons.Rounded.Favorite else Icons.Rounded.QueueMusic,
                             contentDescription = null,
                             tint = VynlColors.accent,
                             modifier = Modifier.size(22.dp),

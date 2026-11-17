@@ -7,7 +7,7 @@
     Clock,
     ListPlus,
     X,
-    Download,
+    Plus,
     LoaderCircle,
   } from "lucide-svelte";
   import type { CatalogueTrack, Page } from "@lib/types";
@@ -56,6 +56,7 @@
   let streamTarget = $state<CatalogueTrack | null>(null);
   let streamBusy = $state(false);
   let bulkTracks = $state<readonly CatalogueTrack[]>([]);
+  let bulkMode = $state<"add" | "download">("add");
   let bulkOpen = $state(false);
   let bulkBusy = $state(false);
   let bulkDone = $state(0);
@@ -169,11 +170,48 @@
     return items;
   }
 
-  function openDownload(list: CatalogueTrack[]): void {
-    if (list.length === 0 || bulkBusy) return;
+  function submitBulk(picked: readonly CatalogueTrack[], mode: "add" | "download"): void {
+    if (picked.length === 0 || bulkBusy) return;
     downloadOpen = false;
-    bulkTracks = list;
+    bulkMode = mode;
+    bulkTracks = picked;
     bulkOpen = true;
+  }
+
+  async function runBulkAdd(
+    playlistId: string | null,
+    playlistName: string | null,
+  ): Promise<void> {
+    const list = bulkTracks;
+    if (bulkBusy || list.length === 0) return;
+    bulkBusy = true;
+    bulkDone = 0;
+    let done = 0;
+    let failed = 0;
+    for (const track of list) {
+      try {
+        await saveStreamToPlaylist(track, playlistId, playlistName ?? undefined);
+        done += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn("catalogue bulk add failed for", track.id, error);
+      }
+      bulkDone = done + failed;
+    }
+    bulkBusy = false;
+    bulkDone = 0;
+    bulkTracks = [];
+    if (failed === 0) {
+      const name =
+        playlistName ??
+        playlists.find((playlist) => playlist.id === playlistId)?.name ??
+        "";
+      toasts.success(
+        t("catalogue.addedToPlaylist", { name: toPascalCase(name) }),
+      );
+    } else {
+      toasts.error(t("catalogue.addPartial", { done, failed }));
+    }
   }
 
   async function runBulkDownload(playlistId: string | null, playlistName: string | null): Promise<void> {
@@ -313,13 +351,13 @@
       <div class="hero-sub mono">
         {#if tracks.length > 0}
           {tracks.length}
-          {tracks.length === 1 ? t("library.song") : t("library.songsPlural")} ·
+          {tracks.length === 1 ? t("library.song") : t("library.songsPlural")} Â·
           {t("playlist.about")}
           {fmtTotalDuration(totalDur)}{:else}
           {t("playlist.zeroSongs")}
         {/if}
         {#if bulkBusy}
-          · {t("catalogue.downloading", { done: bulkDone, total: bulkTracks.length })}
+          Â· {t("catalogue.downloading", { done: bulkDone, total: bulkTracks.length })}
         {/if}
       </div>
     </div>
@@ -350,13 +388,13 @@
         class="icon-btn round"
         onclick={() => (downloadOpen = true)}
         disabled={tracks.length === 0 || bulkBusy}
-        aria-label={t("catalogue.downloadSongs")}
-        title={t("catalogue.downloadSongs")}
+        aria-label={t("catalogue.bulkActions")}
+        title={t("catalogue.bulkActions")}
       >
         {#if bulkBusy}
           <span class="spin"><LoaderCircle size={14} stroke-width={1.5} /></span>
         {:else}
-          <Download size={14} stroke-width={1.5} />
+          <Plus size={14} stroke-width={1.5} />
         {/if}
       </button>
     </div>
@@ -392,7 +430,7 @@
           class:playing={isCurrent(track)}
           role="button"
           tabindex="0"
-          aria-label={`${track.title} — ${track.artist}`}
+          aria-label={`${track.title} â€” ${track.artist}`}
           onclick={() => playTrack(track)}
           onkeydown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -458,7 +496,7 @@
     {tracks}
     busy={bulkBusy}
     onClose={() => (downloadOpen = false)}
-    onDownload={openDownload}
+    onSubmit={submitBulk}
   />
 {/if}
 
@@ -470,11 +508,19 @@
     busy={bulkBusy}
     onAddExisting={(id) => {
       bulkOpen = false;
-      void runBulkDownload(id, null);
+      if (bulkMode === "add") {
+        void runBulkAdd(id, null);
+      } else {
+        void runBulkDownload(id, null);
+      }
     }}
     onCreate={(name) => {
       bulkOpen = false;
-      void runBulkDownload(null, name);
+      if (bulkMode === "add") {
+        void runBulkAdd(null, name);
+      } else {
+        void runBulkDownload(null, name);
+      }
     }}
     onSkip={() => {
       if (bulkBusy) return;

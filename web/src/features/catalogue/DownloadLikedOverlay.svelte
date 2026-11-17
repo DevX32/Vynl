@@ -13,13 +13,15 @@
     tracks,
     busy = false,
     onClose,
-    onDownload,
+    onSubmit,
   }: {
     tracks: readonly CatalogueTrack[];
     busy?: boolean;
     onClose: () => void;
-    onDownload: (picked: CatalogueTrack[]) => void;
+    onSubmit: (picked: CatalogueTrack[], mode: "add" | "download") => void;
   } = $props();
+
+  let mode = $state<"add" | "download">("add");
 
   let query = $state("");
   let selected = $state<Set<string>>(new Set());
@@ -81,7 +83,7 @@
     if (busy) return;
     const picked = tracks.filter((track) => selected.has(track.id));
     if (picked.length === 0) return;
-    onDownload(picked);
+    onSubmit(picked, mode);
   }
 </script>
 
@@ -89,7 +91,7 @@
   class="dl-overlay"
   role="dialog"
   tabindex="-1"
-  aria-label={t("catalogue.downloadSongs")}
+  aria-label={t("catalogue.bulkActions")}
   transition:fade={{ duration: 150 }}
   onkeydown={(e) => {
     if (e.key === "Escape") onClose();
@@ -104,13 +106,36 @@
     out:fly={{ x: 28, duration: 160, easing: cubicIn }}
   >
     <div class="dl-head">
-      <span class="display dl-title">{t("catalogue.downloadSongs")}</span>
+      <span class="display dl-title">{t("catalogue.bulkActions")}</span>
       <button
         class="icon-btn close-btn"
         onclick={onClose}
         aria-label={t("titleBar.close")}
       >
         <X size={12} stroke-width={1.6} />
+      </button>
+    </div>
+
+    <div class="dl-tabs" role="tablist">
+      <button
+        class="dl-tab"
+        class:active={mode === "add"}
+        role="tab"
+        aria-selected={mode === "add"}
+        onclick={() => (mode = "add")}
+      >
+        <Plus size={12} stroke-width={1.5} />
+        <span>{t("catalogue.addToPlaylist")}</span>
+      </button>
+      <button
+        class="dl-tab"
+        class:active={mode === "download"}
+        role="tab"
+        aria-selected={mode === "download"}
+        onclick={() => (mode = "download")}
+      >
+        <Download size={12} stroke-width={1.5} />
+        <span>{t("catalogue.downloadToPlaylist")}</span>
       </button>
     </div>
 
@@ -172,10 +197,14 @@
       >
         {#if busy}
           <span class="spin"><LoaderCircle size={13} stroke-width={1.5} /></span>
+        {:else if mode === "add"}
+          <Plus size={13} stroke-width={1.5} />
         {:else}
           <Download size={13} stroke-width={1.5} />
         {/if}
-        {t("catalogue.downloadN", { n: selectedCount })}
+        {mode === "add"
+          ? t("catalogue.addN", { n: selectedCount })
+          : t("catalogue.downloadN", { n: selectedCount })}
       </button>
     </div>
   </div>
@@ -235,6 +264,46 @@
 
   .close-btn :global(svg) {
     transform: rotate(-45deg);
+  }
+
+  .dl-tabs {
+    flex-shrink: 0;
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: var(--bg-raise);
+  }
+
+  .dl-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--faint);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+      background 0.12s,
+      color 0.12s;
+  }
+
+  .dl-tab:hover {
+    color: var(--dim);
+  }
+
+  .dl-tab.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
   }
 
   .dl-search {

@@ -48,6 +48,15 @@ data class DesktopPlaylist(
     val updatedAt: Long,
 )
 
+data class DesktopTasteTrack(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val album: String?,
+    val duration: Double,
+    val cover: String?,
+)
+
 data class DesktopLyrics(
     val kind: String,
     val text: String,
@@ -155,6 +164,30 @@ class Desktop(context: Context) {
                 updatedAt = entry.optLong("updatedAt", 0L),
             )
         }
+    }
+
+    suspend fun taste(): List<DesktopTasteTrack> = withContext(Dispatchers.IO) {
+        runCatching {
+            http.newCall(request("/v1/taste").build()).execute().use { response ->
+                if (!response.isSuccessful) return@use emptyList<DesktopTasteTrack>()
+                val body = response.body?.string().orEmpty()
+                if (body.isBlank()) return@use emptyList<DesktopTasteTrack>()
+                val liked = JSONObject(body).optJSONArray("liked") ?: return@use emptyList()
+                (0 until liked.length()).mapNotNull { index ->
+                    val s = liked.optJSONObject(index) ?: return@mapNotNull null
+                    val id = s.optString("id")
+                    if (id.isBlank()) return@mapNotNull null
+                    DesktopTasteTrack(
+                        id = id,
+                        title = s.optString("title", "Unknown"),
+                        artist = s.optString("artist", "Unknown"),
+                        album = s.optString("album", "").ifBlank { null },
+                        duration = s.optDouble("duration", 0.0),
+                        cover = s.optString("cover", "").ifBlank { null },
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
     }
 
     suspend fun syncedLyrics(trackId: String): DesktopLyrics? = withContext(Dispatchers.IO) {
