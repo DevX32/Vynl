@@ -4,7 +4,7 @@
   import { cataloguePath, loadCatalogueArtist } from "@state/catalogue.svelte";
   import { requestPlay } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
-  import { blobSrc } from "@lib/format";
+  import { blobSrc, splitWikiAttribution } from "@lib/format";
   import { t } from "@lib/i18n";
   import { friendlyError } from "@lib/errors";
   import CatalogueTrackList from "./CatalogueTrackList.svelte";
@@ -180,6 +180,7 @@
       <div class="hero-meta">
         <div class="hero-title display">{artist.name}</div>
         {#if artist.description}
+          {@const wiki = splitWikiAttribution(artist.description)}
           <div class="bio">
             <div class="bio-head">
               <span class="bio-label mono">{t("catalogue.description")}</span>
@@ -194,8 +195,11 @@
               {/if}
             </div>
             <p class="description" bind:this={bioEl}>
-              {artist.description}
+              {wiki.body}
             </p>
+            {#if wiki.attribution}
+              <span class="bio-source mono">{wiki.attribution}</span>
+            {/if}
           </div>
         {/if}
       </div>
@@ -319,6 +323,8 @@
   <BioModal
     heading={t("catalogue.description")}
     text={artist.description}
+    image={artist.cover}
+    subtitle={artist.name}
     onClose={() => (bioOpen = false)}
   />
 {/if}
@@ -512,6 +518,15 @@
     color: var(--text);
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+
+  .bio-source {
+    font-size: 9.5px;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    color: var(--faint);
+    user-select: text;
+    overflow-wrap: anywhere;
   }
 
   .description {

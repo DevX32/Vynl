@@ -83,6 +83,20 @@ export function stripAlbumSuffix(
   return title;
 }
 
+export interface WikiSplit {
+  body: string;
+  attribution: string | null;
+}
+
+export function splitWikiAttribution(value: string): WikiSplit {
+  const marker = /(?:^|\n)\s*from\s+wikipedia\b/i.exec(value);
+  if (!marker) return { body: value, attribution: null };
+  const body = value.slice(0, marker.index).trim();
+  const attribution = value.slice(marker.index).trim();
+  if (!body) return { body: attribution, attribution: null };
+  return { body, attribution };
+}
+
 export function fmtTime(
   sec: number | null | undefined,
   fallback = "0:00",

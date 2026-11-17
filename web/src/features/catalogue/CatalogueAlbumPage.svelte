@@ -204,6 +204,8 @@
   <BioModal
     heading={t("catalogue.description")}
     text={detail.description}
+    image={album?.cover ?? null}
+    subtitle={album?.title ?? null}
     onClose={() => (bioOpen = false)}
   />
 {/if}

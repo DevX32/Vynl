@@ -48,6 +48,9 @@ mp3lame-encoder = "0.2"
 symphonia-adapter-libopus = "0.3"
 ytmusic = { git = "https://github.com/DevX32/vynl-ytmusic", branch = "main" }
 
+[patch."https://github.com/DevX32/vynl-ytmusic"]
+ytmusic = { path = "vendor/ytmusic" }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.55"
 souvlaki = { version = "0.8.3", default-features = false }

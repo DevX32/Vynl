@@ -3,18 +3,24 @@
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { t } from "@lib/i18n";
+  import { splitWikiAttribution, blobSrc } from "@lib/format";
 
   let {
     heading,
     text,
+    image = null,
+    subtitle = null,
     onClose,
   }: {
     heading: string;
     text: string;
+    image?: string | null;
+    subtitle?: string | null;
     onClose: () => void;
   } = $props();
 
   let dialogEl = $state<HTMLDivElement>();
+  const wiki = $derived(splitWikiAttribution(text));
 
   $effect(() => {
     dialogEl?.focus();
@@ -48,13 +54,29 @@
     tabindex="-1"
   >
     <header class="head">
-      <span class="title mono">{heading}</span>
+      {#if image}
+        <img
+          class="head-image"
+          use:blobSrc={image}
+          alt=""
+          draggable="false"
+        />
+      {/if}
+      <div class="head-text">
+        <span class="head-kicker mono">{heading}</span>
+        {#if subtitle}
+          <span class="head-title">{subtitle}</span>
+        {/if}
+      </div>
       <button class="close" onclick={onClose} aria-label={t("common.close")}>
         <X size={14} stroke-width={1.5} />
       </button>
     </header>
     <div class="body">
-      <p class="text">{text}</p>
+      <p class="text">{wiki.body}</p>
+      {#if wiki.attribution}
+        <span class="source mono">{wiki.attribution}</span>
+      {/if}
     </div>
   </div>
 </div>
@@ -88,18 +110,47 @@
   .head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
-    padding: 12px 16px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--line);
     flex-shrink: 0;
   }
 
-  .title {
-    font-size: 10px;
-    letter-spacing: 0.16em;
+  .head-image {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    display: block;
+    background: var(--bg-raise);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .head-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .head-kicker {
+    font-size: 9px;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--faint);
+  }
+
+  .head-title {
+    font-size: 16px;
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .close {
@@ -137,5 +188,18 @@
     white-space: pre-line;
     overflow-wrap: anywhere;
     user-select: text;
+  }
+
+  .source {
+    display: block;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    font-size: 9px;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    color: var(--faint);
+    user-select: text;
+    overflow-wrap: anywhere;
   }
 </style>
