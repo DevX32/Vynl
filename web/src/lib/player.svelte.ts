@@ -51,6 +51,7 @@ import type {
   MediaControlEvent,
   MediaUpdate,
   PlaybackTick,
+  StreamErrorEvent,
 } from "@lib/types";
 
 function normalizeDuration(value: number | undefined): number {
@@ -183,9 +184,16 @@ function finishPlayReconcile(generation: number): void {
 
 const CROSSFADE_TAIL = 0.75;
 let crossfadeTried = false;
+let pendingStreamError: StreamErrorEvent | null = null;
 
 function resetCrossfade(): void {
   crossfadeTried = false;
+}
+
+function handleStreamError(event: StreamErrorEvent): void {
+  const np = getCurrentTrack();
+  if (!np || catalogueIdOf(np.path) !== event.videoId) return;
+  pendingStreamError = event;
 }
 
 function handleTick(tick: PlaybackTick): void {
@@ -194,9 +202,20 @@ function handleTick(tick: PlaybackTick): void {
   if (!np) return;
 
   if (tick.finished) {
+    const streamError = pendingStreamError;
+    pendingStreamError = null;
     if (np.playing) {
       updatePlaying(false);
       updateMediaSession();
+      if (streamError && catalogueIdOf(np.path) === streamError.videoId) {
+        consecutivePlayFailures += 1;
+        setPlayError(friendlyError(streamError.message, t("error.couldNotPlay")));
+        if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
+          return;
+        }
+        scheduleRetry(np.id);
+        return;
+      }
       nextAutomatic();
     }
     return;
@@ -252,6 +271,7 @@ function handleTick(tick: PlaybackTick): void {
 }
 
 vynl.onPlaybackTick(handleTick);
+vynl.onStreamError(handleStreamError);
 
 async function reconcilePlaybackState(): Promise<void> {
   const np = getCurrentTrack();
@@ -573,6 +593,7 @@ function startTrack(nextTrack: LibraryTrack): void {
   consumeNextTrack(nextTrack);
   clearRetry();
   setPlayError(null);
+  pendingStreamError = null;
   resetCrossfade();
   consecutivePlayFailures = 0;
   cancelSeek(false);

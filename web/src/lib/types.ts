@@ -411,6 +411,11 @@ export interface PlaybackTick {
   duration: number | null;
 }
 
+export interface StreamErrorEvent {
+  videoId: string;
+  message: string;
+}
+
 export interface TasteEntry {
   track: CatalogueTrack;
   plays: number;

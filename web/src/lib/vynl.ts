@@ -30,6 +30,7 @@ import type {
   EqDesign,
   MediaUpdate,
   MediaControlEvent,
+  StreamErrorEvent,
   TasteEntry,
   CatalogueAddResult,
   CatalogueAlbumDetail,
@@ -315,6 +316,9 @@ export const vynl = {
 
   onPlaybackTick: (cb: (tick: PlaybackTick) => void): (() => void) =>
     onEvent<PlaybackTick>("vynl:player:tick", cb),
+
+  onStreamError: (cb: (event: StreamErrorEvent) => void): (() => void) =>
+    onEvent<StreamErrorEvent>("vynl:player:stream-error", cb),
 
   tasteLoad: (): Promise<TasteEntry[]> => cmd("taste_load"),
 

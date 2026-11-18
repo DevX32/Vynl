@@ -35,6 +35,13 @@ pub struct PlaybackTick {
     pub duration: Option<f64>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamErrorEvent {
+    pub video_id: String,
+    pub message: String,
+}
+
 type TickKey = (u64, bool, bool, u64);
 
 fn reported_pos(sink: Option<&TrackSink>, floor: Option<Duration>) -> f64 {
@@ -69,6 +76,21 @@ fn emit_playback_tick(
     *last_key = Some(key);
 
     let Some(app) = APP.get() else { return };
+    if has_sink && empty {
+        if let Some(track) = sink {
+            if let Some(session) = &track._session {
+                if let Some(message) = session.error() {
+                    let _ = app.emit(
+                        "vynl:player:stream-error",
+                        StreamErrorEvent {
+                            video_id: session.video_id.clone(),
+                            message,
+                        },
+                    );
+                }
+            }
+        }
+    }
     let _ = app.emit(
         PLAYBACK_TICK_EVENT,
         PlaybackTick {
@@ -782,6 +804,13 @@ struct PlayStreamRequest {
 enum PlayerCmd {
     Play(String, Option<f64>, u64),
     PlayStream(PlayStreamRequest),
+    FinishDeviceChange {
+        token: u64,
+        generation: u64,
+        path: String,
+        position: f64,
+        prepared: Option<PreparedAudio>,
+    },
     Crossfade(String, u64, f64),
     CrossfadeStream {
         path: String,
@@ -831,8 +860,9 @@ struct PlayerChannel {
 
 static CHANNEL: once_cell::sync::Lazy<PlayerChannel> = once_cell::sync::Lazy::new(|| {
     let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerRequest>();
+    let thread_tx = cmd_tx.clone();
 
-    std::thread::spawn(move || player_thread(cmd_rx));
+    std::thread::spawn(move || player_thread(cmd_rx, thread_tx));
 
     PlayerChannel { cmd_tx }
 });
@@ -983,86 +1013,53 @@ fn install_source(
     Ok(total)
 }
 
-fn reopen_output(
+fn stop_playback_for_device_change(
     output: &mut Option<OutputStream>,
     handle: &mut Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
-    seek_floor: &mut Option<Duration>,
-    current_path: &Option<String>,
-) {
-    let resume_pos = sink
-        .as_ref()
-        .filter(|t| !t.sink.empty() && !PAUSED.load(Ordering::Relaxed))
-        .map(|t| reported_pos(Some(t), *seek_floor));
+) -> bool {
     if let Some(t) = sink.take() {
         t.sink.stop();
     }
     stop_fading_out(fading);
     drop(handle.take());
     drop(output.take());
-
-    let (new_output, new_handle) = match OutputStream::try_default() {
-        Ok(v) => v,
+    match OutputStream::try_default() {
+        Ok((new_output, new_handle)) => {
+            *output = Some(new_output);
+            *handle = Some(new_handle);
+            true
+        }
         Err(e) => {
             eprintln!("device change: reopen output failed: {e}");
-            return;
+            false
         }
-    };
-    *output = Some(new_output);
-    *handle = Some(new_handle);
-
-    let (Some(path), Some(pos)) = (current_path.clone(), resume_pos) else {
-        return;
-    };
-
-    let mut stream_source = false;
-    let (input, seek_to) = if let Some(video_id) = path.strip_prefix("ytm:") {
-        match crate::services::catalogue::prepare_blocking(video_id, pos, None) {
-            Ok(prepared) => match prepared.audio {
-                PreparedAudio::Stream(session) => {
-                    stream_source = true;
-                    (TrackInput::Stream(session), None)
-                }
-                PreparedAudio::File(file) => (TrackInput::CatalogueFile(file), Some(pos)),
-            },
-            Err(e) => {
-                eprintln!("device change: could not re-resolve {path}: {e}");
-                return;
-            }
-        }
-    } else {
-        (TrackInput::File(PathBuf::from(&path)), Some(pos))
-    };
-
-    match open_input(
-        handle.as_ref(),
-        input,
-        0.0,
-        if stream_source {
-            Duration::from_secs_f64(pos.clamp(0.0, Duration::MAX.as_secs_f64()))
-        } else {
-            Duration::ZERO
-        },
-    ) {
-        Ok((track, _)) => {
-            track
-                .sink
-                .set_volume(scale_volume(VOLUME.load(Ordering::Relaxed)));
-            if let Some(time) = seek_to
-                && let Err(e) = seek_sink(&track.sink, time)
-            {
-                eprintln!("device change: could not resume {path}: {e}");
-                return;
-            }
-            *seek_floor = seek_floor_for(pos);
-            *sink = Some(track);
-        }
-        Err(e) => eprintln!("device change: could not reopen {path}: {e}"),
     }
 }
 
-fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
+fn finish_device_change(
+    handle: &Option<OutputStreamHandle>,
+    sink: &mut Option<TrackSink>,
+    fading: &mut Option<FadingOut>,
+    path: &str,
+    position: f64,
+    prepared: Option<PreparedAudio>,
+) -> Result<Option<f64>, String> {
+    let input = match prepared {
+        Some(PreparedAudio::Stream(session)) => TrackInput::Stream(session),
+        Some(PreparedAudio::File(file)) => TrackInput::CatalogueFile(file),
+        None => {
+            if path.starts_with("ytm:") {
+                return Err("stream could not be re-resolved".into());
+            }
+            TrackInput::File(PathBuf::from(path))
+        }
+    };
+    install_source(handle, sink, fading, input, position, true)
+}
+
+fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerRequest>) {
     let (out, h) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
@@ -1089,6 +1086,8 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
     let mut duration_secs: Option<f64> = None;
     let mut last_tick_key: Option<TickKey> = None;
     let mut last_device_poll = Instant::now();
+    let mut device_handoff_token = 0u64;
+    let mut pending_resume: Option<(String, f64)> = None;
 
     loop {
         match rx.recv_timeout(TICK_INTERVAL) {
@@ -1099,6 +1098,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Ok
                         } else {
                             playback_generation = generation;
+                            pending_resume = None;
                             if handle.is_none()
                                 && let Ok((o, h)) = OutputStream::try_default()
                             {
@@ -1158,6 +1158,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             PlayerResp::Ok
                         } else {
                             playback_generation = request.generation;
+                            pending_resume = None;
                             if handle.is_none()
                                 && let Ok((o, h)) = OutputStream::try_default()
                             {
@@ -1213,6 +1214,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                 playback_generation = generation;
                                 active_generation = generation;
                                 pending_seek = None;
+                                pending_resume = None;
                                 seek_floor = None;
                                 current_path = Some(path);
                                 duration_secs = total;
@@ -1246,6 +1248,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                 playback_generation = generation;
                                 active_generation = generation;
                                 pending_seek = None;
+                                pending_resume = None;
                                 seek_floor = seek_floor_for(start);
                                 current_path = Some(path);
                                 duration_secs = total;
@@ -1255,6 +1258,38 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             Err(e) => PlayerResp::Err(e),
                         }
                     }
+                    PlayerCmd::FinishDeviceChange {
+                        token,
+                        generation,
+                        path,
+                        position,
+                        prepared,
+                    } => {
+                        if token != device_handoff_token || generation != playback_generation {
+                            PlayerResp::Ok
+                        } else {
+                            let result = finish_device_change(
+                                &handle,
+                                &mut sink,
+                                &mut fading,
+                                &path,
+                                position,
+                                prepared,
+                            );
+                            pending_resume = None;
+                            match result {
+                                Ok(total) => {
+                                    duration_secs = total;
+                                    seek_floor = seek_floor_for(position);
+                                    PlayerResp::Ok
+                                }
+                                Err(e) => {
+                                    eprintln!("device change: could not resume {path}: {e}");
+                                    PlayerResp::Ok
+                                }
+                            }
+                        }
+                    }
                     PlayerCmd::Stop(generation) => {
                         if generation < playback_generation {
                             PlayerResp::Ok
@@ -1262,6 +1297,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             playback_generation = generation;
                             active_generation = 0;
                             pending_seek = None;
+                            pending_resume = None;
                             seek_floor = None;
                             duration_secs = None;
                             current_path = None;
@@ -1403,14 +1439,78 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                         && output_device_name.as_deref() != Some(name.as_str())
                     {
                         output_device_name = Some(name);
-                        reopen_output(
+                        device_handoff_token += 1;
+                        let token = device_handoff_token;
+                        let resume_pos = sink
+                            .as_ref()
+                            .map(|t| reported_pos(Some(t), seek_floor))
+                            .or_else(|| pending_resume.as_ref().map(|(_, pos)| *pos));
+                        let reopened = stop_playback_for_device_change(
                             &mut output,
                             &mut handle,
                             &mut sink,
                             &mut fading,
-                            &mut seek_floor,
-                            &current_path,
                         );
+                        let generation = playback_generation;
+                        let candidate =
+                            resume_pos.and_then(|pos| current_path.clone().map(|path| (path, pos)));
+                        match candidate {
+                            Some((path, pos)) if reopened => {
+                                if path.starts_with("ytm:") {
+                                    pending_resume = Some((path.clone(), pos));
+                                    let handoff_tx = cmd_tx.clone();
+                                    std::thread::spawn(move || {
+                                        let prepared = path
+                                            .strip_prefix("ytm:")
+                                            .and_then(|video_id| {
+                                                match crate::services::catalogue::prepare_blocking(
+                                                    video_id, pos, None,
+                                                ) {
+                                                    Ok(prepared) => Some(prepared.audio),
+                                                    Err(error) => {
+                                                        eprintln!(
+                                                            "device change: could not re-resolve {path}: {error}"
+                                                        );
+                                                        None
+                                                    }
+                                                }
+                                            });
+                                        let (reply_tx, _) = mpsc::channel::<PlayerResp>();
+                                        let _ = handoff_tx.send(PlayerRequest {
+                                            cmd: PlayerCmd::FinishDeviceChange {
+                                                token,
+                                                generation,
+                                                path,
+                                                position: pos,
+                                                prepared,
+                                            },
+                                            reply_tx,
+                                        });
+                                    });
+                                } else {
+                                    pending_resume = None;
+                                    match finish_device_change(
+                                        &handle,
+                                        &mut sink,
+                                        &mut fading,
+                                        &path,
+                                        pos,
+                                        None,
+                                    ) {
+                                        Ok(total) => {
+                                            duration_secs = total;
+                                            seek_floor = seek_floor_for(pos);
+                                        }
+                                        Err(e) => {
+                                            eprintln!("device change: could not resume {path}: {e}")
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                pending_resume = None;
+                            }
+                        }
                     }
                 }
             }
