@@ -431,7 +431,17 @@ fn is_safe_candidate_url(url: &str) -> bool {
     if trimmed.is_empty() || trimmed.starts_with('-') {
         return false;
     }
-    trimmed.starts_with("https://") || trimmed.starts_with("http://")
+    if !trimmed.starts_with("https://") {
+        return false;
+    }
+    let Ok(parsed) = reqwest::Url::parse(trimmed) else {
+        return false;
+    };
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    crate::services::rpc::is_public_host(host)
+        && crate::services::util::host_resolves_publicly(host)
 }
 
 fn base_args(format: &AudioFormat) -> Vec<String> {

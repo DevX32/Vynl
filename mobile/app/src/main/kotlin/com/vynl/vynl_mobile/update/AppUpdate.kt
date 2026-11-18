@@ -2,6 +2,7 @@ package com.vynl.vynl_mobile.update
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -119,6 +120,24 @@ class AppUpdate(private val context: Context) {
     fun installSettingsIntent(): Intent =
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
 
+    fun canInstallTrusted(file: File): Boolean = try {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+        val ours = context.packageManager.getPackageInfo(context.packageName, flags)
+        val theirs = context.packageManager.getPackageArchiveInfo(file.absolutePath, flags)
+        val oursFingerprints = fingerprints(ours)
+        val theirsFingerprints = theirs?.let(::fingerprints)
+        oursFingerprints.isNotEmpty() &&
+            theirsFingerprints != null &&
+            oursFingerprints.any { it in theirsFingerprints }
+    } catch (error: Exception) {
+        false
+    }
+
     fun install(file: File): Boolean {
         val uri = FileProvider.getUriForFile(
             context,
@@ -136,6 +155,20 @@ class AppUpdate(private val context: Context) {
         } catch (error: Exception) {
             false
         }
+    }
+
+    private fun fingerprints(info: android.content.pm.PackageInfo): Set<String> {
+        val certs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.signingInfo?.signingCertificateHistory
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures
+        }
+        return certs.orEmpty().map { cert ->
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(cert.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        }.toSet()
     }
 
     companion object {

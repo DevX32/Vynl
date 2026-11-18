@@ -304,8 +304,16 @@ fn with_match_cache<R>(user_data_dir: &Path, f: impl FnOnce(&mut MatchCacheState
 }
 
 const MATCH_CACHE_SAVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+const MAX_MATCH_CACHE_ENTRIES: usize = 4096;
 
 fn match_cache_save(state: &mut MatchCacheState, force: bool) {
+    if state.entries.len() > MAX_MATCH_CACHE_ENTRIES {
+        let target = MAX_MATCH_CACHE_ENTRIES - MAX_MATCH_CACHE_ENTRIES / 4;
+        let keep: std::collections::HashSet<String> =
+            state.entries.keys().take(target).cloned().collect();
+        state.entries.retain(|key, _| keep.contains(key));
+        state.dirty = true;
+    }
     if !state.dirty {
         return;
     }

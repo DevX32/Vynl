@@ -101,16 +101,28 @@ pub async fn import_stream_playlist(
     playlist_name: Option<String>,
     app: AppHandle,
 ) -> Result<StreamImportResult, String> {
+    if collection.tracks.len() > crate::commands::MAX_COLLECTION_TRACKS {
+        return Err(format!(
+            "this collection is too large to import (max {} tracks)",
+            crate::commands::MAX_COLLECTION_TRACKS
+        ));
+    }
     if IMPORT_BUSY
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
         return Err(IMPORT_BUSY_MESSAGE.into());
     }
+    struct BusyGuard;
+    impl Drop for BusyGuard {
+        fn drop(&mut self) {
+            IMPORT_BUSY.store(false, Ordering::SeqCst);
+        }
+    }
+    let _busy_guard = BusyGuard;
     let generation = crate::services::progress::set_emitter(Some(app.clone()));
     let result = do_import(collection, playlist_id, playlist_name, app).await;
     crate::services::progress::clear_emitter(generation);
-    IMPORT_BUSY.store(false, Ordering::SeqCst);
     result
 }
 

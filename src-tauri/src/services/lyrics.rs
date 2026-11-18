@@ -145,7 +145,14 @@ pub fn save_manual_lyrics(file: &str, kind: LyricsKind, text: &str) -> Result<()
     };
     fs::create_dir_all(parent).map_err(|e| format!("Could not create lyrics directory: {e}"))?;
 
-    let temp = path.with_extension(format!("{ext}.{}.tmp", std::process::id()));
+    let temp = path.with_extension(format!(
+        "{ext}.{}.{}.tmp",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
     fs::write(&temp, text).map_err(|e| format!("Could not save lyrics: {e}"))?;
     if let Err(err) = fs::rename(&temp, &path) {
         let _ = fs::remove_file(&temp);
@@ -195,13 +202,6 @@ fn load_disk_cache(user_data_dir: &Path) -> (HashMap<String, DiskCacheEntry>, Op
     (map, mtime)
 }
 
-fn disk_cache_mtime(user_data_dir: &Path) -> Option<SystemTime> {
-    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    fs::metadata(disk_cache_path(user_data_dir))
-        .and_then(|m| m.modified())
-        .ok()
-}
-
 fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, DiskCacheEntry>) {
     let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let mut entries: Vec<&DiskCacheEntry> = cache.values().collect();
@@ -236,7 +236,7 @@ pub async fn fetch_lyrics_with_cache(
     }
 
     let now = now_millis();
-    let (mut disk, disk_loaded_mtime) = load_disk_cache(user_data_dir);
+    let (mut disk, _) = load_disk_cache(user_data_dir);
     if let Some(entry) = disk.get(&key).cloned() {
         if let Some(hit) = entry.result {
             if let Some(current) = disk.get_mut(&key) {
@@ -250,8 +250,7 @@ pub async fn fetch_lyrics_with_cache(
         if now.saturating_sub(entry.accessed_at) < NEGATIVE_CACHE_TTL_MS {
             return None;
         }
-        disk.remove(&key);
-        save_disk_cache(user_data_dir, &disk);
+        disk_cache_remove(user_data_dir, &key);
     }
 
     let result = do_fetch(lookup).await;
@@ -279,18 +278,7 @@ pub async fn fetch_lyrics_with_cache(
         }
     }
 
-    if disk_cache_mtime(user_data_dir) != disk_loaded_mtime {
-        disk = load_disk_cache(user_data_dir).0;
-    }
-    disk.insert(
-        key.clone(),
-        DiskCacheEntry {
-            key,
-            result: result.clone(),
-            accessed_at: now_millis(),
-        },
-    );
-    save_disk_cache(user_data_dir, &disk);
+    disk_cache_update(user_data_dir, &key, result.clone());
 
     result
 }
@@ -299,24 +287,58 @@ fn path_cache_key(path: &str) -> String {
     format!("path:{path}")
 }
 
-pub fn save_path_lyrics(user_data_dir: &Path, path: &str, text: &str, kind: LyricsKind) {
-    let key = path_cache_key(path);
+fn disk_cache_update(user_data_dir: &Path, key: &str, result: Option<LyricsResult>) {
     let now = now_millis();
-    let (mut disk, _) = load_disk_cache(user_data_dir);
-    disk.insert(
-        key.clone(),
+    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let path = disk_cache_path(user_data_dir);
+    let entries: Vec<DiskCacheEntry> = fs::read_to_string(&path)
+        .ok()
+        .and_then(|d| serde_json::from_str(&d).ok())
+        .unwrap_or_default();
+    let mut map: HashMap<String, DiskCacheEntry> =
+        entries.into_iter().map(|e| (e.key.clone(), e)).collect();
+    map.insert(
+        key.to_string(),
         DiskCacheEntry {
-            key,
-            result: Some(LyricsResult {
-                kind,
-                text: text.to_string(),
-                source: crate::commands::types::LyricsSource::Local,
-                file: Some(path.to_string()),
-            }),
+            key: key.to_string(),
+            result,
             accessed_at: now,
         },
     );
-    save_disk_cache(user_data_dir, &disk);
+    let mut entries: Vec<&DiskCacheEntry> = map.values().collect();
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.accessed_at));
+    entries.truncate(DISK_CACHE_MAX);
+    let _ = crate::services::util::write_json(&path, &entries);
+}
+
+fn disk_cache_remove(user_data_dir: &Path, key: &str) {
+    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let path = disk_cache_path(user_data_dir);
+    let entries: Vec<DiskCacheEntry> = fs::read_to_string(&path)
+        .ok()
+        .and_then(|d| serde_json::from_str(&d).ok())
+        .unwrap_or_default();
+    let mut map: HashMap<String, DiskCacheEntry> =
+        entries.into_iter().map(|e| (e.key.clone(), e)).collect();
+    map.remove(key);
+    let mut entries: Vec<&DiskCacheEntry> = map.values().collect();
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.accessed_at));
+    entries.truncate(DISK_CACHE_MAX);
+    let _ = crate::services::util::write_json(&path, &entries);
+}
+
+pub fn save_path_lyrics(user_data_dir: &Path, path: &str, text: &str, kind: LyricsKind) {
+    let key = path_cache_key(path);
+    disk_cache_update(
+        user_data_dir,
+        &key,
+        Some(LyricsResult {
+            kind,
+            text: text.to_string(),
+            source: crate::commands::types::LyricsSource::Local,
+            file: Some(path.to_string()),
+        }),
+    );
 }
 
 pub fn path_lyrics(user_data_dir: &Path, path: &str) -> Option<LyricsResult> {

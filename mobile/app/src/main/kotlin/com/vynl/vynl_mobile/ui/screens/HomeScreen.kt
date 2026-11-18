@@ -385,7 +385,9 @@ private fun FeaturedCard(track: LocalTrack, onTap: () -> Unit) {
             .background(VynlColors.surfaceRaised)
             .clickable { onTap() },
     ) {
-        val local = track.coverPath?.takeIf { it.isNotEmpty() && File(it).exists() }?.let { File(it) }
+        val local = remember(track.coverPath) {
+            track.coverPath?.takeIf { it.isNotEmpty() && File(it).exists() }?.let { File(it) }
+        }
         val model: Any? = local ?: highResCover(track.cover?.takeIf { it.isNotEmpty() })
         if (model != null) {
             AsyncImage(

@@ -40,6 +40,7 @@ pub struct PlaybackTick {
 pub struct StreamErrorEvent {
     pub video_id: String,
     pub message: String,
+    pub generation: u64,
 }
 
 type TickKey = (u64, bool, bool, u64);
@@ -85,6 +86,7 @@ fn emit_playback_tick(
                         StreamErrorEvent {
                             video_id: session.video_id.clone(),
                             message,
+                            generation,
                         },
                     );
                 }
@@ -99,6 +101,19 @@ fn emit_playback_tick(
             playing,
             finished,
             duration: duration_secs,
+        },
+    );
+}
+
+fn emit_stream_error(path: &str, message: &str, generation: u64) {
+    let video_id = path.strip_prefix("ytm:").unwrap_or_default().to_string();
+    let Some(app) = APP.get() else { return };
+    let _ = app.emit(
+        "vynl:player:stream-error",
+        StreamErrorEvent {
+            video_id,
+            message: message.to_string(),
+            generation,
         },
     );
 }
@@ -528,7 +543,7 @@ where
 }
 
 fn valid_seek_time(time: f64) -> bool {
-    time.is_finite() && time >= 0.0 && time <= Duration::MAX.as_secs_f64()
+    time.is_finite() && time >= 0.0 && time < Duration::MAX.as_secs_f64()
 }
 
 #[derive(Clone)]
@@ -900,7 +915,8 @@ fn default_output_device_name() -> Option<String> {
     device.name().ok()
 }
 
-pub const MAX_CROSSFADE_SECS: f64 = 20.0;
+const STREAM_OFFSET_CAP_SECS: f64 = 86_400.0 * 3650.0;
+const MAX_CROSSFADE_SECS: f64 = 20.0;
 
 struct FadingOut {
     track: TrackSink,
@@ -947,7 +963,7 @@ fn begin_crossfade(
     let stream = input.is_stream();
     let seek_file = !stream && start > 0.0;
     let offset = if stream {
-        Duration::from_secs_f64(start.max(0.0).min(Duration::MAX.as_secs_f64()))
+        Duration::from_secs_f64(start.max(0.0).min(STREAM_OFFSET_CAP_SECS))
     } else {
         Duration::ZERO
     };
@@ -987,7 +1003,7 @@ fn install_source(
     let stream = input.is_stream();
     let seek_file = !stream && start > 0.0;
     let offset = if stream {
-        Duration::from_secs_f64(start.max(0.0).min(Duration::MAX.as_secs_f64()))
+        Duration::from_secs_f64(start.max(0.0).min(STREAM_OFFSET_CAP_SECS))
     } else {
         Duration::ZERO
     };
@@ -1149,7 +1165,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                     PAUSED.store(false, Ordering::Relaxed);
                                     PlayerResp::Ok
                                 }
-                                Err(e) => PlayerResp::Err(e),
+                                Err(e) => {
+                                    current_path = None;
+                                    duration_secs = None;
+                                    seek_floor = None;
+                                    PlayerResp::Err(e)
+                                }
                             }
                         }
                     }
@@ -1265,7 +1286,10 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                         position,
                         prepared,
                     } => {
-                        if token != device_handoff_token || generation != playback_generation {
+                        if token != device_handoff_token
+                            || generation != playback_generation
+                            || pending_resume.is_none()
+                        {
                             PlayerResp::Ok
                         } else {
                             if pending_seek.as_ref().is_some_and(|(_, queued_generation)| {
@@ -1295,6 +1319,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                 }
                                 Err(e) => {
                                     eprintln!("device change: could not resume {path}: {e}");
+                                    emit_stream_error(&path, &e, generation);
                                     PlayerResp::Ok
                                 }
                             }
@@ -1338,16 +1363,23 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                     PlayerCmd::Resume(generation) => {
                         if generation < playback_generation || generation != active_generation {
                             PlayerResp::Bool(false)
-                        } else if let Some(t) = sink.as_ref().filter(|t| !t.sink.empty()) {
-                            t.sink.play();
-                            if let Some(out) = &fading {
-                                out.track.sink.play();
-                            }
-                            PAUSED.store(false, Ordering::Relaxed);
-                            PlayerResp::Bool(true)
                         } else {
-                            PAUSED.store(false, Ordering::Relaxed);
-                            PlayerResp::Bool(false)
+                            let resumed_tail = if let Some(out) = &fading {
+                                out.track.sink.play();
+                                true
+                            } else {
+                                false
+                            };
+                            if let Some(t) = sink.as_ref().filter(|t| !t.sink.empty()) {
+                                t.sink.play();
+                                PAUSED.store(false, Ordering::Relaxed);
+                                PlayerResp::Bool(true)
+                            } else {
+                                if resumed_tail {
+                                    PAUSED.store(false, Ordering::Relaxed);
+                                }
+                                PlayerResp::Bool(resumed_tail)
+                            }
                         }
                     }
                     PlayerCmd::Seek(time, generation) => {
@@ -1512,12 +1544,23 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                             seek_floor = seek_floor_for(pos);
                                         }
                                         Err(e) => {
-                                            eprintln!("device change: could not resume {path}: {e}")
+                                            eprintln!(
+                                                "device change: could not resume {path}: {e}"
+                                            );
+                                            emit_stream_error(&path, &e, generation);
                                         }
                                     }
                                 }
                             }
-                            _ => {
+                            Some((path, _)) => {
+                                emit_stream_error(
+                                    &path,
+                                    "the audio output disappeared",
+                                    generation,
+                                );
+                                pending_resume = None;
+                            }
+                            None => {
                                 pending_resume = None;
                             }
                         }

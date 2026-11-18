@@ -69,6 +69,7 @@
   } | null>(null);
 
   let deleteTarget = $state<(typeof hits)[number] | null>(null);
+  let deleteBusy = $state(false);
 
   let pickerTarget = $state<(typeof hits)[number] | null>(null);
   let pickerBusy = $state(false);
@@ -256,7 +257,8 @@
 
   async function handleDelete(): Promise<void> {
     const target = deleteTarget;
-    if (!target) return;
+    if (!target || deleteBusy) return;
+    deleteBusy = true;
     try {
       await vynl.deleteLibraryTrack(target.path, target.id);
       await refreshLibrary();
@@ -264,8 +266,10 @@
       toasts.success(t("library.deleted", { title: target.title }));
     } catch {
       toasts.error(t("library.deleteFailed"));
+    } finally {
+      deleteBusy = false;
+      deleteTarget = null;
     }
-    deleteTarget = null;
   }
 
   function onRowContext(e: MouseEvent, t: (typeof hits)[number]): void {
@@ -429,7 +433,11 @@
     confirmLabel={t("library.deleteConfirm")}
     danger
     onconfirm={() => void handleDelete()}
-    oncancel={() => (deleteTarget = null)}
+    oncancel={() => {
+      if (deleteBusy) return;
+      deleteTarget = null;
+    }}
+    confirmDisabled={deleteBusy}
   />
 {/if}
 

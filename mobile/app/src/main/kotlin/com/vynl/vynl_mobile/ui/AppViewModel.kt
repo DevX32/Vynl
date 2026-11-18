@@ -24,6 +24,7 @@ import com.vynl.vynl_mobile.data.randomNickname
 import com.vynl.vynl_mobile.data.resolveDisplayName
 import com.vynl.vynl_mobile.playback.PlayerController
 import com.vynl.vynl_mobile.remote.Desktop
+import com.vynl.vynl_mobile.remote.DesktopHttpException
 import com.vynl.vynl_mobile.remote.DesktopPlaylist
 import com.vynl.vynl_mobile.remote.DesktopStreamed
 import com.vynl.vynl_mobile.remote.Sync
@@ -31,6 +32,8 @@ import com.vynl.vynl_mobile.remote.SyncStatus
 import com.vynl.vynl_mobile.ui.theme.Accent
 import com.vynl.vynl_mobile.update.AppUpdate
 import com.vynl.vynl_mobile.update.Update
+import android.util.Log
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +43,14 @@ import kotlinx.coroutines.withContext
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app: Application = application
+    private val failureHandler = CoroutineExceptionHandler { _, error ->
+        Log.e("Vynl", "background task failed", error)
+        notice = "Something went wrong — try again"
+    }
+    private fun safeLaunch(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
+        viewModelScope.launch(failureHandler) { block() }
+    }
+
     private val repository = CatalogueRepository()
     private val store = Store(application)
     private val downloader = Downloader(application, repository)
@@ -189,7 +200,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val syncProgress: StateFlow<Float> = _syncProgress.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        safeLaunch {
             runCatching { player.connect() }
                 .onFailure { notice = "could not connect to the player" }
         }
@@ -203,7 +214,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _installedVersion.value = name.ifEmpty { "$build" }
         measureDownloads()
         loadMix()
-        viewModelScope.launch {
+        safeLaunch {
             runCatching { withContext(Dispatchers.IO) { store.rekeyLegacyDtPlaylists() } }
             runCatching { refreshStore() }
         }
@@ -211,7 +222,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun refreshSyncSession() {
-        viewModelScope.launch {
+        safeLaunch {
             syncStatus = withContext(Dispatchers.IO) { sync.status }
             if (syncStatus.signedIn) syncNow(silent = true)
         }
@@ -228,7 +239,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         authBusy = true
         authError = null
         authNotice = null
-        viewModelScope.launch {
+        safeLaunch {
             try {
                 val result = withContext(Dispatchers.IO) { sync.signIn(normalizedEmail, password) }
                 syncStatus = result.status
@@ -257,7 +268,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         authBusy = true
         authError = null
         authNotice = null
-        viewModelScope.launch {
+        safeLaunch {
             try {
                 val result = withContext(Dispatchers.IO) { sync.signUp(normalizedEmail, password) }
                 syncStatus = result.status
@@ -278,7 +289,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun signOut() {
         if (authBusy) return
         authBusy = true
-        viewModelScope.launch {
+        safeLaunch {
             try {
                 withContext(Dispatchers.IO) { sync.signOut() }
                 syncStatus = SyncStatus(false, null)
@@ -300,10 +311,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         syncBusy = true
-        viewModelScope.launch {
+        safeLaunch {
             try {
+                retryPendingTombstonesNow()
                 val result = withContext(Dispatchers.IO) { sync.refresh(store) }
-                retryPendingTombstones()
+                retryPendingTombstonesNow()
                 syncStatus = withContext(Dispatchers.IO) { sync.status }
                 refreshStore()
                 if (!silent) {
@@ -325,9 +337,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun syncPlaylist(id: String) {
         if (!sync.status.signedIn) return
-        viewModelScope.launch {
+        safeLaunch {
             try {
-                val payload = withContext(Dispatchers.IO) { store.syncPayload(id) } ?: return@launch
+                val payload = withContext(Dispatchers.IO) { store.syncPayload(id) } ?: return@safeLaunch
                 withContext(Dispatchers.IO) { sync.pushPlaylist(payload) }
             } catch (_: Exception) {
             }
@@ -336,7 +348,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun syncPlaylistDelete(id: String) {
         if (!sync.status.signedIn) return
-        viewModelScope.launch {
+        safeLaunch {
             val pushed = runCatching { withContext(Dispatchers.IO) { sync.tombstone(id) } }.isSuccess
             if (!pushed) {
                 tombstonePrefs().edit().putLong(id, System.currentTimeMillis()).apply()
@@ -347,20 +359,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun tombstonePrefs() =
         app.getSharedPreferences("vynl_pending_tombstones", android.content.Context.MODE_PRIVATE)
 
-    private fun retryPendingTombstones() {
+    private suspend fun retryPendingTombstonesNow() {
         val pending = tombstonePrefs().all.keys
         if (pending.isEmpty() || !sync.status.signedIn) return
-        viewModelScope.launch {
-            val done = mutableListOf<String>()
-            for (id in pending) {
-                val ok = runCatching { withContext(Dispatchers.IO) { sync.tombstone(id) } }.isSuccess
-                if (ok) done += id
-            }
-            if (done.isNotEmpty()) {
-                tombstonePrefs().edit().apply {
-                    done.forEach { remove(it) }
-                }.apply()
-            }
+        val done = mutableListOf<String>()
+        for (id in pending) {
+            val ok = runCatching { withContext(Dispatchers.IO) { sync.tombstone(id) } }.isSuccess
+            if (ok) done += id
+        }
+        if (done.isNotEmpty()) {
+            tombstonePrefs().edit().apply {
+                done.forEach { remove(it) }
+            }.apply()
         }
     }
 
@@ -403,7 +413,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun pairDesktop(address: String, pin: String) {
-        viewModelScope.launch {
+        safeLaunch {
             pairDesktop(address, pin, autoSync = true)?.let { notice = it }
         }
     }
@@ -420,7 +430,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (syncing) return
-        viewModelScope.launch {
+        safeLaunch {
             syncing = true
             notice = null
             syncStage = "Fetching catalog"
@@ -615,7 +625,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     else -> "$done new songs came over, with lyrics and playlists$likedNote"
                 }
             } catch (error: Exception) {
-                notice = friendly(error)
+                if (desktopAuthFailure(error)) {
+                    desktop.address = ""
+                    desktop.token = ""
+                    notice = "The desktop forgot this phone — pair it again with the QR code."
+                } else {
+                    notice = friendly(error)
+                }
             } finally {
                 syncing = false
                 _syncProgress.value = 0f
@@ -644,7 +660,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun measureDownloads() {
-        viewModelScope.launch {
+        safeLaunch {
             val bytes = withContext(Dispatchers.IO) {
                 val folder = java.io.File(getApplication<Application>().filesDir, "music/audio")
                 folder.listFiles()?.sumOf { it.length() } ?: 0L
@@ -659,7 +675,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearDownloads() {
-        viewModelScope.launch {
+        safeLaunch {
             val freed = withContext(Dispatchers.IO) {
                 val root = getApplication<Application>().filesDir
                 val music = java.io.File(root, "music")
@@ -690,7 +706,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkForUpdate() {
         if (updateBusy) return
-        viewModelScope.launch {
+        safeLaunch {
             updateBusy = true
             try {
                 val (name, build) = updater.installedVersion()
@@ -719,7 +735,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun downloadUpdate() {
         val found = _update.value ?: return
         if (updateBusy) return
-        viewModelScope.launch {
+        safeLaunch {
             updateBusy = true
             updateFile = null
             updateDownloaded = false
@@ -727,7 +743,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val url = updater.urlFor(found)
                 if (url == null) {
                     notice = "There is no build for this phone"
-                    return@launch
+                    return@safeLaunch
                 }
                 updateFile = updater.download(url) { value -> updateProgress = value }
                 updateDownloaded = true
@@ -752,6 +768,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     getApplication<Application>().startActivity(intent)
                 }
             notice = "Allow Vynl to install apps, then try again."
+            return
+        }
+        if (!updater.canInstallTrusted(file)) {
+            updateFile?.delete()
+            updateFile = null
+            updateDownloaded = false
+            stagedBuild = null
+            notice = "That update could not be trusted — download it again from Vynl."
             return
         }
         if (!updater.install(file)) {
@@ -793,7 +817,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _lyrics.value = null
         lyricsStatus = LyricsStatus.Loading
         lyricsAvailable = false
-        viewModelScope.launch {
+        safeLaunch {
             try {
                 val stored = withContext(Dispatchers.IO) { store.findPrivateTrack(track.id)?.lyrics }
                 val result = if (!stored.isNullOrBlank()) {
@@ -801,13 +825,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     repository.lyrics(track)
                 }
-                if (lyricsTrackId != track.id) return@launch
+                if (lyricsTrackId != track.id) return@safeLaunch
                 _lyrics.value = result
                 val useful = result.hasDisplayable
                 lyricsStatus = if (useful) LyricsStatus.Ready else LyricsStatus.Missing
                 lyricsAvailable = useful
             } catch (error: Exception) {
-                if (lyricsTrackId != track.id) return@launch
+                if (lyricsTrackId != track.id) return@safeLaunch
                 _lyrics.value = null
                 lyricsStatus = LyricsStatus.Failed
                 lyricsAvailable = false
@@ -821,13 +845,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadMix() {
         val generation = ++mixGeneration
-        viewModelScope.launch {
+        safeLaunch {
             mixLoading = true
             try {
                 val previous = _mix.value
                 val seeds = repository.search(DISCOVERY_QUERY).songs.take(6).map { it.id }
                 val fresh = repository.taste(seeds)
-                if (generation != mixGeneration) return@launch
+                if (generation != mixGeneration) return@safeLaunch
                 val kept = previous.shuffled().take(30)
                 val keptIds = kept.map { it.id }.toSet()
                 val merged = if (previous.isEmpty()) {
@@ -837,7 +861,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _mix.value = merged
             } catch (error: Exception) {
-                if (generation != mixGeneration) return@launch
+                if (generation != mixGeneration) return@safeLaunch
                 mixError = friendly(error)
             } finally {
                 if (generation == mixGeneration) {
@@ -857,15 +881,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val generation = ++browseGeneration
-        viewModelScope.launch {
+        safeLaunch {
             browseSearching = true
             browseError = null
             try {
                 val found = repository.search(query)
-                if (generation != browseGeneration) return@launch
+                if (generation != browseGeneration) return@safeLaunch
                 _results.value = found
             } catch (error: Exception) {
-                if (generation != browseGeneration) return@launch
+                if (generation != browseGeneration) return@safeLaunch
                 browseError = friendly(error)
             } finally {
                 if (generation == browseGeneration) browseSearching = false
@@ -874,7 +898,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openAlbum(id: String) {
-        viewModelScope.launch {
+        safeLaunch {
             detailLoading = true
             try {
                 val detail: CatalogueAlbumDetail = repository.album(id)
@@ -891,7 +915,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openArtist(id: String) {
-        viewModelScope.launch {
+        safeLaunch {
             detailLoading = true
             try {
                 val detail: CatalogueArtistDetail = repository.artist(id)
@@ -908,7 +932,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openPlaylist(id: String) {
-        viewModelScope.launch {
+        safeLaunch {
             detailLoading = true
             try {
                 val detail: CataloguePlaylistDetail = repository.playlist(id)
@@ -930,7 +954,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshStore() {
-        viewModelScope.launch {
+        safeLaunch {
             val library = withContext(Dispatchers.IO) { store.tracks() }
             val playlists = withContext(Dispatchers.IO) { store.playlists() }
             val covers = withContext(Dispatchers.IO) { store.firstTrackCovers() }
@@ -958,7 +982,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addToPlaylist(playlistId: String, track: CatalogueTrack) {
-        viewModelScope.launch {
+        safeLaunch {
             withContext(Dispatchers.IO) { store.addToPlaylist(playlistId, track) }
             syncPlaylist(playlistId)
             closePlaylistPicker()
@@ -972,13 +996,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun cacheTrackForOffline(track: CatalogueTrack) {
         if (!cachingTracks.add(track.id)) return
-        viewModelScope.launch {
+        safeLaunch {
             try {
                 val existing = withContext(Dispatchers.IO) { store.findPrivateTrack(track.id) }
                 val cached = existing?.audioPath?.takeIf { it.isNotEmpty() }
                 val hasFile = cached != null &&
                     withContext(Dispatchers.IO) { java.io.File(cached).exists() }
-                if (hasFile) return@launch
+                if (hasFile) return@safeLaunch
                 val audio = downloader.audio(track) { }
                 val cover = downloader.cover(track)
                 withContext(Dispatchers.IO) {
@@ -1003,14 +1027,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun downloadOpenPlaylist() {
         val id = openPlaylistId ?: return
-        viewModelScope.launch {
+        safeLaunch {
             val tracks = withContext(Dispatchers.IO) { store.playlistTracks(id) }
             val missing = tracks.filter { track ->
                 track.audioPath.isNullOrEmpty() || !java.io.File(track.audioPath).exists()
             }
             if (missing.isEmpty()) {
                 notice = "Everything here is already offline-ready"
-                return@launch
+                return@safeLaunch
             }
             notice = if (missing.size == 1) {
                 "Caching 1 song for offline"
@@ -1022,7 +1046,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun createPlaylist(name: String, track: CatalogueTrack?) {
-        viewModelScope.launch {
+        safeLaunch {
             val id = withContext(Dispatchers.IO) { store.createPlaylist(name) }
             if (track != null) {
                 withContext(Dispatchers.IO) { store.addToPlaylist(id, track) }
@@ -1036,7 +1060,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deletePlaylist(id: String) {
-        viewModelScope.launch {
+        safeLaunch {
             withContext(Dispatchers.IO) { store.deletePlaylist(id) }
             syncPlaylistDelete(id)
             refreshStore()
@@ -1045,7 +1069,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeFromPlaylist(playlistId: String, trackId: String) {
         if (playlistId.isBlank()) return
-        viewModelScope.launch {
+        safeLaunch {
             withContext(Dispatchers.IO) { store.removeFromPlaylist(playlistId, trackId) }
             syncPlaylist(playlistId)
             openPlaylistId?.let { id ->
@@ -1059,7 +1083,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeFromLibrary(track: LocalTrack) {
-        viewModelScope.launch {
+        safeLaunch {
             val affected = withContext(Dispatchers.IO) { store.deleteTrack(track.id) }
             withContext(Dispatchers.IO) {
                 listOfNotNull(track.audioPath, track.coverPath).forEach { path ->
@@ -1078,7 +1102,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openLocalPlaylist(id: String) {
         openPlaylistId = id
-        viewModelScope.launch {
+        safeLaunch {
             _playlistTracks.value = withContext(Dispatchers.IO) { store.playlistTracks(id) }
         }
     }
@@ -1120,6 +1144,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (at >= 0) return "the catalogue did not answer"
         return raw.take(160)
     }
+
+    private fun desktopAuthFailure(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }.any { cause ->
+            cause is DesktopHttpException && (cause.code == 401 || cause.code == 403)
+        }
 
     companion object {
         private const val DISCOVERY_QUERY = "daft punk"

@@ -130,14 +130,17 @@ class PlayerController(
         val built = suspendCancellableCoroutine { continuation ->
             future.addListener(
                 {
-                    try {
-                        continuation.resume(future.get())
-                    } catch (error: Exception) {
-                        continuation.resumeWithException(error)
+                    if (!future.isCancelled && continuation.isActive) {
+                        try {
+                            continuation.resume(future.get())
+                        } catch (error: Exception) {
+                            runCatching { continuation.resumeWithException(error) }
+                        }
                     }
                 },
                 ContextCompat.getMainExecutor(context),
             )
+            continuation.invokeOnCancellation { future.cancel(true) }
         }
         controller = built
         built.addListener(listener)

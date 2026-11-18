@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use types::*;
 
-const MAX_COLLECTION_TRACKS: usize = 10_000;
+pub(crate) const MAX_COLLECTION_TRACKS: usize = 10_000;
 
 pub struct AppState {
     pub settings: Mutex<Option<Settings>>,

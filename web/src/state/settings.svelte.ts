@@ -2,6 +2,8 @@ import type { Settings, ToolName, ToolStatus, AudioFormat } from "@lib/types";
 import { BITRATES } from "@lib/constants";
 import { eqFlat, loadEqDesign } from "@lib/eq.svelte";
 import { vynl } from "@lib/vynl";
+import { toasts } from "@lib/toast";
+import { t } from "@lib/i18n";
 import { DEFAULT_ACCENT_COLOR, applyAccentColor } from "@lib/color";
 import { DEFAULT_THEME, applyTheme, isThemeId } from "@lib/theme";
 import { extractVibrantColor } from "@lib/art-color";
@@ -62,7 +64,11 @@ export async function initSettings(): Promise<void> {
   applyTheme(_settings.theme);
   applyAccentColor(_settings.accentColor, false);
   startDynamicAccent();
-  _tools = await vynl.getTools();
+  const tools = await vynl.getTools().catch((e) => {
+    console.warn("tools load failed:", e);
+    return null;
+  });
+  _tools = tools ?? [];
   if (_toolsUnlisten) _toolsUnlisten();
   _toolsUnlisten = vynl.onToolsUpdate((t) => {
     const update = t as Partial<ToolStatus> & { name: string };
@@ -70,7 +76,7 @@ export async function initSettings(): Promise<void> {
       s.name === update.name ? { ...s, ...update } : s,
     );
   });
-  void ensureTools();
+  if (tools !== null) void ensureTools();
 }
 
 let _ensureStarted = false;
@@ -120,6 +126,9 @@ export async function patchSettings(patch: Partial<Settings>): Promise<void> {
     if (patch.accentColor !== undefined) applyAccentColor(updated.accentColor);
   });
   _settingsQueue = job.catch(() => {});
+  job.catch(() => {
+    toasts.error(t("error.settingsSaveFailed"));
+  });
   return job;
 }
 

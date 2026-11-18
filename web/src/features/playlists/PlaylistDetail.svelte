@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import {
     Play,
     Shuffle,
@@ -58,14 +59,20 @@
   let ctxMenu = $state<{ x: number; y: number; idx: number } | null>(null);
   let removeTarget = $state<(typeof plHits)[number] | null>(null);
   let removeBusy = $state(false);
+  let lastPlaylistId: string | undefined;
 
   const pl = $derived(getCurrentPlaylist());
   const library = $derived(getLibrary());
   const loading = $derived(isPlaylistLoading());
 
   $effect(() => {
-    void pl?.id;
-    if (q !== "") q = "";
+    const id = pl?.id;
+    if (id !== lastPlaylistId) {
+      lastPlaylistId = id;
+      untrack(() => {
+        if (q !== "") q = "";
+      });
+    }
     const streams = pl?.streams;
     if (streams && streams.length > 0) {
       const id = window.setTimeout(() => registerCatalogueTracks(streams), 0);
@@ -127,7 +134,12 @@
 
   async function addPaths(paths: string[]): Promise<void> {
     if (!pl) return;
-    await addToPlaylist(pl.id, paths);
+    try {
+      await addToPlaylist(pl.id, paths);
+    } catch (e) {
+      console.warn("addToPlaylist error:", e);
+      toasts.error(t("playlist.addFailed"));
+    }
   }
 
   async function moveTrack(fromPath: string, toPath: string): Promise<void> {

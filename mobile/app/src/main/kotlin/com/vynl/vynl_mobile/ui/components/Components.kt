@@ -25,8 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -60,12 +63,15 @@ fun ArtTile(
     ) {
         val local = coverPath?.takeIf { it.isNotEmpty() }
         if (local != null) {
-            val bitmap = remember(local) {
-                runCatching { android.graphics.BitmapFactory.decodeFile(local)?.asImageBitmap() }.getOrNull()
+            val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, local) {
+                value = withContext(Dispatchers.IO) {
+                    runCatching { android.graphics.BitmapFactory.decodeFile(local)?.asImageBitmap() }.getOrNull()
+                }
             }
-            if (bitmap != null) {
+            val currentBitmap = bitmap
+            if (currentBitmap != null) {
                 androidx.compose.foundation.Image(
-                    bitmap = bitmap,
+                    bitmap = currentBitmap,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

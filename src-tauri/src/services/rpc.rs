@@ -28,28 +28,28 @@ fn is_public_v4(ip: &std::net::Ipv4Addr) -> bool {
         || ip.is_multicast())
 }
 
+pub fn is_public_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ip) => is_public_v4(ip),
+        std::net::IpAddr::V6(ip) => {
+            if let Some(mapped) = ip.to_ipv4_mapped() {
+                return is_public_v4(&mapped);
+            }
+            let segments = ip.segments();
+            let unique_local = (segments[0] & 0xfe00) == 0xfc00;
+            let link_local = (segments[0] & 0xffc0) == 0xfe80;
+            let multicast = (segments[0] & 0xff00) == 0xff00;
+            !(ip.is_loopback() || ip.is_unspecified() || unique_local || link_local || multicast)
+        }
+    }
+}
+
 pub fn is_public_host(host: &str) -> bool {
     let trimmed = host.trim();
     let trimmed = trimmed.trim_start_matches('[').trim_end_matches(']');
     let normalized = trimmed.trim_end_matches('.');
     if let Ok(ip) = normalized.parse::<std::net::IpAddr>() {
-        return match ip {
-            std::net::IpAddr::V4(ip) => is_public_v4(&ip),
-            std::net::IpAddr::V6(ip) => {
-                if let Some(mapped) = ip.to_ipv4_mapped() {
-                    return is_public_v4(&mapped);
-                }
-                let segments = ip.segments();
-                let unique_local = (segments[0] & 0xfe00) == 0xfc00;
-                let link_local = (segments[0] & 0xffc0) == 0xfe80;
-                let multicast = (segments[0] & 0xff00) == 0xff00;
-                !(ip.is_loopback()
-                    || ip.is_unspecified()
-                    || unique_local
-                    || link_local
-                    || multicast)
-            }
-        };
+        return is_public_ip(&ip);
     }
 
     let normalized = normalized.to_lowercase();

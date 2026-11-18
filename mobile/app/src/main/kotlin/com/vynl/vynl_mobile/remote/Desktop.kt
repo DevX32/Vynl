@@ -66,6 +66,9 @@ data class DesktopLyrics(
     val source: String,
 )
 
+class DesktopHttpException(val code: Int, path: String) :
+    java.io.IOException("desktop returned HTTP $code for $path")
+
 class Desktop(context: Context) {
     private val prefs = context.getSharedPreferences("vynl", Context.MODE_PRIVATE)
     private val http = OkHttpClient.Builder()
@@ -172,7 +175,7 @@ class Desktop(context: Context) {
     suspend fun taste(): List<DesktopTasteTrack> = withContext(Dispatchers.IO) {
         http.newCall(request("/v1/taste").build()).execute().use { response ->
             if (!response.isSuccessful) {
-                throw java.io.IOException("desktop returned HTTP ${response.code} for /v1/taste")
+                throw DesktopHttpException(response.code, "/v1/taste")
             }
             val body = response.body?.string().orEmpty()
             if (body.isBlank()) {
@@ -226,7 +229,7 @@ class Desktop(context: Context) {
     ): List<T> {
         return http.newCall(request(path).build()).execute().use { response ->
             if (!response.isSuccessful) {
-                throw java.io.IOException("desktop returned HTTP ${response.code} for $path")
+                throw DesktopHttpException(response.code, path)
             }
             val body = response.body?.string().orEmpty()
             val trimmed = body.trim()

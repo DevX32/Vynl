@@ -175,7 +175,11 @@
     try {
       await initSettings();
       void vynl.rpcUpdate(null).catch(() => {});
-      await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
+      await Promise.all([
+        refreshPlaylists().catch((e) => console.warn("playlist refresh failed:", e)),
+        refreshLibrary().catch((e) => console.warn("library refresh failed:", e)),
+        restoreNowPlaying().catch((e) => console.warn("restore failed:", e)),
+      ]);
     } catch (e) {
       console.warn("boot failed", e);
     } finally {

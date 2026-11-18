@@ -348,8 +348,9 @@ fun PlayerScreen(
             val itemHeightPx = with(density) { itemHeight.toPx() }
             var dragFrom by remember { mutableStateOf(-1) }
             var dragOffset by remember { mutableStateOf(0f) }
-            val dragTarget = if (dragFrom >= 0) {
-                (dragFrom + (dragOffset / itemHeightPx)).toInt().coerceIn(0, size - 1)
+            val safeMax = (size - 1).coerceAtLeast(0)
+            val dragTarget = if (dragFrom >= 0 && size > 0) {
+                (dragFrom + (dragOffset / itemHeightPx)).toInt().coerceIn(0, safeMax)
             } else {
                 -1
             }
@@ -391,8 +392,9 @@ fun PlayerScreen(
                             animationSpec = tween(150, easing = FastOutSlowInEasing),
                             label = "queueSlide",
                         )
-                        val clampMin = -dragFrom * itemHeightPx
-                        val clampMax = (size - 1 - dragFrom) * itemHeightPx
+                        val dragFromClamped = dragFrom.coerceIn(0, safeMax)
+                        val clampMin = -dragFromClamped * itemHeightPx
+                        val clampMax = (safeMax - dragFromClamped) * itemHeightPx
                         Row(
                             modifier = Modifier
                                 .height(itemHeight)
@@ -440,10 +442,10 @@ fun PlayerScreen(
                                             },
                                             onDragEnd = {
                                                 val from = dragFrom
-                                                if (from >= 0) {
+                                                if (from >= 0 && from < size) {
                                                     val target = (from + dragOffset / itemHeightPx)
                                                         .toInt()
-                                                        .coerceIn(0, size - 1)
+                                                        .coerceIn(0, safeMax)
                                                     if (target != from) onReorder(from, target)
                                                 }
                                                 dragFrom = -1

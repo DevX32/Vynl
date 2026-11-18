@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import type {
     Collection,
     DownloadEvent,
@@ -96,6 +96,26 @@
   $effect(() => {
     const tp = totalPages;
     if (page >= tp) page = Math.max(0, tp - 1);
+  });
+
+  $effect(() => {
+    if (trackFilter === "all") return;
+    const c = counts;
+    const count =
+      trackFilter === "failed"
+        ? c.failed
+        : trackFilter === "done"
+          ? c.done
+          : trackFilter === "skipped"
+            ? c.skipped
+            : trackFilter === "queued"
+              ? c.queued
+              : c.active;
+    if (count === 0) {
+      untrack(() => {
+        trackFilter = "all";
+      });
+    }
   });
 
   function handleEvent(e: DownloadEvent): void {
@@ -558,6 +578,8 @@
   function loadRestore(payload: ReturnType<typeof takeRestore>): void {
     if (!payload) return;
     dismissSearch();
+    searchGen++;
+    ++dlGeneration;
     collection = payload.collection;
     matches = payload.matches;
     picks = payload.picks;

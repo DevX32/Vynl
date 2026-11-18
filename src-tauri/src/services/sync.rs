@@ -638,7 +638,20 @@ fn read_pending_tombstones(data_dir: &Path) -> Vec<PendingTombstone> {
 }
 
 fn write_pending_tombstones(data_dir: &Path, entries: &[PendingTombstone]) {
-    let _ = util::write_json(&pending_tombstones_path(data_dir), &entries);
+    if let Err(error) = util::write_json(&pending_tombstones_path(data_dir), &entries) {
+        eprintln!("[Vynl sync] could not persist playlist deletion marker: {error}");
+    }
+}
+
+static PENDING_TOMBSTONES_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn with_pending_tombstones_lock<R>(f: impl FnOnce() -> R) -> R {
+    let guard = PENDING_TOMBSTONES_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let result = f();
+    drop(guard);
+    result
 }
 
 fn record_pending_tombstone_impl(
@@ -648,26 +661,28 @@ fn record_pending_tombstone_impl(
     created_at: i64,
     signature: &[String],
 ) -> i64 {
-    let mut entries = read_pending_tombstones(data_dir);
-    if let Some(existing) = entries.iter().find(|existing| existing.id == id) {
-        return existing.deleted_at;
-    }
-    let at = now_ms();
-    entries.push(PendingTombstone {
-        id: id.to_string(),
-        name: name.trim().to_string(),
-        created_at,
-        deleted_at: at,
-        signature: signature.to_vec(),
-    });
-    if entries.len() > MAX_PENDING_TOMBSTONES {
-        entries.sort_by_key(|entry| entry.deleted_at);
-        let keep = entries.split_off(entries.len() - MAX_PENDING_TOMBSTONES);
-        write_pending_tombstones(data_dir, &keep);
-    } else {
-        write_pending_tombstones(data_dir, &entries);
-    }
-    at
+    with_pending_tombstones_lock(|| {
+        let mut entries = read_pending_tombstones(data_dir);
+        if let Some(existing) = entries.iter().find(|existing| existing.id == id) {
+            return existing.deleted_at;
+        }
+        let at = now_ms();
+        entries.push(PendingTombstone {
+            id: id.to_string(),
+            name: name.trim().to_string(),
+            created_at,
+            deleted_at: at,
+            signature: signature.to_vec(),
+        });
+        if entries.len() > MAX_PENDING_TOMBSTONES {
+            entries.sort_by_key(|entry| entry.deleted_at);
+            let keep = entries.split_off(entries.len() - MAX_PENDING_TOMBSTONES);
+            write_pending_tombstones(data_dir, &keep);
+        } else {
+            write_pending_tombstones(data_dir, &entries);
+        }
+        at
+    })
 }
 
 async fn patch_remote_tombstone(
@@ -1005,6 +1020,11 @@ fn marks_supported() -> bool {
 
 fn set_marks_supported(supported: bool) {
     MARKS_SUPPORTED.store(supported, std::sync::atomic::Ordering::Relaxed);
+    if !supported {
+        eprintln!(
+            "[Vynl sync] remote schema rejected the marks columns; continuing without adds/removals this sync"
+        );
+    }
 }
 
 fn body_missing_marks(body: &str) -> bool {
@@ -1268,6 +1288,39 @@ pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
     let _ = upsert_rows(data_dir, &[playlist_value_push(&session, playlist, &maps)]).await;
 }
 
+fn signature_hits(row_tracks: &[SyncTrack], signature: &[String]) -> usize {
+    let wanted: std::collections::HashSet<String> = signature.iter().map(|s| norm_id(s)).collect();
+    if wanted.is_empty() {
+        return 0;
+    }
+    row_tracks
+        .iter()
+        .map(|track| norm_id(&track.id))
+        .filter(|id| wanted.contains(id))
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+}
+
+fn signature_matches(row_tracks: &[SyncTrack], signature: &[String]) -> bool {
+    if signature.is_empty() || row_tracks.is_empty() {
+        return false;
+    }
+    let wanted_len = signature
+        .iter()
+        .map(|s| norm_id(s))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    let row_len = row_tracks
+        .iter()
+        .map(|track| norm_id(&track.id))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    let overlap = signature_hits(row_tracks, signature);
+    let wanted_needed = (wanted_len as f64 * 0.8).ceil() as usize;
+    let row_needed = (row_len.min(wanted_len) as f64 * 0.8).ceil() as usize;
+    overlap >= wanted_needed && overlap >= row_needed
+}
+
 fn norm_id(id: &str) -> String {
     util::norm_path_key(id)
 }
@@ -1331,12 +1384,10 @@ async fn patch_equivalent_tombstones(
     signature: &[String],
     deleted_at: i64,
 ) {
-    if name.trim().is_empty() && signature.is_empty() {
+    if name.trim().is_empty() || signature.is_empty() {
         return;
     }
     let wanted_name = name.trim().to_lowercase();
-    let wanted_ids: std::collections::HashSet<String> =
-        signature.iter().map(|s| norm_id(s)).collect();
     let Ok(rows) = fetch_rows(data_dir).await else {
         return;
     };
@@ -1345,16 +1396,8 @@ async fn patch_equivalent_tombstones(
             continue;
         }
         let same_name = !wanted_name.is_empty() && row.name.trim().to_lowercase() == wanted_name;
-        let same_tracks = !wanted_ids.is_empty()
-            && row
-                .tracks
-                .iter()
-                .any(|track| wanted_ids.contains(&norm_id(&track.id)));
-        let same_playlist = if wanted_ids.is_empty() {
-            same_name && row.created_at <= deleted_at
-        } else {
-            same_name && same_tracks && row.created_at <= deleted_at
-        };
+        let same_playlist =
+            same_name && signature_matches(&row.tracks, signature) && row.created_at <= deleted_at;
         if same_playlist {
             let _ = patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await;
         }
@@ -1390,13 +1433,14 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     if !sync_enabled() {
         return Err("Vynl isn't configured.".into());
     }
+    set_marks_supported(true);
     let session = valid_session(data_dir).await?;
     let pending = read_pending_tombstones(data_dir);
     if !pending.is_empty() {
-        let mut still_pending = Vec::with_capacity(pending.len());
+        let mut succeeded: Vec<String> = Vec::with_capacity(pending.len());
         for entry in &pending {
-            if !patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
-                still_pending.push(entry.clone());
+            if patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
+                succeeded.push(entry.id.clone());
             }
             patch_equivalent_tombstones(
                 data_dir,
@@ -1407,7 +1451,11 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
             )
             .await;
         }
-        write_pending_tombstones(data_dir, &still_pending);
+        with_pending_tombstones_lock(|| {
+            let mut entries = read_pending_tombstones(data_dir);
+            entries.retain(|entry| !succeeded.contains(&entry.id));
+            write_pending_tombstones(data_dir, &entries);
+        });
     }
     let raw_rows = fetch_rows(data_dir).await?;
     let maps = library_mark_maps(data_dir);
@@ -1435,13 +1483,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                     if row.created_at > entry.deleted_at {
                         return false;
                     }
-                    if entry.signature.is_empty() {
-                        true
-                    } else {
-                        row.tracks
-                            .iter()
-                            .any(|track| entry.signature.contains(&track.id))
-                    }
+                    signature_matches(&row.tracks, &entry.signature)
                 })
                 .map(|entry| entry.deleted_at)
                 .max();

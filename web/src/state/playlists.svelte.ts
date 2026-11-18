@@ -129,7 +129,7 @@ export async function reorderPlaylists(
   } catch (e) {
     console.warn("reorderPlaylists failed:", e);
     try {
-      _meta = await vynl.listPlaylists();
+      await refreshMeta();
     } catch {}
   }
 }
@@ -167,7 +167,7 @@ function syncAfterMutation(pl: Playlist): void {
 export async function renamePlaylist(id: string, name: string): Promise<void> {
   const pl = await vynl.renamePlaylist(id, name);
   syncAfterMutation(pl);
-  _meta = await vynl.listPlaylists();
+  await refreshMeta();
 }
 
 async function refreshMeta(): Promise<void> {
@@ -203,7 +203,7 @@ export async function addToPlaylist(
 ): Promise<void> {
   const pl = await vynl.addToPlaylist(id, paths);
   syncAfterMutation(pl);
-  _meta = await vynl.listPlaylists();
+  await refreshMeta();
 }
 
 export async function removeFromPlaylist(
@@ -212,12 +212,10 @@ export async function removeFromPlaylist(
 ): Promise<void> {
   const pl = await vynl.removeFromPlaylist(id, trackPath);
   syncAfterMutation(pl);
-  if (trackPath.startsWith("ytm:")) {
-    _meta = await vynl.listPlaylists();
-    return;
+  if (!trackPath.startsWith("ytm:")) {
+    await refreshLibrary();
   }
-  await refreshLibrary();
-  _meta = await vynl.listPlaylists();
+  await refreshMeta();
 }
 
 export async function moveInPlaylist(
@@ -227,7 +225,7 @@ export async function moveInPlaylist(
 ): Promise<void> {
   const pl = await vynl.moveInPlaylist(id, from, to);
   syncAfterMutation(pl);
-  _meta = await vynl.listPlaylists();
+  await refreshMeta();
 }
 
 export async function setPlaylistCover(
@@ -236,7 +234,7 @@ export async function setPlaylistCover(
 ): Promise<void> {
   const pl = await vynl.setPlaylistCover(id, cover);
   syncAfterMutation(pl);
-  _meta = await vynl.listPlaylists();
+  await refreshMeta();
 }
 
 export async function saveStreamToPlaylist(
@@ -250,7 +248,7 @@ export async function saveStreamToPlaylist(
     playlistName ?? null,
   );
   syncAfterMutation(pl);
-  _meta = await vynl.listPlaylists();
+  await refreshMeta();
   return pl;
 }
 

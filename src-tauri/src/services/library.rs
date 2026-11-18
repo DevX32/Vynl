@@ -61,7 +61,7 @@ pub(crate) fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
 
             if full.is_symlink() {
                 if let Ok(resolved) = fs::canonicalize(&full)
-                    && resolved.starts_with(dir)
+                    && resolved.starts_with(&canonical_dir)
                     && resolved.is_file()
                     && let Some(ext) = resolved.extension().and_then(|e| e.to_str())
                     && AUDIO_EXTS.contains(&ext.to_lowercase().as_str())
@@ -252,7 +252,7 @@ fn resolve_added_at(hint: Option<u64>, created_ms: u64, mtime_ms: u64) -> u64 {
         .unwrap_or(mtime_ms)
 }
 
-fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> LibraryTrack {
+fn fallback_track(file: &Path, added_at_hint: Option<u64>) -> LibraryTrack {
     let (mtime_ms, created_ms) = file_times(file);
     let added_at_ms = resolve_added_at(added_at_hint, created_ms, mtime_ms);
 
@@ -270,10 +270,10 @@ fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> 
         .unwrap_or("")
         .to_lowercase();
 
-    let fallback = LibraryTrack {
-        id: hash.clone(),
+    LibraryTrack {
+        id: hash,
         path: file.to_string_lossy().to_string(),
-        title: fallback_title.clone(),
+        title: fallback_title,
         artist: String::new(),
         album: String::new(),
         year: None,
@@ -284,8 +284,13 @@ fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> 
         ext,
         mtime: Some(mtime_ms),
         added_at: Some(added_at_ms),
-    };
+    }
+}
 
+fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> LibraryTrack {
+    let fallback = fallback_track(file, added_at_hint);
+    let fallback_title = fallback.title.clone();
+    let hash = fallback.id.clone();
     let p = probe_via_lofty(file);
 
     if p.duration.is_none() && p.title.is_none() && p.artist.is_none() {
@@ -323,8 +328,8 @@ fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> 
         track_number,
         lyrics: p.lyrics,
         ext: fallback.ext,
-        mtime: Some(mtime_ms),
-        added_at: Some(added_at_ms),
+        mtime: fallback.mtime,
+        added_at: fallback.added_at,
     }
 }
 
@@ -423,9 +428,16 @@ fn scan_library_incremental_unlocked(
                 let hint = *added_at_hint;
                 handles.push(s.spawn(move || probe_file(&f, &ud, hint)));
             }
-            for handle in handles {
-                if let Ok(track) = handle.join() {
-                    probed.push(track);
+            for ((file, added_at_hint), handle) in chunk.iter().zip(handles) {
+                match handle.join() {
+                    Ok(track) => probed.push(track),
+                    Err(_) => {
+                        eprintln!(
+                            "[Vynl library] metadata probe panicked for {}",
+                            file.display()
+                        );
+                        probed.push(fallback_track(file, *added_at_hint));
+                    }
                 }
             }
         });

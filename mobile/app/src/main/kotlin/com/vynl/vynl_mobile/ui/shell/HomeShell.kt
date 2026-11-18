@@ -145,10 +145,11 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                 actions = {
                     val session = viewModel.syncStatus
                     val displayName = viewModel.greetingName
+                    val accountContext = androidx.compose.ui.platform.LocalContext.current
                     val accountSeed = if (session.signedIn && !session.email.isNullOrBlank()) {
-                        avatarSeed(session.email!!)
+                        avatarSeed(accountContext, session.email!!)
                     } else {
-                        displayName
+                        "vynl"
                     }
                     Box {
                         IconButton(onClick = { accountMenuOpen = true }) {

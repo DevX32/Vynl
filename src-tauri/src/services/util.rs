@@ -11,6 +11,23 @@ pub fn now_ms() -> i64 {
 
 pub const GITHUB_UA: &str = concat!("Vynl/", env!("CARGO_PKG_VERSION"));
 
+pub fn host_resolves_publicly(host: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    match (host, 443u16).to_socket_addrs() {
+        Ok(iter) => {
+            let mut saw_address = false;
+            for addr in iter {
+                saw_address = true;
+                if !crate::services::rpc::is_public_ip(&addr.ip()) {
+                    return false;
+                }
+            }
+            saw_address
+        }
+        Err(_) => false,
+    }
+}
+
 pub fn github_client(read_timeout: std::time::Duration) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(GITHUB_UA)
@@ -38,6 +55,9 @@ pub async fn follow_public_https(
             .to_string();
         if !crate::services::rpc::is_public_host(&host) {
             return Err("host points at a private or reserved address".into());
+        }
+        if !host_resolves_publicly(&host) {
+            return Err("host resolves to a private or reserved address".into());
         }
         let resp = http
             .get(&current)

@@ -75,8 +75,8 @@ pub(crate) fn write_order_at(
     ids: &[String],
     updated_at: i64,
 ) -> Result<(), String> {
-    let _order = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let _order = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     util::write_json(&order_file(output_dir), &ids)?;
     util::write_json(&order_meta_file(output_dir), &OrderMeta { updated_at })
 }

@@ -60,10 +60,20 @@ import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 import java.net.URLEncoder
 
-internal fun avatarSeed(email: String): String {
-    val digest = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(email.trim().lowercase().toByteArray(Charsets.UTF_8))
-    return digest.joinToString("") { b -> "%02x".format(b) }.take(24)
+private fun avatarSalt(context: android.content.Context): String {
+    val prefs = context.getSharedPreferences("vynl_avatar", android.content.Context.MODE_PRIVATE)
+    prefs.getString("salt", null)?.let { return it }
+    val salt = java.util.UUID.randomUUID().toString()
+    prefs.edit().putString("salt", salt).apply()
+    return salt
+}
+
+internal fun avatarSeed(context: android.content.Context, email: String): String {
+    val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+    mac.init(javax.crypto.spec.SecretKeySpec(avatarSalt(context).toByteArray(Charsets.UTF_8), "HmacSHA256"))
+    return mac.doFinal(email.trim().lowercase().toByteArray(Charsets.UTF_8))
+        .joinToString("") { b -> "%02x".format(b) }
+        .take(24)
 }
 
 internal fun blobatarUrl(seed: String, size: Int): String {
@@ -119,7 +129,8 @@ internal fun AccountMenu(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
-                val seed = if (signedIn && !email.isNullOrBlank()) avatarSeed(email) else displayName
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val seed = if (signedIn && !email.isNullOrBlank()) avatarSeed(context, email) else "vynl"
                 AccountAvatar(seed = seed, size = 34.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -215,10 +226,11 @@ internal fun AccountDialog(
     onDismiss: () -> Unit,
 ) {
     val session = viewModel.syncStatus
+    val context = androidx.compose.ui.platform.LocalContext.current
     val seed = if (session.signedIn && !session.email.isNullOrBlank()) {
-        avatarSeed(session.email)
+        avatarSeed(context, session.email)
     } else {
-        viewModel.displayName.ifBlank { viewModel.nickname.ifBlank { "vynl" } }
+        "vynl"
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -396,7 +408,8 @@ private fun ActionButton(
 @Composable
 private fun SignedInBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
     val session = viewModel.syncStatus
-    val seed = session.email?.let { avatarSeed(it) } ?: viewModel.displayName.ifBlank { viewModel.nickname }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val seed = session.email?.let { avatarSeed(context, it) } ?: "vynl"
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AccountBanner(seed = seed, signedIn = true, email = session.email)

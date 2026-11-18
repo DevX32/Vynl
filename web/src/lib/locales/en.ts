@@ -518,6 +518,7 @@ export const en = {
     removeTrackConfirm: "Delete",
     removeTrackFailed: "Failed to remove track",
     reorderFailed: "Couldn't reorder the playlist",
+    addFailed: "Couldn't add those tracks",
     renameFailed: "Couldn't rename that playlist",
     removedTrack: 'Removed "{title}" from {name}',
     changeCover: "Change cover",
@@ -588,6 +589,7 @@ export const en = {
   },
   error: {
     couldNotPlay: "Could not play this file",
+    settingsSaveFailed: "Could not save that setting",
   },
   shortcuts: {
     title: "Keyboard Shortcuts",

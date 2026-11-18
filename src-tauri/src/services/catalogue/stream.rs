@@ -77,11 +77,14 @@ pub async fn fetch_complete_file(
     let ext = ext_for(&format);
     let (path, file_name) = cache.begin(video_id, ext, total)?;
 
-    let mut file = tokio::fs::OpenOptions::new()
-        .write(true)
-        .open(&path)
-        .await
-        .map_err(|e| format!("could not open the stream cache: {e}"))?;
+    let mut file = match tokio::fs::OpenOptions::new().write(true).open(&path).await {
+        Ok(file) => file,
+        Err(error) => {
+            let _ = std::fs::remove_file(&path);
+            cache.finish(video_id, &file_name, false);
+            return Err(format!("could not open the stream cache: {error}"));
+        }
+    };
 
     let mut at = 0u64;
     let mut refreshes = 0u32;
@@ -103,7 +106,10 @@ pub async fn fetch_complete_file(
 
     cache.mark_complete(video_id, &file_name, total);
     cache.finish(video_id, &file_name, true);
-    Ok(path)
+    match cache.lookup_complete(video_id) {
+        Some(canonical) => Ok(canonical),
+        None => Ok(path),
+    }
 }
 
 async fn download_range(
@@ -1018,7 +1024,16 @@ fn fetch_loop(
                     match resolver
                         .resolve_blocking(&video_id, (format.itag != 0).then_some(format.itag))
                     {
-                        Ok(next) => format = next,
+                        Ok(next) => {
+                            if next.content_length.is_some_and(|length| length != total) {
+                                store.fail(
+                                    "the renewed stream has a different size than the cached one"
+                                        .into(),
+                                );
+                                return;
+                            }
+                            format = next;
+                        }
                         Err(error) => {
                             store.fail(format!("the stream url expired: {error}"));
                             return;
@@ -1073,14 +1088,17 @@ fn run_fetch(
     let url = format.url.clone();
     let agent = format.user_agent;
     let request = async move {
-        let response = http
-            .get(&url)
-            .header(RANGE, format!("bytes={start}-{}", end - 1))
-            .header(USER_AGENT, agent)
-            .header(ACCEPT, "*/*")
-            .send()
-            .await
-            .map_err(|e| FetchError::Other(format!("range request: {e}")))?;
+        let response = tokio::time::timeout(
+            FETCH_STALL,
+            http.get(&url)
+                .header(RANGE, format!("bytes={start}-{}", end - 1))
+                .header(USER_AGENT, agent)
+                .header(ACCEPT, "*/*")
+                .send(),
+        )
+        .await
+        .map_err(|_| FetchError::Other("the stream did not answer".into()))?
+        .map_err(|e| FetchError::Other(format!("range request: {e}")))?;
         let status = response.status();
         if status == reqwest::StatusCode::FORBIDDEN
             || status == reqwest::StatusCode::UNAUTHORIZED
@@ -1129,10 +1147,9 @@ fn run_fetch(
         Ok(())
     };
 
-    match runtime.block_on(async move { tokio::time::timeout(FETCH_STALL, request).await }) {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(error)) => Err(error),
-        Err(_) => Err(FetchError::Other("the range request timed out".into())),
+    match runtime.block_on(request) {
+        Ok(()) => Ok(()),
+        Err(error) => Err(error),
     }
 }
 
@@ -1393,13 +1410,22 @@ impl StreamSession {
         let ext = ext_for(&format);
         let (path, file_name) = cache.begin(&video_id, ext, total)?;
 
-        let write_file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&path)
-            .map_err(|e| format!("could not open the stream cache: {e}"))?;
-        let read_file =
-            File::open(&path).map_err(|e| format!("could not open the stream cache: {e}"))?;
+        let write_file = match OpenOptions::new().read(true).write(true).open(&path) {
+            Ok(file) => file,
+            Err(error) => {
+                let _ = std::fs::remove_file(&path);
+                cache.finish(&video_id, &file_name, false);
+                return Err(format!("could not open the stream cache: {error}"));
+            }
+        };
+        let read_file = match File::open(&path) {
+            Ok(file) => file,
+            Err(error) => {
+                let _ = std::fs::remove_file(&path);
+                cache.finish(&video_id, &file_name, false);
+                return Err(format!("could not open the stream cache: {error}"));
+            }
+        };
 
         let control = Arc::new(SessionControl::default());
         let buffer = Arc::new(StreamBuffer::new());
@@ -1638,6 +1664,9 @@ fn decode_loop(
             }
             Err(error) => {
                 eprintln!("catalogue: seek in {video_id} failed: {error}");
+                buffer.fail(format!("this stream could not be seeked: {error}"));
+                abandon_cache(&store, &cache, &video_id, &file_name);
+                return;
             }
         }
     }
@@ -1671,10 +1700,10 @@ fn decode_loop(
         audio.copy_to_slice_interleaved(&mut scratch[..samples]);
         let mut slice = &scratch[..samples];
         if discard > 0 {
-            let trim = discard.min(slice.len());
-            let trim = trim - trim % channels as usize;
+            let frames_needed = discard.div_ceil(channels as usize);
+            let trim = (frames_needed * channels as usize).min(slice.len());
             slice = &slice[trim..];
-            discard -= trim;
+            discard = discard.saturating_sub(trim);
         }
         if !buffer.push(slice, &control) {
             break;
