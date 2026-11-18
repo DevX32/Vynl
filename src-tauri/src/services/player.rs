@@ -937,7 +937,7 @@ fn begin_crossfade(
     let stream = input.is_stream();
     let seek_file = !stream && start > 0.0;
     let offset = if stream {
-        Duration::from_secs_f64(start.max(0.0))
+        Duration::from_secs_f64(start.max(0.0).min(Duration::MAX.as_secs_f64()))
     } else {
         Duration::ZERO
     };
@@ -975,7 +975,7 @@ fn install_source(
     let stream = input.is_stream();
     let seek_file = !stream && start > 0.0;
     let offset = if stream {
-        Duration::from_secs_f64(start.max(0.0))
+        Duration::from_secs_f64(start.max(0.0).min(Duration::MAX.as_secs_f64()))
     } else {
         Duration::ZERO
     };
@@ -1058,7 +1058,7 @@ fn reopen_output(
         input,
         0.0,
         if stream_source {
-            Duration::from_secs_f64(pos)
+            Duration::from_secs_f64(pos.clamp(0.0, Duration::MAX.as_secs_f64()))
         } else {
             Duration::ZERO
         },

@@ -95,12 +95,14 @@ pub async fn fetch_complete_file(
             }
             Err(error) => {
                 let _ = std::fs::remove_file(&path);
+                cache.finish(video_id, &file_name, false);
                 return Err(format!("stream download failed: {error}"));
             }
         }
     }
 
     cache.mark_complete(video_id, &file_name, total);
+    cache.finish(video_id, &file_name, true);
     Ok(path)
 }
 
@@ -317,7 +319,7 @@ impl UrlResolver {
             .parse::<f64>()
             .ok()
             .filter(|d| d.is_finite() && *d > 0.0)
-            .map(Duration::from_secs_f64);
+            .and_then(|d| Duration::try_from_secs_f64(d).ok());
 
         let (content_length, mime) = probe_content(&self.http, &url, UA)
             .await
@@ -605,8 +607,13 @@ impl StreamCache {
             return;
         }
         if let Ok(bytes) = serde_json::to_vec_pretty(&state.index) {
-            let _ = std::fs::write(self.index_path(), bytes);
-            state.dirty = false;
+            // Write-then-rename atomically: a crash mid-write must not leave
+            // a truncated index that would wipe the entire cache on next open.
+            let tmp = self.index_path().with_extension("json.tmp");
+            let target = self.index_path();
+            if std::fs::write(&tmp, &bytes).is_ok() && std::fs::rename(&tmp, &target).is_ok() {
+                state.dirty = false;
+            }
         }
     }
 
@@ -657,12 +664,19 @@ impl StreamCache {
         drop(file);
 
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let stale_file = match state.index.entries.get(video_id) {
+            Some(entry) if !entry.complete => Some(entry.file.clone()),
+            _ => None,
+        };
         if !state
             .index
             .entries
             .get(video_id)
             .is_some_and(|entry| entry.complete)
         {
+            if let Some(stale) = stale_file {
+                let _ = std::fs::remove_file(self.dir.join(stale));
+            }
             state.index.entries.insert(
                 video_id.to_string(),
                 CacheEntry {
@@ -1275,7 +1289,6 @@ pub struct StreamSource {
     channels: u16,
     sample_rate: u32,
     duration: Option<Duration>,
-    skip: u64,
 }
 
 impl StreamSource {
@@ -1291,8 +1304,7 @@ impl StreamSource {
             duration: session
                 .duration
                 .filter(|d| d.is_finite() && *d > 0.0)
-                .map(Duration::from_secs_f64),
-            skip: 0,
+                .and_then(|d| Duration::try_from_secs_f64(d).ok()),
         }
     }
 }
@@ -1301,28 +1313,10 @@ impl Iterator for StreamSource {
     type Item = f32;
 
     fn next(&mut self) -> Option<f32> {
-        loop {
-            if self.skip > 0 {
-                match self.buffer.pop() {
-                    Pop::Sample(_) => {
-                        self.skip -= 1;
-                        continue;
-                    }
-                    Pop::Underrun => {
-                        self.skip += 1;
-                        return Some(0.0);
-                    }
-                    Pop::Closed => return None,
-                }
-            }
-            match self.buffer.pop() {
-                Pop::Sample(sample) => return Some(sample),
-                Pop::Underrun => {
-                    self.skip += 1;
-                    return Some(0.0);
-                }
-                Pop::Closed => return None,
-            }
+        match self.buffer.pop() {
+            Pop::Sample(sample) => Some(sample),
+            Pop::Underrun => Some(0.0),
+            Pop::Closed => None,
         }
     }
 }
@@ -1401,7 +1395,7 @@ impl StreamSession {
         let fetch_cache = cache.clone();
         let fetch_video = video_id.clone();
         let fetch_name = file_name.clone();
-        std::thread::Builder::new()
+        if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-fetch".into())
             .spawn(move || {
                 fetch_loop(
@@ -1414,7 +1408,13 @@ impl StreamSession {
                     fetch_name,
                 );
             })
-            .map_err(|e| format!("could not start the stream downloader: {e}"))?;
+        {
+            control.cancel();
+            buffer.close();
+            let _ = std::fs::remove_file(&path);
+            cache.finish(&video_id, &file_name, false);
+            return Err(format!("could not start the stream downloader: {error}"));
+        }
 
         let decode_buffer = buffer.clone();
         let decode_control = control.clone();
@@ -1422,7 +1422,7 @@ impl StreamSession {
         let decode_video = video_id.clone();
         let decode_cache = cache.clone();
         let decode_name = file_name.clone();
-        std::thread::Builder::new()
+        if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-decode".into())
             .spawn(move || {
                 decode_loop(
@@ -1438,7 +1438,13 @@ impl StreamSession {
                     total,
                 );
             })
-            .map_err(|e| format!("could not start the stream decoder: {e}"))?;
+        {
+            control.cancel();
+            buffer.close();
+            let _ = std::fs::remove_file(&path);
+            cache.finish(&video_id, &file_name, false);
+            return Err(format!("could not start the stream decoder: {error}"));
+        }
 
         Ok(Arc::new(Self {
             video_id,

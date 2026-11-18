@@ -216,22 +216,21 @@ pub fn embed_lyrics(file: &Path, text: &str) -> Result<(), String> {
         .and_then(|p| p.read())
         .map_err(|e| format!("lofty probe failed: {e}"))?;
 
-    let tag_type = tagged.primary_tag().map(|t| t.tag_type());
-    let tag = match tag_type {
-        Some(t) if tagged.tag(t).is_some() => {
-            tagged.primary_tag_mut().expect("primary tag present")
-        }
-        Some(t) => {
-            if tagged.tag(t).is_none() {
-                tagged.insert_tag(Tag::new(t));
-            }
-            tagged.tag_mut(t).expect("tag inserted")
-        }
-        None => {
-            tagged.insert_tag(Tag::new(TagType::Id3v2));
-            tagged.primary_tag_mut().expect("tag inserted")
-        }
+    let tag_type = match tagged.primary_tag().map(|t| t.tag_type()) {
+        Some(t) => t,
+        None => match ext.as_str() {
+            "mp3" => TagType::Id3v2,
+            "flac" | "ogg" | "oga" | "opus" => TagType::VorbisComments,
+            "m4a" | "mp4" | "m4b" | "aac" => TagType::Mp4Ilst,
+            _ => return Err("this format cannot store lyrics tags.".into()),
+        },
     };
+    if tagged.tag(tag_type).is_none() {
+        tagged.insert_tag(Tag::new(tag_type));
+    }
+    let tag = tagged
+        .tag_mut(tag_type)
+        .ok_or_else(|| "could not create the lyrics tag.".to_string())?;
 
     tag.insert_text(ItemKey::Lyrics, text.to_string());
     tag.insert_text(ItemKey::UnsyncLyrics, text.to_string());

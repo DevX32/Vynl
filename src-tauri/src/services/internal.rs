@@ -119,7 +119,7 @@ fn generate_totp_from_key(key_bytes: &[u8], offset_secs: i64) -> Result<String, 
 
     let off = (result[19] & 0x0F) as usize;
     let code_bytes = &result[off..off + 4];
-    let code = ((code_bytes[0] as u32) << 24)
+    let code = ((code_bytes[0] as u32 & 0x7f) << 24)
         | ((code_bytes[1] as u32) << 16)
         | ((code_bytes[2] as u32) << 8)
         | (code_bytes[3] as u32);
@@ -773,7 +773,9 @@ fn extract_from_sources(val: Option<&Value>) -> Option<String> {
     let mut best_width: u64 = 0;
 
     for source in sources {
-        let url = source.get("url").and_then(|v| v.as_str())?;
+        let Some(url) = source.get("url").and_then(|v| v.as_str()) else {
+            continue;
+        };
         let width = source
             .get("width")
             .or_else(|| source.get("maxWidth"))

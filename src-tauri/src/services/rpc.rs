@@ -19,6 +19,46 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+fn is_public_v4(ip: &std::net::Ipv4Addr) -> bool {
+    !(ip.is_private()
+        || ip.is_loopback()
+        || ip.is_link_local()
+        || ip.is_unspecified()
+        || ip.is_broadcast()
+        || ip.is_multicast())
+}
+
+pub fn is_public_host(host: &str) -> bool {
+    let trimmed = host.trim();
+    let trimmed = trimmed.trim_start_matches('[').trim_end_matches(']');
+    let normalized = trimmed.trim_end_matches('.');
+    if let Ok(ip) = normalized.parse::<std::net::IpAddr>() {
+        return match ip {
+            std::net::IpAddr::V4(ip) => is_public_v4(&ip),
+            std::net::IpAddr::V6(ip) => {
+                if let Some(mapped) = ip.to_ipv4_mapped() {
+                    return is_public_v4(&mapped);
+                }
+                let segments = ip.segments();
+                let unique_local = (segments[0] & 0xfe00) == 0xfc00;
+                let link_local = (segments[0] & 0xffc0) == 0xfe80;
+                let multicast = (segments[0] & 0xff00) == 0xff00;
+                !(ip.is_loopback()
+                    || ip.is_unspecified()
+                    || unique_local
+                    || link_local
+                    || multicast)
+            }
+        };
+    }
+
+    let normalized = normalized.to_lowercase();
+    !(normalized.eq_ignore_ascii_case("localhost")
+        || normalized.ends_with(".local")
+        || normalized.ends_with(".localhost")
+        || !normalized.contains('.'))
+}
+
 pub fn is_public_cover(url: &str) -> bool {
     let Ok(parsed) = reqwest::Url::parse(url) else {
         return false;
@@ -30,30 +70,7 @@ pub fn is_public_cover(url: &str) -> bool {
     let Some(host) = parsed.host_str() else {
         return false;
     };
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        return match ip {
-            std::net::IpAddr::V4(ip) => {
-                !(ip.is_private()
-                    || ip.is_loopback()
-                    || ip.is_link_local()
-                    || ip.is_unspecified()
-                    || ip.is_broadcast())
-            }
-            std::net::IpAddr::V6(ip) => {
-                let segments = ip.segments();
-                let unique_local = (segments[0] & 0xfe00) == 0xfc00;
-                let link_local = (segments[0] & 0xffc0) == 0xfe80;
-                !(ip.is_loopback() || ip.is_unspecified() || unique_local || link_local)
-            }
-        };
-    }
-
-    !(host.eq_ignore_ascii_case("localhost")
-        || host.ends_with(".local")
-        || host.ends_with(".localhost")
-        || !host.contains('.'))
+    is_public_host(host)
 }
 
 fn build_activity(p: &RpcPresence) -> Activity<'static> {

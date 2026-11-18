@@ -331,9 +331,7 @@ pub fn load_cache(user_data_dir: &Path) -> Option<Vec<LibraryTrack>> {
 }
 
 fn save_cache(user_data_dir: &Path, tracks: &[LibraryTrack]) {
-    if let Ok(json) = serde_json::to_string(tracks) {
-        let _ = fs::write(cache_path(user_data_dir), json);
-    }
+    let _ = crate::services::util::write_json(&cache_path(user_data_dir), &tracks);
 }
 
 pub fn scan_library(output_dir: &Path, user_data_dir: &Path) -> Vec<LibraryTrack> {

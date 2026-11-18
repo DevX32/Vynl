@@ -17,6 +17,7 @@ pub fn hidden_std(mut cmd: StdCommand) -> StdCommand {
 #[inline]
 #[allow(unused_mut)]
 pub fn hidden_tokio(mut cmd: tokio::process::Command) -> tokio::process::Command {
+    cmd.kill_on_drop(true);
     #[cfg(windows)]
     {
         cmd.creation_flags(CREATE_NO_WINDOW);

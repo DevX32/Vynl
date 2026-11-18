@@ -6,12 +6,14 @@ use tokio::io::AsyncWriteExt;
 static HTTP: once_cell::sync::Lazy<reqwest::Client> = once_cell::sync::Lazy::new(|| {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_default()
 });
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 const CHUNK_STALL_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_BYTES: usize = 512 * 1024 * 1024;
 const MAX_CACHE_FILES: usize = 300;
 const MAX_CACHE_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -34,8 +36,14 @@ fn safe_name(key: &str) -> String {
 }
 
 pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("audio URL must use http(s)".into());
+    if !url.starts_with("https://") {
+        return Err("audio URL must use https".into());
+    }
+    if let Ok(parsed) = reqwest::Url::parse(url)
+        && let Some(host) = parsed.host_str()
+        && !crate::services::rpc::is_public_host(host)
+    {
+        return Err("audio URL points at a private host".into());
     }
     let dir = cache_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("cache dir: {e}"))?;
@@ -49,11 +57,25 @@ pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> 
         return Ok(dest.to_string_lossy().into_owned());
     }
 
-    let tmp = dest.with_extension("partial");
-    let mut resp = tokio::time::timeout(RESPONSE_TIMEOUT, HTTP.get(url).send())
-        .await
-        .map_err(|_| format!("download timed out after {}s", RESPONSE_TIMEOUT.as_secs()))?
-        .map_err(|e| format!("download failed: {e}"))?;
+    static TMP_COUNTER: once_cell::sync::Lazy<std::sync::atomic::AtomicU64> =
+        once_cell::sync::Lazy::new(|| std::sync::atomic::AtomicU64::new(0));
+    let unique = TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = dir.join(format!(
+        "{}.partial.{}.{}",
+        safe_name(key),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
+        unique
+    ));
+    let mut resp = tokio::time::timeout(
+        RESPONSE_TIMEOUT,
+        crate::services::util::follow_public_https(&HTTP, url, 5),
+    )
+    .await
+    .map_err(|_| format!("download timed out after {}s", RESPONSE_TIMEOUT.as_secs()))?
+    .map_err(|e| format!("download failed: {e}"))?;
 
     if !resp.status().is_success() {
         return Err(format!("download HTTP {}", resp.status()));
@@ -80,9 +102,14 @@ async fn stream_body(
     resp: &mut reqwest::Response,
     file: &mut tokio::fs::File,
 ) -> Result<(), String> {
+    let mut written: usize = 0;
     loop {
         match tokio::time::timeout(CHUNK_STALL_TIMEOUT, resp.chunk()).await {
             Ok(Ok(Some(chunk))) => {
+                written += chunk.len();
+                if written > MAX_BYTES {
+                    return Err("download exceeded the size limit".into());
+                }
                 file.write_all(&chunk)
                     .await
                     .map_err(|e| format!("write cache: {e}"))?;

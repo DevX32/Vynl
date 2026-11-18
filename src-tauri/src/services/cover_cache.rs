@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use reqwest::header::{ACCEPT, CONTENT_TYPE, USER_AGENT};
+use reqwest::header::CONTENT_TYPE;
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 
@@ -9,12 +9,12 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 const CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_BYTES: u64 = 15 * 1024 * 1024;
-const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 static HTTP: once_cell::sync::Lazy<reqwest::Client> = once_cell::sync::Lazy::new(|| {
     reqwest::Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
         .timeout(RESPONSE_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_default()
 });
@@ -113,19 +113,20 @@ fn ytimg_fallback(url: &str) -> Option<String> {
 }
 
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
-    HTTP.get(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
-        .send()
-        .await
-        .map_err(|e| format!("cover download failed: {e}"))
+    crate::services::util::follow_public_https(&HTTP, url, 5).await
 }
 
 pub async fn cache_cover(user_data: &Path, url: &str) -> Result<String, String> {
     let url = normalize_cover_url(url);
     let url = url.as_ref();
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err("unsupported cover URL".into());
+    if !url.starts_with("https://") {
+        return Err("cover URL must use https".into());
+    }
+    if let Ok(parsed) = reqwest::Url::parse(url)
+        && let Some(host) = parsed.host_str()
+        && !crate::services::rpc::is_public_host(host)
+    {
+        return Err("cover URL points at a private host".into());
     }
 
     let dir = cache_dir(user_data);

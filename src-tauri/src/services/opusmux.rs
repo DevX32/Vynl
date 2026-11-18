@@ -170,6 +170,9 @@ impl<'a> Walk<'a> {
 
     fn track_entry(&mut self, body: &[u8]) {
         let mut c = Cursor::new(body);
+        let mut track_number: Option<u64> = None;
+        let mut track_type: Option<u64> = None;
+        let mut head: Option<OpusHead> = None;
         while c.remaining() > 0 {
             let Some(id) = c.read_id() else { break };
             let Some(Some(size)) = c.read_size() else {
@@ -183,19 +186,17 @@ impl<'a> Walk<'a> {
             match id {
                 ID_TRACK_NUMBER => {
                     if let Some(v) = c.uint(size) {
-                        self.audio_track = v;
+                        track_number = Some(v);
                     }
                 }
                 ID_TRACK_TYPE => {
-                    if c.uint(size) != Some(TRACK_TYPE_AUDIO) {
-                        self.audio_track = u64::MAX;
+                    if let Some(v) = c.uint(size) {
+                        track_type = Some(v);
                     }
                 }
                 ID_CODEC_PRIVATE => {
-                    if let Some(private) = c.slice(size)
-                        && self.head.is_none()
-                    {
-                        self.head = parse_opus_head(private);
+                    if let Some(private) = c.slice(size) {
+                        head = parse_opus_head(private);
                     }
                 }
                 ID_TRACK_ENTRY => {
@@ -205,6 +206,14 @@ impl<'a> Walk<'a> {
                 _ => {}
             }
             c.pos = start.saturating_add(size);
+        }
+        if let (Some(number), Some(kind)) = (track_number, track_type)
+            && kind == TRACK_TYPE_AUDIO
+        {
+            self.audio_track = number;
+            if self.head.is_none() {
+                self.head = head;
+            }
         }
     }
 
@@ -325,10 +334,11 @@ pub fn demux_bytes(data: &[u8]) -> Result<DemuxedOpus, String> {
 
     while probe.remaining() > 0 {
         let Some(id) = probe.read_id() else { break };
-        let Some(Some(size)) = probe.read_size() else {
-            break;
+        let size = match probe.read_size() {
+            Some(Some(s)) => s as usize,
+            Some(None) => probe.remaining(),
+            None => break,
         };
-        let size = size as usize;
         if id == ID_SEGMENT {
             let rest = &data[probe.pos..];
             walk.segment(rest);

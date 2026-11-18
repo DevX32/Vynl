@@ -688,7 +688,14 @@ pub async fn delete_all_library_tracks(app: AppHandle) -> Result<DeleteTracksRes
         } else {
             failed += 1;
         }
-        stale.push(path);
+        stale.push(path.clone());
+
+        if let Ok(canonical) = validate_path_in_output(&path, &app) {
+            let canonical_str = canonical.to_string_lossy().to_string();
+            if canonical_str != path {
+                stale.push(canonical_str);
+            }
+        }
     }
     if !stale.is_empty() {
         crate::services::playlists::remove_paths_from_all(&output, &stale);

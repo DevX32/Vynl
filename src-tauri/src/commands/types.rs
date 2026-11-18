@@ -151,6 +151,7 @@ fn default_eq_bands() -> Vec<f32> {
 #[serde(rename_all = "lowercase")]
 pub enum MatchSource {
     YouTube,
+    #[serde(rename = "youtubeMusic", alias = "youtubemusic")]
     YouTubeMusic,
 }
 

@@ -209,9 +209,7 @@ fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, DiskCacheEntry>
     entries.truncate(DISK_CACHE_MAX);
 
     let path = disk_cache_path(user_data_dir);
-    if let Ok(json) = serde_json::to_string(&entries) {
-        let _ = fs::write(&path, json);
-    }
+    let _ = crate::services::util::write_json(&path, &entries);
 }
 
 pub async fn fetch_lyrics_with_cache(

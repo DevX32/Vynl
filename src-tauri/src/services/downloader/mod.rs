@@ -148,6 +148,7 @@ const DOWNLOAD_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 const SEARCH_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
 
 const COVER_PREFETCH_WORKERS: usize = 8;
+const MAX_COVER_BYTES: usize = 15 * 1024 * 1024;
 
 type CoverMap = Arc<std::sync::Mutex<HashMap<String, Option<PathBuf>>>>;
 
@@ -209,7 +210,7 @@ async fn probe_duration(file: &Path) -> Option<f64> {
 
 async fn fetch_cover(url: &str, dest: &str) -> bool {
     let url = crate::services::cover_cache::normalize_cover_url(url).into_owned();
-    if !url.starts_with("http://") && !url.starts_with("https://") {
+    if !url.starts_with("https://") {
         return false;
     }
     let client = match reqwest::Client::builder()
@@ -231,12 +232,34 @@ async fn fetch_cover(url: &str, dest: &str) -> bool {
         return false;
     }
 
-    let bytes = match resp.bytes().await {
-        Ok(b) => b,
-        Err(_) => return false,
-    };
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_default();
 
-    tokio::fs::write(dest, &bytes).await.is_ok()
+    if !content_type.starts_with("image/") {
+        return false;
+    }
+
+    let mut resp = resp;
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), resp.chunk()).await {
+            Ok(Ok(Some(chunk))) => {
+                buf.extend_from_slice(&chunk);
+                if buf.len() > MAX_COVER_BYTES {
+                    return false;
+                }
+            }
+            Ok(Ok(None)) => break,
+            Ok(Err(_)) => return false,
+            Err(_) => return false,
+        }
+    }
+
+    tokio::fs::write(dest, &buf).await.is_ok()
 }
 
 fn tag_type_for(file: &str) -> lofty::tag::TagType {
@@ -982,11 +1005,8 @@ async fn process_track(
 
     let (lyrics_text, lyrics_sidecar) = process_lyrics_lookup(track, user_data_dir).await;
 
-    let mut tagged_file = tmp.join(format!(
-        "{}.tagged.{}",
-        track.id,
-        audio_format_ext(&settings.format)
-    ));
+    let mut tagged_file = raw_path.clone();
+    tagged_file.set_extension(format!("tagged.{}", audio_format_ext(&settings.format)));
 
     {
         let cover_str = cover_path.as_ref().map(|p| p.to_string_lossy().to_string());

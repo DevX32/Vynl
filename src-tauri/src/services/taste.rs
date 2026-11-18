@@ -75,13 +75,7 @@ pub fn save(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
         trimmed = trimmed[trimmed.len() - MAX_ENTRIES..].to_vec();
     }
     let owned: Vec<TasteEntry> = trimmed.into_iter().cloned().collect();
-    let body = serde_json::to_string_pretty(&owned)
-        .map_err(|e| format!("could not encode the taste profile: {e}"))?;
-    let path = taste_path(user_data);
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    std::fs::write(&path, body).map_err(|e| format!("could not write the taste profile: {e}"))
+    crate::services::util::write_json(&taste_path(user_data), &owned)
 }
 
 pub fn summary(entries: &[TasteEntry]) -> TasteSummary {
