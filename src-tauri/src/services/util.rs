@@ -11,21 +11,24 @@ pub fn now_ms() -> i64 {
 
 pub const GITHUB_UA: &str = concat!("Vynl/", env!("CARGO_PKG_VERSION"));
 
-pub fn host_resolves_publicly(host: &str) -> bool {
+pub(crate) fn public_addrs(host: &str) -> Option<Vec<std::net::SocketAddr>> {
     use std::net::ToSocketAddrs;
-    match (host, 443u16).to_socket_addrs() {
-        Ok(iter) => {
-            let mut saw_address = false;
-            for addr in iter {
-                saw_address = true;
-                if !crate::services::rpc::is_public_ip(&addr.ip()) {
-                    return false;
-                }
-            }
-            saw_address
-        }
-        Err(_) => false,
+    let addrs: Vec<std::net::SocketAddr> = (host, 443u16).to_socket_addrs().ok()?.collect();
+    if addrs.is_empty() {
+        return None;
     }
+    if addrs
+        .iter()
+        .all(|addr| crate::services::rpc::is_public_ip(&addr.ip()))
+    {
+        Some(addrs)
+    } else {
+        None
+    }
+}
+
+pub fn host_resolves_publicly(host: &str) -> bool {
+    public_addrs(host).is_some()
 }
 
 pub fn github_client(read_timeout: std::time::Duration) -> Result<reqwest::Client, String> {
@@ -39,7 +42,7 @@ pub fn github_client(read_timeout: std::time::Duration) -> Result<reqwest::Clien
 }
 
 pub async fn follow_public_https(
-    http: &reqwest::Client,
+    _http: &reqwest::Client,
     url: &str,
     max_hops: u8,
 ) -> Result<reqwest::Response, String> {
@@ -56,10 +59,19 @@ pub async fn follow_public_https(
         if !crate::services::rpc::is_public_host(&host) {
             return Err("host points at a private or reserved address".into());
         }
-        if !host_resolves_publicly(&host) {
-            return Err("host resolves to a private or reserved address".into());
-        }
-        let resp = http
+        let addrs = public_addrs(&host)
+            .ok_or_else(|| "host resolves to a private or reserved address".to_string())?;
+        let bound = addrs.iter().fold(
+            reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
+                .redirect(reqwest::redirect::Policy::none()),
+            |builder, addr| builder.resolve(&host, *addr),
+        );
+        let bound = bound
+            .build()
+            .map_err(|e| format!("could not build the fetch client: {e}"))?;
+        let resp = bound
             .get(&current)
             .send()
             .await

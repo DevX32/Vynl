@@ -618,26 +618,25 @@ class Sync(context: Context) {
     }
 
     private fun session(): SyncSession? {
-        val token = prefs.getString(KEY_ACCESS, null) ?: return null
-        val userId = prefs.getString(KEY_USER, null) ?: return null
+        val token = SecurePrefs.getString(prefs, KEY_ACCESS, null) ?: return null
+        val userId = SecurePrefs.getString(prefs, KEY_USER, null) ?: return null
         if (token.isBlank() || userId.isBlank()) return null
         return SyncSession(
-            email = prefs.getString(KEY_EMAIL, "") ?: "",
+            email = SecurePrefs.getString(prefs, KEY_EMAIL, "") ?: "",
             userId = userId,
             accessToken = token,
-            refreshToken = prefs.getString(KEY_REFRESH, "") ?: "",
+            refreshToken = SecurePrefs.getString(prefs, KEY_REFRESH, "") ?: "",
             expiresAt = prefs.getLong(KEY_EXPIRES, 0),
         )
     }
 
     private fun saveSession(session: SyncSession) {
-        prefs.edit()
-            .putString(KEY_EMAIL, session.email)
-            .putString(KEY_USER, session.userId)
-            .putString(KEY_ACCESS, session.accessToken)
-            .putString(KEY_REFRESH, session.refreshToken)
-            .putLong(KEY_EXPIRES, session.expiresAt)
-            .apply()
+        val editor = prefs.edit()
+        SecurePrefs.putString(editor, KEY_EMAIL, session.email)
+        SecurePrefs.putString(editor, KEY_USER, session.userId)
+        SecurePrefs.putString(editor, KEY_ACCESS, session.accessToken)
+        SecurePrefs.putString(editor, KEY_REFRESH, session.refreshToken)
+        editor.putLong(KEY_EXPIRES, session.expiresAt).apply()
     }
 
     private fun clearSession() {

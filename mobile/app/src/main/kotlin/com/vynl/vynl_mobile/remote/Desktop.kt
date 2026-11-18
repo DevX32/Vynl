@@ -78,12 +78,20 @@ class Desktop(context: Context) {
         .build()
 
     var address: String
-        get() = prefs.getString(KEY_ADDRESS, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_ADDRESS, value.trim()).apply()
+        get() = SecurePrefs.getString(prefs, KEY_ADDRESS, "") ?: ""
+        set(value) {
+            val editor = prefs.edit()
+            SecurePrefs.putString(editor, KEY_ADDRESS, value.trim())
+            editor.apply()
+        }
 
     var token: String
-        get() = prefs.getString(KEY_TOKEN, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_TOKEN, value.trim()).apply()
+        get() = SecurePrefs.getString(prefs, KEY_TOKEN, "") ?: ""
+        set(value) {
+            val editor = prefs.edit()
+            SecurePrefs.putString(editor, KEY_TOKEN, value.trim())
+            editor.apply()
+        }
 
     val paired: Boolean
         get() = address.isNotEmpty() && token.isNotEmpty()

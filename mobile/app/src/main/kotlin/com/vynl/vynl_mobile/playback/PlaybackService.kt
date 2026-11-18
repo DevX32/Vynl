@@ -22,7 +22,25 @@ class PlaybackService : MediaSessionService() {
             )
             setHandleAudioBecomingNoisy(true)
         }
-        session = MediaSession.Builder(this, player).build()
+        val service = this
+        session = MediaSession.Builder(this, player)
+            .setCallback(object : MediaSession.Callback {
+                override fun onConnect(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                ): MediaSession.ConnectionResult {
+                    val ownPackage = service.packageName
+                    return if (controller.isTrusted || controller.packageName == ownPackage) {
+                        MediaSession.ConnectionResult.accept(
+                            MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS,
+                            MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
+                        )
+                    } else {
+                        MediaSession.ConnectionResult.reject()
+                    }
+                }
+            })
+            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
