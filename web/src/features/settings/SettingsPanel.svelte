@@ -75,10 +75,11 @@
         toasts.error(
           t("downloads.removeDownloadedPartial", { failed: result.failed }),
         );
+      } else {
+        toasts.success(
+          t("downloads.removeDownloadedDone", { deleted: result.deleted }),
+        );
       }
-      toasts.success(
-        t("downloads.removeDownloadedDone", { deleted: result.deleted }),
-      );
     } catch (error) {
       toasts.error(
         t("downloads.removeDownloadedFailed", { error: errText(error) }),

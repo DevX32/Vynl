@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { Search, Plus, ListMusic, Check } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
 
   type Playlist = { id: string; name: string; trackCount: number };
 
@@ -26,12 +27,7 @@
   let query = $state("");
   let newName = $state(untrack(() => suggestedName));
   let creating = $state(false);
-  let dialogEl = $state<HTMLDivElement>();
   let nameEl = $state<HTMLInputElement>();
-
-  $effect(() => {
-    dialogEl?.focus();
-  });
 
   $effect(() => {
     if (creating) nameEl?.focus();
@@ -79,13 +75,13 @@
 <div class="overlay" onclick={onSkip} role="presentation">
   <div
     class="dialog"
-    bind:this={dialogEl}
     onclick={(e) => e.stopPropagation()}
     onkeydown={handleKey}
     role="dialog"
     aria-modal="true"
     aria-label={t("playlistPicker.title")}
     tabindex="-1"
+    use:focusTrap
   >
     <header class="head">
       <div class="head-text">

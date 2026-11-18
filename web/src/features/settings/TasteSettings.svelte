@@ -1,15 +1,18 @@
 <script lang="ts">
   import { t } from "@lib/i18n";
   import Button from "@components/Button.svelte";
+  import Dialog from "@components/Dialog.svelte";
   import { resetCatalogueTaste } from "@state/catalogue.svelte";
   import { getTasteSummary, resetTaste } from "@state/taste.svelte";
   import SettingRow from "./SettingRow.svelte";
 
   const summary = $derived(getTasteSummary());
+  let confirming = $state(false);
 
-  function reset(): void {
+  function confirmReset(): void {
     resetTaste();
     resetCatalogueTaste();
+    confirming = false;
   }
 </script>
 
@@ -23,13 +26,25 @@
     {#snippet control()}
       <Button
         size="sm"
-        onclick={() => reset()}
+        onclick={() => (confirming = true)}
         disabled={summary.entries === 0}
       >
         {t("settings.tasteReset")}
       </Button>
     {/snippet}
   </SettingRow>
+
+  {#if confirming}
+    <Dialog
+      open
+      title={t("settings.tasteResetTitle")}
+      description={t("settings.tasteResetBody")}
+      confirmLabel={t("settings.tasteResetConfirm")}
+      danger
+      onconfirm={confirmReset}
+      oncancel={() => (confirming = false)}
+    />
+  {/if}
 </div>
 
 <style>

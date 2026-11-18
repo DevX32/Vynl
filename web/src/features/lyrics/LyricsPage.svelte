@@ -18,6 +18,7 @@
     getLyricsLines,
     getLyricsSynced,
     getLyricsActiveIndex,
+    getLyricsError,
     isInstrumental,
   } from "@state/lyrics.svelte";
   import { startClock, stopClock } from "@state/media-clock.svelte";
@@ -203,6 +204,11 @@ import { toggleLyrics } from "@state/player.svelte";
     selected = [];
     overlay = null;
   });
+
+  function retryLyrics(): void {
+    const id = getCurrentId();
+    loadLyrics(id);
+  }
 
   $effect(() => {
     if (!getIsTrackPlaying() || getLyricsLines().length === 0) return;
@@ -523,6 +529,13 @@ import { toggleLyrics } from "@state/player.svelte";
       {#if getLyricsLoading() && getLyricsLines().length === 0}
         <div class="lyr-empty" transition:fade={{ duration: 120 }}>
           <div class="lyr-empty-sub mono">{t("lyrics.loadingLyrics")}</div>
+        </div>
+      {:else if !getLyricsResult() && getLyricsError()}
+        <div class="lyr-empty" transition:fade={{ duration: 120 }}>
+          <div class="lyr-empty-title display">{t("lyrics.loadFailed")}</div>
+          <button class="btn-ghost settings-action mono" style="margin-top:12px" onclick={retryLyrics}>
+            {t("common.retry")}
+          </button>
         </div>
       {:else if !getLyricsResult()}
         <div class="lyr-empty" transition:fade={{ duration: 120 }}>

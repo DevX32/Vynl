@@ -71,6 +71,7 @@ let reconcilePending = false;
 
 let pauseIntent = 0;
 let resumeToken = 0;
+let resumePending = 0;
 
 const CATALOGUE_PREFIX = "ytm:";
 
@@ -513,17 +514,23 @@ export function pausePlayback(): void {
 export function toggle(): void {
   const np = getCurrentTrack();
   if (!np) return;
-  if (np.playing) {
+  const effectivelyPlaying = np.playing !== (pauseIntent > 0) || resumePending > 0;
+  if (effectivelyPlaying) {
     pausePlayback();
   } else {
     const seekTo = getCurrentTime() || 0;
     if (np.path) {
       resumeToken += 1;
+      resumePending += 1;
       void resumeOrPlay(
         np.path,
         seekTo > 0 ? seekTo : undefined,
         playGeneration,
-      ).catch(handlePlayReject);
+      )
+        .catch(handlePlayReject)
+        .finally(() => {
+          resumePending -= 1;
+        });
     }
   }
 }

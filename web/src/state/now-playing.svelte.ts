@@ -208,15 +208,19 @@ function refillShuffleSession(currentPath: string | null): void {
   }
 }
 
-function takeShufflePath(): string | null {
+function takeShufflePath(
+  currentPath: string | null,
+  loop: LoopMode,
+): string | null {
   const scope = new Set(_shuffleScope);
   const byPath = libraryByPath();
-  _shuffleUpcoming = _shuffleUpcoming.filter(
-    (path) => scope.has(path) && byPath.has(path),
-  );
+  _shuffleUpcoming = _shuffleUpcoming.filter((path) => scope.has(path) && byPath.has(path));
 
   const path = _shuffleUpcoming[0] ?? null;
   if (path) _shuffleUpcoming = _shuffleUpcoming.slice(1);
+  if (_shuffleUpcoming.length === 0 && loop === "all") {
+    refillShuffleSession(currentPath);
+  }
   return path;
 }
 
@@ -590,12 +594,8 @@ export function pickNextId(
       return trackAt(redoPath)?.id ?? null;
     }
 
-    let path = takeShufflePath();
-    if (!path && loop === "all") {
-      const currentPath = findTrackById(currentId)?.path ?? null;
-      refillShuffleSession(currentPath);
-      path = takeShufflePath();
-    }
+    const currentPath = findTrackById(currentId)?.path ?? null;
+    const path = takeShufflePath(currentPath, loop);
     if (!path) return null;
     return trackAt(path)?.id ?? null;
   }

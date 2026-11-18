@@ -253,7 +253,7 @@
       {/if}
     </div>
   {:else}
-    {#each tracks as track, i (track.id)}
+    {#each tracks as track, i (`${track.id}#${i}`)}
       <div
         class="row"
         class:playing={isCurrent(track)}

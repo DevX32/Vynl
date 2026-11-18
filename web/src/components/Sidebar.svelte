@@ -71,10 +71,17 @@
   } = $props();
 
   let railSnapshot: typeof playlists | undefined;
+  const railList = $derived(railSnapshot ?? playlists);
   const { drag, start, shouldSkipClick } = useDragList({
-    pathAt: (_section, idx) => (railSnapshot ?? playlists)[idx]?.id,
+    pathAt: (_section, idx) => railList[idx]?.id,
     onReorder: (fromId, toId) => onReorderPlaylists(fromId, toId),
     rowSelector: () => ".rail-item[data-playlist]",
+  });
+
+  $effect(() => {
+    if (!drag.dragging && railSnapshot) {
+      railSnapshot = undefined;
+    }
   });
 
   const likedTracks = $derived(getLikedTracks());
@@ -117,6 +124,52 @@
     }
     void refreshSyncStatus().catch(() => {});
   }
+
+  $effect(() => {
+    if (!accountMenuOpen) return;
+    const focusFirst = (): void => {
+      accountWrap
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
+        ?.focus();
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        accountMenuOpen = false;
+        accountButton?.focus();
+        return;
+      }
+      const items = accountWrap?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]',
+      );
+      if (!items || items.length === 0) return;
+      const list = Array.from(items);
+      const active = document.activeElement as HTMLButtonElement | null;
+      const index = active ? list.indexOf(active) : -1;
+      if (
+        e.key === "ArrowDown" ||
+        e.key === "ArrowUp" ||
+        e.key === "Tab"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.key === "Tab" ? (e.shiftKey ? -1 : 1) : e.key === "ArrowDown" ? 1 : -1;
+        const nextIndex = index < 0
+          ? delta > 0
+            ? 0
+            : list.length - 1
+          : (index + delta + list.length) % list.length;
+        list[nextIndex]?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    const frame = requestAnimationFrame(focusFirst);
+    return () => {
+      window.removeEventListener("keydown", onKey, { capture: true });
+      cancelAnimationFrame(frame);
+    };
+  });
 
   function closeAccountMenu(event: MouseEvent): void {
     if (!accountMenuOpen) return;
@@ -283,7 +336,7 @@
         </button>
       {/if}
 
-      {#each playlists as p, i (p.id)}
+      {#each railList as p, i (p.id)}
         {@const covers = getPlaylistCovers(p.id).slice(0, 4)}
         <button
           class="rail-item"

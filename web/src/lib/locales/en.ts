@@ -240,6 +240,7 @@ export const en = {
     shortcuts: "Shortcuts",
     loadingLyrics: "Loading lyrics",
     noLyricsFound: "No lyrics found",
+    loadFailed: "Couldn't load lyrics",
     emptyLyricsFile: "Empty lyrics file",
     nLines: "{n} line{s} · {c} chars",
     copySelected: "Copy selected lines",
@@ -318,6 +319,10 @@ export const en = {
     tasteEmpty:
       "Like a song or play a few tracks and Vynl will start building your mix.",
     tasteReset: "Reset",
+    tasteResetTitle: "Reset your taste profile?",
+    tasteResetBody:
+      "This erases everything Vynl learned from your listening — including your liked songs on every synced device. You can build it up again by listening.",
+    tasteResetConfirm: "Reset everything",
     mobileSync: "Mobile Sync",
     mobileSyncHint:
       "Share your library with the Vynl Android app over your local Wi‑Fi.",

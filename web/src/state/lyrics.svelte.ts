@@ -23,6 +23,7 @@ export type LyricLine = {
 let _loading = $state(false);
 let _result = $state<LyricsResult | null>(null);
 let _lines = $state<LyricLine[]>([]);
+let _loadError = $state<string | null>(null);
 
 const MAX_CACHE_SIZE = 500;
 const _cache = new Map<string, { result: LyricsResult; lines: LyricLine[] }>();
@@ -497,6 +498,7 @@ function clearLyricsState(): void {
   _loading = false;
   _result = null;
   _lines = [];
+  _loadError = null;
 }
 
 function checkCache(t: { path: string }): boolean {
@@ -505,6 +507,7 @@ function checkCache(t: { path: string }): boolean {
   _loading = false;
   _result = cached.result;
   _lines = cached.lines;
+  _loadError = null;
   return true;
 }
 
@@ -569,6 +572,7 @@ export function loadLyrics(id: string | null): void {
   _loadingId = id;
   _result = null;
   _lines = [];
+  _loadError = null;
 
   if (checkCache(t)) {
     _loadingId = null;
@@ -605,6 +609,7 @@ export function loadLyrics(id: string | null): void {
 
       _result = res;
       _lines = res ? toLines(res) : [];
+      _loadError = null;
       if (res) {
         storeInCache(t.path, res, _lines);
       } else {
@@ -619,6 +624,11 @@ export function loadLyrics(id: string | null): void {
         : null;
       _result = res;
       _lines = res ? toLines(res) : [];
+      _loadError = res
+        ? null
+        : error instanceof Error && error.message
+          ? error.message
+          : "could not load lyrics";
       if (res) {
         storeInCache(t.path, res, _lines);
       } else {
@@ -701,6 +711,9 @@ const _activeWordIndex = $derived(
 
 export function getLyricsLoading(): boolean {
   return _loading;
+}
+export function getLyricsError(): string | null {
+  return _loadError;
 }
 export function getLyricsResult(): LyricsResult | null {
   return _result;

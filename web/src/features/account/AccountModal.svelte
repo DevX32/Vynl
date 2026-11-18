@@ -17,6 +17,7 @@
   } from "@state/sync.svelte";
   import Button from "@components/Button.svelte";
   import SettingRow from "@features/settings/SettingRow.svelte";
+  import { focusTrap } from "@lib/actions/focus-trap";
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -200,6 +201,7 @@
     aria-label={t("account.title")}
     tabindex="-1"
     onclick={(event) => event.stopPropagation()}
+    use:focusTrap
   >
     <div class="head">
       <span class="brand mono">VYNL</span>

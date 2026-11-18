@@ -5,6 +5,7 @@
   import { closeEq } from "@state/equalizer.svelte";
   import Equalizer from "./Equalizer.svelte";
   import CrossfadeControl from "./CrossfadeControl.svelte";
+  import { focusTrap } from "@lib/actions/focus-trap";
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -18,6 +19,7 @@
     aria-label={t("settings.equalizer")}
     tabindex="-1"
     onclick={(e) => e.stopPropagation()}
+    use:focusTrap
   >
     <div class="head">
       <span class="title display">{t("settings.equalizer")}</span>
