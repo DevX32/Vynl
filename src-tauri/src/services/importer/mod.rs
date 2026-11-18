@@ -122,8 +122,10 @@ pub async fn import_stream_playlist(
         for track in &collection.tracks {
             let video_id = extract_video_id(&track.url);
             match video_id {
-                Some(id) if seen_video_ids.insert(id.clone()) => {
-                    picked.push(stream_track_for(track, id));
+                Some(id) => {
+                    if seen_video_ids.insert(id.clone()) {
+                        picked.push(stream_track_for(track, id));
+                    }
                 }
                 _ => unmatched.push(UnmatchedImport {
                     title: track.title.clone(),
@@ -138,8 +140,10 @@ pub async fn import_stream_playlist(
             let ranked = downloader::filter_and_rank_candidates(candidates, track);
             let video_id = ranked.first().and_then(|c| extract_video_id(&c.url));
             match video_id {
-                Some(id) if seen_video_ids.insert(id.clone()) => {
-                    picked.push(stream_track_for(track, id));
+                Some(id) => {
+                    if seen_video_ids.insert(id.clone()) {
+                        picked.push(stream_track_for(track, id));
+                    }
                 }
                 _ => unmatched.push(UnmatchedImport {
                     title: track.title.clone(),
@@ -154,7 +158,7 @@ pub async fn import_stream_playlist(
     }
 
     let matched = picked.len() as u64;
-    let total = collection.tracks.len() as u64;
+    let total = matched + unmatched.len() as u64;
 
     let requested_id = playlist_id
         .map(|id| id.trim().to_string())

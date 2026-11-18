@@ -85,53 +85,53 @@ fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
         };
         let query = query.to_string();
         let request = async move {
-        match kind {
-            Ask::Search => client
-                .search(&query)
-                .await
-                .map(|value| serde_json::to_value(value).unwrap_or_default()),
-            Ask::Album => client
-                .album(&query)
-                .await
-                .map(|value| serde_json::to_value(value).unwrap_or_default()),
-            Ask::Artist => client
-                .artist(&query)
-                .await
-                .map(|value| serde_json::to_value(value).unwrap_or_default()),
-            Ask::Playlist => client
-                .playlist(&query)
-                .await
-                .map(|value| serde_json::to_value(value).unwrap_or_default()),
-            Ask::Stream => client.stream(&query).await.map(|stream| {
-                serde_json::json!({
-                    "url": stream.url,
-                    "mime": stream.mime,
-                })
-            }),
-            Ask::Taste => {
-                let seeds: Vec<String> = serde_json::from_str(&query).unwrap_or_default();
-                client
-                    .taste(&seeds)
+            match kind {
+                Ask::Search => client
+                    .search(&query)
                     .await
-                    .map(|tracks| serde_json::json!({ "tracks": tracks }))
+                    .map(|value| serde_json::to_value(value).unwrap_or_default()),
+                Ask::Album => client
+                    .album(&query)
+                    .await
+                    .map(|value| serde_json::to_value(value).unwrap_or_default()),
+                Ask::Artist => client
+                    .artist(&query)
+                    .await
+                    .map(|value| serde_json::to_value(value).unwrap_or_default()),
+                Ask::Playlist => client
+                    .playlist(&query)
+                    .await
+                    .map(|value| serde_json::to_value(value).unwrap_or_default()),
+                Ask::Stream => client.stream(&query).await.map(|stream| {
+                    serde_json::json!({
+                        "url": stream.url,
+                        "mime": stream.mime,
+                    })
+                }),
+                Ask::Taste => {
+                    let seeds: Vec<String> = serde_json::from_str(&query).unwrap_or_default();
+                    client
+                        .taste(&seeds)
+                        .await
+                        .map(|tracks| serde_json::json!({ "tracks": tracks }))
+                }
+                Ask::Lyrics => {
+                    let lookup: lyrics::LyricsLookup =
+                        serde_json::from_str(&query).unwrap_or(lyrics::LyricsLookup {
+                            title: String::new(),
+                            artist: String::new(),
+                            album: String::new(),
+                            duration: 0.0,
+                        });
+                    Ok(match lyrics::fetch(&lookup).await {
+                        Some(result) => serde_json::json!({
+                            "kind": result.kind,
+                            "text": result.text,
+                        }),
+                        None => serde_json::json!({ "kind": "", "text": "" }),
+                    })
+                }
             }
-            Ask::Lyrics => {
-                let lookup: lyrics::LyricsLookup =
-                    serde_json::from_str(&query).unwrap_or(lyrics::LyricsLookup {
-                        title: String::new(),
-                        artist: String::new(),
-                        album: String::new(),
-                        duration: 0.0,
-                    });
-                Ok(match lyrics::fetch(&lookup).await {
-                    Some(result) => serde_json::json!({
-                        "kind": result.kind,
-                        "text": result.text,
-                    }),
-                    None => serde_json::json!({ "kind": "", "text": "" }),
-                })
-            }
-        }
         };
         match runtime.block_on(async {
             tokio::time::timeout(std::time::Duration::from_secs(30), request).await
