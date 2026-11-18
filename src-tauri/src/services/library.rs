@@ -9,7 +9,13 @@ const AUDIO_EXTS: &[&str] = &["mp3", "m4a", "opus", "flac", "wav", "ogg", "aac"]
 
 static SCAN_LOCK: once_cell::sync::Lazy<Mutex<()>> = once_cell::sync::Lazy::new(|| Mutex::new(()));
 
-fn track_hash(path: &str, mtime_ms: u64) -> String {
+fn track_hash(path: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(crate::services::util::norm_path_key(path).as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn legacy_track_hash(path: &str, mtime_ms: u64) -> String {
     let mut hasher = Sha256::new();
     hasher.update(format!("{path}:{mtime_ms}").as_bytes());
     hex::encode(hasher.finalize())
@@ -193,7 +199,8 @@ pub fn remove_cached_cover(user_data_dir: &Path, track_id: Option<&str>, scan_pa
     let mtime_ms = file_times(Path::new(scan_path)).0;
     let candidates = [
         track_id.map(str::to_string),
-        (mtime_ms > 0).then(|| track_hash(scan_path, mtime_ms)),
+        Some(track_hash(scan_path)),
+        (mtime_ms > 0).then(|| legacy_track_hash(scan_path, mtime_ms)),
     ];
 
     let mut ids: Vec<String> = Vec::new();
@@ -248,7 +255,7 @@ fn probe_file(file: &Path, user_data_dir: &Path, added_at_hint: Option<u64>) -> 
     let (mtime_ms, created_ms) = file_times(file);
     let added_at_ms = resolve_added_at(added_at_hint, created_ms, mtime_ms);
 
-    let hash = track_hash(&file.to_string_lossy(), mtime_ms);
+    let hash = track_hash(&file.to_string_lossy());
 
     let fallback_title = file
         .file_stem()

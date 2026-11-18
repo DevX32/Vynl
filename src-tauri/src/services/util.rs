@@ -82,6 +82,15 @@ pub fn write_json<T: serde::Serialize>(path: &Path, data: &T) -> Result<(), Stri
     fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+pub fn norm_path_key(key: &str) -> String {
+    let stripped = key.trim_start_matches(r"\\?\");
+    if cfg!(windows) {
+        stripped.replace('/', "\\").to_lowercase()
+    } else {
+        stripped.replace('\\', "/")
+    }
+}
+
 #[macro_export]
 macro_rules! declare_file_mutex {
     () => {

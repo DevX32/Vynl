@@ -132,7 +132,7 @@ fn library_mark_maps(data_dir: &Path) -> LibraryMarkMaps {
             maps.hash_to_path
                 .insert(track.id.clone(), track.path.clone());
             maps.path_to_hash
-                .insert(norm_path_key(&track.path), track.id);
+                .insert(util::norm_path_key(&track.path), track.id);
         }
     }
     maps
@@ -253,19 +253,10 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
     FoldedRows { rows: out, stale }
 }
 
-fn norm_path_key(key: &str) -> String {
-    let stripped = key.trim_start_matches(r"\\?\");
-    if cfg!(windows) {
-        stripped.replace('/', "\\").to_lowercase()
-    } else {
-        stripped.replace('\\', "/")
-    }
-}
-
 fn mark_map(marks: &[PlaylistMark]) -> std::collections::HashMap<String, i64> {
     let mut map = std::collections::HashMap::new();
     for mark in marks {
-        let key = norm_path_key(&mark.track_id);
+        let key = util::norm_path_key(&mark.track_id);
         map.entry(key)
             .and_modify(|at| {
                 if mark.at > *at {
@@ -318,7 +309,7 @@ fn union_playlist(local: &Playlist, row: &SyncRow) -> Playlist {
     let add_map = mark_map(&adds);
     let rem_map = mark_map(&removals);
     let visible = |key: &str| {
-        let normalized = norm_path_key(key);
+        let normalized = util::norm_path_key(key);
         let add = add_map.get(normalized.as_str()).copied().unwrap_or(0);
         let removal = rem_map.get(normalized.as_str()).copied().unwrap_or(0);
         add >= removal
@@ -1111,7 +1102,7 @@ fn pushable_marks(marks: &[PlaylistMark], maps: &LibraryMarkMaps) -> Vec<Playlis
                 return Some(mark.clone());
             }
             maps.path_to_hash
-                .get(&norm_path_key(&mark.track_id))
+                .get(&util::norm_path_key(&mark.track_id))
                 .map(|hash| PlaylistMark {
                     track_id: format!("ytm:{hash}"),
                     at: mark.at,
