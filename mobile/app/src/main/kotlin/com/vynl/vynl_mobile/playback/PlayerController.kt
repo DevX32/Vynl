@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -243,14 +244,22 @@ class PlayerController(
         filling = true
         scope.launch {
             try {
+                val expectedVersion = queueVersion
                 val player = controller ?: return@launch
                 val have = player.mediaItemCount
                 val absolute = queueStart + player.currentMediaItemIndex
                 val wanted = absolute + window + 1
                 if (wanted > queueStart + have) {
                     val next = resolve(queueStart + have)
-                    if (next.isNotEmpty()) {
-                        player.addMediaItems(have, next)
+                    // The queue may have been replaced (play, shuffle, skip) while resolve() awaited the network; re-check and bail if so.
+                    if (expectedVersion != queueVersion) return@launch
+                    val currentPlayer = controller ?: return@launch
+                    val currentHave = currentPlayer.mediaItemCount.coerceAtLeast(0)
+                    if (have <= currentHave && next.isNotEmpty()) {
+                        try {
+                            currentPlayer.addMediaItems(have, next)
+                        } catch (_: IndexOutOfBoundsException) {
+                        }
                     }
                 }
             } finally {
@@ -415,6 +424,7 @@ class PlayerController(
 
     fun release() {
         poll?.cancel()
+        scope.cancel()
         controller?.removeListener(listener)
         controller?.release()
         controller = null

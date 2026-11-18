@@ -105,16 +105,24 @@ impl Iterator for FileSource {
             let packet = match self.format_reader.next_packet() {
                 Ok(Some(packet)) => packet,
                 Ok(None) => return None,
-                Err(_) => return None,
+                Err(error) => {
+                    eprintln!("[Vynl] audio read error: {error}");
+                    return None;
+                }
             };
             if packet.track_id != self.track_id {
                 continue;
             }
-            if let Ok(audio) = self.decoder.decode(&packet) {
-                let samples = audio.samples_interleaved();
-                let mut buffer = vec![0.0f32; samples];
-                audio.copy_to_slice_interleaved(&mut buffer);
-                self.samples.extend_from_slice(&buffer);
+            match self.decoder.decode(&packet) {
+                Ok(audio) => {
+                    let samples = audio.samples_interleaved();
+                    let mut buffer = vec![0.0f32; samples];
+                    audio.copy_to_slice_interleaved(&mut buffer);
+                    self.samples.extend_from_slice(&buffer);
+                }
+                Err(error) => {
+                    eprintln!("[Vynl] audio decode error: {error}");
+                }
             }
         }
     }

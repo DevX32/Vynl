@@ -202,10 +202,6 @@ function handleTick(tick: PlaybackTick): void {
     return;
   }
 
-  if (tick.playing && maybeStartCrossfade(tick.position)) {
-    return;
-  }
-
   if (tick.playing) {
     if (consecutivePlayFailures > 0) {
       consecutivePlayFailures = 0;
@@ -224,6 +220,10 @@ function handleTick(tick: PlaybackTick): void {
 
   if (Number.isFinite(tick.position)) {
     updateTime(tick.position);
+  }
+
+  if (tick.playing) {
+    maybeStartCrossfade(tick.position);
   }
 
   if (
@@ -294,7 +294,7 @@ if (typeof document !== "undefined") {
 
 export function applyVolume(): void {
   const raw = getCurrentMuted() ? 0 : getCurrentVolume();
-  void vynl.playerSetVolume(Math.round(raw * 100));
+  void vynl.playerSetVolume(Math.round(raw * 100)).catch(() => {});
 }
 
 export function setVolumeAt(ratio: number): void {

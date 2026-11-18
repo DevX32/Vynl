@@ -98,9 +98,9 @@ fn get_user_data_and_settings(app: &AppHandle) -> Result<(std::path::PathBuf, Se
 
 #[tauri::command]
 pub async fn resolve(url: String, app: AppHandle) -> Result<Collection, String> {
-    crate::services::progress::set_emitter(Some(app.clone()));
+    let generation = crate::services::progress::set_emitter(Some(app.clone()));
     let result = crate::services::downloader::resolve_link(&url).await;
-    crate::services::progress::set_emitter(None);
+    crate::services::progress::clear_emitter(generation);
     result
 }
 
@@ -356,20 +356,6 @@ pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, S
 #[tauri::command]
 pub async fn get_eq_design() -> Result<crate::services::player::EqDesign, String> {
     Ok(crate::services::player::eq_design())
-}
-
-#[tauri::command]
-pub async fn get_eq_response_db(
-    gains: Vec<f32>,
-    freq: f32,
-    sample_rate: Option<f32>,
-) -> Result<f32, String> {
-    let rate = sample_rate.unwrap_or(48000.0);
-    Ok(crate::services::player::eq_response_db(
-        &crate::services::player::normalize_eq_bands(&gains),
-        freq,
-        rate,
-    ))
 }
 
 #[tauri::command]
@@ -760,6 +746,10 @@ pub async fn remove_from_playlist(
                 "Could not delete the file, it may be in use. Stop playback and try again.".into(),
             );
         }
+    } else {
+        let playlist = crate::services::playlists::remove_from_playlist(&output, &id, &track_path)?;
+        sync_playlist(&app, &playlist);
+        return Ok(playlist);
     }
     let mut stale = vec![track_path.clone()];
     if let Some(canonical) = canonical {
@@ -843,9 +833,9 @@ pub(crate) fn sync_playlist_delete(
     let name = name.unwrap_or_default().to_string();
     let created_at = created_at.unwrap_or(0);
     let signature = signature.to_vec();
+    crate::services::sync::record_pending_tombstone(&user_data, &id, name, created_at, &signature);
     tauri::async_runtime::spawn(async move {
-        crate::services::sync::tombstone_playlist(&user_data, &id, &name, created_at, &signature)
-            .await;
+        crate::services::sync::tombstone_playlist_remote(&user_data, &id).await;
     });
 }
 
@@ -868,8 +858,10 @@ async fn sync_auth(
     } else {
         crate::services::sync::sign_in(&user_data, &email, &password).await?
     };
-    if result.status.signed_in {
-        let _ = crate::services::sync::sync(&user_data, &output).await;
+    if result.status.signed_in
+        && let Err(error) = crate::services::sync::sync(&user_data, &output).await
+    {
+        eprintln!("[Vynl sync] sync after sign-in failed: {error}");
     }
     Ok(result)
 }
@@ -997,9 +989,7 @@ pub async fn lyrics_fetch(
 
 #[tauri::command]
 pub async fn lyrics_embed(file: String, text: String, app: AppHandle) -> Result<(), String> {
-    let Ok(validated) = require_path_in_output(&file, &app) else {
-        return Ok(());
-    };
+    let validated = require_path_in_output(&file, &app)?;
     tokio::task::spawn_blocking(move || {
         crate::services::lyrics::embed_lyrics(&validated.to_string_lossy(), &text)
     })

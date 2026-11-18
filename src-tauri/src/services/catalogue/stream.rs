@@ -978,63 +978,65 @@ fn fetch_loop(
         };
         last_gen = generation;
 
-        let total = {
-            let state = store.state.lock().unwrap_or_else(|e| e.into_inner());
-            state.total
-        };
-        let snapshot = {
-            let state = store.state.lock().unwrap_or_else(|e| e.into_inner());
-            state.coverage.clone()
-        };
-        let Some(gap_start) = first_gap(&snapshot, demand_start, total) else {
-            continue;
-        };
-        if gap_start >= demand_end {
-            continue;
-        }
-        let fetch_end = (gap_start + FETCH_CHUNK.max(READAHEAD.min(total)))
-            .min(total)
-            .max(demand_end.min(total));
-        let result = run_fetch(
-            &store,
-            &resolver,
-            &mut format,
-            &mut file,
-            gap_start,
-            fetch_end,
-        );
-
-        match result {
-            Ok(()) => {
-                attempts = 0;
-                if store.is_complete() {
-                    cache.mark_complete(&video_id, &file_name, total);
-                }
+        'demand: loop {
+            let total = {
+                let state = store.state.lock().unwrap_or_else(|e| e.into_inner());
+                state.total
+            };
+            let snapshot = {
+                let state = store.state.lock().unwrap_or_else(|e| e.into_inner());
+                state.coverage.clone()
+            };
+            let Some(gap_start) = first_gap(&snapshot, demand_start, total) else {
+                break 'demand;
+            };
+            if gap_start >= demand_end {
+                break 'demand;
             }
-            Err(FetchError::Cancelled) => return,
-            Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
-                refreshes += 1;
-                match resolver
-                    .resolve_blocking(&video_id, (format.itag != 0).then_some(format.itag))
-                {
-                    Ok(next) => format = next,
-                    Err(error) => {
-                        store.fail(format!("the stream url expired: {error}"));
-                        return;
+            let fetch_end = (gap_start + FETCH_CHUNK.max(READAHEAD.min(total)))
+                .min(total)
+                .max(demand_end.min(total));
+            let result = run_fetch(
+                &store,
+                &resolver,
+                &mut format,
+                &mut file,
+                gap_start,
+                fetch_end,
+            );
+
+            match result {
+                Ok(()) => {
+                    attempts = 0;
+                    if store.is_complete() {
+                        cache.mark_complete(&video_id, &file_name, total);
                     }
                 }
-            }
-            Err(FetchError::Auth) => {
-                store.fail("the stream url expired and could not be renewed".into());
-                return;
-            }
-            Err(error) => {
-                attempts += 1;
-                if attempts >= MAX_FETCH_ATTEMPTS {
-                    store.fail(format!("stream download failed: {error}"));
+                Err(FetchError::Cancelled) => return,
+                Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
+                    refreshes += 1;
+                    match resolver
+                        .resolve_blocking(&video_id, (format.itag != 0).then_some(format.itag))
+                    {
+                        Ok(next) => format = next,
+                        Err(error) => {
+                            store.fail(format!("the stream url expired: {error}"));
+                            return;
+                        }
+                    }
+                }
+                Err(FetchError::Auth) => {
+                    store.fail("the stream url expired and could not be renewed".into());
                     return;
                 }
-                std::thread::sleep(Duration::from_millis(250 * attempts as u64));
+                Err(error) => {
+                    attempts += 1;
+                    if attempts >= MAX_FETCH_ATTEMPTS {
+                        store.fail(format!("stream download failed: {error}"));
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(250 * attempts as u64));
+                }
             }
         }
     }
@@ -1411,15 +1413,22 @@ impl StreamSession {
         if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-fetch".into())
             .spawn(move || {
-                fetch_loop(
-                    fetch_store,
-                    fetch_resolver,
-                    fetch_video,
-                    format,
-                    write_file,
-                    fetch_cache,
-                    fetch_name,
-                );
+                let failure = fetch_store.clone();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                    fetch_loop(
+                        fetch_store,
+                        fetch_resolver,
+                        fetch_video,
+                        format,
+                        write_file,
+                        fetch_cache,
+                        fetch_name,
+                    );
+                }));
+                if result.is_err() {
+                    eprintln!("[Vynl] stream fetch thread panicked");
+                    failure.fail("the stream downloader crashed".into());
+                }
             })
         {
             control.cancel();
@@ -1438,18 +1447,26 @@ impl StreamSession {
         if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-decode".into())
             .spawn(move || {
-                decode_loop(
-                    decode_buffer,
-                    decode_control,
-                    decode_store,
-                    read_file,
-                    decode_video,
-                    start,
-                    ext,
-                    decode_cache,
-                    decode_name,
-                    total,
-                );
+                let decode_control = decode_control.clone();
+                let panic_control = decode_control.clone();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                    decode_loop(
+                        decode_buffer,
+                        decode_control,
+                        decode_store,
+                        read_file,
+                        decode_video,
+                        start,
+                        ext,
+                        decode_cache,
+                        decode_name,
+                        total,
+                    );
+                }));
+                if result.is_err() {
+                    eprintln!("[Vynl] stream decode thread panicked");
+                    panic_control.cancel();
+                }
             })
         {
             control.cancel();

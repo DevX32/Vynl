@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Download, Upload } from "lucide-svelte";
+  import { Download, Upload, RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
@@ -20,12 +20,14 @@
   let importing = $state(false);
   let lastExport = $state<ExportSummary | null>(null);
   let trackCount = $state<number | null>(null);
+  let libraryError = $state<string | null>(null);
 
   const playlistCount = $derived(getCurrentPlaylists().length);
 
   const busy = $derived(exporting || trackCount === null || trackCount === 0);
 
   const exportHint = $derived.by(() => {
+    if (libraryError) return libraryError;
     const base =
       trackCount === null
         ? t("common.loading")
@@ -45,15 +47,23 @@
     })}`;
   });
 
+  async function loadLibrary(): Promise<void> {
+    libraryError = null;
+    trackCount = null;
+    try {
+      const [tracks] = await Promise.all([vynl.getLibrary(), refreshPlaylists()]);
+      trackCount = tracks.length;
+    } catch {
+      trackCount = 0;
+      libraryError = t("backup.libraryLoadFailed");
+    }
+  }
+
   onMount(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        const [tracks] = await Promise.all([vynl.getLibrary(), refreshPlaylists()]);
-        if (!cancelled) trackCount = tracks.length;
-      } catch {
-        if (!cancelled) trackCount = 0;
-      }
+      await loadLibrary();
+      if (cancelled) return;
     })();
     return () => {
       cancelled = true;
@@ -141,10 +151,19 @@
   <div class="rows">
     <SettingRow label={t("backup.contents")} hint={exportHint}>
       {#snippet control()}
-        <Button size="sm" disabled={busy} onclick={runExport}>
-          <Download size={13} stroke-width={1.5} />
-          {exporting ? t("backup.exporting") : t("backup.export")}
-        </Button>
+        <div class="export-controls">
+          {#if libraryError}
+            <Button size="sm" variant="ghost" onclick={() => void loadLibrary()}>
+              <RefreshCw size={13} stroke-width={1.5} />
+              {t("common.retry")}
+            </Button>
+          {:else}
+            <Button size="sm" disabled={busy} onclick={runExport}>
+              <Download size={13} stroke-width={1.5} />
+              {exporting ? t("backup.exporting") : t("backup.export")}
+            </Button>
+          {/if}
+        </div>
       {/snippet}
     </SettingRow>
 
@@ -201,6 +220,12 @@
 
   .rows > :global(.row + .row) {
     border-top: 1px solid var(--line);
+  }
+
+  .export-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .label {

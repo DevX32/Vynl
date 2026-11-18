@@ -378,7 +378,6 @@ pub fn run() {
             commands::get_settings,
             commands::set_settings,
             commands::get_eq_design,
-            commands::get_eq_response_db,
             commands::get_mobile_sync_status,
             commands::set_mobile_sync_enabled,
             commands::rotate_mobile_sync_pin,

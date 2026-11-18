@@ -7,6 +7,9 @@ use crate::services::util;
 
 crate::declare_file_mutex!();
 
+static ORDER_LOCK: once_cell::sync::Lazy<std::sync::Mutex<()>> =
+    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(()));
+
 const CATALOGUE_PREFIX: &str = "ytm:";
 
 fn playlists_dir(output_dir: &Path) -> std::path::PathBuf {
@@ -35,6 +38,7 @@ fn order_meta_file(output_dir: &Path) -> std::path::PathBuf {
 }
 
 pub fn order_updated_at(output_dir: &Path) -> i64 {
+    let _lock = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(meta) = util::read_json::<OrderMeta>(&order_meta_file(output_dir)) {
         return meta.updated_at.max(0);
     }
@@ -56,6 +60,7 @@ pub fn read_order(output_dir: &Path) -> Vec<String> {
 }
 
 pub fn write_order(output_dir: &Path, ids: &[String]) -> Result<(), String> {
+    let _lock = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     util::write_json(&order_file(output_dir), &ids)?;
     util::write_json(
         &order_meta_file(output_dir),
@@ -70,6 +75,7 @@ pub(crate) fn write_order_at(
     ids: &[String],
     updated_at: i64,
 ) -> Result<(), String> {
+    let _order = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     util::write_json(&order_file(output_dir), &ids)?;
     util::write_json(&order_meta_file(output_dir), &OrderMeta { updated_at })
@@ -171,6 +177,7 @@ fn cover_path_allowed(cover: &str, user_data_dir: &Path, id: &str) -> bool {
 pub fn validate_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
+        && id != "order"
         && id
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')

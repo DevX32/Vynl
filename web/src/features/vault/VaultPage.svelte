@@ -149,7 +149,7 @@
   async function resolve(): Promise<void> {
     if (!url.trim() || resolving) return;
     const query = url.trim();
-    searchGen++;
+    const gen = ++searchGen;
     searching = false;
     showSearchResults = false;
     searchResults = [];
@@ -168,13 +168,15 @@
     doneIds = [];
     try {
       const c = await vynl.resolve(query);
+      if (gen !== searchGen) return;
       collection = c;
       addedTrackIds = new Set(c.tracks.map((t) => t.id));
       await refreshDone({ force: true });
     } catch (e) {
+      if (gen !== searchGen) return;
       error = friendlyVaultError(e, t("vault.resolveFailed"));
     } finally {
-      resolving = false;
+      if (gen === searchGen) resolving = false;
     }
   }
 
@@ -530,6 +532,7 @@
   }
 
   function clearAll(): void {
+    searchGen++;
     dismissSearch();
     collection = null;
     progress = {};
@@ -722,7 +725,7 @@
       </div>
 
       <div class="list" bind:this={listEl}>
-        {#each pagedTracks as track (track.id)}
+        {#each pagedTracks as track, i (track.id + "#" + i)}
           <TrackRow
             {track}
             progress={progress[track.id]}

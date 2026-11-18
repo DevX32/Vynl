@@ -107,9 +107,9 @@ pub async fn import_stream_playlist(
     {
         return Err(IMPORT_BUSY_MESSAGE.into());
     }
-    crate::services::progress::set_emitter(Some(app.clone()));
+    let generation = crate::services::progress::set_emitter(Some(app.clone()));
     let result = do_import(collection, playlist_id, playlist_name, app).await;
-    crate::services::progress::set_emitter(None);
+    crate::services::progress::clear_emitter(generation);
     IMPORT_BUSY.store(false, Ordering::SeqCst);
     result
 }

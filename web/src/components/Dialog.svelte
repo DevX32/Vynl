@@ -9,6 +9,7 @@
     description = "",
     confirmLabel = "Confirm",
     danger = false,
+    confirmDisabled = false,
     onconfirm,
     oncancel,
     children,
@@ -18,6 +19,7 @@
     description?: string;
     confirmLabel?: string;
     danger?: boolean;
+    confirmDisabled?: boolean;
     onconfirm?: () => void;
     oncancel: () => void;
     children?: Snippet;
@@ -73,7 +75,7 @@
       {/if}
       <div class="footer">
         <Button onclick={oncancel}>{t("dialog.cancel")}</Button>
-        <Button variant={danger ? "danger" : "primary"} onclick={onconfirm}
+        <Button variant={danger ? "danger" : "primary"} onclick={onconfirm} disabled={confirmDisabled}
           >{confirmLabel || t("dialog.confirm")}</Button
         >
       </div>

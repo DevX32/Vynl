@@ -434,6 +434,7 @@ export const en = {
     savedPlaylists: "Exported {tracks} tracks and {playlists} playlists to {path}",
     lastExport: "Last: {tracks} tracks{playlists} · {bytes} · {format}",
     nothingToExport: "There's nothing in your library yet. Download something first.",
+    libraryLoadFailed: "Couldn't load your library.",
     failed: "Export failed: {error}",
     restoreTitle: "Import from a backup",
     restoreHint:
@@ -516,6 +517,8 @@ export const en = {
       '"{title}" will be removed from this playlist. It is not stored on your computer, so nothing is deleted. This action cannot be undone.',
     removeTrackConfirm: "Delete",
     removeTrackFailed: "Failed to remove track",
+    reorderFailed: "Couldn't reorder the playlist",
+    renameFailed: "Couldn't rename that playlist",
     removedTrack: 'Removed "{title}" from {name}',
     changeCover: "Change cover",
     removeCover: "Remove cover",

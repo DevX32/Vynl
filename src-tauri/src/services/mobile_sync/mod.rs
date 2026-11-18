@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -56,6 +57,7 @@ pub struct MobileSyncStatus {
 
 struct Runtime {
     stop: Option<oneshot::Sender<()>>,
+    join: Option<tokio::task::JoinHandle<Result<(), String>>>,
     mdns: Option<mdns_sd::ServiceDaemon>,
     user_data: PathBuf,
 }
@@ -63,6 +65,7 @@ struct Runtime {
 static RUNTIME: Lazy<Mutex<Runtime>> = Lazy::new(|| {
     Mutex::new(Runtime {
         stop: None,
+        join: None,
         mdns: None,
         user_data: PathBuf::new(),
     })
@@ -369,23 +372,27 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         .await
         .map_err(|e| format!("Port {port} is not available: {e}"))?;
 
-    tokio::spawn(async move {
-        if let Err(e) = server::serve(listener, state, rx).await {
-            eprintln!("[mobile_sync] server error: {e}");
-        }
-    });
+    let task = tokio::spawn(async move { server::serve(listener, state, rx).await });
 
     rt.stop = Some(tx);
+    rt.join = Some(task);
     rt.mdns = start_mdns(port);
     rt.user_data = user_data;
     Ok(())
 }
 
 pub async fn stop() {
-    let mut rt = RUNTIME.lock().await;
-    if let Some(tx) = rt.stop.take() {
-        let _ = tx.send(());
+    let join = {
+        let mut rt = RUNTIME.lock().await;
+        if let Some(tx) = rt.stop.take() {
+            let _ = tx.send(());
+        }
+        rt.join.take()
+    };
+    if let Some(join) = join {
+        let _ = tokio::time::timeout(Duration::from_secs(3), join).await;
     }
+    let mut rt = RUNTIME.lock().await;
     if let Some(daemon) = rt.mdns.take() {
         let _ = daemon.shutdown();
     }

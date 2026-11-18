@@ -250,16 +250,21 @@ class Desktop(context: Context) {
         val request = request(path).build()
         val tmp = File(dest.parentFile ?: dest.absoluteFile.parentFile, "${dest.name}.part")
         try {
-            http.newCall(request).execute().use { response ->
+            http.newCall(request).execute().use httpUse@{ response ->
                 if (!response.isSuccessful) {
                     response.close()
-                    return@use null
+                    tmp.delete()
+                    return@httpUse null
                 }
                 val total = response.body?.contentLength() ?: -1L
                 FileOutputStream(tmp).use { out ->
                     var read = 0L
                     val buf = ByteArray(64 * 1024)
-                    val src = response.body?.byteStream() ?: return@use null
+                    val src = response.body?.byteStream()
+                    if (src == null) {
+                        tmp.delete()
+                        return@httpUse null
+                    }
                     while (true) {
                         val n = src.read(buf)
                         if (n <= 0) break

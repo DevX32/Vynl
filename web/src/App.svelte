@@ -108,6 +108,7 @@
   let moveToVynlOpen = $state(false);
   let renameTarget = $state<{ id: string; name: string } | null>(null);
   let deleteTarget = $state<{ id: string; name: string } | null>(null);
+  let deleting = $state(false);
   let createTarget = $state(false);
   let renameVal = $state("");
   let createVal = $state("");
@@ -122,7 +123,7 @@
 
   $effect(() => {
     const enabled = getCurrentSettings().discordRpc;
-    if (!enabled) void vynl.rpcUpdate(null);
+    if (!enabled) void vynl.rpcUpdate(null).catch(() => {});
   });
 
   $effect(() => {
@@ -173,7 +174,7 @@
     onboarded = wasOnboarded();
     try {
       await initSettings();
-      void vynl.rpcUpdate(null);
+      void vynl.rpcUpdate(null).catch(() => {});
       await Promise.all([refreshPlaylists(), refreshLibrary(), restoreNowPlaying()]);
     } catch (e) {
       console.warn("boot failed", e);
@@ -377,6 +378,8 @@
   }
 
   async function confirmDeletePlaylist(target: { id: string; name: string }): Promise<void> {
+    if (deleting) return;
+    deleting = true;
     const wasViewing = page === "playlist" && getSelectedId() === target.id;
     try {
       const result = await deletePlaylist(target.id);
@@ -391,14 +394,25 @@
       if (wasViewing) navigate("library");
     } catch {
       toasts.error(t("playlists.deleteFailed"));
+    } finally {
+      deleting = false;
+      deleteTarget = null;
     }
-    deleteTarget = null;
   }
 
-  function confirmRenamePlaylist(): void {
+  async function confirmRenamePlaylist(): Promise<void> {
     const tgt = renameTarget;
-    if (tgt && renameVal.trim()) void renamePlaylist(tgt.id, renameVal.trim());
+    if (!tgt || !renameVal.trim()) {
+      renameTarget = null;
+      return;
+    }
     renameTarget = null;
+    try {
+      await renamePlaylist(tgt.id, renameVal.trim());
+    } catch (err) {
+      console.warn("rename playlist failed:", err);
+      toasts.error(t("playlist.renameFailed"));
+    }
   }
 
   async function confirmCreatePlaylist(): Promise<void> {
@@ -584,6 +598,7 @@
       const target = deleteTarget;
       if (target) void confirmDeletePlaylist(target);
     }}
+    confirmDisabled={deleting}
     oncancel={() => (deleteTarget = null)}
   />
 {/if}

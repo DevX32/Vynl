@@ -615,6 +615,8 @@ struct PendingTombstone {
     name: String,
     created_at: i64,
     deleted_at: i64,
+    #[serde(default)]
+    signature: Vec<String>,
 }
 
 fn read_pending_tombstones(data_dir: &Path) -> Vec<PendingTombstone> {
@@ -630,6 +632,7 @@ fn read_pending_tombstones(data_dir: &Path) -> Vec<PendingTombstone> {
             name: String::new(),
             created_at: 0,
             deleted_at,
+            signature: Vec::new(),
         })
         .collect()
 }
@@ -638,7 +641,13 @@ fn write_pending_tombstones(data_dir: &Path, entries: &[PendingTombstone]) {
     let _ = util::write_json(&pending_tombstones_path(data_dir), &entries);
 }
 
-fn record_pending_tombstone(data_dir: &Path, id: &str, name: &str, created_at: i64) -> i64 {
+fn record_pending_tombstone_impl(
+    data_dir: &Path,
+    id: &str,
+    name: &str,
+    created_at: i64,
+    signature: &[String],
+) -> i64 {
     let mut entries = read_pending_tombstones(data_dir);
     if let Some(existing) = entries.iter().find(|existing| existing.id == id) {
         return existing.deleted_at;
@@ -649,6 +658,7 @@ fn record_pending_tombstone(data_dir: &Path, id: &str, name: &str, created_at: i
         name: name.trim().to_string(),
         created_at,
         deleted_at: at,
+        signature: signature.to_vec(),
     });
     if entries.len() > MAX_PENDING_TOMBSTONES {
         entries.sort_by_key(|entry| entry.deleted_at);
@@ -1262,20 +1272,33 @@ fn norm_id(id: &str) -> String {
     util::norm_path_key(id)
 }
 
-pub async fn tombstone_playlist(
+pub(crate) fn record_pending_tombstone(
     data_dir: &Path,
     id: &str,
-    name: &str,
+    name: String,
     created_at: i64,
     signature: &[String],
-) {
-    if !sync_enabled() {
-        return;
+) -> i64 {
+    if !crate::services::playlists::validate_id(id) {
+        return now_ms();
     }
+    record_pending_tombstone_impl(data_dir, id, &name, created_at, signature)
+}
+
+pub async fn tombstone_playlist_remote(data_dir: &Path, id: &str) {
     if !crate::services::playlists::validate_id(id) {
         return;
     }
-    let at = record_pending_tombstone(data_dir, id, name, created_at);
+    if !sync_enabled() {
+        return;
+    }
+    let pending = read_pending_tombstones(data_dir);
+    let Some(entry) = pending.iter().find(|entry| entry.id == id) else {
+        return;
+    };
+    let at = entry.deleted_at;
+    let name = entry.name.clone();
+    let signature = entry.signature.clone();
     if read_session(data_dir).is_none() {
         eprintln!(
             "[Vynl sync] playlist deletion recorded locally; not signed in — will sync later"
@@ -1290,7 +1313,7 @@ pub async fn tombstone_playlist(
         }
     };
     let own_row = patch_remote_tombstone(data_dir, &session, id, at).await;
-    patch_equivalent_tombstones(data_dir, &session, name, signature, at).await;
+    patch_equivalent_tombstones(data_dir, &session, &name, &signature, at).await;
     eprintln!(
         "[Vynl sync] playlist {name} deleted (own row: {})",
         if own_row {
@@ -1328,9 +1351,9 @@ async fn patch_equivalent_tombstones(
                 .iter()
                 .any(|track| wanted_ids.contains(&norm_id(&track.id)));
         let same_playlist = if wanted_ids.is_empty() {
-            same_name
+            same_name && row.created_at <= deleted_at
         } else {
-            same_name && same_tracks
+            same_name && same_tracks && row.created_at <= deleted_at
         };
         if same_playlist {
             let _ = patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await;
@@ -1375,8 +1398,14 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
             if !patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
                 still_pending.push(entry.clone());
             }
-            patch_equivalent_tombstones(data_dir, &session, &entry.name, &[], entry.deleted_at)
-                .await;
+            patch_equivalent_tombstones(
+                data_dir,
+                &session,
+                &entry.name,
+                &entry.signature,
+                entry.deleted_at,
+            )
+            .await;
         }
         write_pending_tombstones(data_dir, &still_pending);
     }
@@ -1397,10 +1426,22 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
             let forced = pending
                 .iter()
                 .filter(|entry| {
-                    entry.id == row.local_id
-                        || (!entry.name.is_empty()
-                            && normalized_name(&entry.name) == wanted
-                            && row.created_at <= entry.deleted_at)
+                    if entry.id == row.local_id {
+                        return true;
+                    }
+                    if entry.name.is_empty() || normalized_name(&entry.name) != wanted {
+                        return false;
+                    }
+                    if row.created_at > entry.deleted_at {
+                        return false;
+                    }
+                    if entry.signature.is_empty() {
+                        true
+                    } else {
+                        row.tracks
+                            .iter()
+                            .any(|track| entry.signature.contains(&track.id))
+                    }
                 })
                 .map(|entry| entry.deleted_at)
                 .max();

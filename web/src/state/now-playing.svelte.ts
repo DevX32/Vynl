@@ -19,7 +19,7 @@ let _contextQueue = $state<string[]>([]);
 let _contextIndex = $state(0);
 let _currentTime = $state(0);
 let _shuffleUpcoming = $state<string[]>([]);
-let _shuffleScope: string[] = [];
+let _shuffleScope = $state<string[]>([]);
 let _shuffleHistory = $state<string[]>([]);
 let _shuffleRedo = $state<string[]>([]);
 
@@ -28,7 +28,7 @@ const SAVE_DEBOUNCE = 3000;
 
 function writeNowPlaying(): void {
   if (!_state) {
-    void vynl.clearNowPlaying();
+    void vynl.clearNowPlaying().catch(() => {});
     return;
   }
   void vynl.saveNowPlaying({
@@ -40,7 +40,8 @@ function writeNowPlaying(): void {
     contextQueue: _contextQueue,
     contextIndex: _contextIndex,
     timestamp: Date.now(),
-  });
+  })
+    .catch(() => {});
 }
 
 function persistNowPlaying(): void {
@@ -292,7 +293,7 @@ function syncRpc(force = false): void {
   if (!force && now - lastRpc < RPC_THROTTLE) return;
   lastRpc = now;
   if (!_state || !_state.playing) {
-    void vynl.rpcUpdate(null);
+    void vynl.rpcUpdate(null).catch(() => {});
     return;
   }
   void vynl.rpcUpdate({
@@ -303,7 +304,8 @@ function syncRpc(force = false): void {
     time: _currentTime,
     playing: _state.playing,
     cover: _state.cover,
-  });
+  })
+    .catch(() => {});
 }
 
 export function nowPlayingFromTrack(track: LibraryTrack, time = 0): NowPlaying {
@@ -807,13 +809,13 @@ export async function restoreNowPlaying(): Promise<{
     }),
     whenLibraryLoaded(),
   ]);
-  void hydrateTaste();
+  void hydrateTaste().catch(() => {});
   if (!saved) return null;
   const track =
     findTrackById(saved.id) ?? findTrackByPath(saved.path);
   if (!track) {
     if (getLibrary().length > 0 || getCatalogueTracks().length > 0) {
-      void vynl.clearNowPlaying();
+      void vynl.clearNowPlaying().catch(() => {});
     }
     return null;
   }

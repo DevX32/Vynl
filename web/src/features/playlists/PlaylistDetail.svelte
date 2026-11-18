@@ -135,7 +135,12 @@
     const from = pl.paths.indexOf(fromPath);
     const to = pl.paths.indexOf(toPath);
     if (from === to || from < 0 || to < 0) return;
-    await moveInPlaylist(pl.id, from, to);
+    try {
+      await moveInPlaylist(pl.id, from, to);
+    } catch (e) {
+      console.warn("moveInPlaylist error:", e);
+      toasts.error(t("playlist.reorderFailed"));
+    }
   }
 
   async function confirmRemoveTrack(): Promise<void> {

@@ -31,6 +31,7 @@ fn codec_ext(codec: &str) -> &str {
 
 pub(crate) fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
+    let canonical_dir = fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
     let mut stack = vec![dir.to_path_buf()];
     let mut visited: std::collections::HashSet<std::path::PathBuf> =
         std::collections::HashSet::new();
@@ -40,7 +41,7 @@ pub(crate) fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
             Err(_) => continue,
         };
 
-        if !canonical.starts_with(dir) {
+        if !canonical.starts_with(&canonical_dir) {
             continue;
         }
 

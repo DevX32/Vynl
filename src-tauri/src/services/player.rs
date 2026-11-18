@@ -35,7 +35,7 @@ pub struct PlaybackTick {
     pub duration: Option<f64>,
 }
 
-type TickKey = (u64, bool, bool);
+type TickKey = (u64, bool, bool, u64);
 
 fn reported_pos(sink: Option<&TrackSink>, floor: Option<Duration>) -> f64 {
     let pos = sink
@@ -60,15 +60,15 @@ fn emit_playback_tick(
     let paused = PAUSED.load(Ordering::Relaxed);
     let playing = has_sink && !empty && !paused;
     let finished = has_sink && empty && !paused;
+    let position = reported_pos(sink, seek_floor);
 
-    let key: TickKey = (generation, playing, finished);
+    let key: TickKey = (generation, playing, finished, position.to_bits());
     if !playing && *last_key == Some(key) {
         return;
     }
     *last_key = Some(key);
 
     let Some(app) = APP.get() else { return };
-    let position = reported_pos(sink, seek_floor);
     let _ = app.emit(
         PLAYBACK_TICK_EVENT,
         PlaybackTick {
@@ -166,31 +166,6 @@ pub fn eq_design() -> EqDesign {
         min_db: EQ_MIN_DB,
         max_db: EQ_MAX_DB,
     }
-}
-
-pub fn eq_response_db(gains: &[f32], freq: f32, sample_rate: f32) -> f32 {
-    if sample_rate <= 0.0 || !freq.is_finite() || freq <= 0.0 {
-        return 0.0;
-    }
-    let w = 2.0 * std::f32::consts::PI * freq / sample_rate;
-    let (sin, cos) = w.sin_cos();
-    let cos2 = 2.0 * cos * cos - 1.0;
-    let sin2 = 2.0 * sin * cos;
-    let mut db = 0.0f32;
-    for band in 0..EQ_BAND_COUNT {
-        let gain = gains.get(band).copied().unwrap_or(0.0);
-        let c = Coeffs::design(band, gain, sample_rate);
-        let num = ((c.b0 + c.b1 * cos + c.b2 * cos2).powi(2)
-            + (c.b1 * -sin + c.b2 * -sin2).powi(2))
-        .sqrt();
-        let den = ((1.0 + c.a1 * cos + c.a2 * cos2).powi(2) + (c.a1 * -sin + c.a2 * -sin2).powi(2))
-            .sqrt();
-        if num <= 0.0 || den <= 0.0 {
-            return 0.0;
-        }
-        db += 20.0 * (num / den).log10();
-    }
-    db
 }
 
 pub fn normalize_eq_bands(gains: &[f32]) -> Vec<f32> {
@@ -554,9 +529,11 @@ impl FadeControl {
         }))
     }
 
-    fn ramp_to(&self, to: f32, secs: f64, sample_rate: u32) {
+    fn ramp_to(&self, to: f32, secs: f64, sample_rate: u32, channels: u16) {
         let samples = if secs.is_finite() && secs > 0.0 && sample_rate > 0 {
-            (secs * sample_rate as f64).round().min(u32::MAX as f64) as u32
+            (secs * sample_rate as f64 * channels.max(1) as f64)
+                .round()
+                .min(u32::MAX as f64) as u32
         } else {
             0
         };
@@ -708,6 +685,7 @@ struct TrackSink {
     sink: Sink,
     fade: FadeControl,
     sample_rate: u32,
+    channels: u16,
     position_offset: Duration,
     _session: Option<Arc<StreamSession>>,
 }
@@ -732,6 +710,7 @@ impl TrackSink {
             }
         };
         let sample_rate = source.sample_rate().max(1);
+        let channels = source.channels().max(1);
         let fade_secs = if fade_secs.is_finite() {
             fade_secs
         } else {
@@ -739,7 +718,7 @@ impl TrackSink {
         };
         let control = FadeControl::settled(if fade_secs > 0.0 { 0.0 } else { 1.0 });
         if fade_secs > 0.0 {
-            control.ramp_to(1.0, fade_secs, sample_rate);
+            control.ramp_to(1.0, fade_secs, sample_rate, channels);
         }
         let sink = Sink::try_new(handle).map_err(|e| format!("sink: {e}"))?;
         sink.append(FadeSource::new(
@@ -751,6 +730,7 @@ impl TrackSink {
                 sink,
                 fade: control,
                 sample_rate,
+                channels,
                 position_offset,
                 _session: session,
             },
@@ -950,7 +930,9 @@ fn begin_crossfade(
     incoming.sink.set_volume(volume);
     let outgoing = sink.replace(incoming).ok_or("nothing playing")?;
     outgoing.sink.set_volume(volume);
-    outgoing.fade.ramp_to(0.0, fade_secs, outgoing.sample_rate);
+    outgoing
+        .fade
+        .ramp_to(0.0, fade_secs, outgoing.sample_rate, outgoing.channels);
     stop_fading_out(fading);
     *fading = Some(FadingOut {
         track: outgoing,
@@ -1301,7 +1283,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                             if let Some(out) = &fading {
                                 out.track.sink.pause();
                             }
-                            PAUSED.store(true, Ordering::Relaxed);
+                            if sink.as_ref().is_none_or(|track| !track.sink.empty()) {
+                                PAUSED.store(true, Ordering::Relaxed);
+                            }
                             PlayerResp::Ok
                         }
                     }

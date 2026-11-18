@@ -159,6 +159,7 @@ export function setCurrentPlaylist(pl: Playlist): void {
 }
 
 function syncAfterMutation(pl: Playlist): void {
+  _metaGeneration += 1;
   _all = { ..._all, [pl.id]: pl };
   if (_current?.id === pl.id) _current = pl;
 }

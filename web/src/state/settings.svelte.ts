@@ -109,8 +109,11 @@ let _settingsQueue: Promise<void> = Promise.resolve();
 
 export async function patchSettings(patch: Partial<Settings>): Promise<void> {
   const job = _settingsQueue.then(async () => {
-    if (!_settings) return;
-    const next = normalizeSettings({ ..._settings, ...patch });
+    if (!_settings) {
+      console.warn("patchSettings called before settings finished loading — applying against defaults");
+    }
+    const base = _settings ?? defaultSettings();
+    const next = normalizeSettings({ ...base, ...patch });
     const updated = await vynl.setSettings(next);
     _settings = updated;
     if (patch.theme !== undefined) applyTheme(updated.theme);

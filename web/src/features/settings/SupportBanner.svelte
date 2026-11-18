@@ -12,7 +12,7 @@
     {#snippet control()}
       <button
         class="kofi-btn mono"
-        onclick={() => void vynl.openExternal(KOFI_URL)}
+        onclick={() => void vynl.openExternal(KOFI_URL).catch(() => {})}
       >
         <Coffee size={13} stroke-width={1.5} />
         {t("settings.supportButton")}

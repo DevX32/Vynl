@@ -3,6 +3,7 @@
   import { getLibrary } from "@state/library.svelte";
   import { getPlaylistStreamTracks } from "@state/playlists.svelte";
   import { getLikedStreamTracks } from "@state/taste.svelte";
+  import { registerCatalogueTracks } from "@state/catalogue.svelte";
   import type { LibraryTrack } from "@lib/types";
   import {
     requestPlay,
@@ -25,6 +26,24 @@
   const library = $derived(getLibrary());
   const playlistStreams = $derived(getPlaylistStreamTracks());
   const likedStreams = $derived(getLikedStreamTracks());
+
+  $effect(() => {
+    const streams = [...playlistStreams, ...likedStreams];
+    if (streams.length > 0) {
+      registerCatalogueTracks(
+        streams.map((t) => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          artists: [{ name: t.artist, id: null }],
+          album: t.album ? { name: t.album, id: null } : null,
+          duration: t.duration,
+          cover: t.cover,
+          explicit: false,
+        })),
+      );
+    }
+  });
   const currentId = $derived(getCurrentId());
 
   function isCurrent(track: {
