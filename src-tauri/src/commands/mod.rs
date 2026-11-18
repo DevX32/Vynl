@@ -668,7 +668,7 @@ pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksR
             crate::services::playlists::remove_paths_from_all(&output, &stale);
         }
     }
-    crate::services::playlists::delete_playlist(&output, &user_data, &id);
+    crate::services::playlists::delete_playlist(&output, &user_data, &id)?;
     sync_playlist_delete(&app, &id);
     Ok(DeleteTracksResult { deleted, failed })
 }

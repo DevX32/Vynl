@@ -196,7 +196,12 @@ pub async fn import_stream_playlist(
             .filter(|u| !u.is_empty())
         && let Ok(local) = cover_cache::cache_cover(&user_data, cover_url).await
     {
-        match playlists::set_playlist_cover(&output, &user_data, &playlist.id, Some(local)) {
+        match playlists::save_imported_cover(
+            &output,
+            &user_data,
+            &playlist.id,
+            std::path::Path::new(&local),
+        ) {
             Ok(updated) => playlist = updated,
             Err(error) => {
                 eprintln!("[Vynl] could not set the imported playlist cover: {error}")

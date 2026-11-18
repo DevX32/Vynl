@@ -225,8 +225,8 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
                 }
                 tracks.push(track.clone());
             }
-            adds = merge_marks(&adds, &row.adds);
-            removals = merge_marks(&removals, &row.removals);
+            adds = merge_marks(&adds, &row.adds, false);
+            removals = merge_marks(&removals, &row.removals, true);
         }
         synthetic.tracks = tracks;
         synthetic.adds = adds;
@@ -268,19 +268,23 @@ fn mark_map(marks: &[PlaylistMark]) -> std::collections::HashMap<String, i64> {
     map
 }
 
-fn merge_marks(a: &[PlaylistMark], b: &[PlaylistMark]) -> Vec<PlaylistMark> {
+const ADD_MARKS_CAP: usize = 10_000;
+const REMOVAL_MARKS_CAP: usize = 50_000;
+
+fn merge_marks(a: &[PlaylistMark], b: &[PlaylistMark], is_removals: bool) -> Vec<PlaylistMark> {
+    let cap = if is_removals {
+        REMOVAL_MARKS_CAP
+    } else {
+        ADD_MARKS_CAP
+    };
     let combined: Vec<PlaylistMark> = a.iter().chain(b.iter()).cloned().collect();
     let map = mark_map(&combined);
     let mut merged: Vec<PlaylistMark> = map
         .into_iter()
-        .map(|(track_id, at)| PlaylistMark {
-            track_id: track_id.to_string(),
-            at,
-        })
+        .map(|(track_id, at)| PlaylistMark { track_id, at })
         .collect();
     merged.sort_by(|x, y| y.at.cmp(&x.at).then_with(|| x.track_id.cmp(&y.track_id)));
-    const MAX_MARKS: usize = 10_000;
-    merged.truncate(MAX_MARKS);
+    merged.truncate(cap);
     merged
 }
 
@@ -304,8 +308,8 @@ fn remote_track_to_catalogue(track: &SyncTrack) -> CatalogueTrack {
 }
 
 fn union_playlist(local: &Playlist, row: &SyncRow) -> Playlist {
-    let adds = merge_marks(&local.adds, &row.adds);
-    let removals = merge_marks(&local.removals, &row.removals);
+    let adds = merge_marks(&local.adds, &row.adds, false);
+    let removals = merge_marks(&local.removals, &row.removals, true);
     let add_map = mark_map(&adds);
     let rem_map = mark_map(&removals);
     let visible = |key: &str| {
@@ -743,8 +747,14 @@ async fn refresh_session(data_dir: &Path, session: &Session) -> Result<Session, 
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        clear_session(data_dir);
-        return Err("Your session expired. Sign in again.".into());
+        if matches!(status.as_u16(), 400 | 401 | 403) {
+            clear_session(data_dir);
+            return Err("Your session expired. Sign in again.".into());
+        }
+        return Err(format!(
+            "Vynl Sync had a problem ({}). Try again later.",
+            status.as_u16()
+        ));
     }
     let value: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
     let mut fresh = parse_session(&value, &session.email)
@@ -1277,26 +1287,45 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
             LocalResolution::Missing => None,
         };
         match row.deleted_at {
-            Some(deleted_at) => match local {
-                Some(playlist) if playlist.updated_at <= deleted_at => {
-                    playlists::delete_playlist(output_dir, data_dir, &row.local_id);
-                    result.deleted += 1;
-                }
-                Some(playlist) => {
-                    if let Err(error) =
-                        upsert_rows(data_dir, &[playlist_value(&session, &playlist, &maps)]).await
-                    {
-                        eprintln!(
-                            "Vynl sync: could not save playlist {}: {error}",
-                            playlist.id
-                        );
-                        result.failed += 1;
-                    } else {
-                        result.pushed += 1;
+            Some(deleted_at) => {
+                if local.is_some() {
+                    match playlists::delete_playlist_if_stale(
+                        output_dir,
+                        data_dir,
+                        &row.local_id,
+                        deleted_at,
+                    ) {
+                        Ok(true) => result.deleted += 1,
+                        Ok(false) => {
+                            if let Some(playlist) =
+                                playlists::get_playlist(output_dir, &row.local_id)
+                            {
+                                if let Err(error) = upsert_rows(
+                                    data_dir,
+                                    &[playlist_value(&session, &playlist, &maps)],
+                                )
+                                .await
+                                {
+                                    eprintln!(
+                                        "Vynl sync: could not save playlist {}: {error}",
+                                        playlist.id
+                                    );
+                                    result.failed += 1;
+                                } else {
+                                    result.pushed += 1;
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!(
+                                "Vynl sync: could not delete playlist {}: {error}",
+                                row.local_id
+                            );
+                            result.failed += 1;
+                        }
                     }
                 }
-                None => {}
-            },
+            }
             None => match local {
                 None => {
                     let synced = row_to_playlist(row);
@@ -1311,31 +1340,48 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                         }
                     }
                 }
-                Some(playlist) => {
-                    let merged = union_playlist(&playlist, row);
-                    if merge_signature(&merged) != merge_signature(&playlist) {
-                        if let Err(error) = playlists::upsert_playlist(output_dir, &merged) {
-                            eprintln!("Vynl sync: could not merge playlist {}: {error}", merged.id);
-                            result.failed += 1;
-                            continue;
+                Some(_playlist) => {
+                    match playlists::merge_playlist_with_remote(
+                        output_dir,
+                        &row.local_id,
+                        |current| union_playlist(current, row),
+                        |before, merged| merge_signature(before) != merge_signature(merged),
+                    ) {
+                        Ok(Some((before, merged, changed))) => {
+                            if changed {
+                                let remote_change =
+                                    merged.paths.iter().any(|p| !before.paths.contains(p))
+                                        || merged.removals.iter().any(|m| {
+                                            before
+                                                .removals
+                                                .iter()
+                                                .all(|r| r.track_id != m.track_id || r.at < m.at)
+                                        });
+                                if remote_change {
+                                    result.pulled += 1;
+                                } else {
+                                    result.pushed += 1;
+                                }
+                                if let Err(error) = upsert_rows(
+                                    data_dir,
+                                    &[playlist_value(&session, &merged, &maps)],
+                                )
+                                .await
+                                {
+                                    eprintln!(
+                                        "Vynl sync: could not save playlist {}: {error}",
+                                        merged.id
+                                    );
+                                    result.failed += 1;
+                                }
+                            }
                         }
-                        let remote_change =
-                            merged.paths.iter().any(|p| !playlist.paths.contains(p))
-                                || merged.removals.iter().any(|m| {
-                                    playlist
-                                        .removals
-                                        .iter()
-                                        .all(|r| r.track_id != m.track_id || r.at < m.at)
-                                });
-                        if remote_change {
-                            result.pulled += 1;
-                        } else {
-                            result.pushed += 1;
-                        }
-                        if let Err(error) =
-                            upsert_rows(data_dir, &[playlist_value(&session, &merged, &maps)]).await
-                        {
-                            eprintln!("Vynl sync: could not save playlist {}: {error}", merged.id);
+                        Ok(None) => {}
+                        Err(error) => {
+                            eprintln!(
+                                "Vynl sync: could not merge playlist {}: {error}",
+                                row.local_id
+                            );
                             result.failed += 1;
                         }
                     }

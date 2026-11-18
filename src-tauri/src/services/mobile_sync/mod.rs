@@ -401,10 +401,7 @@ pub async fn ensure_started_on_boot(user_data_dir: &Path) {
 pub fn load_library_tracks(user_data: &Path) -> Vec<LibraryTrack> {
     let settings = settings::get_settings(user_data);
     let output = PathBuf::from(&settings.output_dir);
-    if let Some(cached) = library::load_cache(user_data) {
-        return cached;
-    }
-    library::scan_library(&output, user_data)
+    library::scan_cached_library(&output, user_data).0
 }
 
 pub fn load_playlists(user_data: &Path) -> Vec<Playlist> {

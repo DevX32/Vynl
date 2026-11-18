@@ -99,7 +99,7 @@ impl CatalogueService {
 
     fn note_seek(&self, generation: u64, request_id: u64) {
         let mut latest = self.seeks.lock().unwrap_or_else(|e| e.into_inner());
-        if generation != latest.0 || request_id >= latest.1 {
+        if generation > latest.0 || (generation == latest.0 && request_id >= latest.1) {
             *latest = (generation, request_id);
         }
     }

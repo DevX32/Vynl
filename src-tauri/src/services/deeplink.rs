@@ -25,9 +25,11 @@ pub fn parse_confirm_url(url: &str) -> Option<ConfirmRequest> {
     let mut token_hash: Option<String> = None;
     let mut email_type: Option<String> = None;
     for part in rest.split('&') {
-        let mut iter = part.splitn(2, '=');
-        let key = iter.next()?.trim().to_lowercase();
-        let value = iter.next()?.trim();
+        let Some((k, value)) = part.split_once('=') else {
+            continue;
+        };
+        let key = k.trim().to_lowercase();
+        let value = value.trim();
         if value.is_empty() {
             continue;
         }

@@ -224,7 +224,7 @@ async fn get_access_token(
     for offset in &windows {
         let totp_code = generate_totp_from_key(&key_bytes, *offset)?;
         eprintln!(
-            "[Vynl] TOTP code: {totp_code} (version: {totp_version}, offset: {offset}, key_len: {})",
+            "[Vynl] fetching access token (version: {totp_version}, offset: {offset}, key_len: {})",
             key_bytes.len()
         );
 
@@ -268,7 +268,7 @@ async fn get_access_token(
         }
 
         let body = resp.text().await.unwrap_or_default();
-        eprintln!("[Vynl] TOTP offset {offset}: HTTP {status}, body: {body}");
+        eprintln!("[Vynl] access token request failed: HTTP {status}");
         last_err = token_failure_message(status, &body);
         tokio::time::sleep(Duration::from_millis(800)).await;
     }

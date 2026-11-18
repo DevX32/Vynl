@@ -70,6 +70,7 @@ pub(crate) fn write_order_at(
     ids: &[String],
     updated_at: i64,
 ) -> Result<(), String> {
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     util::write_json(&order_file(output_dir), &ids)?;
     util::write_json(&order_meta_file(output_dir), &OrderMeta { updated_at })
 }
@@ -371,9 +372,17 @@ fn random_hex_8() -> String {
 pub fn create_playlist(output_dir: &Path, name: &str) -> Result<Playlist, String> {
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let now = util::now_ms();
-    let timestamp_part = to_base36((now / 1000) as u64);
-    let random_part = random_hex_8();
-    let id = format!("pl-{}-{}", timestamp_part, random_part);
+    let mut id = String::new();
+    for _ in 0..16 {
+        let candidate = format!("pl-{}-{}", to_base36((now / 1000) as u64), random_hex_8());
+        if !playlist_file(output_dir, &candidate).exists() {
+            id = candidate;
+            break;
+        }
+    }
+    if id.is_empty() {
+        return Err("could not generate a unique playlist id".into());
+    }
     let pl = Playlist {
         id: id.clone(),
         name: if name.trim().is_empty() {
@@ -410,15 +419,75 @@ pub fn rename_playlist(output_dir: &Path, id: &str, name: &str) -> Result<Playli
     Ok(pl)
 }
 
-pub fn delete_playlist(output_dir: &Path, user_data_dir: &Path, id: &str) {
+pub(crate) fn merge_playlist_with_remote(
+    output_dir: &Path,
+    id: &str,
+    merge: impl FnOnce(&Playlist) -> Playlist,
+    changed: impl FnOnce(&Playlist, &Playlist) -> bool,
+) -> Result<Option<(Playlist, Playlist, bool)>, String> {
     if !validate_id(id) {
-        return;
+        return Err("invalid playlist id".into());
     }
-    let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let Some(before) = read_playlist(output_dir, id) else {
+        return Ok(None);
+    };
+    let merged = merge(&before);
+    let changed = changed(&before, &merged);
+    if !changed {
+        return Ok(Some((before, merged, false)));
+    }
+    let mut order = read_order(output_dir);
+    if !order.iter().any(|eid| eid == &merged.id) {
+        order.push(merged.id.clone());
+        write_order(output_dir, &order)?;
+    }
+    write_playlist(output_dir, &merged)?;
+    Ok(Some((before, merged, true)))
+}
+
+pub(crate) fn delete_playlist_locked(
+    output_dir: &Path,
+    user_data_dir: &Path,
+    id: &str,
+) -> Result<(), String> {
     let path = playlist_file(output_dir, id);
-    let _ = fs::remove_file(&path);
+    match fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("could not delete the playlist: {error}")),
+    }
     prune_order(output_dir, id);
     remove_playlist_covers(user_data_dir, id);
+    Ok(())
+}
+
+pub fn delete_playlist(output_dir: &Path, user_data_dir: &Path, id: &str) -> Result<(), String> {
+    if !validate_id(id) {
+        return Err("invalid playlist id".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    delete_playlist_locked(output_dir, user_data_dir, id)
+}
+
+pub fn delete_playlist_if_stale(
+    output_dir: &Path,
+    user_data_dir: &Path,
+    id: &str,
+    deleted_at: i64,
+) -> Result<bool, String> {
+    if !validate_id(id) {
+        return Err("invalid playlist id".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    let Some(current) = read_playlist(output_dir, id) else {
+        return Ok(false);
+    };
+    if current.updated_at > deleted_at {
+        return Ok(false);
+    }
+    delete_playlist_locked(output_dir, user_data_dir, id)?;
+    Ok(true)
 }
 
 pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {
@@ -670,6 +739,62 @@ pub fn set_playlist_cover(
         remove_playlist_covers(user_data_dir, id);
     }
     Ok(pl)
+}
+
+pub fn save_imported_cover(
+    output_dir: &Path,
+    user_data_dir: &Path,
+    id: &str,
+    source: &Path,
+) -> Result<Playlist, String> {
+    if !validate_id(id) {
+        return Err("invalid playlist id".into());
+    }
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !validate_cover_ext(&ext) {
+        return Err("cover is not a supported image".into());
+    }
+    let data = fs::read(source).map_err(|e| format!("could not read the cover: {e}"))?;
+    if data.len() > 10 * 1024 * 1024 {
+        return Err("cover image too large (max 10MB)".into());
+    }
+    if data.len() < 8 {
+        return Err("cover image data too small".into());
+    }
+    let valid = match ext.as_str() {
+        "png" => data[..8] == [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
+        "jpg" | "jpeg" => data[..2] == [0xff, 0xd8],
+        "webp" => data.len() >= 12 && data[..4] == *b"RIFF" && data[8..12] == *b"WEBP",
+        _ => false,
+    };
+    if !valid {
+        return Err("cover data does not match its extension".into());
+    }
+    let covers = covers_dir(user_data_dir);
+    fs::create_dir_all(&covers).map_err(|e| e.to_string())?;
+    let stamp = util::now_ms();
+    let filename = format!("pl-{id}.{stamp}.{ext}");
+    let dest = covers.join(&filename);
+    fs::write(&dest, &data).map_err(|e| e.to_string())?;
+    let prefix = format!("pl-{id}.");
+    if let Ok(entries) = fs::read_dir(&covers) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(&prefix) && name != filename {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    set_playlist_cover(
+        output_dir,
+        user_data_dir,
+        id,
+        Some(dest.to_string_lossy().into_owned()),
+    )
 }
 
 pub fn validate_cover_ext(ext: &str) -> bool {

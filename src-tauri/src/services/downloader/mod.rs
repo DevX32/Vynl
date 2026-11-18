@@ -213,7 +213,7 @@ async fn probe_duration(file: &Path) -> Option<f64> {
 
 async fn fetch_cover(url: &str, dest: &str) -> bool {
     let url = crate::services::cover_cache::normalize_cover_url(url).into_owned();
-    if !url.starts_with("https://") {
+    if !crate::services::rpc::is_public_cover(&url) {
         return false;
     }
     let client = match reqwest::Client::builder()
@@ -230,6 +230,10 @@ async fn fetch_cover(url: &str, dest: &str) -> bool {
         Ok(r) => r,
         Err(_) => return false,
     };
+
+    if !crate::services::rpc::is_public_cover(resp.url().as_str()) {
+        return false;
+    }
 
     if !resp.status().is_success() {
         return false;

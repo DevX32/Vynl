@@ -234,9 +234,20 @@ pub fn embed_lyrics(file: &Path, text: &str) -> Result<(), String> {
 
     tag.insert_text(ItemKey::Lyrics, text.to_string());
     tag.insert_text(ItemKey::UnsyncLyrics, text.to_string());
-    tagged
-        .save_to_path(file, lofty::config::WriteOptions::new().use_id3v23(true))
-        .map_err(|e| format!("lofty save failed: {e}"))
+    let tmp = file.with_file_name(format!(".vynl-lyrics-{}.tmp", std::process::id()));
+    let result = tagged
+        .save_to_path(&tmp, lofty::config::WriteOptions::new().use_id3v23(true))
+        .map_err(|e| format!("lofty save failed: {e}"));
+    match result {
+        Ok(()) => std::fs::rename(&tmp, file).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            format!("could not replace the audio file: {e}")
+        }),
+        Err(error) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(error)
+        }
+    }
 }
 
 pub fn transcode_to_mp3(

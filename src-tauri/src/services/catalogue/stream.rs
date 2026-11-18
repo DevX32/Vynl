@@ -659,13 +659,12 @@ impl StreamCache {
             .write(true)
             .open(&path)
             .map_err(|e| format!("could not create the stream cache: {e}"))?;
-        file.set_len(total)
-            .map_err(|e| format!("could not prepare the stream cache: {e}"))?;
         drop(file);
 
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let has_active = state.active.contains(video_id);
         let stale_file = match state.index.entries.get(video_id) {
-            Some(entry) if !entry.complete => Some(entry.file.clone()),
+            Some(entry) if !entry.complete && !has_active => Some(entry.file.clone()),
             _ => None,
         };
         if !state
@@ -716,6 +715,22 @@ impl StreamCache {
         entry.last_used = now_secs();
         state.dirty = true;
         self.save_locked(&mut state);
+    }
+
+    pub fn discard_entry(&self, video_id: &str, file_name: &str) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let matches = state
+            .index
+            .entries
+            .get(video_id)
+            .is_some_and(|entry| entry.file == file_name);
+        if matches {
+            state.index.entries.remove(video_id);
+            state.dirty = true;
+            self.save_locked(&mut state);
+        }
+        state.active.remove(video_id);
+        let _ = std::fs::remove_file(self.dir.join(file_name));
     }
 
     pub fn finish(&self, video_id: &str, file_name: &str, complete: bool) {
@@ -1494,6 +1509,11 @@ impl Drop for StreamSession {
     }
 }
 
+fn abandon_cache(store: &RangeStore, cache: &StreamCache, video_id: &str, file_name: &str) {
+    store.fail("the stream could not be decoded".to_string());
+    cache.discard_entry(video_id, file_name);
+}
+
 #[allow(clippy::too_many_arguments)]
 fn decode_loop(
     buffer: Arc<StreamBuffer>,
@@ -1523,6 +1543,7 @@ fn decode_loop(
         Ok(reader) => reader,
         Err(error) => {
             buffer.fail(format!("could not read this track: {error}"));
+            abandon_cache(&store, &cache, &video_id, &file_name);
             return;
         }
     };
@@ -1531,6 +1552,7 @@ fn decode_loop(
         Some(track) => track,
         None => {
             buffer.fail("this track has no audio".into());
+            abandon_cache(&store, &cache, &video_id, &file_name);
             return;
         }
     };
@@ -1543,6 +1565,7 @@ fn decode_loop(
         Some(params) => params,
         None => {
             buffer.fail("this track has no audio parameters".into());
+            abandon_cache(&store, &cache, &video_id, &file_name);
             return;
         }
     };
@@ -1561,6 +1584,7 @@ fn decode_loop(
         Ok(decoder) => decoder,
         Err(error) => {
             buffer.fail(format!("this audio format cannot be decoded: {error}"));
+            abandon_cache(&store, &cache, &video_id, &file_name);
             return;
         }
     };
@@ -1592,6 +1616,7 @@ fn decode_loop(
                     Ok(decoder) => decoder,
                     Err(error) => {
                         buffer.fail(format!("this audio format cannot be decoded: {error}"));
+                        abandon_cache(&store, &cache, &video_id, &file_name);
                         return;
                     }
                 };
@@ -1612,6 +1637,7 @@ fn decode_loop(
             Ok(None) => break,
             Err(error) => {
                 buffer.fail(format!("stream read failed: {error}"));
+                abandon_cache(&store, &cache, &video_id, &file_name);
                 return;
             }
         };
