@@ -15,8 +15,9 @@
     UserRound,
     Import,
   } from "lucide-svelte";
+  import { Blobatar } from "@blobatar/svelte";
   import { blobSrc } from "../lib/format";
-  import { avatarUri, avatarRevision } from "@lib/blobatar.svelte";
+  import { avatarProps, avatarRevision } from "@lib/blobatar.svelte";
   import { t } from "@lib/i18n";
   import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
@@ -94,11 +95,11 @@
   const displayName = $derived(
     resolveDisplayName(getCurrentSettings().displayName),
   );
-  const avatarSrc = $derived.by(() => {
+  const avatar = $derived.by(() => {
     void avatarRevision();
-    return avatarUri(
-      session.signedIn && session.email ? session.email : displayName,
-      { size: 80 },
+    return avatarProps(
+      (session.signedIn && session.email ? session.email : displayName) || "vynl",
+      32,
     );
   });
 
@@ -407,7 +408,7 @@
         <div class="account-menu" style={accountMenuStyle} role="menu">
           <div class="account-menu-head">
             <span class="menu-avatar">
-              <img src={avatarSrc} alt="" draggable="false" />
+              <Blobatar {...avatar} class="avatar-blob" />
             </span>
             <div class="menu-head-text">
               <span class="menu-name display">{displayName}</span>
@@ -470,7 +471,7 @@
         aria-expanded={accountMenuOpen}
       >
         <span class="avatar">
-          <img src={avatarSrc} alt="" />
+          <Blobatar {...avatar} class="avatar-blob" />
         </span>
         {#if sidebarOpen}
           <span class="account-meta">
@@ -856,7 +857,7 @@
     border-radius: 50%;
   }
 
-  .avatar img {
+  .avatar :global(svg) {
     display: block;
     width: 100%;
     height: 100%;
@@ -933,7 +934,7 @@
     border-radius: 50%;
   }
 
-  .menu-avatar img {
+  .menu-avatar :global(svg) {
     display: block;
     width: 100%;
     height: 100%;

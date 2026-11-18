@@ -350,3 +350,8 @@ html[data-theme="espresso"] .tbl-head {
   transform: translateX(16px);
   background: var(--accent);
 }
+
+/* Blobatar: idles in place — no hover lift or scale */
+.mo-root.mo-root:hover {
+  transform: none;
+}

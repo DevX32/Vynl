@@ -1,4 +1,3 @@
-import { blobatarUri } from "blobatar/uri";
 import type { BlobatarOptions } from "blobatar/blob";
 
 export const AVATAR_STORAGE_KEY = "vynl.avatar.v1";
@@ -83,28 +82,24 @@ export function resetAvatarCustom(): void {
   revision += 1;
 }
 
-export function avatarUri(
+export function avatarProps(
   seed: string,
-  opts?: BlobatarOptions,
-): string {
+  size: number,
+): { name: string } & BlobatarOptions {
   const custom = read();
-  const seedToUse = custom.seed.trim() || seed;
-  const traits: Record<string, number> = {};
+  const options: BlobatarOptions = { size };
+  if (custom.hue !== null) options.hue = custom.hue;
+  if (custom.tone !== null) options.tone = custom.tone;
+  if (custom.background === "none") options.background = false;
+  else if (custom.background !== "default") options.background = custom.background;
   if (custom.shape && SHAPE_BANDS[custom.shape] !== undefined) {
-    traits.shape = SHAPE_BANDS[custom.shape];
+    options.traits = { shape: SHAPE_BANDS[custom.shape] };
   }
-  const merged: BlobatarOptions = {
-    size: opts?.size,
-    ...opts,
+  return {
+    name: custom.seed.trim() || seed,
+    animate: "always",
+    ...options,
   };
-  if (custom.hue !== null) merged.hue = custom.hue;
-  if (custom.tone !== null) merged.tone = custom.tone;
-  if (custom.background === "none") merged.background = false;
-  else if (custom.background !== "default") merged.background = custom.background;
-  if (Object.keys(traits).length > 0) {
-    merged.traits = { ...(opts?.traits as Record<string, number> | undefined), ...traits };
-  }
-  return blobatarUri(seedToUse, merged);
 }
 
 export function randomAvatarSeed(): string {

@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { LoaderCircle, RefreshCw, X, Dices } from "lucide-svelte";
-  import { avatarUri, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar.svelte";
+  import { avatarProps, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar.svelte";
+  import { Blobatar } from "@blobatar/svelte";
   import { t } from "@lib/i18n";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
@@ -32,9 +33,9 @@
   );
   const customSeed = $derived(custom.seed.trim());
   const effectiveSeed = $derived(customSeed || avatarSeed);
-  const avatarSrc = $derived.by(() => {
+  const avatar = $derived.by(() => {
     void avatarRevision();
-    return avatarUri(effectiveSeed, { size: 96 });
+    return avatarProps(effectiveSeed, 96);
   });
 
   let mode = $state<"signin" | "signup">("signin");
@@ -218,7 +219,7 @@
       }}
     >
       <div class="banner" class:connected={status.signedIn}>
-        <img class="avatar" src={avatarSrc} alt="" />
+        <Blobatar {...avatar} class="avatar" />
         <div class="banner-copy">
           <span class="caption mono">Account</span>
           <span class="banner-title">
@@ -462,7 +463,7 @@
     background: color-mix(in srgb, var(--accent) 6%, var(--bg));
   }
 
-  .avatar {
+  :global(.avatar) {
     width: 52px;
     height: 52px;
     flex-shrink: 0;
