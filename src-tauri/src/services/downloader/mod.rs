@@ -135,6 +135,9 @@ async fn follow_short_link(raw: &str) -> Option<catalog::CatalogLink> {
 }
 
 pub async fn resolve_link(raw_url: &str) -> Result<Collection, String> {
+    if let Some(result) = crate::services::catalogue::try_resolve_yt_playlist(raw_url).await {
+        return result;
+    }
     let link = catalog::parse_link(raw_url)
         .or(async { follow_short_link(raw_url).await }.await)
         .ok_or_else(|| "That does not look like a track, album, or playlist link.".to_string())?;

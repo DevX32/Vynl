@@ -109,24 +109,43 @@ pub async fn import_stream_playlist(
         .app_data_dir()
         .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
 
-    let matches = downloader::find_matches(&collection, &user_data).await?;
+    let direct_picks = collection
+        .tracks
+        .iter()
+        .all(|track| extract_video_id(&track.url).is_some());
 
     let mut picked: Vec<CatalogueTrack> = Vec::with_capacity(collection.tracks.len());
     let mut unmatched: Vec<UnmatchedImport> = Vec::new();
     let mut seen_video_ids: HashSet<String> = HashSet::with_capacity(collection.tracks.len());
 
-    for track in &collection.tracks {
-        let candidates = matches.get(&track.id).cloned().unwrap_or_default();
-        let ranked = downloader::filter_and_rank_candidates(candidates, track);
-        let video_id = ranked.first().and_then(|c| extract_video_id(&c.url));
-        match video_id {
-            Some(id) if seen_video_ids.insert(id.clone()) => {
-                picked.push(stream_track_for(track, id));
+    if direct_picks {
+        for track in &collection.tracks {
+            let video_id = extract_video_id(&track.url);
+            match video_id {
+                Some(id) if seen_video_ids.insert(id.clone()) => {
+                    picked.push(stream_track_for(track, id));
+                }
+                _ => unmatched.push(UnmatchedImport {
+                    title: track.title.clone(),
+                    artist: track.artist.clone(),
+                }),
             }
-            _ => unmatched.push(UnmatchedImport {
-                title: track.title.clone(),
-                artist: track.artist.clone(),
-            }),
+        }
+    } else {
+        let matches = downloader::find_matches(&collection, &user_data).await?;
+        for track in &collection.tracks {
+            let candidates = matches.get(&track.id).cloned().unwrap_or_default();
+            let ranked = downloader::filter_and_rank_candidates(candidates, track);
+            let video_id = ranked.first().and_then(|c| extract_video_id(&c.url));
+            match video_id {
+                Some(id) if seen_video_ids.insert(id.clone()) => {
+                    picked.push(stream_track_for(track, id));
+                }
+                _ => unmatched.push(UnmatchedImport {
+                    title: track.title.clone(),
+                    artist: track.artist.clone(),
+                }),
+            }
         }
     }
 

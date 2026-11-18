@@ -461,6 +461,81 @@ pub async fn catalogue_artist(id: String) -> Result<CatalogueArtist, String> {
     service()?.artist(&id).await
 }
 
+fn extract_yt_playlist_id(url: &str) -> Option<String> {
+    if !url.contains("youtube.com") && !url.contains("youtu.be") {
+        return None;
+    }
+    let query = url.split(['?', '#']).nth(1)?;
+    for part in query.split('&') {
+        let Some((k, v)) = part.split_once('=') else {
+            continue;
+        };
+        if k.trim() == "list" {
+            let id = v.trim();
+            if id.is_empty() {
+                return None;
+            }
+            return Some(id.to_string());
+        }
+    }
+    None
+}
+
+const MAX_IMPORT_PAGES: usize = 100;
+
+fn yt_track_to_meta(track: &CatalogueTrack) -> TrackMeta {
+    TrackMeta {
+        id: track.id.clone(),
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        album: track
+            .album
+            .as_ref()
+            .map(|album| album.name.clone())
+            .unwrap_or_default(),
+        year: None,
+        duration: track.duration,
+        cover: track.cover.clone(),
+        track_number: None,
+        url: format!("https://music.youtube.com/watch?v={}", track.id),
+    }
+}
+
+async fn fetch_yt_playlist_collection(list_id: &str) -> Result<Collection, String> {
+    let first = service()?.playlist(list_id).await?;
+    let title = first.playlist.title.clone();
+    let owner = first.playlist.author.clone();
+    let cover = first.playlist.cover.clone();
+    let mut tracks = first.tracks;
+    let mut continuation = first.continuation.clone();
+    let mut pages = 1usize;
+    while let Some(token) = continuation.take() {
+        if pages >= MAX_IMPORT_PAGES {
+            break;
+        }
+        let page = service()?.playlist_page(&token).await?;
+        tracks.extend(page.tracks);
+        continuation = page.continuation;
+        pages += 1;
+    }
+    if tracks.is_empty() {
+        return Err("That playlist has no tracks.".into());
+    }
+    Ok(Collection {
+        kind: CollectionKind::Playlist,
+        id: list_id.to_string(),
+        title,
+        owner,
+        cover,
+        tracks: tracks.iter().map(yt_track_to_meta).collect(),
+    })
+}
+
+pub(crate) async fn try_resolve_yt_playlist(url: &str) -> Option<Result<Collection, String>> {
+    let list_id = extract_yt_playlist_id(url)?;
+    Some(fetch_yt_playlist_collection(&list_id).await)
+}
+
 #[tauri::command]
 pub async fn catalogue_playlist(id: String) -> Result<CataloguePlaylistDetail, String> {
     service()?.playlist(&id).await

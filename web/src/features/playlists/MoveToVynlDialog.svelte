@@ -35,12 +35,15 @@
 
   function looksValid(raw: string): boolean {
     const v = raw.trim().toLowerCase();
-    return (
+    if (
       v.includes("open.spotify.com") ||
       v.includes("spotify:") ||
       v.includes("spotify.link") ||
       v.includes("spotify.app.link")
-    );
+    ) {
+      return true;
+    }
+    return /youtube\.com\/.*list=|youtu\.be\/.*list=/.test(v);
   }
 
   async function resolveLink(): Promise<void> {
@@ -100,9 +103,7 @@
   }
 
   const importLabel = $derived(
-    collection
-      ? t("moveToVynl.importing", { n: collection.tracks.length })
-      : "",
+    collection ? t("moveToVynl.importing", { n: collection.tracks.length }) : "",
   );
 </script>
 
