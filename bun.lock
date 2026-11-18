@@ -5,6 +5,7 @@
     "": {
       "name": "vynl",
       "dependencies": {
+        "@blobatar/svelte": "^2.7.0",
         "@tauri-apps/api": "^2.12.1",
         "@tauri-apps/plugin-clipboard-manager": "~2.5.0",
         "@tauri-apps/plugin-shell": "~2.5.0",
@@ -23,6 +24,8 @@
     },
   },
   "packages": {
+    "@blobatar/svelte": ["@blobatar/svelte@2.7.0", "", { "peerDependencies": { "blobatar": "2.x", "svelte": ">=5" } }, "sha512-Pf/RE5ICEUatbWloaBa4vGLRx+HRsKNN/eNCCHp1Nksgs3+3VuutpZBB61Y169fa0uMgAqPl72fAr+GcmnmtHA=="],
+
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.28.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ=="],
 
     "@esbuild/android-arm": ["@esbuild/android-arm@0.28.2", "", { "os": "android", "cpu": "arm" }, "sha512-kXXoiPVVGQcnIYGOeaovwOURpniDBpSq4A03qkQ+BMQqtGG6HYap3xne9C1O1yo4TR3qxlCX5IqqmX6fFo2Lqg=="],
