@@ -296,6 +296,7 @@ export interface SyncResult {
   pushed: number;
   pulled: number;
   deleted: number;
+  failed: number;
 }
 
 export interface TrackProgress {

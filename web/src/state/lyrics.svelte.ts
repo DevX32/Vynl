@@ -625,9 +625,9 @@ export function loadLyrics(id: string | null): void {
         _activeId = null;
       }
     } finally {
+      if (_loadingId === id) _loadingId = null;
       if (version === _loadVersion) {
         _loading = false;
-        if (_loadingId === id) _loadingId = null;
       }
     }
   })();

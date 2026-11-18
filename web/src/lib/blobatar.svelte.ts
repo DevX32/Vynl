@@ -3,7 +3,7 @@ import type { BlobatarOptions } from "blobatar/blob";
 
 export const AVATAR_STORAGE_KEY = "vynl.avatar.v1";
 
-let revision = 0;
+let revision = $state(0);
 
 export function avatarRevision(): number {
   return revision;

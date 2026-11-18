@@ -165,10 +165,14 @@ import { toggleLyrics } from "@state/player.svelte";
     toastTimer = setTimeout(() => (toast = ""), 1600);
   }
 
-  function copyText(text: string): void {
+  function copyText(
+    text: string,
+    successKey: string = "lyrics.copied",
+    values: Record<string, string | number> = {},
+  ): void {
     vynl
       .copyText(text)
-      .then(() => showToast(t("lyrics.copied")))
+      .then(() => showToast(t(successKey, values)))
       .catch((e) => {
         console.warn("clipboard write failed:", e);
         showToast(t("lyrics.copyFailed"));
@@ -378,8 +382,7 @@ import { toggleLyrics } from "@state/player.svelte";
       .map((l) => l.text.trim())
       .filter(Boolean);
     if (lines.length === 0) return;
-    copyText(lines.join("\n\n"));
-    showToast(t("lyrics.copiedAll", { n: lines.length }));
+    copyText(lines.join("\n\n"), "lyrics.copiedAll", { n: lines.length });
   }
 
   function copySelectedLyrics(): void {
@@ -388,8 +391,7 @@ import { toggleLyrics } from "@state/player.svelte";
       .map((i) => lines[i]?.text?.trim())
       .filter((line): line is string => !!line);
     if (joined.length === 0) return;
-    copyText(joined.join("\n\n"));
-    showToast(t("lyrics.copiedN", { n: joined.length }));
+    copyText(joined.join("\n\n"), "lyrics.copiedN", { n: joined.length });
   }
 
   function openSearch(): void {

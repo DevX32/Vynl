@@ -105,18 +105,34 @@ async function ensureTools(): Promise<void> {
   }
 }
 
+let _settingsQueue: Promise<void> = Promise.resolve();
+
 export async function patchSettings(patch: Partial<Settings>): Promise<void> {
-  if (!_settings) return;
-  const next = normalizeSettings({ ..._settings, ...patch });
-  const updated = await vynl.setSettings(next);
-  _settings = updated;
-  if (patch.theme !== undefined) applyTheme(updated.theme);
-  if (patch.accentColor !== undefined) applyAccentColor(updated.accentColor);
+  const job = _settingsQueue.then(async () => {
+    if (!_settings) return;
+    const next = normalizeSettings({ ..._settings, ...patch });
+    const updated = await vynl.setSettings(next);
+    _settings = updated;
+    if (patch.theme !== undefined) applyTheme(updated.theme);
+    if (patch.accentColor !== undefined) applyAccentColor(updated.accentColor);
+  });
+  _settingsQueue = job.catch(() => {});
+  return job;
 }
 
 let _dynamicStop: (() => void) | null = null;
 let _extractGen = 0;
 const _vibrantCache = new Map<string, string>();
+const MAX_VIBRANT_CACHE = 500;
+
+function cacheVibrant(cover: string, hex: string): void {
+  _vibrantCache.set(cover, hex);
+  while (_vibrantCache.size > MAX_VIBRANT_CACHE) {
+    const oldest = _vibrantCache.keys().next().value;
+    if (oldest === undefined) break;
+    _vibrantCache.delete(oldest);
+  }
+}
 
 function startDynamicAccent(): void {
   if (_dynamicStop) return;
@@ -146,7 +162,7 @@ async function applyExtractedAccent(
       if (gen === _extractGen) applyAccentColor(fallback);
       return;
     }
-    _vibrantCache.set(cover, extracted);
+    cacheVibrant(cover, extracted);
     hex = extracted;
   }
   if (gen !== _extractGen) return;

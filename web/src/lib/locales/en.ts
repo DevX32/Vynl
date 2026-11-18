@@ -393,6 +393,8 @@ export const en = {
     syncDone: "Sync finished — {pulled} pulled, {pushed} pushed.",
     syncDoneDeleted:
       "Sync finished — {pulled} pulled, {pushed} pushed, {deleted} deleted.",
+    syncPartialFailed:
+      "Sync finished with issues — {pulled} pulled, {pushed} pushed, {failed} failed.",
     syncFailed: "Sync failed: {error}",
     welcomeBack: "Signed in. Your playlists are syncing.",
     signUpSuccess: "Account created. Your playlists are syncing.",
@@ -511,6 +513,7 @@ export const en = {
     title: "Playlists",
     playlist: "Playlist",
     noPlaylists: "No playlists yet",
+    playlistUnavailable: "This playlist is no longer available",
     deleteTitle: "Delete playlist",
     deleteConfirm: "Delete",
     deleteBody:

@@ -4,12 +4,11 @@ const DRIFT_TOLERANCE_SECS = 0.4;
 
 let _anchorMedia = 0;
 let _anchorPerf = 0;
-let _time = $state(0);
 let _running = false;
 let _subs = 0;
 let _raf = 0;
 
-function frame(): void {
+function predictedNow(): number {
   const perf = performance.now();
   const predicted = _anchorMedia + (perf - _anchorPerf) / 1000;
 
@@ -18,7 +17,11 @@ function frame(): void {
     _anchorPerf = perf;
   }
 
-  _time = _anchorMedia + (perf - _anchorPerf) / 1000;
+  return _anchorMedia + (perf - _anchorPerf) / 1000;
+}
+
+function frame(): void {
+  predictedNow();
   _raf = requestAnimationFrame(frame);
 }
 
@@ -28,7 +31,6 @@ export function startClock(): void {
   _running = true;
   _anchorMedia = getCurrentTime();
   _anchorPerf = performance.now();
-  _time = _anchorMedia;
   _raf = requestAnimationFrame(frame);
 }
 
@@ -41,5 +43,5 @@ export function stopClock(): void {
 }
 
 export function getSmoothTime(): number {
-  return _running ? _time : getCurrentTime();
+  return _running ? predictedNow() : getCurrentTime();
 }

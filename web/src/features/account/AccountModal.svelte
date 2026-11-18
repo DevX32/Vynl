@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { LoaderCircle, RefreshCw, X, Dices } from "lucide-svelte";
-  import { avatarUri, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar";
+  import { avatarUri, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar.svelte";
   import { t } from "@lib/i18n";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
@@ -130,19 +130,30 @@
     try {
       const result = await vynl.syncNow();
       await refreshPlaylists();
-      toasts.success(
-        result.deleted > 0
-          ? t("account.syncDoneDeleted", {
-              pulled: result.pulled,
-              pushed: result.pushed,
-              deleted: result.deleted,
-            })
-          : t("account.syncDone", {
-              pulled: result.pulled,
-              pushed: result.pushed,
-            }),
-        5000,
-      );
+      if (result.failed > 0) {
+        toasts.warning(
+          t("account.syncPartialFailed", {
+            pulled: result.pulled,
+            pushed: result.pushed,
+            failed: result.failed,
+          }),
+          6000,
+        );
+      } else {
+        toasts.success(
+          result.deleted > 0
+            ? t("account.syncDoneDeleted", {
+                pulled: result.pulled,
+                pushed: result.pushed,
+                deleted: result.deleted,
+              })
+            : t("account.syncDone", {
+                pulled: result.pulled,
+                pushed: result.pushed,
+              }),
+          5000,
+        );
+      }
     } catch (e) {
       toasts.error(
         t("account.syncFailed", {
@@ -531,17 +542,17 @@
   .message {
     margin: 12px 16px;
     padding: 10px 12px;
-    border-left: 2px solid var(--danger);
-    background: color-mix(in srgb, var(--danger) 8%, transparent);
-    color: var(--danger);
+    border-left: 2px solid var(--red);
+    background: color-mix(in srgb, var(--red) 8%, transparent);
+    color: var(--red);
     font-size: 11px;
     line-height: 1.5;
   }
 
   .message.ok {
-    border-color: var(--success);
-    background: color-mix(in srgb, var(--success) 8%, transparent);
-    color: var(--success);
+    border-color: var(--green);
+    background: color-mix(in srgb, var(--green) 8%, transparent);
+    color: var(--green);
   }
 
   .switch-mode {

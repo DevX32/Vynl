@@ -2,8 +2,17 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { t } from "@lib/i18n";
 import { vynl } from "@lib/vynl";
 
+const MAX_CACHE_ENTRIES = 500;
 const remote = new Map<string, Promise<string>>();
 const resolved = new Map<string, string>();
+
+function evictIfNeeded(map: Map<string, unknown>): void {
+  while (map.size > MAX_CACHE_ENTRIES) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
 
 export function upsizeCover(url: string): string {
   const trimmed = url.trim();
@@ -41,11 +50,18 @@ export function upsizeCover(url: string): string {
 function cacheRemote(url: string): Promise<string> {
   let pending = remote.get(url);
   if (!pending) {
-    pending = vynl.cacheCover(url).catch((error) => {
-      remote.delete(url);
-      throw error;
-    });
+    pending = vynl
+      .cacheCover(url)
+      .then((local) => {
+        remote.delete(url);
+        return local;
+      })
+      .catch((error) => {
+        remote.delete(url);
+        throw error;
+      });
     remote.set(url, pending);
+    evictIfNeeded(remote);
   }
   return pending;
 }
@@ -74,6 +90,7 @@ export function blobSrc(
       void cacheRemote(src).then(
         (local) => {
           resolved.set(src, local);
+          evictIfNeeded(resolved);
         },
         () => {},
       );

@@ -16,7 +16,7 @@
     Import,
   } from "lucide-svelte";
   import { blobSrc } from "../lib/format";
-  import { avatarUri, avatarRevision } from "@lib/blobatar";
+  import { avatarUri, avatarRevision } from "@lib/blobatar.svelte";
   import { t } from "@lib/i18n";
   import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
@@ -70,8 +70,9 @@
     onOpenLikedSongs: () => void;
   } = $props();
 
+  let railSnapshot: typeof playlists | undefined;
   const { drag, start, shouldSkipClick } = useDragList({
-    pathAt: (_section, idx) => playlists[idx]?.id,
+    pathAt: (_section, idx) => (railSnapshot ?? playlists)[idx]?.id,
     onReorder: (fromId, toId) => onReorderPlaylists(fromId, toId),
     rowSelector: () => ".rail-item[data-playlist]",
   });
@@ -141,19 +142,30 @@
     try {
       const result = await vynl.syncNow();
       await refreshPlaylists();
-      toasts.success(
-        result.deleted > 0
-          ? t("account.syncDoneDeleted", {
-              pulled: result.pulled,
-              pushed: result.pushed,
-              deleted: result.deleted,
-            })
-          : t("account.syncDone", {
-              pulled: result.pulled,
-              pushed: result.pushed,
-            }),
-        5000,
-      );
+      if (result.failed > 0) {
+        toasts.warning(
+          t("account.syncPartialFailed", {
+            pulled: result.pulled,
+            pushed: result.pushed,
+            failed: result.failed,
+          }),
+          6000,
+        );
+      } else {
+        toasts.success(
+          result.deleted > 0
+            ? t("account.syncDoneDeleted", {
+                pulled: result.pulled,
+                pushed: result.pushed,
+                deleted: result.deleted,
+              })
+            : t("account.syncDone", {
+                pulled: result.pulled,
+                pushed: result.pushed,
+              }),
+          5000,
+        );
+      }
     } catch (e) {
       toasts.error(
         t("account.syncFailed", {
@@ -182,7 +194,10 @@
 
   function onRailPointerDown(e: PointerEvent, idx: number): void {
     const p = playlists[idx];
-    if (p) start(e, { idx, path: p.id });
+    if (p) {
+      railSnapshot = playlists.slice();
+      start(e, { idx, path: p.id });
+    }
   }
 </script>
 

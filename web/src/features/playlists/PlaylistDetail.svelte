@@ -416,6 +416,11 @@
         added={addedPaths}
       />
     {/if}
+  {:else}
+    <div class="tbl-empty">
+      <ListMusic size={30} stroke-width={1.1} />
+      <span class="display">{t("playlists.playlistUnavailable")}</span>
+    </div>
   {/if}
 
   {#if ctxMenu}

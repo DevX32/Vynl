@@ -350,13 +350,13 @@
       <div class="hero-sub mono">
         {#if tracks.length > 0}
           {tracks.length}
-          {tracks.length === 1 ? t("library.song") : t("library.songsPlural")} Â·
+          {tracks.length === 1 ? t("library.song") : t("library.songsPlural")} ·
           {t("playlist.about")}
           {fmtTotalDuration(totalDur)}{:else}
           {t("playlist.zeroSongs")}
         {/if}
         {#if bulkBusy}
-          Â· {t("catalogue.downloading", { done: bulkDone, total: bulkTracks.length })}
+          · {t("catalogue.downloading", { done: bulkDone, total: bulkTracks.length })}
         {/if}
       </div>
     </div>
@@ -429,7 +429,7 @@
           class:playing={isCurrent(track)}
           role="button"
           tabindex="0"
-          aria-label={`${track.title} â€” ${track.artist}`}
+          aria-label={`${track.title} — ${track.artist}`}
           onclick={() => playTrack(track)}
           onkeydown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
