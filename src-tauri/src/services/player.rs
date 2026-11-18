@@ -1268,6 +1268,16 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                         if token != device_handoff_token || generation != playback_generation {
                             PlayerResp::Ok
                         } else {
+                            if pending_seek.as_ref().is_some_and(|(_, queued_generation)| {
+                                *queued_generation != generation
+                            }) {
+                                pending_seek = None;
+                            }
+                            let queued_seek = pending_seek
+                                .take()
+                                .filter(|(_, queued_generation)| *queued_generation == generation)
+                                .map(|(time, _)| time);
+                            let position = queued_seek.unwrap_or(position);
                             let result = finish_device_change(
                                 &handle,
                                 &mut sink,
