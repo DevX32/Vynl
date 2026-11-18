@@ -7,7 +7,7 @@ import type {
 } from "@lib/types";
 import { getLibrary, refreshLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
-import { isSameSong } from "@lib/format";
+import { songKey } from "@lib/format";
 import { vynl } from "@lib/vynl";
 
 let _meta = $state<PlaylistMeta[]>([]);
@@ -16,7 +16,7 @@ let _current = $state<Playlist | null>(null);
 let _selected = $state<string | null>(null);
 let _selecting = $state(false);
 let _selectGeneration = 0;
-let _fetchAllGeneration = 0;
+let _metaGeneration = 0;
 let _refreshPromise: Promise<void> | null = null;
 
 const currentPlaylists = $derived(_meta);
@@ -37,8 +37,7 @@ export function isPlaylistLoading(): boolean {
   return isSelecting;
 }
 
-async function fetchAll(): Promise<void> {
-  const gen = ++_fetchAllGeneration;
+async function fetchAll(generation: number): Promise<void> {
   const map: Record<string, Playlist> = {};
   await Promise.all(
     _meta.map(async (pl) => {
@@ -50,18 +49,32 @@ async function fetchAll(): Promise<void> {
       }
     }),
   );
-  if (gen === _fetchAllGeneration) {
+  if (generation === _metaGeneration) {
     _all = map;
   }
+}
+
+export function refreshPlaylistMeta(): Promise<void> {
+  const generation = ++_metaGeneration;
+  return (async () => {
+    try {
+      const meta = await vynl.listPlaylists();
+      if (generation === _metaGeneration) _meta = meta;
+    } catch (e) {
+      console.warn("refreshPlaylistMeta failed:", e);
+    }
+  })();
 }
 
 export function refreshPlaylists(): Promise<void> {
   if (_refreshPromise) return _refreshPromise;
 
+  const generation = ++_metaGeneration;
   const promise = (async () => {
     try {
-      _meta = await vynl.listPlaylists();
-      await fetchAll();
+      const meta = await vynl.listPlaylists();
+      if (generation === _metaGeneration) _meta = meta;
+      await fetchAll(generation);
     } catch (e) {
       console.warn("refreshPlaylists failed:", e);
     } finally {
@@ -121,6 +134,30 @@ export async function reorderPlaylists(
   }
 }
 
+function metaOf(pl: Playlist): PlaylistMeta {
+  return {
+    id: pl.id,
+    name: pl.name,
+    trackCount: pl.paths.length,
+    createdAt: pl.createdAt,
+    updatedAt: pl.updatedAt,
+  };
+}
+
+export function setCurrentPlaylist(pl: Playlist): void {
+  _selectGeneration += 1;
+  _metaGeneration += 1;
+  _selected = pl.id;
+  _current = pl;
+  _selecting = false;
+  const meta = metaOf(pl);
+  const exists = _meta.some((m) => m.id === pl.id);
+  _meta = exists
+    ? _meta.map((m) => (m.id === pl.id ? meta : m))
+    : [..._meta, meta];
+  _all = { ..._all, [pl.id]: pl };
+}
+
 function syncAfterMutation(pl: Playlist): void {
   _all = { ..._all, [pl.id]: pl };
   if (_current?.id === pl.id) _current = pl;
@@ -133,8 +170,11 @@ export async function renamePlaylist(id: string, name: string): Promise<void> {
 }
 
 async function refreshMeta(): Promise<void> {
+  const generation = ++_metaGeneration;
   try {
-    _meta = await vynl.listPlaylists();
+    const meta = await vynl.listPlaylists();
+    if (generation === _metaGeneration) _meta = meta;
+    await fetchAll(generation);
   } catch (e) {
     console.warn("refreshMeta failed:", e);
   }
@@ -143,6 +183,8 @@ async function refreshMeta(): Promise<void> {
 export async function deletePlaylist(id: string): Promise<DeleteTracksResult> {
   const result = await vynl.deletePlaylist(id);
   _selectGeneration += 1;
+  _metaGeneration += 1;
+  _meta = _meta.filter((p) => p.id !== id);
   await refreshMeta();
   const next = { ..._all };
   delete next[id];
@@ -259,8 +301,16 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
   return [...seen.values()];
 }
 
+const _tracksCache = new Map<
+  Playlist,
+  { library: LibraryTrack[] | null; result: LibraryTrack[] }
+>();
+
 export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
+  const cached = _tracksCache.get(pl);
+  if (cached && cached.library === library) return cached.result;
+
   if (_pathSource !== library) {
     const next = new Map<string, LibraryTrack>();
     for (const track of library) next.set(track.path, track);
@@ -274,6 +324,27 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
     const track = _pathMap.get(path);
     if (track) localTracks.push(track);
   }
+  const localSongDurations = new Map<string, number[]>();
+  for (const track of localTracks) {
+    if (!(track.duration > 0)) continue;
+    const key = songKey(track.title, track.artist);
+    const list = localSongDurations.get(key);
+    if (list) {
+      list.push(track.duration);
+    } else {
+      localSongDurations.set(key, [track.duration]);
+    }
+  }
+  const hasLocalMatch = (stream: LibraryTrack): boolean => {
+    if (!(stream.duration > 0)) return false;
+    const durations = localSongDurations.get(
+      songKey(stream.title, stream.artist),
+    );
+    return (
+      durations !== undefined &&
+      durations.some((d) => Math.abs(d - stream.duration) <= 3)
+    );
+  };
   const result: LibraryTrack[] = [];
   for (const path of pl.paths) {
     if (isCataloguePath(path)) {
@@ -281,12 +352,18 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
       const track = id ? streams.get(id) : undefined;
       if (!track) continue;
       const stream = streamTrackOf(track);
-      if (localTracks.some((local) => isSameSong(local, stream))) continue;
+      if (hasLocalMatch(stream)) continue;
       result.push(stream);
       continue;
     }
     const track = _pathMap.get(path);
     if (track) result.push(track);
+  }
+
+  _tracksCache.set(pl, { library, result });
+  if (_tracksCache.size > 64) {
+    const oldest = _tracksCache.keys().next().value;
+    if (oldest !== undefined) _tracksCache.delete(oldest);
   }
   return result;
 }
@@ -313,8 +390,21 @@ export function getPlaylistCustomCover(id: string): string | null {
   return _all[id]?.cover ?? null;
 }
 
+const _coversCache = new Map<
+  Playlist,
+  { failed: Set<string>; result: string[] }
+>();
+
 export function getPlaylistCovers(id: string): string[] {
   const pl = _all[id];
   if (!pl) return [];
-  return resolvePlaylistCovers(pl.cover, tracksOf(pl));
+  const cached = _coversCache.get(pl);
+  if (cached && cached.failed === _failedCovers) return cached.result;
+  const result = resolvePlaylistCovers(pl.cover, tracksOf(pl));
+  _coversCache.set(pl, { failed: _failedCovers, result });
+  if (_coversCache.size > 128) {
+    const oldest = _coversCache.keys().next().value;
+    if (oldest !== undefined) _coversCache.delete(oldest);
+  }
+  return result;
 }

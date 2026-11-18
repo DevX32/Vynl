@@ -22,8 +22,6 @@
   const calm =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const unit = (pct: number) => Math.min(1, Math.max(0, pct / 100));
 </script>
 
 <div class="stack" aria-live="polite" aria-atomic="false">
@@ -51,7 +49,11 @@
         <X size={12} strokeWidth={1.5} />
       </button>
 
-      <span class="timer" aria-hidden="true" style:transform={`scaleX(${unit(toast.progress)})`}></span>
+      <span
+        class="timer"
+        aria-hidden="true"
+        style:animation-duration="{toast.duration}ms"
+      ></span>
     </div>
   {/each}
 </div>
@@ -150,6 +152,18 @@
     background: var(--tone);
     opacity: 0.6;
     transform-origin: left;
+    animation-name: shrink;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes shrink {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

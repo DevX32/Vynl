@@ -364,9 +364,13 @@ async fn enrich_covers(client: &Client, tracks: &mut [TrackMeta]) {
     }
 
     let mut results: Vec<(String, Option<String>)> = Vec::new();
+    let total = missing_ids.len();
+    let mut done = 0usize;
     for h in handles {
         if let Ok((id, cover)) = h.await {
             results.push((id, cover));
+            done += 1;
+            crate::services::progress::emit("covers", done, total);
         }
     }
 

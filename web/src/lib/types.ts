@@ -259,6 +259,12 @@ export interface StreamImportResult {
   unmatched: { title: string; artist: string }[];
 }
 
+export interface ImportProgressEvent {
+  phase: "resolve" | "covers" | "match" | "save";
+  done: number;
+  total: number;
+}
+
 export interface ToolStatus {
   name: ToolName;
   installed: boolean;

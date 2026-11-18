@@ -41,6 +41,7 @@ import type {
   CatalogueTrack,
   DeleteTracksResult,
   StreamImportResult,
+  ImportProgressEvent,
 } from "../lib/types";
 
 async function cmd<T>(command: string, args?: InvokeArgs): Promise<T> {
@@ -432,6 +433,11 @@ export const vynl = {
       playlistId: playlistId ?? null,
       playlistName: playlistName ?? null,
     }),
+
+  cancelStreamImport: (): Promise<void> => cmd("cancel_stream_import"),
+
+  onImportProgress: (cb: (event: ImportProgressEvent) => void): (() => void) =>
+    onEvent<ImportProgressEvent>("vynl:import:progress", cb),
 
   clearAudioCache: (): Promise<void> => cmd("clear_audio_cache"),
 };

@@ -6,7 +6,7 @@ interface ToastItem {
   id: number;
   message: string;
   kind: ToastKind;
-  progress: number;
+  duration: number;
 }
 
 let nextId = 0;
@@ -123,28 +123,8 @@ function dismiss(id: number) {
 }
 
 function createDismissTimer(id: number, duration: number): void {
-  const started = Date.now();
-  let frame = 0;
-
-  const stop = () => {
-    cancelAnimationFrame(frame);
-    timers.delete(id);
-  };
-
-  const tick = () => {
-    const pct = Math.max(0, 100 - ((Date.now() - started) / duration) * 100);
-    items.update((l) =>
-      l.map((x) => (x.id === id ? { ...x, progress: pct } : x)),
-    );
-    if (pct <= 0) {
-      dismiss(id);
-      return;
-    }
-    frame = requestAnimationFrame(tick);
-  };
-
-  timers.set(id, stop);
-  frame = requestAnimationFrame(tick);
+  const timeout = setTimeout(() => dismiss(id), duration);
+  timers.set(id, () => clearTimeout(timeout));
 }
 
 function push(message: string, kind: ToastKind = "info", duration = 3000) {
@@ -158,7 +138,7 @@ function push(message: string, kind: ToastKind = "info", duration = 3000) {
     id = nextId++;
     return [
       ...l,
-      { id, message, kind, progress: 100 },
+      { id, message, kind, duration },
     ];
   });
 

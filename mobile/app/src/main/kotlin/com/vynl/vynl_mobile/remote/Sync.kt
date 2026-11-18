@@ -204,9 +204,8 @@ class Sync(context: Context) {
         var pulled = 0
         var deleted = 0
         var failed = 0
-        var consumed = mutableSetOf<String>()
+        val consumed = mutableSetOf<String>()
         val known = mutableSetOf<String>()
-        // Folded-out stale duplicates must not be pushed back as new rows.
         known += folded.staleIds
 
         for (row in rows) {
@@ -216,9 +215,6 @@ class Sync(context: Context) {
             val deletedAt = if (row.isNull("deleted_at")) null else row.optLong("deleted_at")
 
             if (deletedAt != null) {
-                // Strict resolution: a tombstoned row may only delete a
-                // playlist that exactly matches its own local_id. Name
-                // matching here could rekey and delete a merged, live one.
                 val strictLocal = store.playlist(canonical)
                 when {
                     strictLocal == null -> {}

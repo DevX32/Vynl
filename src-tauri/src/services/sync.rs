@@ -23,6 +23,9 @@ const TABLE: &str = "playlists";
 const ORDER_TABLE: &str = "library_order";
 const SESSION_DIR: &str = "cloud";
 const SESSION_FILE: &str = "session.json";
+const PENDING_TOMBSTONES_FILE: &str = "playlist-tombstones.json";
+
+const MAX_PENDING_TOMBSTONES: usize = 200;
 
 enum LocalResolution {
     Present(Playlist),
@@ -601,6 +604,95 @@ fn clear_session(data_dir: &Path) {
     let _ = std::fs::remove_file(session_path(data_dir));
 }
 
+fn pending_tombstones_path(data_dir: &Path) -> PathBuf {
+    data_dir.join(SESSION_DIR).join(PENDING_TOMBSTONES_FILE)
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingTombstone {
+    id: String,
+    name: String,
+    created_at: i64,
+    deleted_at: i64,
+}
+
+fn read_pending_tombstones(data_dir: &Path) -> Vec<PendingTombstone> {
+    let path = pending_tombstones_path(data_dir);
+    if let Some(parsed) = util::read_json::<Vec<PendingTombstone>>(&path) {
+        return parsed;
+    }
+    util::read_json::<Vec<(String, i64)>>(&path)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, deleted_at)| PendingTombstone {
+            id,
+            name: String::new(),
+            created_at: 0,
+            deleted_at,
+        })
+        .collect()
+}
+
+fn write_pending_tombstones(data_dir: &Path, entries: &[PendingTombstone]) {
+    let _ = util::write_json(&pending_tombstones_path(data_dir), &entries);
+}
+
+fn record_pending_tombstone(data_dir: &Path, id: &str, name: &str, created_at: i64) -> i64 {
+    let mut entries = read_pending_tombstones(data_dir);
+    if let Some(existing) = entries.iter().find(|existing| existing.id == id) {
+        return existing.deleted_at;
+    }
+    let at = now_ms();
+    entries.push(PendingTombstone {
+        id: id.to_string(),
+        name: name.trim().to_string(),
+        created_at,
+        deleted_at: at,
+    });
+    if entries.len() > MAX_PENDING_TOMBSTONES {
+        entries.sort_by_key(|entry| entry.deleted_at);
+        let keep = entries.split_off(entries.len() - MAX_PENDING_TOMBSTONES);
+        write_pending_tombstones(data_dir, &keep);
+    } else {
+        write_pending_tombstones(data_dir, &entries);
+    }
+    at
+}
+
+async fn patch_remote_tombstone(
+    data_dir: &Path,
+    session: &Session,
+    id: &str,
+    deleted_at: i64,
+) -> bool {
+    if !crate::services::playlists::validate_id(id) {
+        return false;
+    }
+    let Ok(client) = http() else {
+        return false;
+    };
+    let request = client
+        .patch(format!(
+            "{}/rest/v1/{}?user_id=eq.{}&local_id=eq.{}",
+            base_url(),
+            TABLE,
+            session.user_id,
+            urlencoding::encode(id),
+        ))
+        .header("Content-Type", "application/json")
+        .header("Prefer", "return=minimal")
+        .json(&json!({ "deleted_at": deleted_at }));
+    match rest_headers(data_dir, request).await {
+        Ok(request) => request
+            .send()
+            .await
+            .map(|response| response.status().is_success())
+            .unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
 fn http() -> Result<reqwest::Client, String> {
     if !sync_enabled() {
         return Err("Vynl isn't configured.".into());
@@ -1166,35 +1258,83 @@ pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
     let _ = upsert_rows(data_dir, &[playlist_value_push(&session, playlist, &maps)]).await;
 }
 
-pub async fn tombstone_playlist(data_dir: &Path, id: &str) {
+fn norm_id(id: &str) -> String {
+    util::norm_path_key(id)
+}
+
+pub async fn tombstone_playlist(
+    data_dir: &Path,
+    id: &str,
+    name: &str,
+    created_at: i64,
+    signature: &[String],
+) {
     if !sync_enabled() {
         return;
     }
-    let Some(session) = read_session(data_dir) else {
-        return;
-    };
-    if valid_session(data_dir).await.is_err() {
-        return;
-    }
-    let Ok(client) = http() else {
-        return;
-    };
     if !crate::services::playlists::validate_id(id) {
         return;
     }
-    let request = client
-        .patch(format!(
-            "{}/rest/v1/{}?user_id=eq.{}&local_id=eq.{}",
-            base_url(),
-            TABLE,
-            session.user_id,
-            urlencoding::encode(id),
-        ))
-        .header("Content-Type", "application/json")
-        .header("Prefer", "return=minimal")
-        .json(&json!({ "deleted_at": now_ms() }));
-    if let Ok(request) = rest_headers(data_dir, request).await {
-        let _ = request.send().await;
+    let at = record_pending_tombstone(data_dir, id, name, created_at);
+    if read_session(data_dir).is_none() {
+        eprintln!(
+            "[Vynl sync] playlist deletion recorded locally; not signed in — will sync later"
+        );
+        return;
+    }
+    let session = match valid_session(data_dir).await {
+        Ok(session) => session,
+        Err(error) => {
+            eprintln!("[Vynl sync] playlist deletion waiting for session: {error}");
+            return;
+        }
+    };
+    let own_row = patch_remote_tombstone(data_dir, &session, id, at).await;
+    patch_equivalent_tombstones(data_dir, &session, name, signature, at).await;
+    eprintln!(
+        "[Vynl sync] playlist {name} deleted (own row: {})",
+        if own_row {
+            "tombstoned"
+        } else {
+            "failed — kept pending"
+        },
+    );
+}
+
+async fn patch_equivalent_tombstones(
+    data_dir: &Path,
+    session: &Session,
+    name: &str,
+    signature: &[String],
+    deleted_at: i64,
+) {
+    if name.trim().is_empty() && signature.is_empty() {
+        return;
+    }
+    let wanted_name = name.trim().to_lowercase();
+    let wanted_ids: std::collections::HashSet<String> =
+        signature.iter().map(|s| norm_id(s)).collect();
+    let Ok(rows) = fetch_rows(data_dir).await else {
+        return;
+    };
+    for row in &rows {
+        if row.deleted_at.is_some() {
+            continue;
+        }
+        let same_name = !wanted_name.is_empty() && row.name.trim().to_lowercase() == wanted_name;
+        let same_tracks = !wanted_ids.is_empty()
+            && row
+                .tracks
+                .iter()
+                .any(|track| wanted_ids.contains(&norm_id(&track.id)));
+        let same_playlist = if wanted_ids.is_empty() {
+            same_name
+        } else {
+            same_name && same_tracks
+        };
+        if same_playlist {
+            let _ = patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await;
+        }
     }
 }
 
@@ -1228,12 +1368,46 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         return Err("Vynl isn't configured.".into());
     }
     let session = valid_session(data_dir).await?;
+    let pending = read_pending_tombstones(data_dir);
+    if !pending.is_empty() {
+        let mut still_pending = Vec::with_capacity(pending.len());
+        for entry in &pending {
+            if !patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
+                still_pending.push(entry.clone());
+            }
+            patch_equivalent_tombstones(data_dir, &session, &entry.name, &[], entry.deleted_at)
+                .await;
+        }
+        write_pending_tombstones(data_dir, &still_pending);
+    }
     let raw_rows = fetch_rows(data_dir).await?;
     let maps = library_mark_maps(data_dir);
     let folded = fold_equivalent_rows(raw_rows);
     let mut rows = folded.rows;
     for row in &mut rows {
         translate_marks_inbound(row, &maps);
+    }
+    let pending = read_pending_tombstones(data_dir);
+    if !pending.is_empty() {
+        for row in &mut rows {
+            if row.deleted_at.is_some() {
+                continue;
+            }
+            let wanted = normalized_name(&row.name);
+            let forced = pending
+                .iter()
+                .filter(|entry| {
+                    entry.id == row.local_id
+                        || (!entry.name.is_empty()
+                            && normalized_name(&entry.name) == wanted
+                            && row.created_at <= entry.deleted_at)
+                })
+                .map(|entry| entry.deleted_at)
+                .max();
+            if let Some(at) = forced {
+                row.deleted_at = Some(at);
+            }
+        }
     }
 
     let local_order_updated = playlists::order_updated_at(output_dir);

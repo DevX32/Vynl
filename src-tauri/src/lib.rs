@@ -367,6 +367,7 @@ pub fn run() {
             crate::services::catalogue::catalogue_save_to_playlist,
             crate::services::catalogue::catalogue_taste,
             crate::services::importer::import_stream_playlist,
+            commands::cancel_stream_import,
             commands::downloaded_paths,
             commands::start_download,
             commands::cancel_download,

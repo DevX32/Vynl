@@ -34,6 +34,7 @@
     setPlaylistCover,
     createPlaylist,
     reorderPlaylists,
+    setCurrentPlaylist,
   } from "@state/playlists.svelte";
   import ContextMenu, { type CtxEntry } from "./components/ContextMenu.svelte";
   import Dialog from "./components/Dialog.svelte";
@@ -300,7 +301,9 @@
 
   function onMovedToVynl(result: StreamImportResult): void {
     moveToVynlOpen = false;
+    setCurrentPlaylist(result.playlist);
     void refreshPlaylists();
+    navigate("playlist");
     const name = result.playlist.name;
     if (result.unmatched.length === 0) {
       toasts.success(t("moveToVynl.done", { n: result.matched, name }));
@@ -314,7 +317,6 @@
         }),
       );
     }
-    void openPlaylist(result.playlist.id);
   }
 
   function newPlaylist(): void {

@@ -1,10 +1,15 @@
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
 use crate::commands::types::*;
 use crate::services::{cover_cache, downloader, playlists};
+
+static IMPORT_BUSY: AtomicBool = AtomicBool::new(false);
+
+const IMPORT_BUSY_MESSAGE: &str = "An import is already running.";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +101,25 @@ pub async fn import_stream_playlist(
     playlist_name: Option<String>,
     app: AppHandle,
 ) -> Result<StreamImportResult, String> {
+    if IMPORT_BUSY
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(IMPORT_BUSY_MESSAGE.into());
+    }
+    crate::services::progress::set_emitter(Some(app.clone()));
+    let result = do_import(collection, playlist_id, playlist_name, app).await;
+    crate::services::progress::set_emitter(None);
+    IMPORT_BUSY.store(false, Ordering::SeqCst);
+    result
+}
+
+async fn do_import(
+    collection: Collection,
+    playlist_id: Option<String>,
+    playlist_name: Option<String>,
+    app: AppHandle,
+) -> Result<StreamImportResult, String> {
     if collection.kind != CollectionKind::Playlist {
         return Err("That link is not a supported playlist.".into());
     }
@@ -119,7 +143,7 @@ pub async fn import_stream_playlist(
     let mut seen_video_ids: HashSet<String> = HashSet::with_capacity(collection.tracks.len());
 
     if direct_picks {
-        for track in &collection.tracks {
+        for (index, track) in collection.tracks.iter().enumerate() {
             let video_id = extract_video_id(&track.url);
             match video_id {
                 Some(id) => {
@@ -132,9 +156,13 @@ pub async fn import_stream_playlist(
                     artist: track.artist.clone(),
                 }),
             }
+            crate::services::progress::emit("match", index + 1, collection.tracks.len());
         }
     } else {
         let matches = downloader::find_matches(&collection, &user_data).await?;
+        if downloader::find_cancelled() {
+            return Err("Import cancelled.".into());
+        }
         for track in &collection.tracks {
             let candidates = matches.get(&track.id).cloned().unwrap_or_default();
             let ranked = downloader::filter_and_rank_candidates(candidates, track);
@@ -160,11 +188,13 @@ pub async fn import_stream_playlist(
     let matched = picked.len() as u64;
     let total = matched + unmatched.len() as u64;
 
+    crate::services::progress::emit("save", 1, 3);
+
     let requested_id = playlist_id
         .map(|id| id.trim().to_string())
         .filter(|id| !id.is_empty());
     let mut created_new = false;
-    let mut playlist = match requested_id {
+    let playlist = match requested_id {
         Some(id) => {
             if !playlists::validate_id(&id) {
                 return Err("invalid playlist id".into());
@@ -186,7 +216,17 @@ pub async fn import_stream_playlist(
         }
     };
 
-    playlist = playlists::add_streams_to_playlist(&output, &playlist.id, &picked)?;
+    let mut playlist = match playlists::add_streams_to_playlist(&output, &playlist.id, &picked) {
+        Ok(updated) => updated,
+        Err(error) => {
+            if created_new {
+                let _ = playlists::delete_playlist(&output, &user_data, &playlist.id);
+            }
+            return Err(error);
+        }
+    };
+
+    crate::services::progress::emit("save", 2, 3);
 
     if created_new
         && let Some(cover_url) = collection
@@ -208,6 +248,8 @@ pub async fn import_stream_playlist(
             }
         }
     }
+
+    crate::services::progress::emit("save", 3, 3);
 
     crate::commands::sync_playlist(&app, &playlist);
 

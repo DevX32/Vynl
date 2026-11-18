@@ -607,8 +607,6 @@ impl StreamCache {
             return;
         }
         if let Ok(bytes) = serde_json::to_vec_pretty(&state.index) {
-            // Write-then-rename atomically: a crash mid-write must not leave
-            // a truncated index that would wipe the entire cache on next open.
             let tmp = self.index_path().with_extension("json.tmp");
             let target = self.index_path();
             if std::fs::write(&tmp, &bytes).is_ok() && std::fs::rename(&tmp, &target).is_ok() {

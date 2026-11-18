@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use serde_json::Value;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::Mutex;
 
 use crate::commands::types::*;
 
@@ -36,6 +36,12 @@ const YTM_SEARCH_COUNT: usize = 12;
 const YT_SEARCH_COUNT: usize = 12;
 
 const MIN_SEARCH_CANDIDATES: usize = 5;
+
+const MATCH_WORKERS: usize = 6;
+
+const YTMUSIC_SEARCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
+
+const SEARCH_QUERY_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
 
 const MATCH_CACHE_FILE: &str = "match-cache.json";
 
@@ -144,9 +150,10 @@ fn search_source(
             break;
         }
 
+        let query_timeout = remaining.min(SEARCH_QUERY_BUDGET);
         let args = source_search_args(source, q, per_query);
 
-        if let Some(data) = run_yt_json(ytdlp, &args, remaining) {
+        if let Some(data) = run_yt_json(ytdlp, &args, query_timeout) {
             parse_search_entries(&data, source, &mut out);
         }
     }
@@ -166,7 +173,9 @@ fn ytmusic_client() -> &'static ytmusic::YtMusic {
 }
 
 async fn search_via_ytmusic(query: &str) -> Vec<SearchCandidate> {
-    let Ok(tracks) = ytmusic_client().search_songs(query).await else {
+    let result =
+        tokio::time::timeout(YTMUSIC_SEARCH_TIMEOUT, ytmusic_client().search_songs(query)).await;
+    let Ok(Ok(tracks)) = result else {
         return vec![];
     };
 
@@ -351,26 +360,23 @@ pub async fn find_matches(
     CANCELLED_FIND.store(false, Ordering::SeqCst);
     let ytdlp = resolve_tool("yt-dlp", user_data_dir);
 
+    let total = collection.tracks.len();
     let result: Arc<Mutex<HashMap<String, Vec<SearchCandidate>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let index = Arc::new(AtomicUsize::new(0));
-    let semaphore = Arc::new(Semaphore::new(4));
+    let done = Arc::new(AtomicUsize::new(0));
     let data_dir = user_data_dir.to_path_buf();
 
     let mut handles = Vec::new();
-    for _ in 0..4 {
+    for _ in 0..MATCH_WORKERS {
         let ytdlp = ytdlp.clone();
         let collection = collection.clone();
         let result = Arc::clone(&result);
         let index = Arc::clone(&index);
-        let semaphore = Arc::clone(&semaphore);
+        let done = Arc::clone(&done);
         let data_dir = data_dir.clone();
 
         handles.push(tokio::spawn(async move {
-            let _permit = match semaphore.acquire().await {
-                Ok(p) => p,
-                Err(_) => return,
-            };
             loop {
                 if CANCELLED_FIND.load(Ordering::Relaxed) {
                     break;
@@ -381,8 +387,12 @@ pub async fn find_matches(
                 }
                 let track = &collection.tracks[i];
                 let candidates = resolve_candidates(ytdlp.as_deref(), track, &data_dir).await;
-                let mut res = result.lock().await;
-                res.insert(track.id.clone(), candidates);
+                {
+                    let mut res = result.lock().await;
+                    res.insert(track.id.clone(), candidates);
+                }
+                let finished = done.fetch_add(1, Ordering::Relaxed) + 1;
+                crate::services::progress::emit("match", finished, total);
             }
         }));
     }
@@ -399,6 +409,14 @@ pub async fn find_matches(
     with_match_cache(user_data_dir, |s| match_cache_save(s, true));
 
     Ok(final_result)
+}
+
+pub(crate) fn find_cancelled() -> bool {
+    CANCELLED_FIND.load(Ordering::SeqCst)
+}
+
+pub(crate) fn cancel_find() {
+    CANCELLED_FIND.store(true, Ordering::SeqCst);
 }
 
 pub(super) async fn search_and_rank_candidates(

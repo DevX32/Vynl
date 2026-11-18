@@ -28,6 +28,7 @@ use process::{
     progress_from_line, watch_for_stall,
 };
 pub use search::find_matches;
+pub(crate) use search::{cancel_find, find_cancelled};
 use search::{common_yt_args, search_and_rank_candidates};
 
 const VERIFY_TOLERANCE: f64 = 0.10;

@@ -65,8 +65,12 @@
 
   $effect(() => {
     void pl?.id;
-    q = "";
-    if (pl && pl.streams.length > 0) registerCatalogueTracks(pl.streams);
+    if (q !== "") q = "";
+    const streams = pl?.streams;
+    if (streams && streams.length > 0) {
+      const id = window.setTimeout(() => registerCatalogueTracks(streams), 0);
+      return () => window.clearTimeout(id);
+    }
   });
 
   const currentTracks = $derived(pl ? tracksOf(pl) : []);

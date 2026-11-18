@@ -16,11 +16,9 @@ export async function completeOnboarding(name: string): Promise<void> {
   try {
     await patchSettings({ displayName: trimmed });
   } catch {
-    // keep going — the localStorage flag is what gates the screen
   }
   try {
     localStorage.setItem(STORAGE_KEY, "1");
   } catch {
-    // localStorage unavailable — private mode, etc.
   }
 }

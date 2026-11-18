@@ -600,9 +600,6 @@ class Store(context: Context) {
                         visibleOrder += key
                     }
                 }
-                // Keep phone-local additions that haven't round-tripped to the
-                // desktop yet; they are tracked in this playlist by the local
-                // add marks and must survive a desktop-authoritative rebuild.
                 val incomingSet = incomingKeys.toHashSet()
                 for (trackId in localTrackIds) {
                     val key = "ytm:$trackId"

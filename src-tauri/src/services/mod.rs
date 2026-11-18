@@ -18,6 +18,7 @@ pub mod opusmux;
 pub mod player;
 pub mod playlists;
 pub mod process;
+pub(crate) mod progress;
 pub mod queue;
 pub mod rpc;
 pub mod settings;

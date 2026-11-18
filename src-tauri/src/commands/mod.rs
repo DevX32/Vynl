@@ -97,8 +97,11 @@ fn get_user_data_and_settings(app: &AppHandle) -> Result<(std::path::PathBuf, Se
 }
 
 #[tauri::command]
-pub async fn resolve(url: String) -> Result<Collection, String> {
-    crate::services::downloader::resolve_link(&url).await
+pub async fn resolve(url: String, app: AppHandle) -> Result<Collection, String> {
+    crate::services::progress::set_emitter(Some(app.clone()));
+    let result = crate::services::downloader::resolve_link(&url).await;
+    crate::services::progress::set_emitter(None);
+    result
 }
 
 #[tauri::command]
@@ -288,6 +291,11 @@ pub async fn matches(
     }
     let user_data = user_data_dir(&app)?;
     crate::services::downloader::find_matches(&collection, &user_data).await
+}
+
+#[tauri::command]
+pub async fn cancel_stream_import() {
+    crate::services::downloader::cancel_find();
 }
 
 #[tauri::command]
@@ -640,6 +648,13 @@ pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksR
     let mut deleted = 0_u64;
     let mut failed = 0_u64;
     if let Some(playlist) = crate::services::playlists::get_playlist(&output, &id) {
+        let signature: Vec<String> = playlist
+            .paths
+            .iter()
+            .filter_map(|path| path.strip_prefix("ytm:").map(str::to_string))
+            .collect();
+        let tomb_name = playlist.name.clone();
+        let tomb_created = playlist.created_at;
         let mut stale: Vec<String> = Vec::new();
         for path in playlist
             .paths
@@ -667,9 +682,11 @@ pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksR
         if !stale.is_empty() {
             crate::services::playlists::remove_paths_from_all(&output, &stale);
         }
+        sync_playlist_delete(&app, &id, Some(&tomb_name), Some(tomb_created), &signature);
+    } else {
+        sync_playlist_delete(&app, &id, None, None, &[]);
     }
     crate::services::playlists::delete_playlist(&output, &user_data, &id)?;
-    sync_playlist_delete(&app, &id);
     Ok(DeleteTracksResult { deleted, failed })
 }
 
@@ -812,16 +829,24 @@ pub(crate) fn sync_playlist(app: &AppHandle, playlist: &Playlist) {
     }
 }
 
-pub(crate) fn sync_playlist_delete(app: &AppHandle, id: &str) {
+pub(crate) fn sync_playlist_delete(
+    app: &AppHandle,
+    id: &str,
+    name: Option<&str>,
+    created_at: Option<i64>,
+    signature: &[String],
+) {
     let Ok(user_data) = user_data_dir(app) else {
         return;
     };
-    if crate::services::sync::status(&user_data).signed_in {
-        let id = id.to_string();
-        tauri::async_runtime::spawn(async move {
-            crate::services::sync::tombstone_playlist(&user_data, &id).await;
-        });
-    }
+    let id = id.to_string();
+    let name = name.unwrap_or_default().to_string();
+    let created_at = created_at.unwrap_or(0);
+    let signature = signature.to_vec();
+    tauri::async_runtime::spawn(async move {
+        crate::services::sync::tombstone_playlist(&user_data, &id, &name, created_at, &signature)
+            .await;
+    });
 }
 
 #[tauri::command]

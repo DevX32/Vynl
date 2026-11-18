@@ -351,7 +351,6 @@ html[data-theme="espresso"] .tbl-head {
   background: var(--accent);
 }
 
-/* Blobatar: idles in place — no hover lift or scale */
 .mo-root.mo-root:hover {
   transform: none;
 }

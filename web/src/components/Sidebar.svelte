@@ -71,7 +71,7 @@
     onOpenLikedSongs: () => void;
   } = $props();
 
-  let railSnapshot: typeof playlists | undefined;
+  let railSnapshot: typeof playlists | undefined = $state(undefined);
   const railList = $derived(railSnapshot ?? playlists);
   const { drag, start, shouldSkipClick } = useDragList({
     pathAt: (_section, idx) => railList[idx]?.id,

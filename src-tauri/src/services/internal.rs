@@ -508,6 +508,7 @@ pub async fn fetch_all_playlist_tracks(playlist_id: &str) -> Result<Collection, 
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
+        crate::services::progress::emit("resolve", all_items.len(), total_count as usize);
     }
 
     let pages = page_count(total_count);
@@ -527,6 +528,7 @@ pub async fn fetch_all_playlist_tracks(playlist_id: &str) -> Result<Collection, 
                 .cloned()
                 .unwrap_or_default();
             all_items.extend(items);
+            crate::services::progress::emit("resolve", all_items.len(), total_count as usize);
         }
     }
 
@@ -590,6 +592,7 @@ pub async fn fetch_all_album_tracks(album_id: &str) -> Result<Collection, String
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
+        crate::services::progress::emit("resolve", all_items.len(), total_count as usize);
     }
 
     let pages = page_count(total_count);
@@ -609,6 +612,7 @@ pub async fn fetch_all_album_tracks(album_id: &str) -> Result<Collection, String
                 .cloned()
                 .unwrap_or_default();
             all_items.extend(items);
+            crate::services::progress::emit("resolve", all_items.len(), total_count as usize);
         }
     }
 
