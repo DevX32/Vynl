@@ -57,19 +57,30 @@ data class Lyrics(
             return Lyrics(kind, text, withEstimatedWords(parseLrc(text)))
         }
 
+        private val TIMESTAMP_GROUP = Regex("\\[[^\\]]*\\]")
+
         private fun parseLrc(text: String): List<LyricLine> {
             val lines = mutableListOf<LyricLine>()
             for (raw in text.lines()) {
                 val trimmed = raw.trim()
                 if (trimmed.isEmpty()) continue
-                if (trimmed.startsWith("[") && trimmed.contains(":")) {
-                    val close = trimmed.indexOf(']')
-                    if (close < 0) continue
-                    val stamp = trimmed.substring(1, close)
-                    for (time in parseStamp(stamp)) {
-                        val body = trimmed.substring(close + 1)
-                        lines += LyricLine(time, stripTags(body), wordsOf(body))
-                    }
+                if (!trimmed.startsWith("[")) continue
+                var end = 0
+                val stampRun = mutableListOf<MatchResult>()
+                for (group in TIMESTAMP_GROUP.findAll(trimmed)) {
+                    if (group.range.first != end) break
+                    stampRun += group
+                    end = group.range.last + 1
+                }
+                if (stampRun.isEmpty()) continue
+                val body = trimmed.substring(end)
+                val times = mutableListOf<Long>()
+                for (group in stampRun) {
+                    times += parseStamp(group.value.substring(1, group.value.length - 1))
+                }
+                if (times.isEmpty()) continue
+                for (time in times) {
+                    lines += LyricLine(time, stripTags(body), wordsOf(body))
                 }
             }
             return lines.sortedBy { it.timeMs }

@@ -11,6 +11,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.vynl.vynl_mobile.data.CatalogueRepository
 import com.vynl.vynl_mobile.data.CatalogueTrack
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -59,6 +61,7 @@ class PlayerController(
     private val resolved = mutableMapOf<Int, String>()
     private var poll: Job? = null
     private var filling = false
+    private val connectMutex = Mutex()
 
     private val window = 3
 
@@ -98,6 +101,18 @@ class PlayerController(
     }
 
     suspend fun connect() {
+        connectMutex.withLock {
+            if (controller != null) return@withLock
+            try {
+                connectOnce()
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(connected = false, error = "could not connect to the player")
+                throw error
+            }
+        }
+    }
+
+    private suspend fun connectOnce() {
         if (controller != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
@@ -135,14 +150,20 @@ class PlayerController(
             queueStart = startIndex.coerceIn(0, tracks.lastIndex)
             localFiles = files
             resolved.clear()
+            try {
+                connect()
+            } catch (_: Exception) {
+                return@launch
+            }
+            val c = controller ?: return@launch
             val items = resolve(queueStart)
             if (items.isEmpty()) {
                 _state.value = _state.value.copy(error = "could not play that track")
                 return@launch
             }
-            controller?.setMediaItems(items, 0, 0L)
-            controller?.prepare()
-            controller?.play()
+            c.setMediaItems(items, 0, 0L)
+            c.prepare()
+            c.play()
         }
     }
 
@@ -171,7 +192,7 @@ class PlayerController(
     private suspend fun resolve(from: Int): List<MediaItem> = coroutineScope {
         val end = minOf(playlist.size, from + window)
         if (from >= end) return@coroutineScope emptyList()
-        val items = (from until end).map { index ->
+        val results = (from until end).map { index ->
             async {
                 val track = playlist[index]
                 val local = localFiles[track.id]
@@ -180,12 +201,19 @@ class PlayerController(
                 } else {
                     val url = resolved[index] ?: runCatching {
                         repository.stream(track.id).url
-                    }.getOrNull()?.also { resolved[index] = it }
+                    }.getOrNull()?.takeIf { it.isNotBlank() }?.also { resolved[index] = it }
                     url?.let { mediaItem(track, it) }
                 }
             }
         }.awaitAll()
-        items.filterNotNull()
+        val failed = (from until end).filter { results[it - from] == null }
+        if (failed.isNotEmpty()) {
+            playlist = playlist.filterIndexed { idx, _ -> idx !in failed }
+            
+            
+            resolved.clear()
+        }
+        results.filterNotNull()
     }
 
     private fun fillAhead() {
@@ -253,40 +281,42 @@ class PlayerController(
 
     fun moveInQueue(from: Int, to: Int) {
         if (from == to || from !in playlist.indices || to !in playlist.indices) return
-        val oldStart = queueStart
+        val oldPosition = controller?.currentPosition ?: 0L
+        val play = controller?.isPlaying != false
         val mutable = playlist.toMutableList()
         val item = mutable.removeAt(from)
         mutable.add(to, item)
         playlist = mutable
-        queueStart = run {
-            var mapped = oldStart
-            if (from == oldStart) {
-                mapped = to
-            } else {
-                if (from < oldStart) mapped -= 1
-                if (to <= mapped) mapped += 1
-            }
-            mapped
+        val playing = controller?.let { queueStart + it.currentMediaItemIndex } ?: from
+        val newPlaying = when {
+            playing == from -> to
+            from < playing && playing <= to -> playing - 1
+            to <= playing && playing < from -> playing + 1
+            else -> playing
         }
-        val player = controller ?: return
-        if (player.mediaItemCount > 0) {
-            val loadedFrom = from - oldStart
-            val loadedTo = to - oldStart
-            if (loadedFrom in 0 until player.mediaItemCount && loadedTo in 0 until player.mediaItemCount) {
-                player.moveMediaItem(loadedFrom, loadedTo)
+        queueStart = newPlaying
+        resolved.clear()
+        val player = controller ?: run {
+            return
+        }
+        if (player.mediaItemCount == 0) {
+            return
+        }
+        scope.launch {
+            val items = resolve(newPlaying)
+            if (items.isEmpty()) {
+                return@launch
+            }
+            player.setMediaItems(items, 0, oldPosition)
+            player.prepare()
+            if (play) {
+                player.play()
             }
         }
         _state.value = _state.value.copy(
-            queueIndex = queueStart + (player.currentMediaItemIndex.coerceAtLeast(0)),
+            queueIndex = newPlaying,
             queueSize = playlist.size,
         )
-    }
-
-    fun shuffle() {
-        if (playlist.isEmpty()) return
-        playlist = playlist.shuffled()
-        queueStart = 0
-
     }
 
     fun toggleShuffle() {
@@ -307,7 +337,13 @@ class PlayerController(
         if (playlist.isEmpty()) return
         playlist = playlist.shuffled()
         queueStart = 0
+        resolved.clear()
         scope.launch {
+            try {
+                connect()
+            } catch (_: Exception) {
+                return@launch
+            }
             val items = resolve(0)
             if (items.isEmpty()) {
                 _state.value = _state.value.copy(error = "could not play that track")
@@ -323,6 +359,11 @@ class PlayerController(
         if (index !in playlist.indices) return
         scope.launch {
             queueStart = index
+            try {
+                connect()
+            } catch (_: Exception) {
+                return@launch
+            }
             val items = resolve(index)
             if (items.isEmpty()) {
                 _state.value = _state.value.copy(error = "could not play that track")

@@ -72,6 +72,37 @@ data class PairingPayload(
     val alts: List<String> = emptyList(),
 )
 
+fun isLanHost(value: String): Boolean {
+    val stripped = value.removePrefix("http://").removePrefix("https://").substringBefore('/').trim()
+    val host = when {
+        stripped.startsWith("[") -> stripped.substringAfter('[').substringBefore(']').trim()
+        stripped.count { it == ':' } > 1 -> stripped 
+        else -> stripped.substringBefore(':').trim()
+    }
+    if (host.isEmpty()) return false
+    if (
+        host.equals("localhost", ignoreCase = true) ||
+        host.equals("ip6-localhost", ignoreCase = true) ||
+        host.equals("ip6-loopback", ignoreCase = true)
+    ) {
+        return true
+    }
+    val v6 = host.lowercase()
+    if (v6 == "::1") return true
+    if (v6.startsWith("fe8") || v6.startsWith("fe9") || v6.startsWith("fea") || v6.startsWith("feb")) return true
+    if (v6.startsWith("fc") || v6.startsWith("fd")) return true
+
+    val parts = host.split('.')
+    if (parts.size != 4) return false
+    val nums = parts.map { it.toIntOrNull() ?: return false }
+    if (nums.any { it !in 0..255 }) return false
+    return nums[0] == 10 ||
+        (nums[0] == 172 && nums[1] in 16..31) ||
+        (nums[0] == 192 && nums[1] == 168) ||
+        (nums[0] == 169 && nums[1] == 254) ||
+        nums[0] == 127
+}
+
 fun parsePairingPayload(raw: String): PairingPayload? {
     val uri = runCatching { Uri.parse(raw.trim()) }.getOrNull() ?: return null
     if (!"vynl".equals(uri.scheme, ignoreCase = true)) return null
@@ -80,6 +111,7 @@ fun parsePairingPayload(raw: String): PairingPayload? {
     val host = uri.getQueryParameter("h")?.trim().orEmpty()
     val pin = uri.getQueryParameter("pin")?.trim().orEmpty()
     if (host.isEmpty() || pin.isEmpty()) return null
+    if (!isLanHost(host)) return null
 
     val port = uri.getQueryParameter("p")?.trim().orEmpty()
 
@@ -93,7 +125,7 @@ fun parsePairingPayload(raw: String): PairingPayload? {
     val alts = (uri.getQueryParameter("a") ?: "")
         .split(',')
         .map { it.trim() }
-        .filter { it.isNotEmpty() }
+        .filter { it.isNotEmpty() && isLanHost(it) }
         .map(::withPort)
 
     return PairingPayload(host = withPort(host), pin = pin, alts = alts)
@@ -265,6 +297,9 @@ fun PairScreen(
         onDispose {
             analyzer?.clearAnalyzer()
             scanner?.close()
+            scope.launch {
+                runCatching { cameraProviderFuture?.await()?.unbindAll() }
+            }
         }
     }
 

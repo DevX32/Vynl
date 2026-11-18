@@ -152,7 +152,7 @@ fun PlayerScreen(
                         )
                     }
                     Text(
-                        text = if (playback.queueSize > 0) "${playback.queueIndex + 1} / ${playback.queueSize}" else "â€” / â€”",
+                        text = if (playback.queueSize > 0) "${playback.queueIndex + 1} / ${playback.queueSize}" else "— / —",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Center,
                         color = VynlColors.dim,
@@ -234,7 +234,7 @@ fun PlayerScreen(
                 Spacer(Modifier.height(7.dp))
                 Text(
                     text = listOfNotNull(track?.artist, track?.album?.takeIf { it.isNotBlank() })
-                        .joinToString("  Â·  "),
+                        .joinToString("  ·  "),
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

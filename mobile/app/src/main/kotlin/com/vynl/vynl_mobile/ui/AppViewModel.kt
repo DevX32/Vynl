@@ -170,6 +170,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     private var updateFile: java.io.File? = null
+    private var stagedBuild: Int? = null
 
     private val _installedVersion = MutableStateFlow("")
     val installedVersion: StateFlow<String> = _installedVersion.asStateFlow()
@@ -184,13 +185,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var syncStage by mutableStateOf("Syncing library")
         private set
-    var syncProgressState by mutableStateOf(0f)
-        private set
     private val _syncProgress = MutableStateFlow(0f)
     val syncProgress: StateFlow<Float> = _syncProgress.asStateFlow()
 
     init {
-        viewModelScope.launch { player.connect() }
+        viewModelScope.launch {
+            runCatching { player.connect() }
+                .onFailure { notice = "could not connect to the player" }
+        }
         if (settings.accentSet) {
             Accent.set(androidx.compose.ui.graphics.Color(settings.accent))
         }
@@ -202,8 +204,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         measureDownloads()
         loadMix()
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { store.rekeyLegacyDtPlaylists() }
-            refreshStore()
+            runCatching { withContext(Dispatchers.IO) { store.rekeyLegacyDtPlaylists() } }
+            runCatching { refreshStore() }
         }
         refreshSyncSession()
     }
@@ -304,11 +306,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 syncStatus = withContext(Dispatchers.IO) { sync.status }
                 refreshStore()
                 if (!silent) {
-                    notice = if (result.deleted > 0) {
-                        "Sync sync — ${result.pulled} pulled, ${result.pushed} pushed, ${result.deleted} deleted"
-                    } else {
-                        "Sync sync — ${result.pulled} pulled, ${result.pushed} pushed"
+                    val counts = buildString {
+                        append("Sync sync — ${result.pulled} pulled, ${result.pushed} pushed")
+                        if (result.deleted > 0) append(", ${result.deleted} deleted")
+                        if (result.failed > 0) append(", ${result.failed} failed")
                     }
+                    notice = counts
                 }
             } catch (error: Exception) {
                 syncStatus = withContext(Dispatchers.IO) { sync.status }
@@ -348,6 +351,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     ): String? {
         if (pairing) return "Already pairing"
         pairing = true
+        val previousAddress = desktop.address
+        val previousToken = desktop.token
         return try {
             val candidates = (listOf(address) + alts)
                 .map { it.trim().removePrefix("http://").removePrefix("https://").removeSuffix("/") }
@@ -364,8 +369,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 failure = "That pin was not accepted"
             }
+            desktop.address = previousAddress
+            desktop.token = previousToken
             failure ?: "No desktop address to try"
         } catch (error: Exception) {
+            desktop.address = previousAddress
+            desktop.token = previousToken
             friendly(error)
         } finally {
             pairing = false
@@ -394,7 +403,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             syncing = true
             notice = null
             syncStage = "Fetching catalog"
-            syncProgressState = 0f
+            _syncProgress.value = 0f
             try {
                 val catalog = desktop.catalog()
                 val manifest = desktop.syncManifest().associateBy { it.id }
@@ -409,7 +418,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val toFetch = catalog.filter { track ->
                     val localMtime = existing[track.id]?.mtime
                     val missing = !localAudioPaths.containsKey(track.id)
-                    val changed = track.mtime != null && track.mtime > 0 && localMtime != null && localMtime != track.mtime
+                    val localHasMtime = localMtime != null && localMtime > 0
+                    val trackMtime = track.mtime
+                    val trackKnown = trackMtime != null && trackMtime > 0
+                    val changed = trackKnown && (!localHasMtime || trackMtime != localMtime)
                     missing || changed
                 }
 
@@ -434,24 +446,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         previous.mtime == track.mtime &&
                         previous.lyrics == lyrics
                     if (!unchanged) {
-                        store.addTrack(
-                            CatalogueTrack(
-                                id = track.id,
-                                title = track.title,
-                                artist = track.artist,
-                                album = track.album,
-                                duration = track.duration,
-                                cover = coverValue,
-                                explicit = false,
-                            ),
-                            ext = ext,
-                            mtime = manifest[track.id]?.mtime?.takeIf { it > 0 },
-                            lyrics = lyrics,
-                        )
+                        withContext(Dispatchers.IO) {
+                            store.addTrack(
+                                CatalogueTrack(
+                                    id = track.id,
+                                    title = track.title,
+                                    artist = track.artist,
+                                    album = track.album,
+                                    duration = track.duration,
+                                    cover = coverValue,
+                                    explicit = false,
+                                ),
+                                ext = ext,
+                                mtime = manifest[track.id]?.mtime?.takeIf { it > 0 },
+                                lyrics = lyrics,
+                            )
+                        }
                     }
                     updated += 1
-                    syncProgressState = if (catalog.isNotEmpty()) updated / catalog.size.toFloat() else 0f
-                    _syncProgress.value = syncProgressState
+                    _syncProgress.value = if (catalog.isNotEmpty()) updated / catalog.size.toFloat() else 0f
                 }
 
                 syncStage = if (toFetch.isEmpty()) "Finishing up" else "Downloading 0 of ${toFetch.size}"
@@ -471,22 +484,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 (done + progress) / toFetch.size.toFloat()
                             } else 0f
                             _syncProgress.value = ratio
-                            syncProgressState = ratio
                         })
                         if (audio != null && audio > 0L) {
-                            store.setAudioPath(track.id, audioDest.absolutePath, m.mtime)
-                        } else if (audioDest.exists()) {
-                            audioDest.delete()
+                            withContext(Dispatchers.IO) {
+                                store.setAudioPath(track.id, audioDest.absolutePath, m.mtime)
+                            }
                         }
                         done += 1
                         val ratio = done / toFetch.size.toFloat().coerceAtLeast(1f)
                         _syncProgress.value = ratio
-                        syncProgressState = ratio
                         syncStage = "Downloading $done of ${toFetch.size}"
                         val coverDest = store.coverFile(track.id, "jpg")
                         if (m.hasCover && !coverDest.exists()) {
-                            desktop.downloadCover(track.id, coverDest)?.let {
-                                store.setCoverPath(track.id, coverDest.absolutePath)
+                            val downloaded = desktop.downloadCover(track.id, coverDest)
+                            if (downloaded == true && coverDest.exists()) {
+                                withContext(Dispatchers.IO) {
+                                    store.setCoverPath(track.id, coverDest.absolutePath)
+                                }
                             }
                         }
                     } catch (error: Exception) {
@@ -497,37 +511,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 syncStage = "Updating playlists"
                 for (playlist in playlists) {
                     for (streamed in playlist.streamed) {
-                        store.addTrack(
-                            CatalogueTrack(
-                                id = streamed.id,
-                                title = streamed.title,
-                                artist = streamed.artist,
-                                album = streamed.album,
-                                duration = streamed.duration ?: 0.0,
-                                cover = streamed.cover,
-                                explicit = false,
-                            ),
-                        )
+                        withContext(Dispatchers.IO) {
+                            store.addTrack(
+                                CatalogueTrack(
+                                    id = streamed.id,
+                                    title = streamed.title,
+                                    artist = streamed.artist,
+                                    album = streamed.album,
+                                    duration = streamed.duration ?: 0.0,
+                                    cover = streamed.cover,
+                                    explicit = false,
+                                ),
+                            )
+                        }
                     }
                 }
 
                 syncStage = "Updating liked songs"
                 val liked = desktop.taste()
                 for (track in liked) {
-                    store.addTrack(
-                        CatalogueTrack(
-                            id = track.id,
-                            title = track.title,
-                            artist = track.artist,
-                            album = track.album,
-                            duration = track.duration,
-                            cover = track.cover,
-                            explicit = false,
-                        ),
-                    )
+                    withContext(Dispatchers.IO) {
+                        store.addTrack(
+                            CatalogueTrack(
+                                id = track.id,
+                                title = track.title,
+                                artist = track.artist,
+                                album = track.album,
+                                duration = track.duration,
+                                cover = track.cover,
+                                explicit = false,
+                            ),
+                        )
+                    }
                 }
 
                 val syncLists = if (liked.isNotEmpty()) {
+                    val likedKeys = liked.map { "ytm:${it.id}" }
+                    val existingLiked = withContext(Dispatchers.IO) {
+                        store.playlist("liked")
+                    }
+                    val snapshot = withContext(Dispatchers.IO) {
+                        store.snapshot("liked")
+                    }
+                    val unchanged = existingLiked != null &&
+                        snapshot?.orderedTrackIds == likedKeys
                     playlists + DesktopPlaylist(
                         id = "liked",
                         name = "Liked Songs",
@@ -542,14 +569,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 cover = it.cover,
                             )
                         },
-                        createdAt = 0L,
-                        updatedAt = System.currentTimeMillis(),
+                        createdAt = existingLiked?.createdAt ?: 0L,
+                        updatedAt = existingLiked?.takeIf { unchanged }?.updatedAt
+                            ?: System.currentTimeMillis(),
                     )
                 } else {
                     playlists
                 }
 
-                store.replaceDesktopPlaylists(syncLists)
+                withContext(Dispatchers.IO) {
+                    store.replaceDesktopPlaylists(syncLists)
+                }
                 refreshStore()
                 val likedNote = if (liked.isNotEmpty()) " and liked songs" else ""
                 notice = when {
@@ -563,7 +593,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 syncing = false
                 _syncProgress.value = 0f
-                syncProgressState = 0f
                 syncStage = "Syncing library"
                 measureDownloads()
             }
@@ -647,6 +676,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     notice = "You are on the latest build"
                     _update.value = null
                 } else {
+                    if (stagedBuild != found.build) {
+                        updateFile = null
+                        updateDownloaded = false
+                    }
                     _update.value = found
                 }
             } catch (error: Exception) {
@@ -662,6 +695,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (updateBusy) return
         viewModelScope.launch {
             updateBusy = true
+            updateFile = null
+            updateDownloaded = false
             try {
                 val url = updater.urlFor(found)
                 if (url == null) {
@@ -670,7 +705,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 updateFile = updater.download(url) { value -> updateProgress = value }
                 updateDownloaded = true
+                stagedBuild = found.build
             } catch (error: Exception) {
+                updateFile = null
+                updateDownloaded = false
+                stagedBuild = null
                 notice = friendly(error)
             } finally {
                 updateBusy = false
@@ -736,11 +775,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     repository.lyrics(track)
                 }
+                if (lyricsTrackId != track.id) return@launch
                 _lyrics.value = result
                 val useful = result.hasDisplayable
                 lyricsStatus = if (useful) LyricsStatus.Ready else LyricsStatus.Missing
                 lyricsAvailable = useful
             } catch (error: Exception) {
+                if (lyricsTrackId != track.id) return@launch
                 _lyrics.value = null
                 lyricsStatus = LyricsStatus.Failed
                 lyricsAvailable = false
@@ -750,13 +791,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshMix() = loadMix()
 
+    private var mixGeneration = 0
+
     private fun loadMix() {
+        val generation = ++mixGeneration
         viewModelScope.launch {
             mixLoading = true
             try {
                 val previous = _mix.value
                 val seeds = repository.search(DISCOVERY_QUERY).songs.take(6).map { it.id }
                 val fresh = repository.taste(seeds)
+                if (generation != mixGeneration) return@launch
                 val kept = previous.shuffled().take(30)
                 val keptIds = kept.map { it.id }.toSet()
                 val merged = if (previous.isEmpty()) {
@@ -766,12 +811,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _mix.value = merged
             } catch (error: Exception) {
+                if (generation != mixGeneration) return@launch
                 mixError = friendly(error)
             } finally {
-                mixLoading = false
+                if (generation == mixGeneration) {
+                    mixLoading = false
+                }
             }
         }
     }
+
+    private var browseGeneration = 0
 
     fun browse(query: String) {
         browseQuery = query
@@ -780,15 +830,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             browseError = null
             return
         }
+        val generation = ++browseGeneration
         viewModelScope.launch {
             browseSearching = true
             browseError = null
             try {
-                _results.value = repository.search(query)
+                val found = repository.search(query)
+                if (generation != browseGeneration) return@launch
+                _results.value = found
             } catch (error: Exception) {
+                if (generation != browseGeneration) return@launch
                 browseError = friendly(error)
             } finally {
-                browseSearching = false
+                if (generation == browseGeneration) browseSearching = false
             }
         }
     }
@@ -1017,9 +1071,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         player.play(catalogue, index.coerceIn(0, catalogue.lastIndex), files)
     }
 
+    fun playLocalShuffled(tracks: List<LocalTrack>) {
+        if (tracks.isEmpty()) return
+        val shuffled = tracks.shuffled()
+        player.play(shuffled.map { it.toCatalogue() }, 0, shuffled.mapNotNull { track ->
+            track.audioPath?.takeIf { it.isNotEmpty() }?.let { track.id to it }
+        }.toMap())
+    }
+
+    override fun onCleared() {
+        player.release()
+        super.onCleared()
+    }
+
     private fun friendly(error: Exception): String {
         val raw = error.message.orEmpty()
         if (raw.isBlank()) return "something went wrong"
+        if (raw.contains("desktop returned", ignoreCase = true) || raw.contains("failed connect", ignoreCase = true)) {
+            return "the desktop did not answer"
+        }
         val at = raw.indexOf("http")
         if (at >= 0) return "the catalogue did not answer"
         return raw.take(160)

@@ -233,7 +233,12 @@ private fun DrawScope.drawSlider(
 
 internal fun formatClock(milliseconds: Long): String {
     val total = (milliseconds / 1000).coerceAtLeast(0)
+    val hours = total / 3600
     val minutes = (total / 60) % 60
     val seconds = total % 60
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
+    return if (hours > 0) {
+        "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+    } else {
+        "$minutes:${seconds.toString().padStart(2, '0')}"
+    }
 }

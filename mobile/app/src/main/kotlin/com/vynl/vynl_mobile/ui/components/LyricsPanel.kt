@@ -281,11 +281,8 @@ private fun KaraokeLine(line: LyricLine, positionMs: Long, playing: Boolean, sty
             if (current >= 0) wordFill(words, current, positionMs) else 0f,
         )
     }
-    LaunchedEffect(words, current, playing, positionMs) {
-        if (!playing) {
-            fillState.floatValue = if (current >= 0) wordFill(words, current, positionMs) else 0f
-            return@LaunchedEffect
-        }
+    LaunchedEffect(words, current, playing) {
+        if (!playing) return@LaunchedEffect
         var startNanos = -1L
         val startPos = positionMs
         while (true) {
@@ -297,6 +294,10 @@ private fun KaraokeLine(line: LyricLine, positionMs: Long, playing: Boolean, sty
                 0f
             }
         }
+    }
+    LaunchedEffect(positionMs, current, playing) {
+        if (playing) return@LaunchedEffect
+        fillState.floatValue = if (current >= 0) wordFill(words, current, positionMs) else 0f
     }
 
     val text = remember(words, current) {

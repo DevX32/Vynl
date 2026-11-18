@@ -13,19 +13,31 @@ use client::CatalogueClient;
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static CLIENT: OnceLock<CatalogueClient> = OnceLock::new();
 
-fn runtime() -> &'static tokio::runtime::Runtime {
-    RUNTIME.get_or_init(|| {
+fn client() -> Option<&'static CatalogueClient> {
+    if let Some(client) = CLIENT.get() {
+        return Some(client);
+    }
+    match std::panic::catch_unwind(CatalogueClient::new) {
+        Ok(built) => Some(CLIENT.get_or_init(|| built)),
+        Err(_) => None,
+    }
+}
+
+fn runtime() -> Option<&'static tokio::runtime::Runtime> {
+    if let Some(runtime) = RUNTIME.get() {
+        return Some(runtime);
+    }
+    match std::panic::catch_unwind(|| {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(2)
             .thread_name("vynl-catalogue")
             .build()
             .expect("could not start the catalogue runtime")
-    })
-}
-
-fn client() -> &'static CatalogueClient {
-    CLIENT.get_or_init(CatalogueClient::new)
+    }) {
+        Ok(built) => Some(RUNTIME.get_or_init(|| built)),
+        Err(_) => None,
+    }
 }
 
 fn error_json(message: &str) -> String {
@@ -64,9 +76,15 @@ enum Ask {
 }
 
 fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
-    let client = client();
-    let query = query.to_string();
-    let result = runtime().block_on(async move {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let Some(client) = client() else {
+            return Err("the catalogue client failed to start".to_string());
+        };
+        let Some(runtime) = runtime() else {
+            return Err("the catalogue runtime failed to start".to_string());
+        };
+        let query = query.to_string();
+        let request = async move {
         match kind {
             Ask::Search => client
                 .search(&query)
@@ -114,7 +132,16 @@ fn ask(env: &mut JNIEnv, query: &str, kind: Ask) -> jstring {
                 })
             }
         }
-    });
+        };
+        match runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(30), request).await
+        }) {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(error)) => Err(error),
+            Err(_) => Err("the catalogue request timed out".to_string()),
+        }
+    }))
+    .unwrap_or_else(|_| Err("the catalogue request failed unexpectedly".to_string()));
     finish(env, result)
 }
 

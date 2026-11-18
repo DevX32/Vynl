@@ -167,27 +167,27 @@ class Desktop(context: Context) {
     }
 
     suspend fun taste(): List<DesktopTasteTrack> = withContext(Dispatchers.IO) {
-        runCatching {
-            http.newCall(request("/v1/taste").build()).execute().use { response ->
-                if (!response.isSuccessful) return@use emptyList<DesktopTasteTrack>()
-                val body = response.body?.string().orEmpty()
-                if (body.isBlank()) return@use emptyList<DesktopTasteTrack>()
-                val liked = JSONObject(body).optJSONArray("liked") ?: return@use emptyList()
-                (0 until liked.length()).mapNotNull { index ->
-                    val s = liked.optJSONObject(index) ?: return@mapNotNull null
-                    val id = s.optString("id")
-                    if (id.isBlank()) return@mapNotNull null
-                    DesktopTasteTrack(
-                        id = id,
-                        title = s.optString("title", "Unknown"),
-                        artist = s.optString("artist", "Unknown"),
-                        album = s.optString("album", "").ifBlank { null },
-                        duration = s.optDouble("duration", 0.0),
-                        cover = s.optString("cover", "").ifBlank { null },
-                    )
-                }
+        http.newCall(request("/v1/taste").build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw java.io.IOException("desktop returned HTTP ${response.code} for /v1/taste")
             }
-        }.getOrDefault(emptyList())
+            val body = response.body?.string().orEmpty()
+            if (body.isBlank()) return@use emptyList()
+            val liked = JSONObject(body).optJSONArray("liked") ?: return@use emptyList()
+            (0 until liked.length()).mapNotNull { index ->
+                val s = liked.optJSONObject(index) ?: return@mapNotNull null
+                val id = s.optString("id")
+                if (id.isBlank()) return@mapNotNull null
+                DesktopTasteTrack(
+                    id = id,
+                    title = s.optString("title", "Unknown"),
+                    artist = s.optString("artist", "Unknown"),
+                    album = s.optString("album", "").ifBlank { null },
+                    duration = s.optDouble("duration", 0.0),
+                    cover = s.optString("cover", "").ifBlank { null },
+                )
+            }
+        }
     }
 
     suspend fun syncedLyrics(trackId: String): DesktopLyrics? = withContext(Dispatchers.IO) {
@@ -210,30 +210,30 @@ class Desktop(context: Context) {
         }
 
     suspend fun downloadCover(trackId: String, dest: File): Boolean? = withContext(Dispatchers.IO) {
-        downloadInto("/v1/tracks/$trackId/cover", dest) { }; true
+        val written = downloadInto("/v1/tracks/$trackId/cover", dest) { }
+        written != null && dest.isFile && dest.length() > 0
     }
 
     private suspend inline fun <T> parseEntries(
         path: String,
         crossinline entry: (JSONObject) -> T,
     ): List<T> {
-        return runCatching {
-            http.newCall(request(path).build()).execute().use { response ->
-                if (!response.isSuccessful) return@use emptyList()
-                val body = response.body?.string().orEmpty()
-                val trimmed = body.trim()
-                val array = if (trimmed.startsWith("[")) {
-                    org.json.JSONArray(trimmed)
-                } else {
-                    JSONObject(trimmed).optJSONArray("items")?.takeIf { it.length() > 0 }
-                        ?: org.json.JSONArray(trimmed)
-                }
-                (0 until array.length()).mapNotNull { index ->
-                    val obj = array.optJSONObject(index) ?: return@mapNotNull null
-                    entry(obj).takeIf { obj.optString("id", "").isNotBlank() }
-                }
+        return http.newCall(request(path).build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw java.io.IOException("desktop returned HTTP ${response.code} for $path")
             }
-        }.getOrDefault(emptyList())
+            val body = response.body?.string().orEmpty()
+            val trimmed = body.trim()
+            val array = if (trimmed.startsWith("[")) {
+                org.json.JSONArray(trimmed)
+            } else {
+                JSONObject(trimmed).optJSONArray("items") ?: org.json.JSONArray()
+            }
+            (0 until array.length()).mapNotNull { index ->
+                val obj = array.optJSONObject(index) ?: return@mapNotNull null
+                entry(obj).takeIf { obj.optString("id", "").isNotBlank() }
+            }
+        }
     }
 
     private suspend inline fun downloadInto(
@@ -242,6 +242,7 @@ class Desktop(context: Context) {
         crossinline onProgress: (Float) -> Unit,
     ): Long? = withContext(Dispatchers.IO) {
         val request = request(path).build()
+        val tmp = File(dest.parentFile ?: dest.absoluteFile.parentFile, "${dest.name}.part")
         try {
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
@@ -249,7 +250,7 @@ class Desktop(context: Context) {
                     return@use null
                 }
                 val total = response.body?.contentLength() ?: -1L
-                FileOutputStream(dest).use { out ->
+                FileOutputStream(tmp).use { out ->
                     var read = 0L
                     val buf = ByteArray(64 * 1024)
                     val src = response.body?.byteStream() ?: return@use null
@@ -261,10 +262,17 @@ class Desktop(context: Context) {
                         if (total > 0) onProgress(read.toFloat() / total)
                     }
                 }
+                if (dest.exists()) {
+                    dest.delete()
+                }
+                if (!tmp.renameTo(dest)) {
+                    tmp.copyTo(dest, overwrite = true)
+                    tmp.delete()
+                }
                 dest.length()
             }
         } catch (e: Exception) {
-            dest.delete()
+            tmp.delete()
             null
         }
     }

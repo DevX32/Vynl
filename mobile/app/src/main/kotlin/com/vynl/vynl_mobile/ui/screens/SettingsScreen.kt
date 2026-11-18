@@ -68,6 +68,8 @@ import com.vynl.vynl_mobile.ui.theme.VynlRadius
 
 @Composable
 fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
+    val syncProgress by viewModel.syncProgress.collectAsStateWithLifecycle()
+
     val update by viewModel.update.collectAsStateWithLifecycle()
     val version by viewModel.installedVersion.collectAsStateWithLifecycle()
     var accentOpen by remember { mutableStateOf(false) }
@@ -184,7 +186,7 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                 )
                 if (viewModel.syncing) {
                     LinearProgressIndicator(
-                        progress = { viewModel.syncProgressState },
+                        progress = { syncProgress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp)
@@ -203,7 +205,7 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
             } else {
                 SettingsRow(
                     label = "Pair with desktop",
-                    hint = "Scan the QR code shown in Vynl GǦ Settings",
+                    hint = "Scan the QR code shown in Vynl settings",
                     onClick = { pairOpen = true },
                     trailing = { Chip("Scan", accent = true) },
                 )

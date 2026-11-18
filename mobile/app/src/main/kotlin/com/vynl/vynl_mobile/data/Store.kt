@@ -5,9 +5,10 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.vynl.vynl_mobile.remote.DesktopPlaylist
+import org.json.JSONArray
 import java.io.File
 
-private const val SCHEMA_VERSION = 5
+private const val SCHEMA_VERSION = 6
 
 class Store(context: Context) {
     private val files = File(context.filesDir, "music")
@@ -85,6 +86,12 @@ class Store(context: Context) {
                 )
                 """.trimIndent(),
             )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_playlist_marks_track_id ON playlist_marks (track_id)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_playlist_tracks_track_id ON playlist_tracks (track_id)",
+            )
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -108,6 +115,14 @@ class Store(context: Context) {
                 db.execSQL(
                     "INSERT OR IGNORE INTO desktop_playlists (playlist_id) " +
                         "SELECT id FROM playlists WHERE id LIKE 'dt-%'",
+                )
+            }
+            if (oldVersion < 6) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_tracks_track_id ON playlist_tracks (track_id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_marks_track_id ON playlist_marks (track_id)",
                 )
             }
             if (oldVersion < 5) {
@@ -300,7 +315,54 @@ class Store(context: Context) {
                 )
             }
         }
-        return result
+        val order = storedCustomOrder()
+        return if (order.isNullOrEmpty()) {
+            result
+        } else {
+            val rank = order.withIndex().associate { it.value to it.index }
+            result.sortedWith(
+                compareBy<LocalPlaylist> {
+                    rank[it.id] ?: Int.MAX_VALUE
+                }.thenBy { it.createdAt },
+            )
+        }
+    }
+
+    fun storedCustomOrder(): List<String>? {
+        val file = File(files, "library_order.json")
+        if (!file.isFile) return null
+        return runCatching {
+            val json = org.json.JSONObject(file.readText(Charsets.UTF_8))
+            val array = json.optJSONArray("orderIds") ?: return@runCatching null
+            (0 until array.length())
+                .map { array.optString(it) }
+                .filter { it.isNotBlank() }
+                .takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    fun storedCustomOrderUpdatedAt(): Long {
+        val file = File(files, "library_order.json")
+        if (!file.isFile) return 0L
+        return runCatching {
+            org.json.JSONObject(file.readText(Charsets.UTF_8))
+                .optLong("updatedAt", 0L)
+        }.getOrDefault(0L)
+    }
+
+    fun setCustomOrder(ids: List<String>, updatedAt: Long = System.currentTimeMillis()) {
+        files.mkdirs()
+        val json = org.json.JSONObject().apply {
+            put("orderIds", org.json.JSONArray(ids))
+            put("updatedAt", updatedAt)
+        }
+        val file = File(files, "library_order.json")
+        val tmp = File(files, "library_order.json.tmp")
+        tmp.writeText(json.toString(), Charsets.UTF_8)
+        if (!tmp.renameTo(file)) {
+            file.writeBytes(tmp.readBytes())
+            tmp.delete()
+        }
     }
 
     fun playlist(id: String): LocalPlaylist? {
@@ -325,8 +387,9 @@ class Store(context: Context) {
         return null
     }
 
+    @Synchronized
     fun createPlaylist(name: String): String {
-        val id = "pl-${System.currentTimeMillis()}"
+        val id = "pl-${System.currentTimeMillis().toString(36)}-${(0..0xffff).random().toString(16).padStart(4, '0')}"
         val now = System.currentTimeMillis()
         helper.writableDatabase.insert(
             "playlists",
@@ -362,12 +425,19 @@ class Store(context: Context) {
         )
     }
 
+    @Synchronized
     fun deletePlaylist(id: String) {
         val db = helper.writableDatabase
-        db.delete("playlist_tracks", "playlist_id = ?", arrayOf(id))
-        db.delete("playlists", "id = ?", arrayOf(id))
-        db.delete("desktop_playlists", "playlist_id = ?", arrayOf(id))
-        db.delete("playlist_marks", "playlist_id = ?", arrayOf(id))
+        db.beginTransaction()
+        try {
+            db.delete("playlist_tracks", "playlist_id = ?", arrayOf(id))
+            db.delete("playlists", "id = ?", arrayOf(id))
+            db.delete("desktop_playlists", "playlist_id = ?", arrayOf(id))
+            db.delete("playlist_marks", "playlist_id = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     @Synchronized
@@ -509,7 +579,9 @@ class Store(context: Context) {
             for (list in lists) {
                 val id = list.id
                 val existingMarks = readMarks(db, id)
-                val incomingKeys = list.trackIds.map { "ytm:$it" }
+                val incomingKeys = (list.trackIds + list.streamed.map { it.id })
+                    .distinct()
+                    .map { "ytm:$it" }
 
                 val visibleOrder = mutableListOf<String>()
                 for (key in incomingKeys) {
@@ -566,6 +638,17 @@ class Store(context: Context) {
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
+        }
+    }
+
+    private fun capMarks(map: MutableMap<String, Long>) {
+        val keep = map.entries
+            .sortedWith(compareByDescending<Map.Entry<String, Long>> { it.value }.thenBy { it.key })
+            .take(500)
+            .map { it.key }
+            .toSet()
+        if (keep.size < map.size) {
+            map.keys.retainAll(keep)
         }
     }
 
@@ -653,6 +736,18 @@ class Store(context: Context) {
         }
         for (mark in removals) {
             remMap[mark.trackId] = maxOf(remMap[mark.trackId] ?: 0L, mark.at)
+        }
+        capMarks(addMap)
+        capMarks(remMap)
+        val keptKeys = addMap.keys + remMap.keys
+        for (key in readMarks(db, localId).keys) {
+            if (key !in keptKeys) {
+                db.delete(
+                    "playlist_marks",
+                    "playlist_id = ? AND track_id = ?",
+                    arrayOf(localId, key),
+                )
+            }
         }
         val allKeys = addMap.keys + remMap.keys
         fun markVisible(key: String): Boolean =
@@ -752,7 +847,8 @@ class Store(context: Context) {
                 ).use { inner ->
                     while (inner.moveToNext()) ids += inner.getString(0)
                 }
-                if (ids == trackIds || (ids.isEmpty() && trackIds.isEmpty())) {
+                val compatible = ids.isEmpty() || trackIds.isEmpty() || ids.intersect(trackIds).isNotEmpty()
+                if (compatible) {
                     val candidate = LocalPlaylist(
                         id = id,
                         name = name,
@@ -811,79 +907,111 @@ class Store(context: Context) {
         val ordered = readTrackKeys(db, id)
         return PlaylistSnapshot(
             name = pl.name,
+            createdAt = pl.createdAt,
             updatedAt = pl.updatedAt,
             orderedTrackIds = ordered,
             marks = marks,
         )
     }
 
+    @Synchronized
     fun addToPlaylist(playlistId: String, track: CatalogueTrack) {
         addTrack(track)
         val db = helper.writableDatabase
-        val position = db.rawQuery(
-            "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = ?",
-            arrayOf(playlistId),
-        ).use { cursor ->
-            if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        }
-        db.insertWithOnConflict(
-            "playlist_tracks",
-            null,
-            ContentValues().apply {
-                put("playlist_id", playlistId)
-                put("track_id", track.id)
-                put("position", position)
-            },
-            SQLiteDatabase.CONFLICT_REPLACE,
-        )
-        val now = System.currentTimeMillis()
-        upsertMark(
-            db,
-            playlistId,
-            "ytm:${track.id}",
-            add_at = now,
-            remove_at = readMarks(db, playlistId)["ytm:${track.id}"]?.second ?: 0L,
-        )
-        touchPlaylist(playlistId)
-    }
-
-    fun removeFromPlaylist(playlistId: String, trackId: String) {
-        helper.writableDatabase.delete(
-            "playlist_tracks",
-            "playlist_id = ? AND track_id = ?",
-            arrayOf(playlistId, trackId),
-        )
-        val now = System.currentTimeMillis()
-        upsertMark(
-            helper.writableDatabase,
-            playlistId,
-            "ytm:$trackId",
-            add_at = readMarks(helper.readableDatabase, playlistId)["ytm:$trackId"]?.first ?: 0L,
-            remove_at = now,
-        )
-        touchPlaylist(playlistId)
-    }
-
-    fun deleteTrack(trackId: String): List<String> {
-        val affected = mutableListOf<String>()
-        helper.readableDatabase.rawQuery(
-            "SELECT DISTINCT playlist_id FROM playlist_tracks WHERE track_id = ?",
-            arrayOf(trackId),
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                affected += cursor.getString(0)
-            }
-        }
-        val db = helper.writableDatabase
         db.beginTransaction()
         try {
-            db.delete("playlist_tracks", "track_id = ?", arrayOf(trackId))
-            db.delete("tracks", "id = ?", arrayOf(trackId))
+            val position = db.rawQuery(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?",
+                arrayOf(playlistId),
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            db.insertWithOnConflict(
+                "playlist_tracks",
+                null,
+                ContentValues().apply {
+                    put("playlist_id", playlistId)
+                    put("track_id", track.id)
+                    put("position", position)
+                },
+                SQLiteDatabase.CONFLICT_REPLACE,
+            )
+            val now = System.currentTimeMillis()
+            val existing = readMarks(db, playlistId)["ytm:${track.id}"]
+            upsertMark(
+                db,
+                playlistId,
+                "ytm:${track.id}",
+                add_at = maxOf(now, existing?.first ?: 0L),
+                remove_at = existing?.second ?: 0L,
+            )
+            touchPlaylist(playlistId)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
         }
-        affected.forEach { touchPlaylist(it) }
+    }
+
+    @Synchronized
+    fun removeFromPlaylist(playlistId: String, trackId: String) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(
+                "playlist_tracks",
+                "playlist_id = ? AND track_id = ?",
+                arrayOf(playlistId, trackId),
+            )
+            val now = System.currentTimeMillis()
+            val existing = readMarks(db, playlistId)["ytm:$trackId"]
+            upsertMark(
+                db,
+                playlistId,
+                "ytm:$trackId",
+                add_at = existing?.first ?: 0L,
+                remove_at = maxOf(now, existing?.second ?: 0L),
+            )
+            touchPlaylist(playlistId)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    @Synchronized
+    fun deleteTrack(trackId: String): List<String> {
+        val db = helper.writableDatabase
+        val affected = mutableListOf<String>()
+        db.beginTransaction()
+        try {
+            db.rawQuery(
+                "SELECT DISTINCT playlist_id FROM playlist_tracks WHERE track_id = ?",
+                arrayOf(trackId),
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    affected += cursor.getString(0)
+                }
+            }
+            val now = System.currentTimeMillis()
+            for (id in affected) {
+                val existing = readMarks(db, id)["ytm:$trackId"]
+                upsertMark(
+                    db,
+                    id,
+                    "ytm:$trackId",
+                    add_at = existing?.first ?: 0L,
+                    remove_at = maxOf(now, existing?.second ?: 0L),
+                )
+            }
+            db.delete("playlist_tracks", "track_id = ?", arrayOf(trackId))
+            db.delete("tracks", "id = ?", arrayOf(trackId))
+            for (id in affected) {
+                touchPlaylist(id)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         return affected
     }
 
@@ -1010,6 +1138,7 @@ data class SyncMark(
 
 data class PlaylistSnapshot(
     val name: String,
+    val createdAt: Long,
     val updatedAt: Long,
     val orderedTrackIds: List<String>,
     val marks: Map<String, Pair<Long, Long>>,

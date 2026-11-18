@@ -60,6 +60,12 @@ import com.vynl.vynl_mobile.ui.theme.VynlFonts
 import com.vynl.vynl_mobile.ui.theme.VynlRadius
 import java.net.URLEncoder
 
+internal fun avatarSeed(email: String): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(email.trim().lowercase().toByteArray(Charsets.UTF_8))
+    return digest.joinToString("") { b -> "%02x".format(b) }.take(24)
+}
+
 internal fun blobatarUrl(seed: String, size: Int): String {
     val safe = URLEncoder.encode(seed.trim().ifBlank { "vynl" }, "UTF-8")
         .replace("+", "%20")
@@ -113,7 +119,7 @@ internal fun AccountMenu(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
-                val seed = if (signedIn && !email.isNullOrBlank()) email else displayName
+                val seed = if (signedIn && !email.isNullOrBlank()) avatarSeed(email) else displayName
                 AccountAvatar(seed = seed, size = 34.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -210,7 +216,7 @@ internal fun AccountDialog(
 ) {
     val session = viewModel.syncStatus
     val seed = if (session.signedIn && !session.email.isNullOrBlank()) {
-        session.email
+        avatarSeed(session.email)
     } else {
         viewModel.displayName.ifBlank { viewModel.nickname.ifBlank { "vynl" } }
     }
@@ -390,7 +396,7 @@ private fun ActionButton(
 @Composable
 private fun SignedInBody(viewModel: AppViewModel, onDismiss: () -> Unit) {
     val session = viewModel.syncStatus
-    val seed = session.email ?: viewModel.displayName.ifBlank { viewModel.nickname }
+    val seed = session.email?.let { avatarSeed(it) } ?: viewModel.displayName.ifBlank { viewModel.nickname }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AccountBanner(seed = seed, signedIn = true, email = session.email)

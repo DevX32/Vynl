@@ -33,6 +33,12 @@ data class SyncResult(
     val pushed: Int,
     val pulled: Int,
     val deleted: Int,
+    val failed: Int = 0,
+)
+
+private data class FoldResult(
+    val rows: List<JSONObject>,
+    val staleIds: List<String>,
 )
 
 private data class SyncSession(
@@ -110,13 +116,20 @@ class Sync(context: Context) {
         clearSession()
     }
 
-    suspend fun pushPlaylist(payload: SyncPlaylistPayload) = withContext(Dispatchers.IO) {
+    suspend fun pushPlaylist(
+        payload: SyncPlaylistPayload,
+        includeDeletedAt: Boolean = false,
+    ) = withContext(Dispatchers.IO) {
         val session = validSession()
-        pushPlaylist(session, payload)
+        pushPlaylist(session, payload, includeDeletedAt)
     }
 
-    private fun pushPlaylist(session: SyncSession, payload: SyncPlaylistPayload) {
-        val body = playlistJson(session, payload, marksSupported)
+    private fun pushPlaylist(
+        session: SyncSession,
+        payload: SyncPlaylistPayload,
+        includeDeletedAt: Boolean = false,
+    ) {
+        val body = playlistJson(session, payload, marksSupported, includeDeletedAt)
         val request = Request.Builder()
             .url("$baseUrl/rest/v1/playlists?on_conflict=user_id,local_id")
             .header("apikey", anonKey)
@@ -130,7 +143,7 @@ class Sync(context: Context) {
         } catch (error: IOException) {
             if (marksSupported && bodyMissingMarks(error.message.orEmpty())) {
                 marksSupported = false
-                val stripped = playlistJson(session, payload, false)
+                val stripped = playlistJson(session, payload, false, includeDeletedAt)
                 val retry = Request.Builder()
                     .url("$baseUrl/rest/v1/playlists?on_conflict=user_id,local_id")
                     .header("apikey", anonKey)
@@ -168,35 +181,62 @@ class Sync(context: Context) {
     suspend fun refresh(store: Store): SyncResult = withContext(Dispatchers.IO) {
         store.rekeyLegacyDtPlaylists()
         val session = validSession()
-        val rows = fetchRows(session)
+        val folded = foldRows(fetchRows(session))
+        val rows = folded.rows
+        val remoteOrder = fetchOrder(session)
+        if (remoteOrder != null) {
+            val remoteUpdated = remoteOrder.optLong("updated_at", 0L)
+            if (remoteUpdated > store.storedCustomOrderUpdatedAt()) {
+                val ids = remoteOrder
+                    .optJSONArray("order_ids")
+                    ?.let { array ->
+                        (0 until array.length())
+                            .map { array.optString(it) }
+                            .filter { it.isNotBlank() }
+                    }
+                    .orEmpty()
+                if (ids.isNotEmpty()) {
+                    store.setCustomOrder(ids, remoteUpdated)
+                }
+            }
+        }
         var pushed = 0
         var pulled = 0
         var deleted = 0
+        var failed = 0
+        var consumed = mutableSetOf<String>()
         val known = mutableSetOf<String>()
-        val consumed = mutableSetOf<String>()
+        // Folded-out stale duplicates must not be pushed back as new rows.
+        known += folded.staleIds
 
         for (row in rows) {
             val canonical = row.optString("local_id")
             if (canonical.isBlank()) continue
             known += canonical
             val deletedAt = if (row.isNull("deleted_at")) null else row.optLong("deleted_at")
-            val localId = resolveLocalId(store, canonical, row, consumed)
-            val local = store.playlist(localId)
 
             if (deletedAt != null) {
+                // Strict resolution: a tombstoned row may only delete a
+                // playlist that exactly matches its own local_id. Name
+                // matching here could rekey and delete a merged, live one.
+                val strictLocal = store.playlist(canonical)
                 when {
-                    local == null -> {}
-                    local.updatedAt <= deletedAt -> {
-                        store.deletePlaylist(localId)
+                    strictLocal == null -> {}
+                    strictLocal.updatedAt <= deletedAt -> {
+                        store.deletePlaylist(canonical)
                         deleted += 1
                     }
                     else -> {
-                        store.syncPayload(localId)?.let { pushPlaylist(it) }
-                        pushed += 1
+                        val payload = store.syncPayload(canonical)
+                        val ok = payload != null &&
+                            runCatching { pushPlaylist(payload, includeDeletedAt = true) }.isSuccess
+                        if (ok) pushed += 1 else failed += 1
                     }
                 }
                 continue
             }
+
+            val localId = resolveLocalId(store, canonical, row, consumed)
 
             val remoteUpdated = row.optLong("updated_at")
             val remoteName = row.optString("name", "Playlist")
@@ -214,12 +254,14 @@ class Sync(context: Context) {
                 removals = remoteRemovals,
             )
             val after = store.snapshot(localId)
-            if (before == after) {
-                store.syncPayload(localId)?.let { pushPlaylist(it) }
+            val payload = store.syncPayload(localId)
+            val ok = payload != null && runCatching { pushPlaylist(payload) }.isSuccess
+            if (ok) {
                 pushed += 1
             } else {
-                store.syncPayload(localId)?.let { pushPlaylist(it) }
-                pushed += 1
+                failed += 1
+            }
+            if (before != after) {
                 pulled += 1
             }
         }
@@ -227,11 +269,11 @@ class Sync(context: Context) {
         for (playlist in store.playlists()) {
             val payload = store.syncPayload(playlist.id) ?: continue
             if (known.contains(payload.localId)) continue
-            pushPlaylist(payload)
-            pushed += 1
+            val ok = runCatching { pushPlaylist(payload) }.isSuccess
+            if (ok) pushed += 1 else failed += 1
         }
 
-        SyncResult(pushed = pushed, pulled = pulled, deleted = deleted)
+        SyncResult(pushed = pushed, pulled = pulled, deleted = deleted, failed = failed)
     }
 
     private fun resolveLocalId(
@@ -285,6 +327,133 @@ class Sync(context: Context) {
         }
     }
 
+    private fun fetchOrder(session: SyncSession): org.json.JSONObject? {
+        val request = Request.Builder()
+            .url("$baseUrl/rest/v1/library_order?select=order_ids,updated_at&limit=1")
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer ${session.accessToken}")
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        return runCatching {
+            http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@runCatching null
+                val body = response.body?.string().orEmpty()
+                val array = org.json.JSONArray(body)
+                if (array.length() == 0) return@runCatching null
+                array.optJSONObject(0)
+            }
+        }.getOrNull()
+    }
+
+    private fun foldRows(rows: List<JSONObject>): FoldResult {
+        fun nameKey(raw: String?): String =
+            raw.orEmpty()
+                .split(Regex("\\s+"))
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .lowercase()
+
+        fun signatureOf(row: JSONObject): Set<String> {
+            val array = row.optJSONArray("tracks") ?: return emptySet()
+            val out = LinkedHashSet<String>()
+            for (index in 0 until array.length()) {
+                val id = array.optJSONObject(index)?.optString("id").orEmpty().trim()
+                if (id.isNotEmpty()) out += id
+            }
+            return out
+        }
+
+        fun mergeMarkLists(lists: List<List<SyncMark>>): List<SyncMark> {
+            val best = HashMap<String, Long>()
+            for (list in lists) {
+                for (mark in list) {
+                    val existing = best[mark.trackId]
+                    if (existing == null || mark.at > existing) {
+                        best[mark.trackId] = mark.at
+                    }
+                }
+            }
+            return best.entries.map { SyncMark(it.key, it.value) }
+        }
+
+        fun marksArray(marks: List<SyncMark>): JSONArray {
+            val array = JSONArray()
+            marks.sortedWith(compareByDescending<SyncMark> { it.at }.thenBy { it.trackId })
+                .take(10_000)
+                .forEach { mark ->
+                    array.put(
+                        JSONObject().apply {
+                            put("trackId", mark.trackId)
+                            put("at", mark.at)
+                        },
+                    )
+                }
+            return array
+        }
+
+        val groups = LinkedHashMap<String, MutableList<JSONObject>>()
+        for (row in rows) {
+            if (!row.isNull("deleted_at")) continue
+            val key = nameKey(row.optString("name"))
+            if (key.isEmpty()) continue
+            groups.getOrPut(key) { mutableListOf() } += row
+        }
+
+        val consumed = HashSet<JSONObject>()
+        val syntheticByCanonical = HashMap<JSONObject, JSONObject>()
+        for (group in groups.values) {
+            if (group.size < 2) continue
+            val ordered = group.sortedWith(
+                compareBy<JSONObject> { it.optLong("created_at") }.thenBy { it.optString("local_id") },
+            )
+            val canonical = ordered[0]
+            val canonicalSignature = signatureOf(canonical)
+            val members = ordered.drop(1).filter { row ->
+                val signature = signatureOf(row)
+                canonicalSignature.isEmpty() || signature.isEmpty() ||
+                    canonicalSignature.intersect(signature).isNotEmpty()
+            }
+            if (members.isEmpty()) continue
+
+            val merged = JSONObject()
+            merged.put("local_id", canonical.optString("local_id"))
+            merged.put("name", canonical.optString("name"))
+            merged.put("created_at", canonical.optLong("created_at"))
+            merged.put("updated_at", members.plus(canonical).maxOf { it.optLong("updated_at") })
+            merged.put("deleted_at", JSONObject.NULL)
+
+            val seen = HashSet<String>()
+            val tracks = JSONArray()
+            for (row in listOf(canonical) + members) {
+                val array = row.optJSONArray("tracks") ?: continue
+                for (index in 0 until array.length()) {
+                    val track = array.optJSONObject(index) ?: continue
+                    val id = track.optString("id").trim()
+                    if (id.isEmpty() || !seen.add(id)) continue
+                    tracks.put(track)
+                }
+            }
+            merged.put("tracks", tracks)
+            val adds = mergeMarkLists((listOf(canonical) + members).map { parseMarks(it, "adds") })
+            val removals = mergeMarkLists((listOf(canonical) + members).map { parseMarks(it, "removals") })
+            merged.put("adds", marksArray(adds))
+            merged.put("removals", marksArray(removals))
+
+            for (row in members) consumed += row
+            syntheticByCanonical[canonical] = merged
+        }
+
+        if (consumed.isEmpty()) return FoldResult(rows, emptyList())
+        val staleIds = consumed.map { it.optString("local_id") }.filter { it.isNotBlank() }
+        val out = ArrayList<JSONObject>(rows.size)
+        for (row in rows) {
+            if (row in consumed) continue
+            out += syntheticByCanonical[row] ?: row
+        }
+        return FoldResult(out, staleIds)
+    }
+
     private fun bodyMissingMarks(body: String): Boolean {
         val lowered = body.lowercase()
         val mentionsMark = lowered.contains("adds") || lowered.contains("removals")
@@ -297,7 +466,7 @@ class Sync(context: Context) {
         return (0 until array.length()).mapNotNull { index ->
             val mark = array.optJSONObject(index) ?: return@mapNotNull null
             val trackId = mark.optString("trackId").ifBlank { mark.optString("track_id") }
-            if (trackId.isBlank()) return@mapNotNull null
+            if (trackId.isBlank() || !trackId.startsWith("ytm:")) return@mapNotNull null
             SyncMark(trackId, mark.optLong("at"))
         }
     }
@@ -306,6 +475,7 @@ class Sync(context: Context) {
         session: SyncSession,
         payload: SyncPlaylistPayload,
         includeMarks: Boolean = true,
+        includeDeletedAt: Boolean = false,
     ): JSONObject =
         JSONObject().apply {
             put("user_id", session.userId)
@@ -330,7 +500,9 @@ class Sync(context: Context) {
             )
             put("created_at", payload.createdAt)
             put("updated_at", payload.updatedAt)
-            put("deleted_at", JSONObject.NULL)
+            if (includeDeletedAt) {
+                put("deleted_at", JSONObject.NULL)
+            }
             if (includeMarks) {
                 put("adds", marksJson(payload.adds))
                 put("removals", marksJson(payload.removals))
@@ -339,7 +511,11 @@ class Sync(context: Context) {
 
     private fun marksJson(marks: List<SyncMark>): JSONArray =
         JSONArray().apply {
-            for (mark in marks) {
+            val filtered = marks
+                .filter { it.at > 0L && it.trackId.startsWith("ytm:") }
+                .sortedWith(compareByDescending<SyncMark> { it.at }.thenBy { it.trackId })
+                .take(10_000)
+            for (mark in filtered) {
                 put(
                     JSONObject().apply {
                         put("trackId", mark.trackId)

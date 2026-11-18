@@ -66,6 +66,7 @@ import com.vynl.vynl_mobile.ui.components.ArtTile
 import com.vynl.vynl_mobile.ui.components.AccountAvatar
 import com.vynl.vynl_mobile.ui.components.AccountDialog
 import com.vynl.vynl_mobile.ui.components.AccountMenu
+import com.vynl.vynl_mobile.ui.components.avatarSeed
 import com.vynl.vynl_mobile.ui.components.PlaylistPickerSheet
 import com.vynl.vynl_mobile.ui.components.TrackActions
 import com.vynl.vynl_mobile.ui.components.TrackActionsSheet
@@ -139,7 +140,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     val session = viewModel.syncStatus
                     val displayName = viewModel.greetingName
                     val accountSeed = if (session.signedIn && !session.email.isNullOrBlank()) {
-                        session.email
+                        avatarSeed(session.email!!)
                     } else {
                         displayName
                     }

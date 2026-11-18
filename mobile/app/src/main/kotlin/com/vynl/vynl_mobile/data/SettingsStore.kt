@@ -10,7 +10,7 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putInt(KEY_ACCENT, value).apply()
 
     var accentSet: Boolean
-        get() = prefs.contains(KEY_ACCENT)
+        get() = prefs.getBoolean(KEY_ACCENT_SET, prefs.contains(KEY_ACCENT))
         set(value) = prefs.edit().putBoolean(KEY_ACCENT_SET, value).apply()
 
     var displayName: String

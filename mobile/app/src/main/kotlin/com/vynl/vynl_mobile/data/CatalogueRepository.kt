@@ -8,8 +8,11 @@ import org.json.JSONObject
 
 class CatalogueRepository {
 
+    private fun nativeCall(block: () -> String): String =
+        runCatching(block).getOrElse { """{"error":"catalogue unavailable"}""" }
+
     suspend fun search(query: String): CatalogueResults = withContext(Dispatchers.IO) {
-        val body = JSONObject(CatalogueBridge.nativeSearch(query))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativeSearch(query) })
         CatalogueResults(
             songs = parseTracks(body.optJSONArray("songs")),
             albums = parseAlbums(body.optJSONArray("albums")),
@@ -18,7 +21,7 @@ class CatalogueRepository {
     }
 
     suspend fun album(id: String): CatalogueAlbumDetail = withContext(Dispatchers.IO) {
-        val body = JSONObject(CatalogueBridge.nativeAlbum(id))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativeAlbum(id) })
         val album = body.optJSONObject("album") ?: JSONObject()
         CatalogueAlbumDetail(
             album = parseAlbum(album),
@@ -28,7 +31,7 @@ class CatalogueRepository {
     }
 
     suspend fun artist(id: String): CatalogueArtistDetail = withContext(Dispatchers.IO) {
-        val body = JSONObject(CatalogueBridge.nativeArtist(id))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativeArtist(id) })
         CatalogueArtistDetail(
             id = body.optString("id", ""),
             name = body.optString("name", "Unknown"),
@@ -40,7 +43,7 @@ class CatalogueRepository {
     }
 
     suspend fun playlist(id: String): CataloguePlaylistDetail = withContext(Dispatchers.IO) {
-        val body = JSONObject(CatalogueBridge.nativePlaylist(id))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativePlaylist(id) })
         val playlist = body.optJSONObject("playlist") ?: JSONObject()
         CataloguePlaylistDetail(
             playlist = parsePlaylist(playlist),
@@ -49,7 +52,7 @@ class CatalogueRepository {
     }
 
     suspend fun stream(id: String): StreamAddress = withContext(Dispatchers.IO) {
-        val body = JSONObject(CatalogueBridge.nativeStream(id))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativeStream(id) })
         StreamAddress(
             url = body.optString("url", ""),
             mime = body.optString("mime", ""),
@@ -57,7 +60,7 @@ class CatalogueRepository {
     }
 
     suspend fun taste(seeds: List<String>): List<CatalogueTrack> = withContext(Dispatchers.IO) {
-        val body = JSONObject(CatalogueBridge.nativeTaste(JSONArray(seeds).toString()))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativeTaste(JSONArray(seeds).toString()) })
         parseTracks(body.optJSONArray("tracks"))
     }
 
@@ -68,7 +71,9 @@ class CatalogueRepository {
             put("album", track.album ?: "")
             put("duration", track.duration)
         }
-        val body = JSONObject(CatalogueBridge.nativeLyrics(lookup.toString()))
-        Lyrics.parse(body.optString("kind", ""), body.optString("text", ""))
+        val body = JSONObject(nativeCall { CatalogueBridge.nativeLyrics(lookup.toString()) })
+        val kind = body.optString("kind", "")
+        if (kind.isBlank()) throw java.io.IOException("lyrics lookup failed")
+        Lyrics.parse(kind, body.optString("text", ""))
     }
 }
