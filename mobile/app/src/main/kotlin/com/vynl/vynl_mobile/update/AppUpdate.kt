@@ -46,10 +46,11 @@ class AppUpdate(private val context: Context) {
 
     suspend fun check(): Update? = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(MANIFEST_URL).build()
-        val response = http.newCall(request).execute()
-        if (!response.isSuccessful) return@withContext null
-        val body = response.body?.string() ?: return@withContext null
-        parse(body)
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            val body = response.body?.string() ?: return@use null
+            parse(body)
+        }
     }
 
     private fun parse(body: String): Update? {

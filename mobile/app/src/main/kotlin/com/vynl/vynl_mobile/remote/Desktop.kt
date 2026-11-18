@@ -22,6 +22,9 @@ data class DesktopTrack(
     val mtime: Long? = null,
 )
 
+private fun encPath(value: String): String =
+    java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
 data class DesktopManifestEntry(
     val id: String,
     val mtime: Long?,
@@ -172,8 +175,11 @@ class Desktop(context: Context) {
                 throw java.io.IOException("desktop returned HTTP ${response.code} for /v1/taste")
             }
             val body = response.body?.string().orEmpty()
-            if (body.isBlank()) return@use emptyList()
-            val liked = JSONObject(body).optJSONArray("liked") ?: return@use emptyList()
+            if (body.isBlank()) {
+                throw java.io.IOException("desktop returned an empty /v1/taste body")
+            }
+            val liked = JSONObject(body).optJSONArray("liked")
+                ?: throw java.io.IOException("desktop /v1/taste response has no liked list")
             (0 until liked.length()).mapNotNull { index ->
                 val s = liked.optJSONObject(index) ?: return@mapNotNull null
                 val id = s.optString("id")
@@ -192,7 +198,7 @@ class Desktop(context: Context) {
 
     suspend fun syncedLyrics(trackId: String): DesktopLyrics? = withContext(Dispatchers.IO) {
         runCatching {
-            http.newCall(request("/v1/tracks/$trackId/synced-lyrics").build()).execute().use { response ->
+            http.newCall(request("/v1/tracks/${encPath(trackId)}/synced-lyrics").build()).execute().use { response ->
                 if (!response.isSuccessful) return@use null
                 val json = JSONObject(response.body?.string().orEmpty())
                 DesktopLyrics(
@@ -206,11 +212,11 @@ class Desktop(context: Context) {
 
     suspend fun downloadAudio(trackId: String, dest: File, onProgress: (Float) -> Unit): Long? =
         withContext(Dispatchers.IO) {
-            downloadInto("/v1/tracks/$trackId/audio", dest) { onProgress(it) }
+            downloadInto("/v1/tracks/${encPath(trackId)}/audio", dest) { onProgress(it) }
         }
 
     suspend fun downloadCover(trackId: String, dest: File): Boolean? = withContext(Dispatchers.IO) {
-        val written = downloadInto("/v1/tracks/$trackId/cover", dest) { }
+        val written = downloadInto("/v1/tracks/${encPath(trackId)}/cover", dest) { }
         written != null && dest.isFile && dest.length() > 0
     }
 

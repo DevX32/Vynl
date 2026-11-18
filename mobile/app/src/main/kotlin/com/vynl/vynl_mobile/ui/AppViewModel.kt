@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
+    private val app: Application = application
     private val repository = CatalogueRepository()
     private val store = Store(application)
     private val downloader = Downloader(application, repository)
@@ -60,7 +61,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val results: StateFlow<CatalogueResults?> = _results.asStateFlow()
 
     var browseQuery by mutableStateOf("")
-        private set
 
     var browseSearching by mutableStateOf(false)
         private set
@@ -303,6 +303,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { sync.refresh(store) }
+                retryPendingTombstones()
                 syncStatus = withContext(Dispatchers.IO) { sync.status }
                 refreshStore()
                 if (!silent) {
@@ -336,9 +337,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun syncPlaylistDelete(id: String) {
         if (!sync.status.signedIn) return
         viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) { sync.tombstone(id) }
-            } catch (_: Exception) {
+            val pushed = runCatching { withContext(Dispatchers.IO) { sync.tombstone(id) } }.isSuccess
+            if (!pushed) {
+                tombstonePrefs().edit().putLong(id, System.currentTimeMillis()).apply()
+            }
+        }
+    }
+
+    private fun tombstonePrefs() =
+        app.getSharedPreferences("vynl_pending_tombstones", android.content.Context.MODE_PRIVATE)
+
+    private fun retryPendingTombstones() {
+        val pending = tombstonePrefs().all.keys
+        if (pending.isEmpty() || !sync.status.signedIn) return
+        viewModelScope.launch {
+            val done = mutableListOf<String>()
+            for (id in pending) {
+                val ok = runCatching { withContext(Dispatchers.IO) { sync.tombstone(id) } }.isSuccess
+                if (ok) done += id
+            }
+            if (done.isNotEmpty()) {
+                tombstonePrefs().edit().apply {
+                    done.forEach { remove(it) }
+                }.apply()
             }
         }
     }
@@ -458,7 +479,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                     explicit = false,
                                 ),
                                 ext = ext,
-                                mtime = manifest[track.id]?.mtime?.takeIf { it > 0 },
+                                mtime = track.mtime,
                                 lyrics = lyrics,
                             )
                         }
@@ -528,7 +549,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 syncStage = "Updating liked songs"
-                val liked = desktop.taste()
+                val tasteResult = runCatching { desktop.taste() }
+                var likedFailed = tasteResult.isFailure
+                val liked = tasteResult.getOrNull().orEmpty()
                 for (track in liked) {
                     withContext(Dispatchers.IO) {
                         store.addTrack(
@@ -577,11 +600,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     playlists
                 }
 
+                val protected = if (likedFailed) setOf("liked") else emptySet()
                 withContext(Dispatchers.IO) {
-                    store.replaceDesktopPlaylists(syncLists)
+                    store.replaceDesktopPlaylists(syncLists, protected)
                 }
                 refreshStore()
-                val likedNote = if (liked.isNotEmpty()) " and liked songs" else ""
+                val likedNote = if (liked.isNotEmpty()) " and liked songs"
+                    else if (likedFailed) " (liked songs couldn't sync — keeping your local copy)"
+                    else ""
                 notice = when {
                     catalog.isEmpty() -> "The desktop has nothing to share"
                     toFetch.isEmpty() -> "Already up to date — ${catalog.size} songs, synced lyrics and playlists$likedNote"

@@ -112,6 +112,12 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
         viewModel.dismissNotice()
     }
 
+    LaunchedEffect(playback.error) {
+        val message = playback.error ?: return@LaunchedEffect
+        snackbar.showSnackbar(message)
+        viewModel.player.clearError()
+    }
+
     Scaffold(
         containerColor = VynlColors.bg,
         snackbarHost = {
@@ -207,7 +213,7 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
         PlayerScreen(
             playback = playback,
             accent = VynlColors.accent,
-            queueTracks = viewModel.player.queueTracks(),
+            queueTracks = remember(playback.queueVersion) { viewModel.player.queueTracks() },
             onClose = { playerOpen = false },
             onToggle = { viewModel.player.toggle() },
             onNext = { viewModel.player.next() },

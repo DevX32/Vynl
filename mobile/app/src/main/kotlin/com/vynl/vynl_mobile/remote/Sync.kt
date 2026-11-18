@@ -648,6 +648,20 @@ class Sync(context: Context) {
         prefs.edit().clear().apply()
     }
 
+    private fun postRaw(path: String, body: JSONObject): Pair<Int, JSONObject> {
+        val request = Request.Builder()
+            .url(path)
+            .header("apikey", anonKey)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .post(body.toString().toRequestBody(JSON))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
+            return response.code to json
+        }
+    }
+
     private fun validSession(): SyncSession {
         val current = session() ?: throw IOException("Sign in to Vynl first.")
         if (current.expiresAt > System.currentTimeMillis() + 30_000) return current
@@ -659,23 +673,29 @@ class Sync(context: Context) {
                 throw IOException("Your session expired. Sign in again.")
             }
             val body = JSONObject().put("refresh_token", again.refreshToken)
-            val response = try {
-                post("$baseUrl/auth/v1/token?grant_type=refresh_token", body, token = null)
+            val (code, json) = try {
+                postRaw("$baseUrl/auth/v1/token?grant_type=refresh_token", body)
             } catch (error: IOException) {
+                throw IOException("Couldn't reach Vynl Sync — check your connection.")
+            }
+            if (code in 200..299) {
+                val fresh = parseSession(json, again.email) ?: run {
+                    clearSession()
+                    throw IOException("Your session expired. Sign in again.")
+                }
+                val withRefresh = if (fresh.refreshToken.isBlank()) {
+                    fresh.copy(refreshToken = again.refreshToken)
+                } else {
+                    fresh
+                }
+                saveSession(withRefresh)
+                return withRefresh
+            }
+            if (code == 400 || code == 401 || code == 403) {
                 clearSession()
                 throw IOException("Your session expired. Sign in again.")
             }
-            val fresh = parseSession(response.second, again.email) ?: run {
-                clearSession()
-                throw IOException("Your session expired. Sign in again.")
-            }
-            val withRefresh = if (fresh.refreshToken.isBlank()) {
-                fresh.copy(refreshToken = again.refreshToken)
-            } else {
-                fresh
-            }
-            saveSession(withRefresh)
-            return withRefresh
+            throw IOException("Vynl Sync had a problem ($code). Try again later.")
         }
     }
 

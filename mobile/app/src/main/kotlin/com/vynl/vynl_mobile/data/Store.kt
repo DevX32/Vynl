@@ -117,14 +117,6 @@ class Store(context: Context) {
                         "SELECT id FROM playlists WHERE id LIKE 'dt-%'",
                 )
             }
-            if (oldVersion < 6) {
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_playlist_tracks_track_id ON playlist_tracks (track_id)",
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_playlist_marks_track_id ON playlist_marks (track_id)",
-                )
-            }
             if (oldVersion < 5) {
                 db.execSQL(
                     """
@@ -136,6 +128,14 @@ class Store(context: Context) {
                         PRIMARY KEY (playlist_id, track_id)
                     )
                     """.trimIndent(),
+                )
+            }
+            if (oldVersion < 6) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_tracks_track_id ON playlist_tracks (track_id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_marks_track_id ON playlist_marks (track_id)",
                 )
             }
         }
@@ -555,7 +555,8 @@ class Store(context: Context) {
 
     private fun trackKey(track: CatalogueTrack): String = "ytm:${track.id.trim()}"
 
-    fun replaceDesktopPlaylists(lists: List<DesktopPlaylist>) {
+    @Synchronized
+    fun replaceDesktopPlaylists(lists: List<DesktopPlaylist>, protect: Set<String> = emptySet()) {
         rekeyLegacyDtPlaylists()
         val db = helper.writableDatabase
         db.beginTransaction()
@@ -570,7 +571,7 @@ class Store(context: Context) {
             val incoming = lists.map { it.id }.toSet()
             for (id in owned) {
                 val stale = id.startsWith("dt-") || id !in incoming
-                if (!stale) continue
+                if (!stale || id in protect) continue
                 deletePlaylist(id, db)
             }
             db.delete("desktop_playlists", null, null)
@@ -579,6 +580,13 @@ class Store(context: Context) {
             for (list in lists) {
                 val id = list.id
                 val existingMarks = readMarks(db, id)
+                val localTrackIds = mutableListOf<String>()
+                db.rawQuery(
+                    "SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC",
+                    arrayOf(id),
+                ).use { cursor ->
+                    while (cursor.moveToNext()) localTrackIds += cursor.getString(0)
+                }
                 val incomingKeys = (list.trackIds + list.streamed.map { it.id })
                     .distinct()
                     .map { "ytm:$it" }
@@ -589,6 +597,16 @@ class Store(context: Context) {
                     if (add == 0L && remove == 0L) {
                         visibleOrder += key
                     } else if (add >= remove) {
+                        visibleOrder += key
+                    }
+                }
+                // Keep phone-local additions that haven't round-tripped to the
+                // desktop yet; they are tracked in this playlist by the local
+                // add marks and must survive a desktop-authoritative rebuild.
+                val incomingSet = incomingKeys.toHashSet()
+                for (trackId in localTrackIds) {
+                    val key = "ytm:$trackId"
+                    if (key !in incomingSet) {
                         visibleOrder += key
                     }
                 }
@@ -672,6 +690,7 @@ class Store(context: Context) {
         )
     }
 
+    @Synchronized
     fun mergePlaylist(
         localId: String,
         name: String,
@@ -866,6 +885,7 @@ class Store(context: Context) {
         return best
     }
 
+    @Synchronized
     fun renamePlaylistId(oldId: String, newId: String) {
         val db = helper.writableDatabase
         db.beginTransaction()

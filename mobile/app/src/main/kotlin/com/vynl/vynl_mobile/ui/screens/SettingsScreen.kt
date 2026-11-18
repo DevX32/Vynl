@@ -72,6 +72,7 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
 
     val update by viewModel.update.collectAsStateWithLifecycle()
     val version by viewModel.installedVersion.collectAsStateWithLifecycle()
+    val downloadedSize by viewModel.downloadedSize.collectAsStateWithLifecycle()
     var accentOpen by remember { mutableStateOf(false) }
     var pairOpen by remember { mutableStateOf(false) }
     var clearConfirm by remember { mutableStateOf(false) }
@@ -223,7 +224,7 @@ fun SettingsScreen(viewModel: AppViewModel, onClose: () -> Unit) {
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "${viewModel.downloadedSize.value} on the phone",
+                        text = "$downloadedSize on the phone",
                         color = VynlColors.faint,
                         fontSize = 12.sp,
                         fontFamily = VynlFonts.display,

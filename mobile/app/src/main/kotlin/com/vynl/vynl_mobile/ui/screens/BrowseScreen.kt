@@ -54,12 +54,12 @@ import com.vynl.vynl_mobile.ui.theme.VynlRadius
 fun BrowseScreen(viewModel: AppViewModel) {
     val results by viewModel.results.collectAsStateWithLifecycle()
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
-    val query = remember { androidx.compose.runtime.mutableStateOf(viewModel.browseQuery) }
+    val query = viewModel.browseQuery
 
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
-            value = query.value,
-            onValueChange = { query.value = it },
+            value = query,
+            onValueChange = { viewModel.browseQuery = it },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
@@ -108,7 +108,7 @@ fun BrowseScreen(viewModel: AppViewModel) {
                 imeAction = androidx.compose.ui.text.input.ImeAction.Search,
             ),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                onSearch = { viewModel.browse(query.value) },
+                onSearch = { viewModel.browse(viewModel.browseQuery) },
             ),
         )
 

@@ -44,6 +44,7 @@ data class PlaybackState(
     val shuffle: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.Off,
     val error: String? = null,
+    val queueVersion: Int = 0,
 )
 
 class PlayerController(
@@ -62,6 +63,7 @@ class PlayerController(
     private var poll: Job? = null
     private var filling = false
     private val connectMutex = Mutex()
+    private var queueVersion = 0
 
     private val window = 3
 
@@ -96,7 +98,15 @@ class PlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            _state.value = _state.value.copy(error = "could not play that track")
+            _state.value = _state.value.copy(
+                error = "could not play that track — skipping to the next one",
+            )
+            val player = controller ?: return
+            if (player.hasNextMediaItem()) {
+                player.seekToNextMediaItem()
+                player.prepare()
+                player.play()
+            }
         }
     }
 
@@ -146,15 +156,16 @@ class PlayerController(
     ) {
         if (tracks.isEmpty()) return
         scope.launch {
-            playlist = tracks
-            queueStart = startIndex.coerceIn(0, tracks.lastIndex)
-            localFiles = files
-            resolved.clear()
             try {
                 connect()
             } catch (_: Exception) {
                 return@launch
             }
+            playlist = tracks
+            queueStart = startIndex.coerceIn(0, tracks.lastIndex)
+            localFiles = files
+            resolved.clear()
+            bumpQueueVersion()
             val c = controller ?: return@launch
             val items = resolve(queueStart)
             if (items.isEmpty()) {
@@ -189,6 +200,15 @@ class PlayerController(
         controller?.seekTo(positionMs)
     }
 
+    private fun bumpQueueVersion() {
+        queueVersion += 1
+        _state.value = _state.value.copy(queueVersion = queueVersion)
+    }
+
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
     private suspend fun resolve(from: Int): List<MediaItem> = coroutineScope {
         val end = minOf(playlist.size, from + window)
         if (from >= end) return@coroutineScope emptyList()
@@ -209,9 +229,11 @@ class PlayerController(
         val failed = (from until end).filter { results[it - from] == null }
         if (failed.isNotEmpty()) {
             playlist = playlist.filterIndexed { idx, _ -> idx !in failed }
-            
-            
             resolved.clear()
+            _state.value = _state.value.copy(
+                error = "${failed.size} track(s) can't be played from the catalog",
+            )
+            bumpQueueVersion()
         }
         results.filterNotNull()
     }
@@ -237,12 +259,26 @@ class PlayerController(
         }
     }
 
+    private fun artworkUri(cover: String): android.net.Uri {
+        val trimmed = cover.trim()
+        return if (trimmed.startsWith("content://")
+            || trimmed.startsWith("file://")
+            || trimmed.startsWith("http://")
+            || trimmed.startsWith("https://")
+            || trimmed.startsWith("android.resource://")
+        ) {
+            android.net.Uri.parse(trimmed)
+        } else {
+            android.net.Uri.fromFile(java.io.File(trimmed))
+        }
+    }
+
     private fun mediaItem(track: CatalogueTrack, url: String): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artist)
             .setAlbumTitle(track.album)
-            .setArtworkUri(track.cover?.let { android.net.Uri.parse(it) })
+            .setArtworkUri(track.cover?.let { artworkUri(it) })
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .build()
@@ -287,6 +323,7 @@ class PlayerController(
         val item = mutable.removeAt(from)
         mutable.add(to, item)
         playlist = mutable
+        bumpQueueVersion()
         val playing = controller?.let { queueStart + it.currentMediaItemIndex } ?: from
         val newPlaying = when {
             playing == from -> to
@@ -337,6 +374,7 @@ class PlayerController(
         if (playlist.isEmpty()) return
         playlist = playlist.shuffled()
         queueStart = 0
+        bumpQueueVersion()
         resolved.clear()
         scope.launch {
             try {
