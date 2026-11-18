@@ -21,6 +21,47 @@ pub fn github_client(read_timeout: std::time::Duration) -> Result<reqwest::Clien
         .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
+pub async fn follow_public_https(
+    http: &reqwest::Client,
+    url: &str,
+    max_hops: u8,
+) -> Result<reqwest::Response, String> {
+    let mut current = url.to_string();
+    for _ in 0..max_hops {
+        let parsed = reqwest::Url::parse(&current).map_err(|_| "invalid URL".to_string())?;
+        if parsed.scheme() != "https" {
+            return Err("only https targets are allowed".into());
+        }
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| "missing host".to_string())?
+            .to_string();
+        if !crate::services::rpc::is_public_host(&host) {
+            return Err("host points at a private or reserved address".into());
+        }
+        let resp = http
+            .get(&current)
+            .send()
+            .await
+            .map_err(|e| format!("request failed: {e}"))?;
+        if resp.status().is_redirection() {
+            let location = resp
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| "missing redirect target".to_string())?
+                .to_string();
+            current = parsed
+                .join(&location)
+                .map_err(|_| "bad redirect target".to_string())?
+                .to_string();
+            continue;
+        }
+        return Ok(resp);
+    }
+    Err("too many redirects".into())
+}
+
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()

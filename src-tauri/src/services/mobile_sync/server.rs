@@ -17,7 +17,7 @@ use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::{AsyncRead, AsyncSeekExt, ReadBuf, SeekFrom};
-use tokio::net::TcpListener;
+
 use tokio::sync::{Mutex, RwLock, oneshot};
 
 use crate::commands::types::LibraryTrack;
@@ -265,7 +265,7 @@ struct PairResponse {
 }
 
 pub async fn serve(
-    port: u16,
+    listener: tokio::net::TcpListener,
     state: SharedState,
     stop: oneshot::Receiver<()>,
 ) -> Result<(), String> {
@@ -288,10 +288,6 @@ pub async fn serve(
             auth_middleware,
         ))
         .with_state(state);
-
-    let listener = TcpListener::bind(("0.0.0.0", port))
-        .await
-        .map_err(|e| format!("bind {port}: {e}"))?;
 
     axum::serve(
         listener,
@@ -477,18 +473,19 @@ fn to_catalog(track: &LibraryTrack) -> MobileCatalogTrack {
     }
 }
 
+fn lan_path_key(path: &str) -> String {
+    let stripped = path.trim_start_matches(r"\\?\");
+    if cfg!(windows) {
+        stripped.replace('/', "\\").to_lowercase()
+    } else {
+        stripped.replace('\\', "/")
+    }
+}
+
 fn path_to_id_map(tracks: &[LibraryTrack]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for t in tracks {
-        map.insert(t.path.clone(), t.id.clone());
-        let alt = t.path.replace('/', "\\");
-        if alt != t.path {
-            map.insert(alt, t.id.clone());
-        }
-        let alt2 = t.path.replace('\\', "/");
-        if alt2 != t.path {
-            map.insert(alt2, t.id.clone());
-        }
+        map.insert(lan_path_key(&t.path), t.id.clone());
     }
     map
 }
@@ -515,7 +512,7 @@ async fn playlists_handler(State(state): State<SharedState>) -> Json<Vec<MobileP
                 let track_ids = pl
                     .paths
                     .iter()
-                    .filter_map(|p| map.get(p).cloned())
+                    .filter_map(|p| map.get(&lan_path_key(p)).cloned())
                     .collect();
                 let streamed = streamed_entries(&pl);
                 let has_cover = pl.cover.is_some();

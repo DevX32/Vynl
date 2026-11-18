@@ -23,11 +23,11 @@ fn order_file(output_dir: &Path) -> std::path::PathBuf {
     playlists_dir(output_dir).join(ORDER_FILE)
 }
 
-fn read_order(output_dir: &Path) -> Vec<String> {
+pub fn read_order(output_dir: &Path) -> Vec<String> {
     util::read_json::<Vec<String>>(&order_file(output_dir)).unwrap_or_default()
 }
 
-fn write_order(output_dir: &Path, ids: &[String]) -> Result<(), String> {
+pub fn write_order(output_dir: &Path, ids: &[String]) -> Result<(), String> {
     util::write_json(&order_file(output_dir), &ids)
 }
 
@@ -52,7 +52,7 @@ fn cover_prefix(id: &str) -> String {
 }
 
 pub(crate) fn record_marks(pl: &mut Playlist, adds: &[String], removals: &[String]) {
-    const MAX_MARKS: usize = 500;
+    const MAX_MARKS: usize = 10_000;
     let now = util::now_ms();
     let touch = |marks: &mut Vec<PlaylistMark>, key: &str| {
         if let Some(mark) = marks.iter_mut().find(|m| m.track_id == key) {

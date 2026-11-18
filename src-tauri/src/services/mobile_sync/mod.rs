@@ -365,8 +365,12 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         next_generation: std::sync::atomic::AtomicU64::new(0),
     });
 
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+        .await
+        .map_err(|e| format!("Port {port} is not available: {e}"))?;
+
     tokio::spawn(async move {
-        if let Err(e) = server::serve(port, state, rx).await {
+        if let Err(e) = server::serve(listener, state, rx).await {
             eprintln!("[mobile_sync] server error: {e}");
         }
     });
@@ -409,5 +413,6 @@ pub fn load_playlists(user_data: &Path) -> Vec<Playlist> {
     playlists::list_playlists(&output)
         .into_iter()
         .filter_map(|meta| playlists::get_playlist(&output, &meta.id))
+        .filter(|playlist| playlist.id != crate::services::sync::LIKED_PLAYLIST_ID)
         .collect()
 }

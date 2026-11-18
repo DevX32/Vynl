@@ -25,5 +25,19 @@ create policy "own playlists" on public.playlists
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+create table if not exists public.library_order (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  order_ids jsonb not null default '[]'::jsonb,
+  updated_at bigint not null
+);
+
+alter table public.library_order enable row level security;
+
+drop policy if exists "own order" on public.library_order;
+create policy "own order" on public.library_order
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 create index if not exists playlists_user_updated
   on public.playlists (user_id, updated_at desc);
