@@ -18,9 +18,37 @@ fn playlist_file(output_dir: &Path, id: &str) -> std::path::PathBuf {
 }
 
 const ORDER_FILE: &str = "order.json";
+const ORDER_META_FILE: &str = "order.json.meta";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderMeta {
+    updated_at: i64,
+}
 
 fn order_file(output_dir: &Path) -> std::path::PathBuf {
     playlists_dir(output_dir).join(ORDER_FILE)
+}
+
+fn order_meta_file(output_dir: &Path) -> std::path::PathBuf {
+    playlists_dir(output_dir).join(ORDER_META_FILE)
+}
+
+pub fn order_updated_at(output_dir: &Path) -> i64 {
+    if let Some(meta) = util::read_json::<OrderMeta>(&order_meta_file(output_dir)) {
+        return meta.updated_at.max(0);
+    }
+    let mtime = fs::metadata(order_file(output_dir))
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0);
+    let _ = util::write_json(
+        &order_meta_file(output_dir),
+        &OrderMeta { updated_at: mtime },
+    );
+    mtime
 }
 
 pub fn read_order(output_dir: &Path) -> Vec<String> {
@@ -28,7 +56,22 @@ pub fn read_order(output_dir: &Path) -> Vec<String> {
 }
 
 pub fn write_order(output_dir: &Path, ids: &[String]) -> Result<(), String> {
-    util::write_json(&order_file(output_dir), &ids)
+    util::write_json(&order_file(output_dir), &ids)?;
+    util::write_json(
+        &order_meta_file(output_dir),
+        &OrderMeta {
+            updated_at: util::now_ms(),
+        },
+    )
+}
+
+pub(crate) fn write_order_at(
+    output_dir: &Path,
+    ids: &[String],
+    updated_at: i64,
+) -> Result<(), String> {
+    util::write_json(&order_file(output_dir), &ids)?;
+    util::write_json(&order_meta_file(output_dir), &OrderMeta { updated_at })
 }
 
 fn prune_order(output_dir: &Path, id: &str) {

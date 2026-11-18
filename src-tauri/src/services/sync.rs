@@ -1235,19 +1235,11 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         translate_marks_inbound(row, &maps);
     }
 
-    let order_path = output_dir.join("playlists").join("order.json");
-    let local_order_mtime = std::fs::metadata(&order_path)
-        .and_then(|meta| meta.modified())
-        .map(|time| {
-            time.duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as i64)
-                .unwrap_or(0)
-        })
-        .unwrap_or(0);
+    let local_order_updated = playlists::order_updated_at(output_dir);
 
     if let Ok(Some(row)) = fetch_order(data_dir).await {
         let remote_updated = row.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(0);
-        if remote_updated > local_order_mtime {
+        if remote_updated > local_order_updated {
             let ids: Vec<String> = row
                 .get("order_ids")
                 .and_then(|v| v.as_array())
@@ -1259,7 +1251,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                 })
                 .unwrap_or_default();
             if !ids.is_empty() {
-                let _ = playlists::write_order(output_dir, &ids);
+                let _ = playlists::write_order_at(output_dir, &ids, remote_updated);
             }
         }
     }
@@ -1380,11 +1372,21 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         }
     }
 
-    if let Err(error) =
-        push_order(data_dir, &playlists::read_order(output_dir), util::now_ms()).await
-    {
-        eprintln!("Vynl sync: could not save the playlist order: {error}");
-        result.failed += 1;
+    let order = playlists::read_order(output_dir);
+    if !order.is_empty() {
+        let remote_at = fetch_order(data_dir)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|row| row.get("updated_at").and_then(|v| v.as_i64()))
+            .unwrap_or(0);
+        let local_at = playlists::order_updated_at(output_dir);
+        if local_at > remote_at
+            && let Err(error) = push_order(data_dir, &order, local_at).await
+        {
+            eprintln!("Vynl sync: could not save the playlist order: {error}");
+            result.failed += 1;
+        }
     }
 
     if let Some(liked) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {

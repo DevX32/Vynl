@@ -1187,18 +1187,24 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>) {
                                     .send(PlayerResp::Err("No audio output device".to_string()));
                                 continue;
                             }
-                            pending_seek = None;
+                            let queued_seek = pending_seek
+                                .take()
+                                .filter(|(_, queued_generation)| {
+                                    *queued_generation == request.generation
+                                })
+                                .map(|(time, _)| time);
+                            let start = queued_seek.unwrap_or(request.start);
                             match install_source(
                                 &handle,
                                 &mut sink,
                                 &mut fading,
                                 request.input,
-                                request.start,
+                                start,
                                 request.preserve_pause,
                             ) {
                                 Ok(total) => {
                                     active_generation = request.generation;
-                                    seek_floor = seek_floor_for(request.start);
+                                    seek_floor = seek_floor_for(start);
                                     current_path = Some(request.path);
                                     duration_secs = total;
                                     PlayerResp::Ok

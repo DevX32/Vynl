@@ -281,7 +281,7 @@ private fun KaraokeLine(line: LyricLine, positionMs: Long, playing: Boolean, sty
             if (current >= 0) wordFill(words, current, positionMs) else 0f,
         )
     }
-    LaunchedEffect(words, current, playing) {
+    LaunchedEffect(words, current, playing, positionMs) {
         if (!playing) return@LaunchedEffect
         var startNanos = -1L
         val startPos = positionMs
