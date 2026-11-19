@@ -25,7 +25,7 @@ const SESSION_DIR: &str = "cloud";
 const SESSION_FILE: &str = "session.json";
 const PENDING_TOMBSTONES_FILE: &str = "playlist-tombstones.json";
 
-const MAX_PENDING_TOMBSTONES: usize = 200;
+const PENDING_TOMBSTONE_WARN: usize = 200;
 
 enum LocalResolution {
     Present(Playlist),
@@ -702,17 +702,13 @@ fn record_pending_tombstone_impl(
             signature: signature.to_vec(),
             user_id,
         });
-        if entries.len() > MAX_PENDING_TOMBSTONES {
-            entries.sort_by_key(|entry| entry.deleted_at);
-            let evicted = entries.len() - MAX_PENDING_TOMBSTONES;
-            let ids: Vec<String> = entries.drain(..evicted).map(|entry| entry.id).collect();
+        if entries.len() > PENDING_TOMBSTONE_WARN {
             eprintln!(
-                "Vynl sync: dropping {evicted} pending tombstone(s) for deleted playlists {ids:?}; those remote rows will not be deleted"
+                "Vynl sync: {} pending tombstone(s) wait to be delivered to the server; the delete queue is not being dropped but is unusually large",
+                entries.len()
             );
-            write_pending_tombstones(data_dir, &entries);
-        } else {
-            write_pending_tombstones(data_dir, &entries);
         }
+        write_pending_tombstones(data_dir, &entries);
         at
     })
 }
@@ -1582,7 +1578,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         }
     }
 
+    let tombstone_undelivered = pending.len().saturating_sub(tombstone_succeeded.len());
     let mut result = SyncResult::default();
+    result.failed += tombstone_undelivered;
     let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
     for row in &folded.stale {
         known.insert(row.local_id.clone());
