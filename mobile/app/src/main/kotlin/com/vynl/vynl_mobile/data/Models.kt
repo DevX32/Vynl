@@ -121,6 +121,49 @@ internal fun parseTracks(value: JSONArray?): List<CatalogueTrack> {
     }
 }
 
+internal fun trackToJson(track: CatalogueTrack): JSONObject =
+    JSONObject()
+        .put("id", track.id)
+        .put("title", track.title)
+        .put("artist", track.artist)
+        .put("album", track.album ?: JSONObject.NULL)
+        .put("albumId", track.albumId ?: JSONObject.NULL)
+        .put("artistId", track.artistId ?: JSONObject.NULL)
+        .put("duration", track.duration)
+        .put("cover", track.cover ?: JSONObject.NULL)
+        .put("explicit", track.explicit)
+
+internal fun parseTrackLike(value: JSONObject): CatalogueTrack =
+    CatalogueTrack(
+        id = value.optString("id", ""),
+        title = value.optString("title", "Unknown"),
+        artist = value.optString("artist", "Unknown"),
+        album = value.optStringOrNull("album"),
+        albumId = value.optStringOrNull("albumId"),
+        artistId = value.optStringOrNull("artistId"),
+        duration = value.optDouble("duration", 0.0),
+        cover = value.optStringOrNull("cover"),
+        explicit = value.optBoolean("explicit", false),
+    )
+
+internal fun mixToJson(tracks: List<CatalogueTrack>): String {
+    val array = JSONArray()
+    for (track in tracks) {
+        array.put(trackToJson(track))
+    }
+    return array.toString()
+}
+
+internal fun mixFromJson(text: String): List<CatalogueTrack> = runCatching {
+    val array = JSONArray(text)
+    buildList {
+        for (index in 0 until array.length()) {
+            val entry = array.optJSONObject(index) ?: continue
+            add(parseTrackLike(entry))
+        }
+    }
+}.getOrDefault(emptyList())
+
 internal fun parseAlbums(value: JSONArray?): List<CatalogueAlbum> {
     if (value == null) return emptyList()
     return buildList {

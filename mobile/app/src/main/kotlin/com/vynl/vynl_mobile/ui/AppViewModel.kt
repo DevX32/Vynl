@@ -15,6 +15,8 @@ import com.vynl.vynl_mobile.data.CatalogueRepository
 import com.vynl.vynl_mobile.data.CatalogueResults
 import com.vynl.vynl_mobile.data.CatalogueTrack
 import com.vynl.vynl_mobile.data.Downloader
+import com.vynl.vynl_mobile.data.mixFromJson
+import com.vynl.vynl_mobile.data.mixToJson
 import com.vynl.vynl_mobile.data.LocalPlaylist
 import com.vynl.vynl_mobile.data.Lyrics
 import com.vynl.vynl_mobile.data.LyricsStatus
@@ -216,6 +218,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val (name, build) = updater.installedVersion()
         _installedVersion.value = name.ifEmpty { "$build" }
         measureDownloads()
+        safeLaunch {
+            val cached = withContext(Dispatchers.IO) {
+                val file = java.io.File(getApplication<Application>().filesDir, "mix.json")
+                runCatching { mixFromJson(file.readText()) }.getOrDefault(emptyList())
+            }
+            if (cached.isNotEmpty() && _mix.value.isEmpty()) {
+                _mix.value = cached
+            }
+        }
         safeLaunch {
             runCatching { withContext(Dispatchers.IO) { store.rekeyLegacyDtPlaylists() } }
             runCatching { refreshStore() }
@@ -956,6 +967,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     (kept + fresh.filter { it.id !in keptIds }.take(60 - kept.size)).shuffled()
                 }
                 _mix.value = merged
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        java.io.File(getApplication<Application>().filesDir, "mix.json")
+                            .writeText(mixToJson(merged))
+                    }
+                }
             } catch (error: Exception) {
                 if (generation != mixGeneration) return@safeLaunch
                 mixError = friendly(error)
@@ -1250,3 +1267,4 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private const val DISCOVERY_QUERY = "daft punk"
     }
 }
+
