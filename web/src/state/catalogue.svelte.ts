@@ -243,14 +243,63 @@ export function clearCatalogueSearch(): void {
   _searchError = null;
 }
 
-let _taste = $state<CatalogueTrack[]>([]);
-let _tasteKey = $state("");
+const TASTE_CACHE = "vynl.taste.mix.v1";
+
+interface TasteCache {
+  profileKey: string;
+  seedsKey: string;
+  tracks: CatalogueTrack[];
+}
+
+function readTasteCache(): TasteCache | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(TASTE_CACHE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TasteCache> | null;
+    if (
+      !parsed ||
+      typeof parsed.profileKey !== "string" ||
+      typeof parsed.seedsKey !== "string" ||
+      !Array.isArray(parsed.tracks)
+    ) {
+      return null;
+    }
+    const tracks = parsed.tracks.filter(
+      (t): t is CatalogueTrack =>
+        typeof t === "object" &&
+        t !== null &&
+        typeof (t as CatalogueTrack).id === "string" &&
+        typeof (t as CatalogueTrack).title === "string",
+    );
+    return { profileKey: parsed.profileKey, seedsKey: parsed.seedsKey, tracks };
+  } catch {
+    return null;
+  }
+}
+
+function writeTasteCache(cache: TasteCache): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(TASTE_CACHE, JSON.stringify(cache));
+  } catch {}
+}
+
+const cachedTaste = readTasteCache();
+
+let _taste = $state<CatalogueTrack[]>(cachedTaste?.tracks ?? []);
+let _tasteKey = $state(cachedTaste?.seedsKey ?? "");
+let _tasteProfileKey: string | null = cachedTaste?.profileKey ?? null;
 let _tasteLoading = $state(false);
 let _tasteError = $state<string | null>(null);
 let _tasteGeneration = 0;
 
 export function getCatalogueTaste(): readonly CatalogueTrack[] {
   return _taste;
+}
+
+export function getCatalogueTasteProfileKey(): string | null {
+  return _tasteProfileKey;
 }
 
 export function isCatalogueTasteLoading(): boolean {
@@ -267,6 +316,12 @@ export function resetCatalogueTaste(): void {
   _tasteKey = "";
   _tasteLoading = false;
   _tasteError = null;
+  _tasteProfileKey = null;
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.removeItem(TASTE_CACHE);
+    } catch {}
+  }
 }
 
 const TASTE_KEEP = 30;
@@ -284,6 +339,7 @@ function shuffle<T>(items: readonly T[]): T[] {
 export async function loadCatalogueTaste(
   seeds: readonly string[],
   force = false,
+  profileKey = "",
 ): Promise<void> {
   const key = seeds.join("|");
   if (!key) {
@@ -315,6 +371,10 @@ export async function loadCatalogueTaste(
       _taste = shuffle([...kept, ...fresh]);
     } else {
       _taste = tracks;
+    }
+    if (profileKey) {
+      _tasteProfileKey = profileKey;
+      writeTasteCache({ profileKey, seedsKey: key, tracks: _taste });
     }
     registerCatalogueTracks(_taste);
   } catch (error) {

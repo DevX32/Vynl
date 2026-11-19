@@ -16,6 +16,7 @@
     getCatalogueSearchError,
     getCatalogueTaste,
     getCatalogueTasteError,
+    getCatalogueTasteProfileKey,
     isCatalogueSearching,
     isCatalogueTasteLoading,
     loadCatalogueTaste,
@@ -62,10 +63,14 @@
   $effect(() => {
     const key = profileKey;
     if (!key || key === lastMixKey) return;
+    if (getCatalogueTasteProfileKey() === key && taste.length > 0) {
+      lastMixKey = key;
+      return;
+    }
     const current = untrack(() => getTasteSeeds(6));
     if (current.length === 0) return;
     lastMixKey = key;
-    void untrack(() => loadCatalogueTaste(current));
+    void untrack(() => loadCatalogueTaste(current, false, key));
   });
 
   const playableSongs = $derived(
@@ -141,7 +146,7 @@
   }
 
   function retryTaste(): void {
-    void loadCatalogueTaste(untrack(() => getTasteSeeds(6)), true);
+    void loadCatalogueTaste(untrack(() => getTasteSeeds(6)), true, profileKey);
   }
 </script>
 
