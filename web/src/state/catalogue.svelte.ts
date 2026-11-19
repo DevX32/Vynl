@@ -220,6 +220,7 @@ export async function searchCatalogue(query: string): Promise<void> {
   const generation = ++_searchGeneration;
   _searching = true;
   _searchError = null;
+  _results = null;
   try {
     const results = await vynl.catalogueSearch(trimmed);
     if (generation !== _searchGeneration) return;

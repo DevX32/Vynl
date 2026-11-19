@@ -934,6 +934,7 @@ function handleMediaPause(): void {
 
 function handleMediaStop(): void {
   if (getIsTrackPlaying()) pausePlayback();
+  if (catalogueIdOf(getCurrentTrack()?.path)) return;
   seekToTime(0);
 }
 

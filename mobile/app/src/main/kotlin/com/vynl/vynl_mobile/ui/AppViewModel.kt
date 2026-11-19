@@ -678,8 +678,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun measureDownloads() {
         safeLaunch {
             val bytes = withContext(Dispatchers.IO) {
-                val folder = java.io.File(getApplication<Application>().filesDir, "music/audio")
-                folder.listFiles()?.sumOf { it.length() } ?: 0L
+                val audioDir = java.io.File(getApplication<Application>().filesDir, "music/audio")
+                val partCutoff = System.currentTimeMillis() - 5 * 60_000L
+                audioDir.listFiles()?.forEach { file ->
+                    if (file.name.endsWith(".part") && file.lastModified() < partCutoff) {
+                        file.delete()
+                    }
+                }
+                audioDir.listFiles()?.sumOf { it.length() } ?: 0L
             }
             val megabytes = bytes / (1024.0 * 1024.0)
             _downloadedSize.value = if (bytes > 1024L * 1024L) {

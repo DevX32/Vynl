@@ -141,9 +141,11 @@ fun parsePairingPayload(raw: String): PairingPayload? {
     }
 
     val alts = (uri.getQueryParameter("a") ?: "")
+        .take(2048)
         .split(',')
         .map { it.trim() }
         .filter { it.isNotEmpty() && isLanHost(it) }
+        .take(8)
         .map(::withPort)
 
     return PairingPayload(host = withPort(host), pin = pin, alts = alts, fp = fp)

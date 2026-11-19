@@ -429,7 +429,7 @@ pub(crate) fn filter_and_rank_candidates(
         let title_hit = !expected_title.is_empty()
             && expected_title.intersection(&info.title_tokens).count() > 0;
 
-        (artist_hit || title_hit) && duration_ok(c)
+        (artist_hit || title_hit) && duration_ok(c) && (expected_artist.len() <= 1 || artist_hit)
     };
 
     let relevant: Vec<(CandidateInfo, SearchCandidate)> = candidates
@@ -458,5 +458,9 @@ pub(crate) fn filter_and_rank_candidates(
         .collect();
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored.into_iter().map(|(_, c)| c).collect()
+    scored
+        .into_iter()
+        .filter(|(score, _)| *score > 0.0)
+        .map(|(_, c)| c)
+        .collect()
 }

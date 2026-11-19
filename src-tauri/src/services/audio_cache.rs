@@ -92,8 +92,18 @@ pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> 
         return Err(e);
     }
 
-    let _ = std::fs::remove_file(&dest);
-    std::fs::rename(&tmp, &dest).map_err(|e| format!("rename cache: {e}"))?;
+    match std::fs::rename(&tmp, &dest) {
+        Ok(()) => {}
+        Err(rename_error) => {
+            if dest.is_file() {
+                let _ = std::fs::remove_file(&dest);
+                std::fs::rename(&tmp, &dest).map_err(|e| format!("rename cache: {e}"))?;
+            } else {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(format!("rename cache: {rename_error}"));
+            }
+        }
+    }
 
     Ok(dest.to_string_lossy().into_owned())
 }
@@ -136,6 +146,13 @@ fn prune_cache() {
     let mut files: Vec<(PathBuf, u64, u64)> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
+        if path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.contains(".partial."))
+        {
+            continue;
+        }
         let Ok(meta) = path.metadata() else { continue };
         if !meta.is_file() {
             continue;

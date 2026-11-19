@@ -465,11 +465,34 @@ impl Drop for ScratchDir {
 async fn promote(staged: &Path, dest: &Path) -> Result<(), String> {
     let (staged, dest) = (staged.to_path_buf(), dest.to_path_buf());
     tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        fs::rename(&staged, &dest).or_else(|_| -> std::io::Result<()> {
-            fs::copy(&staged, &dest)?;
-            fs::remove_file(&staged)?;
-            Ok(())
-        })?;
+        if fs::rename(&staged, &dest).is_ok() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
+            }
+            return Ok(());
+        }
+        let tmp = dest.with_extension(format!(
+            "staged-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        fs::copy(&staged, &tmp)?;
+        let staged_size = fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+        if staged_size == 0 {
+            let _ = fs::remove_file(&tmp);
+            return Err(std::io::Error::other("the copied binary was empty"));
+        }
+        #[cfg(windows)]
+        {
+            let _ = fs::remove_file(&dest);
+        }
+        fs::rename(&tmp, &dest)?;
+        fs::remove_file(&staged)?;
 
         #[cfg(unix)]
         {

@@ -200,7 +200,12 @@ class PlayerController(
                 if (this@PlayerController.controller === controller) {
                     this@PlayerController.controller = null
                 }
-                _state.value = _state.value.copy(connected = false, playing = false, buffering = false)
+                _state.value = _state.value.copy(
+                    connected = false,
+                    playing = false,
+                    buffering = false,
+                    track = null,
+                )
             }
         }
         val future = MediaController.Builder(context, token)

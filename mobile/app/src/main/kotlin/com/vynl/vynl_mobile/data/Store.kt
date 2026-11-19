@@ -785,6 +785,32 @@ class Store(context: Context) {
     }
 
     @Synchronized
+    fun transferMarks(sourceId: String, targetId: String) {
+        if (sourceId == targetId) return
+        dbCall {
+            val db = writableDb()
+            db.beginTransaction()
+            try {
+                db.rawQuery(
+                    "SELECT track_id, add_at, remove_at FROM playlist_marks WHERE playlist_id = ?",
+                    arrayOf(sourceId),
+                ).use { cursor ->
+                    val targetMarks = readMarks(db, targetId).toMutableMap()
+                    while (cursor.moveToNext()) {
+                        val trackKey = cursor.getString(0)
+                        val add = maxOf(cursor.getLong(1), targetMarks[trackKey]?.first ?: 0L)
+                        val remove = maxOf(cursor.getLong(2), targetMarks[trackKey]?.second ?: 0L)
+                        upsertMark(db, targetId, trackKey, add, remove)
+                    }
+                }
+                db.delete("playlist_marks", "playlist_id = ?", arrayOf(sourceId))
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
+
     fun mergePlaylist(
         localId: String,
         name: String,

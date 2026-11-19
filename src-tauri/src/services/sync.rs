@@ -1226,7 +1226,11 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
         }
         offset += PAGE_SIZE;
     }
-    Ok(out)
+    let mut seen = std::collections::HashSet::with_capacity(out.len());
+    Ok(out
+        .into_iter()
+        .filter(|row| seen.insert(row.local_id.clone()))
+        .collect())
 }
 
 async fn upsert_rows_once(data_dir: &Path, rows: &[Value]) -> Result<reqwest::Response, String> {
@@ -1612,6 +1616,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     }
     if !folded.stale.is_empty() {
         for (row, canonical_id) in &folded.stale {
+            if row.local_id == *canonical_id {
+                continue;
+            }
             if row.local_id == LIKED_PLAYLIST_ID {
                 continue;
             }

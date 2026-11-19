@@ -39,6 +39,7 @@ data class SyncResult(
 private data class FoldResult(
     val rows: List<JSONObject>,
     val staleIds: List<String>,
+    val staleToCanonical: Map<String, String>,
 )
 
 private data class SyncSession(
@@ -215,15 +216,23 @@ class Sync(context: Context) {
         var pulled = 0
         var deleted = 0
         var failed = 0
+        val reviveFailed = mutableSetOf<String>()
         val consumed = mutableSetOf<String>()
         val known = mutableSetOf<String>()
         known += folded.staleIds
 
         if (folded.staleIds.isNotEmpty()) {
             for (staleId in folded.staleIds) {
-                runCatching { tombstone(staleId) }
-                    .onFailure { failed += 1 }
-                store.deletePlaylist(staleId)
+                val canonicalId = folded.staleToCanonical[staleId]
+                if (canonicalId != null && canonicalId != staleId) {
+                    runCatching { store.transferMarks(staleId, canonicalId) }
+                }
+                val tombstoned = runCatching { tombstone(staleId) }.isSuccess
+                if (tombstoned) {
+                    store.deletePlaylist(staleId)
+                } else {
+                    failed += 1
+                }
             }
         }
 
@@ -248,6 +257,7 @@ class Sync(context: Context) {
                         if (ok) pushed += 1 else {
                             failed += 1
                             known -= canonical
+                            reviveFailed += canonical
                         }
                     }
                 }
@@ -288,7 +298,8 @@ class Sync(context: Context) {
         for (playlist in store.playlists()) {
             val payload = store.syncPayload(playlist.id) ?: continue
             if (known.contains(payload.localId)) continue
-            val ok = runCatching { pushPlaylist(payload) }.isSuccess
+            val includeDeletedAt = reviveFailed.contains(payload.localId)
+            val ok = runCatching { pushPlaylist(payload, includeDeletedAt = includeDeletedAt) }.isSuccess
             if (ok) pushed += 1 else failed += 1
         }
 
@@ -426,6 +437,7 @@ class Sync(context: Context) {
         }
 
         val consumed = HashSet<JSONObject>()
+        val staleToCanonical = HashMap<String, String>()
         val syntheticByCanonical = HashMap<JSONObject, JSONObject>()
         for (group in groups.values) {
             if (group.size < 2) continue
@@ -465,18 +477,21 @@ class Sync(context: Context) {
             merged.put("adds", marksArray(adds))
             merged.put("removals", marksArray(removals))
 
-            for (row in members) consumed += row
+            for (row in members) {
+                consumed += row
+                staleToCanonical[row.optString("local_id")] = canonical.optString("local_id")
+            }
             syntheticByCanonical[canonical] = merged
         }
 
-        if (consumed.isEmpty()) return FoldResult(rows, emptyList())
+        if (consumed.isEmpty()) return FoldResult(rows, emptyList(), emptyMap())
         val staleIds = consumed.map { it.optString("local_id") }.filter { it.isNotBlank() }
         val out = ArrayList<JSONObject>(rows.size)
         for (row in rows) {
             if (row in consumed) continue
             out += syntheticByCanonical[row] ?: row
         }
-        return FoldResult(out, staleIds)
+        return FoldResult(out, staleIds, staleToCanonical)
     }
 
     private fun bodyMissingMarks(body: String): Boolean {
