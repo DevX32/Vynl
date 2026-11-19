@@ -250,6 +250,8 @@ export interface Playlist {
   cover: string | null;
   createdAt: number;
   updatedAt: number;
+  adds?: { trackId: string; at: number }[];
+  removals?: { trackId: string; at: number }[];
 }
 
 export interface StreamImportResult {
