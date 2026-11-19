@@ -216,7 +216,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val (name, build) = updater.installedVersion()
         _installedVersion.value = name.ifEmpty { "$build" }
         measureDownloads()
-        loadMix()
         safeLaunch {
             runCatching { withContext(Dispatchers.IO) { store.rekeyLegacyDtPlaylists() } }
             runCatching { refreshStore() }
@@ -879,6 +878,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTab(index: Int) {
         tab = index
+        if (index == 3 && _mix.value.isEmpty() && !mixLoading && mixError == null) {
+            loadMix()
+        }
     }
 
     fun dismissNotice() {
