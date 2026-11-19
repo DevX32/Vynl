@@ -1331,6 +1331,7 @@ pub struct StreamSource {
     channels: u16,
     sample_rate: u32,
     duration: Option<Duration>,
+    underrun_ms: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl StreamSource {
@@ -1347,6 +1348,7 @@ impl StreamSource {
                 .duration
                 .filter(|d| d.is_finite() && *d > 0.0)
                 .and_then(|d| Duration::try_from_secs_f64(d).ok()),
+            underrun_ms: session.underrun_ms.clone(),
         }
     }
 }
@@ -1357,7 +1359,13 @@ impl Iterator for StreamSource {
     fn next(&mut self) -> Option<f32> {
         match self.buffer.pop() {
             Pop::Sample(sample) => Some(sample),
-            Pop::Underrun => Some(0.0),
+            Pop::Underrun => {
+                self.underrun_ms.store(
+                    crate::services::util::now_ms().max(0) as u64,
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+                Some(0.0)
+            }
             Pop::Closed => None,
         }
     }
@@ -1395,6 +1403,7 @@ pub struct StreamSession {
     store: Arc<RangeStore>,
     cache: Arc<StreamCache>,
     file_name: String,
+    underrun_ms: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl StreamSession {
@@ -1524,6 +1533,7 @@ impl StreamSession {
             store,
             cache,
             file_name,
+            underrun_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }))
     }
 
@@ -1550,6 +1560,11 @@ impl StreamSession {
 
     pub fn is_complete(&self) -> bool {
         self.store.is_complete()
+    }
+
+    pub fn recently_underrun(&self, budget_ms: u64) -> bool {
+        let last = self.underrun_ms.load(std::sync::atomic::Ordering::Relaxed);
+        last > 0 && crate::services::util::now_ms().saturating_sub(last as i64) < budget_ms as i64
     }
 }
 
@@ -1794,6 +1809,12 @@ pub async fn prepare(
             audio: PreparedAudio::File(path),
             cached: true,
         });
+    }
+
+    if cache.has_active(video_id) {
+        return Err(
+            "that track is already downloading — wait for it or restart playback".to_string(),
+        );
     }
 
     if cache.has_active(video_id) {

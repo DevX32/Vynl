@@ -147,31 +147,38 @@ class Store(context: Context) {
         }
     }
 
-    private var helper = Helper(context)
+    private val dbMutex = Any()
+    @Volatile private var helper = Helper(context)
     private val appContext = context.applicationContext
 
     private fun recreateCorruptedDb() {
-        runCatching { helper.close() }
-        for (suffix in listOf("", "-wal", "-shm")) {
-            runCatching { appContext.getDatabasePath("vynl.db$suffix")?.delete() }
+        synchronized(dbMutex) {
+            runCatching { helper.close() }
+            for (suffix in listOf("", "-wal", "-shm")) {
+                runCatching { appContext.getDatabasePath("vynl.db$suffix")?.delete() }
+            }
+            helper = Helper(appContext)
         }
-        helper = Helper(appContext)
     }
 
-    private fun writableDb(): SQLiteDatabase = try {
-        helper.writableDatabase
-    } catch (error: android.database.sqlite.SQLiteDatabaseCorruptException) {
-        android.util.Log.e("Vynl", "database is corrupt; rebuilding", error)
-        recreateCorruptedDb()
-        helper.writableDatabase
+    private fun writableDb(): SQLiteDatabase = synchronized(dbMutex) {
+        try {
+            helper.writableDatabase
+        } catch (error: android.database.sqlite.SQLiteDatabaseCorruptException) {
+            android.util.Log.e("Vynl", "database is corrupt; rebuilding", error)
+            recreateCorruptedDb()
+            helper.writableDatabase
+        }
     }
 
-    private fun readableDb(): SQLiteDatabase = try {
-        helper.readableDatabase
-    } catch (error: android.database.sqlite.SQLiteDatabaseCorruptException) {
-        android.util.Log.e("Vynl", "database is corrupt; rebuilding", error)
-        recreateCorruptedDb()
-        helper.readableDatabase
+    private fun readableDb(): SQLiteDatabase = synchronized(dbMutex) {
+        try {
+            helper.readableDatabase
+        } catch (error: android.database.sqlite.SQLiteDatabaseCorruptException) {
+            android.util.Log.e("Vynl", "database is corrupt; rebuilding", error)
+            recreateCorruptedDb()
+            helper.readableDatabase
+        }
     }
 
     fun addTrack(

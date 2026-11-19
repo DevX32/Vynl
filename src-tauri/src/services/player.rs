@@ -66,7 +66,11 @@ fn emit_playback_tick(
     let has_sink = sink.is_some();
     let empty = sink.map(|s| s.sink.empty()).unwrap_or(false);
     let paused = PAUSED.load(Ordering::Relaxed);
-    let playing = has_sink && !empty && !paused;
+    let starved = sink
+        .as_ref()
+        .and_then(|track| track._session.as_ref())
+        .is_some_and(|session| session.recently_underrun(750));
+    let playing = has_sink && !empty && !paused && !starved;
     let finished = has_sink && empty && !paused;
     let position = reported_pos(sink, seek_floor);
 

@@ -89,7 +89,6 @@ class PlayerController(
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-            _state.value = _state.value.copy(shuffle = shuffleModeEnabled)
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
@@ -323,7 +322,6 @@ class PlayerController(
             playing = player.isPlaying,
             queueIndex = absolute,
             queueSize = playlist.size,
-            shuffle = player.shuffleModeEnabled,
             repeatMode = when (player.repeatMode) {
                 Player.REPEAT_MODE_ALL -> RepeatMode.All
                 Player.REPEAT_MODE_ONE -> RepeatMode.One
@@ -375,9 +373,44 @@ class PlayerController(
         )
     }
 
+    private var canonicalPlaylist: List<CatalogueTrack>? = null
+
     fun toggleShuffle() {
         val controller = controller ?: return
-        controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+        val want = !_state.value.shuffle
+        val currentTrack = playlist.getOrNull(queueStart)
+        if (want) {
+            canonicalPlaylist = playlist
+            val preserveThrough = (queueStart + 1).coerceAtMost(playlist.size)
+            val head = playlist.subList(0, preserveThrough)
+            val tail = playlist.subList(preserveThrough, playlist.size).shuffled()
+            playlist = head + tail
+        } else {
+            val saved = canonicalPlaylist
+            if (saved != null && currentTrack != null) {
+                val index = saved.indexOfFirst { it.id == currentTrack.id }
+                playlist = saved
+                queueStart = if (index >= 0) index else 0
+            }
+            canonicalPlaylist = null
+        }
+        bumpQueueVersion()
+        scope.launch {
+            try {
+                connect()
+                val items = resolve(queueStart)
+                if (items.isEmpty()) {
+                    _state.value = _state.value.copy(error = "could not play that track")
+                    return@launch
+                }
+                val position = controller.currentPosition
+                controller.setMediaItems(items, 0, position)
+                controller.prepare()
+            } catch (_: Exception) {
+            }
+        }
+        controller.shuffleModeEnabled = false
+        _state.value = _state.value.copy(shuffle = want)
     }
 
     fun toggleRepeat() {
