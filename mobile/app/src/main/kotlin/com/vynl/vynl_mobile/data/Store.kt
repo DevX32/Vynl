@@ -181,12 +181,21 @@ class Store(context: Context) {
         }
     }
 
+    private fun <T> dbCall(call: () -> T): T = try {
+        call()
+    } catch (error: android.database.sqlite.SQLiteDatabaseCorruptException) {
+        android.util.Log.e("Vynl", "database is corrupt; rebuilding and retrying", error)
+        recreateCorruptedDb()
+        call()
+    }
+
     fun addTrack(
         track: CatalogueTrack,
         ext: String? = null,
         mtime: Long? = null,
         lyrics: String? = null,
     ) {
+        dbCall {
         val db = writableDb()
         db.insertWithOnConflict(
             "tracks",
@@ -216,9 +225,11 @@ class Store(context: Context) {
             if (lyrics != null) put("lyrics", lyrics)
         }
         db.update("tracks", values, "id = ?", arrayOf(track.id))
+        }
     }
 
     fun setAudioPath(trackId: String, path: String, mtime: Long? = null) {
+        dbCall {
         writableDb().update(
             "tracks",
             ContentValues().apply {
@@ -228,27 +239,32 @@ class Store(context: Context) {
             "id = ?",
             arrayOf(trackId),
         )
+        }
     }
 
     fun clearAudio() {
+        dbCall {
         writableDb().update(
             "tracks",
             ContentValues().apply { put("audio_path", "") },
             null,
             null,
         )
+        }
     }
 
     fun clearCovers() {
+        dbCall {
         writableDb().update(
             "tracks",
             ContentValues().apply { put("cover_path", "") },
             null,
             null,
         )
+        }
     }
 
-    fun localMtimes(): Map<String, Long> {
+    fun localMtimes(): Map<String, Long> = dbCall {
         val result = mutableMapOf<String, Long>()
         readableDb().rawQuery(
             "SELECT id, mtime FROM tracks WHERE mtime IS NOT NULL",
@@ -258,10 +274,10 @@ class Store(context: Context) {
                 result[cursor.getString(0)] = cursor.getLong(1)
             }
         }
-        return result
+        result
     }
 
-    fun localAudioPaths(): Map<String, String> {
+    fun localAudioPaths(): Map<String, String> = dbCall {
         val result = mutableMapOf<String, String>()
         readableDb().rawQuery(
             "SELECT id, audio_path FROM tracks WHERE audio_path IS NOT NULL AND audio_path != ''",
@@ -271,19 +287,21 @@ class Store(context: Context) {
                 result[cursor.getString(0)] = cursor.getString(1)
             }
         }
-        return result
+        result
     }
 
     fun setCoverPath(trackId: String, path: String) {
+        dbCall {
         writableDb().update(
             "tracks",
             ContentValues().apply { put("cover_path", path) },
             "id = ?",
             arrayOf(trackId),
         )
+        }
     }
 
-    fun firstTrackCovers(): Map<String, Pair<String?, String?>> {
+    fun firstTrackCovers(): Map<String, Pair<String?, String?>> = dbCall {
         val result = mutableMapOf<String, Pair<String?, String?>>()
         readableDb().rawQuery(
             """
@@ -303,10 +321,10 @@ class Store(context: Context) {
                 result[cursor.getString(0)] = Pair(local, remote)
             }
         }
-        return result
+        result
     }
 
-    fun tracks(): List<LocalTrack> {
+    fun tracks(): List<LocalTrack> = dbCall {
         val result = mutableListOf<LocalTrack>()
         readableDb().rawQuery(
             "SELECT id, title, artist, album, duration, cover, audio_path, cover_path, ext, mtime, lyrics FROM tracks ORDER BY added_at DESC",
@@ -328,10 +346,10 @@ class Store(context: Context) {
                 )
             }
         }
-        return result
+        result
     }
 
-    fun playlists(): List<LocalPlaylist> {
+    fun playlists(): List<LocalPlaylist> = dbCall {
         val result = mutableListOf<LocalPlaylist>()
         readableDb().rawQuery(
             """
@@ -352,7 +370,7 @@ class Store(context: Context) {
             }
         }
         val order = storedCustomOrder()
-        return if (order.isNullOrEmpty()) {
+        if (order.isNullOrEmpty()) {
             result
         } else {
             val rank = order.withIndex().associate { it.value to it.index }
@@ -401,7 +419,7 @@ class Store(context: Context) {
         }
     }
 
-    fun playlist(id: String): LocalPlaylist? {
+    fun playlist(id: String): LocalPlaylist? = dbCall {
         readableDb().rawQuery(
             """
             SELECT p.id, p.name, p.created_at, p.updated_at,
@@ -411,7 +429,7 @@ class Store(context: Context) {
             arrayOf(id),
         ).use { cursor ->
             if (cursor.moveToNext()) {
-                return LocalPlaylist(
+                return@dbCall LocalPlaylist(
                     id = cursor.getString(0),
                     name = cursor.getString(1),
                     createdAt = cursor.getLong(2),
@@ -420,11 +438,11 @@ class Store(context: Context) {
                 )
             }
         }
-        return null
+        null
     }
 
     @Synchronized
-    fun createPlaylist(name: String): String {
+    fun createPlaylist(name: String): String = dbCall {
         val id = "pl-${System.currentTimeMillis().toString(36)}-${(0..0xffff).random().toString(16).padStart(4, '0')}"
         val now = System.currentTimeMillis()
         writableDb().insert(
@@ -437,10 +455,11 @@ class Store(context: Context) {
                 put("updated_at", now)
             },
         )
-        return id
+        id
     }
 
     fun renamePlaylist(id: String, name: String) {
+        dbCall {
         writableDb().update(
             "playlists",
             ContentValues().apply {
@@ -450,6 +469,7 @@ class Store(context: Context) {
             "id = ?",
             arrayOf(id),
         )
+        }
     }
 
     private fun touchPlaylist(id: String) {
@@ -463,6 +483,7 @@ class Store(context: Context) {
 
     @Synchronized
     fun deletePlaylist(id: String) {
+        dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -474,11 +495,13 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
+        }
     }
 
     @Synchronized
     @Suppress("LongMethod")
     fun rekeyLegacyDtPlaylists() {
+        dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -553,6 +576,7 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
+        }
     }
 
     private fun deletePlaylist(id: String, db: SQLiteDatabase) {
@@ -601,6 +625,7 @@ class Store(context: Context) {
 
     @Synchronized
     fun replaceDesktopPlaylists(lists: List<DesktopPlaylist>, protect: Set<String> = emptySet()) {
+        dbCall {
         rekeyLegacyDtPlaylists()
         val db = writableDb()
         db.beginTransaction()
@@ -698,6 +723,7 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
+        }
     }
 
     private fun capMarks(map: MutableMap<String, Long>) {
@@ -741,6 +767,7 @@ class Store(context: Context) {
         adds: List<SyncMark>,
         removals: List<SyncMark>,
     ) {
+        dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -757,6 +784,7 @@ class Store(context: Context) {
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
+        }
         }
     }
 
@@ -890,7 +918,7 @@ class Store(context: Context) {
     }
 
     @Synchronized
-    fun findEquivalentPlaylist(name: String, trackIds: Set<String>): LocalPlaylist? {
+    fun findEquivalentPlaylist(name: String, trackIds: Set<String>): LocalPlaylist? = dbCall {
         val wanted = name.trim().lowercase()
         var best: LocalPlaylist? = null
         readableDb().rawQuery(
@@ -925,11 +953,12 @@ class Store(context: Context) {
                 }
             }
         }
-        return best
+        best
     }
 
     @Synchronized
     fun renamePlaylistId(oldId: String, newId: String) {
+        dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -961,10 +990,11 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
+        }
     }
 
     @Synchronized
-    fun snapshot(id: String): PlaylistSnapshot? {
+    fun snapshot(id: String): PlaylistSnapshot? = dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -988,11 +1018,11 @@ class Store(context: Context) {
                         trackCount = cursor.getInt(4),
                     )
                 }
-            } ?: return null
+            } ?: return@dbCall null
             val marks = readMarks(db, id)
             val ordered = readTrackKeys(db, id)
             db.setTransactionSuccessful()
-            return PlaylistSnapshot(
+            PlaylistSnapshot(
                 name = pl.name,
                 createdAt = pl.createdAt,
                 updatedAt = pl.updatedAt,
@@ -1007,6 +1037,7 @@ class Store(context: Context) {
     @Synchronized
     fun addToPlaylist(playlistId: String, track: CatalogueTrack) {
         addTrack(track)
+        dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -1040,10 +1071,12 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
+        }
     }
 
     @Synchronized
     fun removeFromPlaylist(playlistId: String, trackId: String) {
+        dbCall {
         val db = writableDb()
         db.beginTransaction()
         try {
@@ -1066,10 +1099,11 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
+        }
     }
 
     @Synchronized
-    fun deleteTrack(trackId: String): List<String> {
+    fun deleteTrack(trackId: String): List<String> = dbCall {
         val db = writableDb()
         val affected = mutableListOf<String>()
         db.beginTransaction()
@@ -1102,10 +1136,10 @@ class Store(context: Context) {
         } finally {
             db.endTransaction()
         }
-        return affected
+        affected
     }
 
-    fun playlistTracks(playlistId: String): List<LocalTrack> {
+    fun playlistTracks(playlistId: String): List<LocalTrack> = dbCall {
         val result = mutableListOf<LocalTrack>()
         readableDb().rawQuery(
             """
@@ -1133,16 +1167,16 @@ class Store(context: Context) {
                 )
             }
         }
-        return result
+        result
     }
 
-    fun findPrivateTrack(trackId: String): LocalTrack? {
+    fun findPrivateTrack(trackId: String): LocalTrack? = dbCall {
         readableDb().rawQuery(
             "SELECT id, title, artist, album, duration, cover, audio_path, cover_path, ext, mtime, lyrics FROM tracks WHERE id = ?",
             arrayOf(trackId),
         ).use { cursor ->
             if (cursor.moveToNext()) {
-                return LocalTrack(
+                return@dbCall LocalTrack(
                     id = cursor.getString(0),
                     title = cursor.getString(1),
                     artist = cursor.getString(2),
@@ -1157,15 +1191,15 @@ class Store(context: Context) {
                 )
             }
         }
-        return null
+        null
     }
 
     @Synchronized
-    fun syncPayload(id: String): SyncPlaylistPayload? {
-        val playlist = playlist(id) ?: return null
+    fun syncPayload(id: String): SyncPlaylistPayload? = dbCall {
+        val playlist = playlist(id) ?: return@dbCall null
         val db = readableDb()
         val marks = readMarks(db, id)
-        return SyncPlaylistPayload(
+        SyncPlaylistPayload(
             localId = id,
             name = playlist.name,
             createdAt = playlist.createdAt,

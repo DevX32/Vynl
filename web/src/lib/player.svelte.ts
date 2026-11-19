@@ -510,13 +510,14 @@ export async function resumeOrPlay(
     clearRetry();
     pendingStreamError = null;
   }
+  const token = resumeToken;
   beginPlayReconcile(generation);
   try {
     let resumed = false;
     try {
       resumed = await vynl.playerResume(generation);
     } catch {}
-    if (generation !== playGeneration) return;
+    if (generation !== playGeneration || token !== resumeToken) return;
     if (!resumed) {
       const duration = getCurrentTrack()?.duration ?? 0;
       const atEnd =
@@ -525,7 +526,7 @@ export async function resumeOrPlay(
         seekTo >= Math.max(0, duration - 0.5);
       await playNative(path, atEnd ? undefined : seekTo, generation);
     }
-    if (generation !== playGeneration) return;
+    if (generation !== playGeneration || token !== resumeToken) return;
     updatePlaying(true);
     updateMediaSession();
   } finally {
@@ -535,6 +536,7 @@ export async function resumeOrPlay(
 
 export function pausePlayback(): void {
   const generation = playGeneration;
+  resumeToken += 1;
   const token = resumeToken;
   pauseIntent += 1;
   const finish = (): void => {
