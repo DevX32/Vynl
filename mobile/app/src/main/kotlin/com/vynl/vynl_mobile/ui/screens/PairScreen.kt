@@ -70,6 +70,7 @@ data class PairingPayload(
     val host: String,
     val pin: String,
     val alts: List<String> = emptyList(),
+    val fp: String = "",
 )
 
 fun isLanHost(value: String): Boolean {
@@ -114,6 +115,7 @@ fun parsePairingPayload(raw: String): PairingPayload? {
     if (!isLanHost(host)) return null
 
     val port = uri.getQueryParameter("p")?.trim().orEmpty()
+    val fp = uri.getQueryParameter("fp")?.trim().orEmpty().lowercase()
 
     fun withPort(value: String): String {
         val cleaned = value.trim().removePrefix("http://").removePrefix("https://").removeSuffix("/")
@@ -128,7 +130,7 @@ fun parsePairingPayload(raw: String): PairingPayload? {
         .filter { it.isNotEmpty() && isLanHost(it) }
         .map(::withPort)
 
-    return PairingPayload(host = withPort(host), pin = pin, alts = alts)
+    return PairingPayload(host = withPort(host), pin = pin, alts = alts, fp = fp)
 }
 
 @OptIn(ExperimentalGetImage::class)
@@ -271,6 +273,7 @@ fun PairScreen(
                                                     address = payload.host,
                                                     pin = payload.pin,
                                                     alts = payload.alts,
+                                                    fingerprint = payload.fp,
                                                     autoSync = true,
                                                 )
                                             }.getOrElse { "Pairing failed." }

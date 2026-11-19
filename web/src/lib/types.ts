@@ -285,6 +285,7 @@ export interface MobileSyncStatus {
   pairUrls: string[];
   hostname: string | null;
   qrSvg: string | null;
+  fingerprint?: string | null;
 }
 
 export interface SyncStatus {

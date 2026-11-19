@@ -265,7 +265,8 @@ struct PairResponse {
 }
 
 pub async fn serve(
-    listener: tokio::net::TcpListener,
+    listener: std::net::TcpListener,
+    user_data: &Path,
     state: SharedState,
     stop: oneshot::Receiver<()>,
 ) -> Result<(), String> {
@@ -289,15 +290,26 @@ pub async fn serve(
         ))
         .with_state(state);
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    let identity = super::tls::ensure_identity(user_data)?;
+    let config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
+        &identity.cert_path,
+        &identity.key_path,
     )
-    .with_graceful_shutdown(async {
-        let _ = stop.await;
-    })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| format!("could not load the sync certificate: {e}"))?;
+    let handle = axum_server::Handle::new();
+    let shutdown = handle.clone();
+    tokio::spawn(async move {
+        let _ = stop.await;
+        shutdown.graceful_shutdown(Some(Duration::from_secs(3)));
+    });
+
+    axum_server::from_tcp_rustls(listener, config)
+        .map_err(|e| format!("could not start the sync server: {e}"))?
+        .handle(handle)
+        .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn path_in_output(state: &SharedState, path: &Path) -> bool {

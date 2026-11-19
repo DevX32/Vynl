@@ -254,7 +254,6 @@ class PlayerController(
                 val wanted = absolute + window + 1
                 if (wanted > queueStart + have) {
                     val next = resolve(queueStart + have)
-                    // The queue may have been replaced (play, shuffle, skip) while resolve() awaited the network; re-check and bail if so.
                     if (expectedVersion != queueVersion) return@launch
                     val currentPlayer = controller ?: return@launch
                     val currentHave = currentPlayer.mediaItemCount.coerceAtLeast(0)

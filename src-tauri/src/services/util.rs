@@ -41,6 +41,29 @@ pub fn github_client(read_timeout: std::time::Duration) -> Result<reqwest::Clien
         .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
+pub fn bound_public_client(url: &str) -> Result<reqwest::Client, String> {
+    let parsed = reqwest::Url::parse(url).map_err(|_| "invalid URL".to_string())?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "missing host".to_string())?
+        .to_string();
+    if !crate::services::rpc::is_public_host(&host) {
+        return Err("host points at a private or reserved address".into());
+    }
+    let addrs = public_addrs(&host)
+        .ok_or_else(|| "host resolves to a private or reserved address".to_string())?;
+    let builder = addrs.iter().fold(
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none()),
+        |builder, addr| builder.resolve(&host, *addr),
+    );
+    builder
+        .build()
+        .map_err(|e| format!("could not build the fetch client: {e}"))
+}
+
 pub async fn follow_public_https(
     _http: &reqwest::Client,
     url: &str,
@@ -52,25 +75,7 @@ pub async fn follow_public_https(
         if parsed.scheme() != "https" {
             return Err("only https targets are allowed".into());
         }
-        let host = parsed
-            .host_str()
-            .ok_or_else(|| "missing host".to_string())?
-            .to_string();
-        if !crate::services::rpc::is_public_host(&host) {
-            return Err("host points at a private or reserved address".into());
-        }
-        let addrs = public_addrs(&host)
-            .ok_or_else(|| "host resolves to a private or reserved address".to_string())?;
-        let bound = addrs.iter().fold(
-            reqwest::Client::builder()
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .timeout(std::time::Duration::from_secs(30))
-                .redirect(reqwest::redirect::Policy::none()),
-            |builder, addr| builder.resolve(&host, *addr),
-        );
-        let bound = bound
-            .build()
-            .map_err(|e| format!("could not build the fetch client: {e}"))?;
+        let bound = bound_public_client(&current)?;
         let resp = bound
             .get(&current)
             .send()

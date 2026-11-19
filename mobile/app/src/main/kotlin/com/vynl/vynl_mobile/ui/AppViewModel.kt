@@ -378,12 +378,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         address: String,
         pin: String,
         alts: List<String> = emptyList(),
+        fingerprint: String = "",
         autoSync: Boolean = true,
     ): String? {
         if (pairing) return "Already pairing"
         pairing = true
         val previousAddress = desktop.address
         val previousToken = desktop.token
+        val previousFingerprint = desktop.fingerprint
         return try {
             val candidates = (listOf(address) + alts)
                 .map { it.trim().removePrefix("http://").removePrefix("https://").removeSuffix("/") }
@@ -393,6 +395,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             for (candidate in candidates) {
                 desktop.address = candidate
                 desktop.token = ""
+                desktop.fingerprint = fingerprint
                 if (desktop.pair(pin)) {
                     notice = "Paired with the desktop"
                     if (autoSync) syncLibrary()
@@ -402,10 +405,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             desktop.address = previousAddress
             desktop.token = previousToken
+            desktop.fingerprint = previousFingerprint
             failure ?: "No desktop address to try"
         } catch (error: Exception) {
             desktop.address = previousAddress
             desktop.token = previousToken
+            desktop.fingerprint = previousFingerprint
             friendly(error)
         } finally {
             pairing = false
@@ -421,6 +426,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun unpairDesktop() {
         desktop.address = ""
         desktop.token = ""
+        desktop.fingerprint = ""
         notice = "The desktop is forgotten"
     }
 
@@ -628,6 +634,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (desktopAuthFailure(error)) {
                     desktop.address = ""
                     desktop.token = ""
+                    desktop.fingerprint = ""
                     notice = "The desktop forgot this phone — pair it again with the QR code."
                 } else {
                     notice = friendly(error)

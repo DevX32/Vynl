@@ -971,12 +971,10 @@ fn fetch_loop(
     video_id: String,
     mut format: YtAudioFormat,
     mut file: File,
-    cache: Arc<StreamCache>,
-    file_name: String,
+    refresh_count: Arc<std::sync::atomic::AtomicU32>,
 ) {
     let mut last_gen = 0u64;
     let mut attempts = 0u32;
-    let mut refreshes = 0u32;
 
     loop {
         let Some((demand_start, demand_end, generation)) = store.wait_demand(last_gen) else {
@@ -1014,13 +1012,12 @@ fn fetch_loop(
             match result {
                 Ok(()) => {
                     attempts = 0;
-                    if store.is_complete() {
-                        cache.mark_complete(&video_id, &file_name, total);
-                    }
                 }
                 Err(FetchError::Cancelled) => return,
-                Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
-                    refreshes += 1;
+                Err(FetchError::Auth)
+                    if refresh_count.load(Ordering::Relaxed) < MAX_REFRESH_ATTEMPTS =>
+                {
+                    refresh_count.fetch_add(1, Ordering::Relaxed);
                     match resolver
                         .resolve_blocking(&video_id, (format.itag != 0).then_some(format.itag))
                     {
@@ -1081,12 +1078,12 @@ fn run_fetch(
     start: u64,
     end: u64,
 ) -> Result<(), FetchError> {
-    let http = &resolver.http;
+    let url = format.url.clone();
+    let agent = format.user_agent;
+    let http = crate::services::util::bound_public_client(&url).map_err(FetchError::Other)?;
     let runtime = resolver.runtime.clone();
     let control = store.control.clone();
     let store_task = store.clone();
-    let url = format.url.clone();
-    let agent = format.user_agent;
     let request = async move {
         let response = tokio::time::timeout(
             FETCH_STALL,
@@ -1431,11 +1428,11 @@ impl StreamSession {
         let buffer = Arc::new(StreamBuffer::new());
         let store = Arc::new(RangeStore::new(total, control.clone()));
 
+        let refresh_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let fetch_store = store.clone();
         let fetch_resolver = resolver.clone();
-        let fetch_cache = cache.clone();
         let fetch_video = video_id.clone();
-        let fetch_name = file_name.clone();
+        let fetch_refresh_count = refresh_count.clone();
         if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-fetch".into())
             .spawn(move || {
@@ -1447,8 +1444,7 @@ impl StreamSession {
                         fetch_video,
                         format,
                         write_file,
-                        fetch_cache,
-                        fetch_name,
+                        fetch_refresh_count,
                     );
                 }));
                 if result.is_err() {
@@ -1470,6 +1466,7 @@ impl StreamSession {
         let decode_video = video_id.clone();
         let decode_cache = cache.clone();
         let decode_name = file_name.clone();
+        let decode_refresh_count = refresh_count.clone();
         if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-decode".into())
             .spawn(move || {
@@ -1487,6 +1484,7 @@ impl StreamSession {
                         decode_cache,
                         decode_name,
                         total,
+                        decode_refresh_count,
                     );
                 }));
                 if result.is_err() {
@@ -1567,6 +1565,7 @@ fn decode_loop(
     cache: Arc<StreamCache>,
     file_name: String,
     total: u64,
+    refresh_count: Arc<std::sync::atomic::AtomicU32>,
 ) {
     let reader = RangeReader {
         store: store.clone(),
@@ -1671,6 +1670,7 @@ fn decode_loop(
         }
     }
 
+    let mut decode_errors = 0usize;
     let mut scratch: Vec<f32> = Vec::new();
     loop {
         if control.is_cancelled() {
@@ -1691,6 +1691,7 @@ fn decode_loop(
         let audio = match decoder.decode(&packet) {
             Ok(audio) => audio,
             Err(error) => {
+                decode_errors += 1;
                 eprintln!("catalogue: skipped undecodable packet for {video_id}: {error}");
                 continue;
             }
@@ -1711,7 +1712,12 @@ fn decode_loop(
     }
 
     buffer.close();
-    if store.is_complete() {
+    if decode_errors >= 10 && refresh_count.load(Ordering::Relaxed) > 0 {
+        eprintln!(
+            "catalogue: {video_id} had {decode_errors} decode errors after a URL refresh; dropping the poisoned cache"
+        );
+        abandon_cache(&store, &cache, &video_id, &file_name);
+    } else if store.is_complete() {
         cache.mark_complete(&video_id, &file_name, total);
     }
 }

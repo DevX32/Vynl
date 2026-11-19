@@ -231,6 +231,24 @@ pub fn run() {
 
             let user_data = app.path().app_data_dir().unwrap_or_default();
             let settings = crate::services::settings::get_settings(&user_data);
+            {
+                let allow = |path: &std::path::Path| {
+                    if let Err(error) = app.asset_protocol_scope().allow_directory(path, true) {
+                        eprintln!(
+                            "could not allow asset access to {}: {error}",
+                            path.display()
+                        );
+                    }
+                };
+                allow(&user_data);
+                let output = std::path::PathBuf::from(&settings.output_dir);
+                if output.is_dir() {
+                    allow(&output);
+                }
+                if let Some(cache) = dirs::cache_dir() {
+                    allow(&cache);
+                }
+            }
 
             if let Some(win) = app.get_webview_window("main")
                 && let Ok(icon) =

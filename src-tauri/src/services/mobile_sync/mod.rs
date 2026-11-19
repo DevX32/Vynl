@@ -1,5 +1,6 @@
 pub mod phone;
 mod server;
+pub(crate) mod tls;
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -53,6 +54,7 @@ pub struct MobileSyncStatus {
     pub pair_urls: Vec<String>,
     pub hostname: Option<String>,
     pub qr_svg: Option<String>,
+    pub fingerprint: Option<String>,
 }
 
 struct Runtime {
@@ -232,19 +234,19 @@ fn start_mdns(port: u16) -> Option<mdns_sd::ServiceDaemon> {
 fn pair_urls(port: u16) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(host) = mdns_hostname() {
-        out.push(format!("http://{host}:{port}"));
+        out.push(format!("https://{host}:{port}"));
     }
     out.extend(
         list_lan_addresses()
             .into_iter()
-            .map(|ip| format!("http://{ip}:{port}")),
+            .map(|ip| format!("https://{ip}:{port}")),
     );
     out
 }
 
-fn pairing_payload(hosts: &[String], port: u16, pin: &str) -> String {
+fn pairing_payload(hosts: &[String], port: u16, pin: &str, fingerprint: &str) -> String {
     let primary = hosts.first().map(String::as_str).unwrap_or_default();
-    let mut payload = format!("vynl://pair?h={primary}&p={port}&pin={pin}");
+    let mut payload = format!("vynl://pair?h={primary}&p={port}&pin={pin}&fp={fingerprint}");
     if hosts.len() > 1 {
         payload.push_str(&format!("&a={}", hosts[1..].join(",")));
     }
@@ -278,7 +280,11 @@ pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
         }
     }
 
-    let qr_svg = qr_for_payload(&pairing_payload(&hosts, cfg.port, &cfg.pairing_pin));
+    let fingerprint = tls::fingerprint(user_data_dir);
+    let qr_svg = fingerprint
+        .as_deref()
+        .map(|fp| qr_for_payload(&pairing_payload(&hosts, cfg.port, &cfg.pairing_pin, fp)))
+        .flatten();
     MobileSyncStatus {
         enabled: cfg.enabled,
         running,
@@ -288,6 +294,7 @@ pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
         pair_urls: urls,
         hostname: mdns_hostname(),
         qr_svg,
+        fingerprint,
     }
 }
 
@@ -368,11 +375,12 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         next_generation: std::sync::atomic::AtomicU64::new(0),
     });
 
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
-        .await
+    let listener = std::net::TcpListener::bind(("0.0.0.0", port))
         .map_err(|e| format!("Port {port} is not available: {e}"))?;
 
-    let task = tokio::spawn(async move { server::serve(listener, state, rx).await });
+    let serve_user_data = user_data.clone();
+    let task =
+        tokio::spawn(async move { server::serve(listener, &serve_user_data, state, rx).await });
 
     rt.stop = Some(tx);
     rt.join = Some(task);

@@ -71,11 +71,46 @@ class DesktopHttpException(val code: Int, path: String) :
 
 class Desktop(context: Context) {
     private val prefs = context.getSharedPreferences("vynl", Context.MODE_PRIVATE)
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(2_000, java.util.concurrent.TimeUnit.MILLISECONDS)
-        .readTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
-        .writeTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
-        .build()
+
+    private val pinnedTrustManager = object : javax.net.ssl.X509TrustManager {
+        override fun checkServerTrusted(
+            chain: Array<out java.security.cert.X509Certificate>,
+            authType: String,
+        ) {
+            val expected = fingerprint
+            if (expected.isEmpty()) {
+                throw java.security.cert.CertificateException("the desktop certificate is not pinned — pair again with the QR code")
+            }
+            val leaf = chain.firstOrNull()
+                ?: throw java.security.cert.CertificateException("the desktop presented no certificate")
+            val actual = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(leaf.encoded)
+                .joinToString("") { "%02x".format(it) }
+            if (!actual.equals(expected, ignoreCase = true)) {
+                throw java.security.cert.CertificateException("the desktop certificate changed")
+            }
+        }
+
+        override fun checkClientTrusted(
+            chain: Array<out java.security.cert.X509Certificate>,
+            authType: String,
+        ) = Unit
+
+        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> =
+            emptyArray()
+    }
+
+    private val http: OkHttpClient = run {
+        val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+        sslContext.init(null, arrayOf(pinnedTrustManager), java.security.SecureRandom())
+        OkHttpClient.Builder()
+            .connectTimeout(2_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .writeTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .sslSocketFactory(sslContext.socketFactory, pinnedTrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+    }
 
     var address: String
         get() = SecurePrefs.getString(prefs, KEY_ADDRESS, "") ?: ""
@@ -93,12 +128,20 @@ class Desktop(context: Context) {
             editor.apply()
         }
 
+    var fingerprint: String
+        get() = SecurePrefs.getString(prefs, KEY_FINGERPRINT, "") ?: ""
+        set(value) {
+            val editor = prefs.edit()
+            SecurePrefs.putString(editor, KEY_FINGERPRINT, value.trim().lowercase())
+            editor.apply()
+        }
+
     val paired: Boolean
         get() = address.isNotEmpty() && token.isNotEmpty()
 
     private fun url(path: String): String {
-        val host = address.trim().removePrefix("http://").removeSuffix("/")
-        return "http://$host$path"
+        val host = address.trim().removePrefix("http://").removePrefix("https://").removeSuffix("/")
+        return "https://$host$path"
     }
 
     private fun request(path: String): Request.Builder {
@@ -302,5 +345,6 @@ class Desktop(context: Context) {
     companion object {
         private const val KEY_ADDRESS = "desktop_address"
         private const val KEY_TOKEN = "desktop_token"
+        private const val KEY_FINGERPRINT = "desktop_fingerprint"
     }
 }
