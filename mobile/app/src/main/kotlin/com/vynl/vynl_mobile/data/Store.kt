@@ -390,17 +390,36 @@ class Store(context: Context) {
         }
     }
 
+    @Volatile
+    private var cachedOrder: Pair<Long, List<String>?>? = null
+
+    private fun sanitizeOrderIds(ids: List<String>): List<String> {
+        val pattern = Regex("[A-Za-z0-9_-]+")
+        return ids.asSequence()
+            .map { it.trim() }
+            .filter { it.length in 1..256 && pattern.matches(it) }
+            .distinct()
+            .take(2_000)
+            .toList()
+    }
+
     fun storedCustomOrder(): List<String>? {
         val file = File(files, "library_order.json")
         if (!file.isFile) return null
-        return runCatching {
+        val mtime = file.lastModified()
+        cachedOrder?.let { (cachedMtime, cachedIds) ->
+            if (cachedMtime == mtime) return cachedIds
+        }
+        val ids = runCatching {
             val json = org.json.JSONObject(file.readText(Charsets.UTF_8))
             val array = json.optJSONArray("orderIds") ?: return@runCatching null
             (0 until array.length())
                 .map { array.optString(it) }
                 .filter { it.isNotBlank() }
                 .takeIf { it.isNotEmpty() }
-        }.getOrNull()
+        }.getOrNull()?.let { sanitizeOrderIds(it) }
+        cachedOrder = mtime to ids
+        return ids
     }
 
     fun storedCustomOrderUpdatedAt(): Long {
@@ -415,7 +434,7 @@ class Store(context: Context) {
     fun setCustomOrder(ids: List<String>, updatedAt: Long = System.currentTimeMillis()) {
         files.mkdirs()
         val json = org.json.JSONObject().apply {
-            put("orderIds", org.json.JSONArray(ids))
+            put("orderIds", org.json.JSONArray(sanitizeOrderIds(ids)))
             put("updatedAt", updatedAt)
         }
         val file = File(files, "library_order.json")
@@ -425,6 +444,7 @@ class Store(context: Context) {
             file.writeBytes(tmp.readBytes())
             tmp.delete()
         }
+        cachedOrder = null
     }
 
     fun playlist(id: String): LocalPlaylist? = dbCall {
@@ -737,7 +757,7 @@ class Store(context: Context) {
     private fun capMarks(map: MutableMap<String, Long>) {
         val keep = map.entries
             .sortedWith(compareByDescending<Map.Entry<String, Long>> { it.value }.thenBy { it.key })
-            .take(500)
+            .take(10_000)
             .map { it.key }
             .toSet()
         if (keep.size < map.size) {

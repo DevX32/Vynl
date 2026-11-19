@@ -1,6 +1,7 @@
 ﻿package com.vynl.vynl_mobile.ui.screens
 
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,6 +110,8 @@ fun PlayerScreen(
 ) {
     val track = playback.track
     var showQueue by remember { mutableStateOf(false) }
+
+    BackHandler { onClose() }
 
     Box(
         modifier = Modifier

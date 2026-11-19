@@ -234,7 +234,10 @@ class Sync(context: Context) {
                         val payload = store.syncPayload(canonical)
                         val ok = payload != null &&
                             runCatching { pushPlaylist(payload, includeDeletedAt = true) }.isSuccess
-                        if (ok) pushed += 1 else failed += 1
+                        if (ok) pushed += 1 else {
+                            failed += 1
+                            known -= canonical
+                        }
                     }
                 }
                 continue
@@ -264,6 +267,7 @@ class Sync(context: Context) {
                 pushed += 1
             } else {
                 failed += 1
+                known -= localId
             }
             if (before != after) {
                 pulled += 1

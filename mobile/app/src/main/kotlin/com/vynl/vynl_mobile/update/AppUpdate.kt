@@ -14,9 +14,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 
+private fun isTrustedUpdateUrl(url: String): Boolean {
+    val uri = Uri.parse(url)
+    if (uri.scheme?.lowercase() != "https") return false
+    val host = uri.host?.lowercase() ?: return false
+    if (host == "objects.githubusercontent.com") return true
+    if (host != "github.com") return false
+    return uri.path?.startsWith("/DevX32/Vynl/releases/") == true
+}
+
 private const val MANIFEST_URL =
     "https://github.com/DevX32/Vynl/releases/latest/download/latest-mobile.json"
-
 data class Update(
     val version: String,
     val build: Int,
@@ -31,7 +39,11 @@ data class Update(
 }
 
 class AppUpdate(private val context: Context) {
-    private val http = OkHttpClient.Builder().build()
+    private val http = OkHttpClient.Builder()
+        .callTimeout(15, java.util.concurrent.TimeUnit.MINUTES)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     fun installedVersion(): Pair<String, Int> {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -64,7 +76,7 @@ class AppUpdate(private val context: Context) {
         json.optJSONObject("apks")?.let { raw ->
             raw.keys().forEach { key ->
                 val url = raw.optString(key, "")
-                if (url.isNotEmpty()) apks[key] = url
+                if (url.isNotEmpty() && isTrustedUpdateUrl(url)) apks[key] = url
             }
         }
         val builds = mutableMapOf<String, Int>()
@@ -87,6 +99,7 @@ class AppUpdate(private val context: Context) {
     suspend fun download(url: String, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val folder = File(context.filesDir, "updates").apply { mkdirs() }
         val file = File(folder, "vynl-update.apk")
+        if (!isTrustedUpdateUrl(url)) throw IllegalStateException("the update was refused")
         val request = Request.Builder().url(url).build()
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("the update was refused")
