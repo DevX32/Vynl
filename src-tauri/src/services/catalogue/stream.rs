@@ -75,7 +75,8 @@ pub async fn fetch_complete_file(
     }
 
     let ext = ext_for(&format);
-    let (path, file_name) = cache.begin(video_id, ext, total)?;
+    let begun = cache.begin(video_id, ext, total, format.itag, false)?;
+    let (path, file_name) = (begun.path, begun.file_name);
 
     let mut file = match tokio::fs::OpenOptions::new().write(true).open(&path).await {
         Ok(file) => file,
@@ -471,6 +472,12 @@ async fn probe_content(
     Some((total, mime))
 }
 
+struct BeginResult {
+    path: PathBuf,
+    file_name: String,
+    coverage: Vec<(u64, u64)>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 struct CacheEntry {
     file: String,
@@ -480,6 +487,10 @@ struct CacheEntry {
     complete: bool,
     #[serde(default)]
     last_used: u64,
+    #[serde(default)]
+    itag: Option<u32>,
+    #[serde(default)]
+    coverage: Vec<(u64, u64)>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -497,6 +508,7 @@ fn index_version() -> u32 {
 struct CacheState {
     index: CacheIndex,
     active: HashMap<String, Vec<String>>,
+    last_coverage_save: HashMap<String, std::time::Instant>,
     dirty: bool,
 }
 
@@ -523,6 +535,7 @@ impl StreamCache {
             state: Mutex::new(CacheState {
                 index,
                 active: HashMap::new(),
+                last_coverage_save: HashMap::new(),
                 dirty: false,
             }),
         });
@@ -535,7 +548,7 @@ impl StreamCache {
         let mut keep: HashMap<String, CacheEntry> = HashMap::new();
         for (video_id, entry) in state.index.entries.drain() {
             let path = self.dir.join(&entry.file);
-            if entry.complete && path.is_file() {
+            if path.is_file() {
                 keep.insert(video_id, entry);
             } else {
                 let _ = std::fs::remove_file(&path);
@@ -642,12 +655,42 @@ impl StreamCache {
         Some(path)
     }
 
-    pub fn begin(
+    fn begin(
         &self,
         video_id: &str,
         ext: &str,
         total: u64,
-    ) -> Result<(PathBuf, String), String> {
+        itag: u32,
+        resume: bool,
+    ) -> Result<BeginResult, String> {
+        if resume && itag != 0 {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(entry) = state.index.entries.get(video_id) {
+                let usable = !entry.complete
+                    && entry.itag == Some(itag)
+                    && entry.size == total
+                    && self.dir.join(&entry.file).is_file();
+                if usable {
+                    let file_name = entry.file.clone();
+                    let coverage = entry.coverage.clone();
+                    if let Some(entry) = state.index.entries.get_mut(video_id) {
+                        entry.last_used = now_secs();
+                    }
+                    state
+                        .active
+                        .entry(video_id.to_string())
+                        .or_default()
+                        .push(file_name.clone());
+                    state.dirty = true;
+                    self.save_locked(&mut state);
+                    return Ok(BeginResult {
+                        path: self.dir.join(&file_name),
+                        file_name,
+                        coverage,
+                    });
+                }
+            }
+        }
         let serial = FILE_SERIAL.fetch_add(1, Ordering::Relaxed);
         let safe_id: String = video_id
             .chars()
@@ -687,6 +730,8 @@ impl StreamCache {
                     size: total,
                     complete: false,
                     last_used: now_secs(),
+                    itag: (itag != 0).then_some(itag),
+                    coverage: Vec::new(),
                 },
             );
         }
@@ -697,7 +742,47 @@ impl StreamCache {
             .push(file_name.clone());
         state.dirty = true;
         self.save_locked(&mut state);
-        Ok((path, file_name))
+        Ok(BeginResult {
+            path,
+            file_name,
+            coverage: Vec::new(),
+        })
+    }
+
+    fn remove_one_active(state: &mut CacheState, video_id: &str, file_name: &str) -> bool {
+        if let Some(active) = state.active.get_mut(video_id) {
+            if let Some(pos) = active.iter().position(|f| f == file_name) {
+                active.remove(pos);
+            }
+            if active.is_empty() {
+                state.active.remove(video_id);
+            }
+            return state
+                .active
+                .get(video_id)
+                .is_some_and(|active| active.iter().any(|f| f == file_name));
+        }
+        false
+    }
+
+    pub fn record_coverage(&self, video_id: &str, coverage: &[(u64, u64)]) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let due = state
+            .last_coverage_save
+            .get(video_id)
+            .map(|saved| saved.elapsed() >= std::time::Duration::from_secs(1))
+            .unwrap_or(true);
+        let Some(entry) = state.index.entries.get_mut(video_id) else {
+            return;
+        };
+        entry.coverage = coverage.to_vec();
+        state.dirty = true;
+        if due {
+            state
+                .last_coverage_save
+                .insert(video_id.to_string(), std::time::Instant::now());
+            self.save_locked(&mut state);
+        }
     }
 
     pub fn mark_complete(&self, video_id: &str, file_name: &str, total: u64) {
@@ -711,6 +796,8 @@ impl StreamCache {
                 size: total,
                 complete: false,
                 last_used: now_secs(),
+                itag: None,
+                coverage: Vec::new(),
             });
         if entry.file != file_name {
             if entry.complete {
@@ -727,6 +814,10 @@ impl StreamCache {
 
     pub fn discard_entry(&self, video_id: &str, file_name: &str) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let still_active = Self::remove_one_active(&mut state, video_id, file_name);
+        if still_active {
+            return;
+        }
         let matches = state
             .index
             .entries
@@ -737,23 +828,12 @@ impl StreamCache {
             state.dirty = true;
             self.save_locked(&mut state);
         }
-        if let Some(active) = state.active.get_mut(video_id) {
-            active.retain(|f| f != file_name);
-            if active.is_empty() {
-                state.active.remove(video_id);
-            }
-        }
         let _ = std::fs::remove_file(self.dir.join(file_name));
     }
 
     pub fn finish(&self, video_id: &str, file_name: &str, complete: bool) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(active) = state.active.get_mut(video_id) {
-            active.retain(|f| f != file_name);
-            if active.is_empty() {
-                state.active.remove(video_id);
-            }
-        }
+        let still_active = Self::remove_one_active(&mut state, video_id, file_name);
 
         if state
             .index
@@ -782,7 +862,7 @@ impl StreamCache {
             .entries
             .get(video_id)
             .is_some_and(|entry| entry.file == file_name);
-        if !keep {
+        if !keep && !still_active {
             let _ = std::fs::remove_file(self.dir.join(file_name));
         }
         state.dirty = true;
@@ -848,13 +928,25 @@ pub struct RangeStore {
     state: Mutex<RangeState>,
     cv: Condvar,
     control: Arc<SessionControl>,
+    sink: Option<(Arc<StreamCache>, String)>,
 }
 
 impl RangeStore {
-    fn new(total: u64, control: Arc<SessionControl>) -> Self {
+    fn new(
+        total: u64,
+        control: Arc<SessionControl>,
+        coverage: Vec<(u64, u64)>,
+        sink: Option<(Arc<StreamCache>, String)>,
+    ) -> Self {
+        let mut merged = Vec::new();
+        let mut sorted = coverage;
+        sorted.sort_unstable();
+        for (start, end) in sorted {
+            mark_range(&mut merged, start, end);
+        }
         Self {
             state: Mutex::new(RangeState {
-                coverage: Vec::new(),
+                coverage: merged,
                 total,
                 demand_start: 0,
                 demand_end: 0,
@@ -863,6 +955,7 @@ impl RangeStore {
             }),
             cv: Condvar::new(),
             control,
+            sink,
         }
     }
 
@@ -875,6 +968,9 @@ impl RangeStore {
         mark_range(&mut state.coverage, start, end);
         if !self.control.complete.load(Ordering::Relaxed) && Self::covered(&state, 0, state.total) {
             self.control.complete.store(true, Ordering::SeqCst);
+        }
+        if let Some((cache, video_id)) = &self.sink {
+            cache.record_coverage(video_id, &state.coverage);
         }
         self.cv.notify_all();
     }
@@ -1432,7 +1528,8 @@ impl StreamSession {
             .or(duration_hint)
             .filter(|d| d.is_finite() && *d > 0.0);
         let ext = ext_for(&format);
-        let (path, file_name) = cache.begin(&video_id, ext, total)?;
+        let begun = cache.begin(&video_id, ext, total, format.itag, true)?;
+        let (path, file_name, coverage) = (begun.path, begun.file_name, begun.coverage);
 
         let write_file = match OpenOptions::new().read(true).write(true).open(&path) {
             Ok(file) => file,
@@ -1453,7 +1550,12 @@ impl StreamSession {
 
         let control = Arc::new(SessionControl::default());
         let buffer = Arc::new(StreamBuffer::new());
-        let store = Arc::new(RangeStore::new(total, control.clone()));
+        let store = Arc::new(RangeStore::new(
+            total,
+            control.clone(),
+            coverage,
+            Some((cache.clone(), video_id.clone())),
+        ));
 
         let refresh_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
         let fetch_store = store.clone();
