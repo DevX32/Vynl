@@ -100,7 +100,7 @@
           <FolderOpen size={16} stroke-width={1.5} style="flex-shrink:0" />
           <span
             >{debouncedQuery
-              ? `no matches for "${debouncedQuery}"`
+              ? t("playlist.noMatchesFor", { query: debouncedQuery })
               : t("playlist.emptyRip")}</span
           >
         </div>

@@ -191,17 +191,6 @@
         void refreshLibrary();
       }
     });
-    const offUpdate = vynl.onUpdateStatus((s) => {
-      if (s.available && !s.downloading && !s.ready && !s.error) {
-        toasts.success(t("update.availableTitle"));
-      }
-      if (s.ready) {
-
-      }
-      if (s.error) {
-        toasts.error(t("update.failedTitle"));
-      }
-    });
     void initAppUpdate();
     void (async () => {
       try {
@@ -222,7 +211,7 @@
         );
       }
     })();
-    return () => { off(); offUpdate(); };
+    return () => { off(); };
   }
 
   onMount(() => {
@@ -243,8 +232,8 @@
           const type = params.get("type") ?? "signup";
           if (token) {
             const ok = await vynl.syncConfirmEmail(token, type);
-            if (ok) toasts.success("Email confirmed. You can sign in now.");
-            else toasts.error("Couldn't confirm this email — the link may have expired.");
+            if (ok) toasts.success(t("account.emailConfirmed"));
+            else toasts.error(t("account.emailConfirmFailed"));
           }
         }
       } catch (e) {

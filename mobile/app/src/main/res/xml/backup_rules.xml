@@ -2,4 +2,8 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="vynl.xml" />
     <exclude domain="sharedpref" path="vynl_cloud.xml" />
+    <exclude domain="database" path="vynl.db" />
+    <exclude domain="database" path="vynl.db-shm" />
+    <exclude domain="database" path="vynl.db-wal" />
+    <exclude domain="file" path="music/" />
 </full-backup-content>

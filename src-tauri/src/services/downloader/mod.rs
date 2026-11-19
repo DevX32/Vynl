@@ -214,27 +214,23 @@ async fn probe_duration(file: &Path) -> Option<f64> {
 
 async fn fetch_cover(url: &str, dest: &str) -> bool {
     let url = crate::services::cover_cache::normalize_cover_url(url).into_owned();
-    if !crate::services::rpc::is_public_cover(&url) {
+    if !url.starts_with("https://") {
         return false;
     }
-    let client = match reqwest::Client::builder()
-        .user_agent(UA)
-        .timeout(std::time::Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-    {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
 
-    let resp = match client.get(url).send().await {
+    static HTTP: once_cell::sync::Lazy<reqwest::Client> = once_cell::sync::Lazy::new(|| {
+        reqwest::Client::builder()
+            .user_agent(UA)
+            .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap_or_default()
+    });
+
+    let resp = match crate::services::util::follow_public_https(&HTTP, &url, 5).await {
         Ok(r) => r,
         Err(_) => return false,
     };
-
-    if !crate::services::rpc::is_public_cover(resp.url().as_str()) {
-        return false;
-    }
 
     if !resp.status().is_success() {
         return false;

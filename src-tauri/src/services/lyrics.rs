@@ -190,6 +190,26 @@ fn disk_cache_path(user_data_dir: &Path) -> PathBuf {
     user_data_dir.join(DISK_CACHE_FILE)
 }
 
+fn disk_cache_touch(user_data_dir: &Path, key: &str) -> Option<DiskCacheEntry> {
+    let now = now_millis();
+    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let path = disk_cache_path(user_data_dir);
+    let entries: Vec<DiskCacheEntry> = fs::read_to_string(&path)
+        .ok()
+        .and_then(|d| serde_json::from_str(&d).ok())
+        .unwrap_or_default();
+    let mut map: HashMap<String, DiskCacheEntry> =
+        entries.into_iter().map(|e| (e.key.clone(), e)).collect();
+    let entry = map.get_mut(key)?;
+    entry.accessed_at = now;
+    let touched = entry.clone();
+    let mut entries: Vec<&DiskCacheEntry> = map.values().collect();
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.accessed_at));
+    entries.truncate(DISK_CACHE_MAX);
+    let _ = crate::services::util::write_json(&path, &entries);
+    Some(touched)
+}
+
 fn load_disk_cache(user_data_dir: &Path) -> (HashMap<String, DiskCacheEntry>, Option<SystemTime>) {
     let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let path = disk_cache_path(user_data_dir);
@@ -200,16 +220,6 @@ fn load_disk_cache(user_data_dir: &Path) -> (HashMap<String, DiskCacheEntry>, Op
         .unwrap_or_default();
     let map = entries.into_iter().map(|e| (e.key.clone(), e)).collect();
     (map, mtime)
-}
-
-fn save_disk_cache(user_data_dir: &Path, cache: &HashMap<String, DiskCacheEntry>) {
-    let _lock = disk_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    let mut entries: Vec<&DiskCacheEntry> = cache.values().collect();
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.accessed_at));
-    entries.truncate(DISK_CACHE_MAX);
-
-    let path = disk_cache_path(user_data_dir);
-    let _ = crate::services::util::write_json(&path, &entries);
 }
 
 pub async fn fetch_lyrics_with_cache(
@@ -236,13 +246,10 @@ pub async fn fetch_lyrics_with_cache(
     }
 
     let now = now_millis();
-    let (mut disk, _) = load_disk_cache(user_data_dir);
+    let disk = load_disk_cache(user_data_dir).0;
     if let Some(entry) = disk.get(&key).cloned() {
         if let Some(hit) = entry.result {
-            if let Some(current) = disk.get_mut(&key) {
-                current.accessed_at = now;
-            }
-            save_disk_cache(user_data_dir, &disk);
+            disk_cache_touch(user_data_dir, &key);
             let mut mem_cache = remote_cache().write().await;
             mem_cache.insert(key, Some(hit.clone()));
             return Some(hit);
@@ -343,12 +350,7 @@ pub fn save_path_lyrics(user_data_dir: &Path, path: &str, text: &str, kind: Lyri
 
 pub fn path_lyrics(user_data_dir: &Path, path: &str) -> Option<LyricsResult> {
     let key = path_cache_key(path);
-    let (mut disk, _) = load_disk_cache(user_data_dir);
-    let entry = disk.get_mut(&key)?;
-    entry.accessed_at = now_millis();
-    let result = entry.result.clone();
-    save_disk_cache(user_data_dir, &disk);
-    result
+    disk_cache_touch(user_data_dir, &key).and_then(|entry| entry.result)
 }
 
 const LRCLIB_BASE: &str = "https://lrclib.net";

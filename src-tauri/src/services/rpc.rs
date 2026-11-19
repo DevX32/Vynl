@@ -20,18 +20,61 @@ fn now_secs() -> u64 {
 }
 
 fn is_public_v4(ip: &std::net::Ipv4Addr) -> bool {
-    !(ip.is_private()
+    if ip.is_private()
         || ip.is_loopback()
         || ip.is_link_local()
         || ip.is_unspecified()
         || ip.is_broadcast()
-        || ip.is_multicast())
+        || ip.is_multicast()
+    {
+        return false;
+    }
+    let octets = ip.octets();
+    if octets[0] == 0 {
+        return false;
+    }
+    if octets[0] == 100 && (octets[1] & 0b1100_0000) == 0b0100_0000 {
+        return false;
+    }
+    if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 {
+        return false;
+    }
+    if octets[0] == 198 && (octets[1] & 0b1111_1110) == 0b0001_0010 {
+        return false;
+    }
+    true
+}
+
+fn is_public_v6_embedded_v4(ip: &std::net::Ipv6Addr) -> Option<std::net::IpAddr> {
+    let segments = ip.segments();
+    if segments[0] == 0x64 && segments[1] == 0xff9b {
+        let embedded = std::net::Ipv4Addr::new(
+            ((segments[6] >> 8) & 0xff) as u8,
+            (segments[6] & 0xff) as u8,
+            ((segments[7] >> 8) & 0xff) as u8,
+            (segments[7] & 0xff) as u8,
+        );
+        return Some(std::net::IpAddr::V4(embedded));
+    }
+    if segments[0] == 0x2002 {
+        let embedded = std::net::Ipv4Addr::new(
+            ((segments[1] >> 8) & 0xff) as u8,
+            (segments[1] & 0xff) as u8,
+            ((segments[2] >> 8) & 0xff) as u8,
+            (segments[2] & 0xff) as u8,
+        );
+        return Some(std::net::IpAddr::V4(embedded));
+    }
+    None
 }
 
 pub fn is_public_ip(ip: &std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(ip) => is_public_v4(ip),
         std::net::IpAddr::V6(ip) => {
+            if let Some(embedded) = is_public_v6_embedded_v4(ip) {
+                return is_public_ip(&embedded);
+            }
             if let Some(mapped) = ip.to_ipv4_mapped() {
                 return is_public_v4(&mapped);
             }

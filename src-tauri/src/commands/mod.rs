@@ -38,7 +38,7 @@ pub(crate) fn output_dir_from_settings(app: &AppHandle) -> Result<PathBuf, Strin
         .map(|s| PathBuf::from(&s.output_dir))
         .filter(|p| !p.as_os_str().is_empty())
         .or_else(dirs::audio_dir)
-        .unwrap_or_else(|| PathBuf::from(".")))
+        .ok_or_else(|| "No output directory is configured".to_string())?)
 }
 
 fn canonicalize_in_output(file: &str, canonical_output: &Path) -> Result<PathBuf, String> {
@@ -82,6 +82,32 @@ fn require_path_in_output(file: &str, app: &AppHandle) -> Result<PathBuf, String
         return Err("File does not exist".into());
     }
     Ok(path)
+}
+
+const DELETABLE_EXTS: &[&str] = &[
+    "mp3", "m4a", "mka", "m4b", "opus", "flac", "wav", "ogg", "aac", "webm", "mp4", "wma", "aiff",
+    "ape", "wv",
+];
+
+fn require_deletable_path(file: &str, app: &AppHandle) -> Result<PathBuf, String> {
+    let path = require_path_in_output(file, app)?;
+    let canonical = fs::canonicalize(&path).unwrap_or(path);
+    if let Some(output) = output_dir_from_settings(app).ok() {
+        if let Ok(canonical_output) = fs::canonicalize(&output)
+            && canonical.starts_with(canonical_output.join("playlists"))
+        {
+            return Err("Path is inside the playlists directory".into());
+        }
+    }
+    let ext = canonical
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !DELETABLE_EXTS.contains(&ext.as_str()) {
+        return Err("Path must be an audio file".into());
+    }
+    Ok(canonical)
 }
 
 fn load_settings(app: &AppHandle) -> Result<Settings, String> {
@@ -502,7 +528,7 @@ pub async fn delete_library_track(
     id: Option<String>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let canonical_path = require_path_in_output(&path, &app)?;
+    let canonical_path = require_deletable_path(&path, &app)?;
     let canonical_str = canonical_path.to_string_lossy().to_string();
     let user_data = user_data_dir(&app)?;
     let output = output_dir_from_settings(&app)?;
@@ -737,7 +763,10 @@ pub async fn remove_from_playlist(
         return Ok(playlist);
     }
 
-    let canonical = validate_path_in_output(&track_path, &app).ok();
+    let canonical = match require_deletable_path(&track_path, &app) {
+        Ok(path) => Some(path),
+        Err(_) => None,
+    };
     let exists = canonical.as_ref().is_some_and(|path| path.exists());
     if exists {
         let canonical = canonical.as_ref().expect("canonical checked");

@@ -617,6 +617,8 @@ struct PendingTombstone {
     deleted_at: i64,
     #[serde(default)]
     signature: Vec<String>,
+    #[serde(default)]
+    user_id: String,
 }
 
 fn read_pending_tombstones(data_dir: &Path) -> Vec<PendingTombstone> {
@@ -633,7 +635,19 @@ fn read_pending_tombstones(data_dir: &Path) -> Vec<PendingTombstone> {
             created_at: 0,
             deleted_at,
             signature: Vec::new(),
+            user_id: String::new(),
         })
+        .collect()
+}
+
+fn tombstones_for_session(
+    pending: &[PendingTombstone],
+    session: &Session,
+) -> Vec<PendingTombstone> {
+    pending
+        .iter()
+        .filter(|entry| entry.user_id.is_empty() || entry.user_id == session.user_id)
+        .cloned()
         .collect()
 }
 
@@ -661,6 +675,9 @@ fn record_pending_tombstone_impl(
     created_at: i64,
     signature: &[String],
 ) -> i64 {
+    let user_id = read_session(data_dir)
+        .map(|s| s.user_id)
+        .unwrap_or_default();
     with_pending_tombstones_lock(|| {
         let mut entries = read_pending_tombstones(data_dir);
         if let Some(existing) = entries.iter().find(|existing| existing.id == id) {
@@ -673,6 +690,7 @@ fn record_pending_tombstone_impl(
             created_at,
             deleted_at: at,
             signature: signature.to_vec(),
+            user_id,
         });
         if entries.len() > MAX_PENDING_TOMBSTONES {
             entries.sort_by_key(|entry| entry.deleted_at);
@@ -990,8 +1008,9 @@ pub async fn confirm_email(token_hash: &str, email_type: &str) -> Result<(), Str
 pub async fn sign_out(data_dir: &Path) -> Result<(), String> {
     if let Some(session) = read_session(data_dir)
         && sync_enabled()
+        && let Ok(client) = http()
     {
-        let _ = http()?
+        let _ = client
             .post(format!("{}/auth/v1/logout", base_url()))
             .header("apikey", anon_key())
             .header("Authorization", format!("Bearer {}", session.access_token))
@@ -1346,7 +1365,12 @@ pub async fn tombstone_playlist_remote(data_dir: &Path, id: &str) {
         return;
     }
     let pending = read_pending_tombstones(data_dir);
-    let Some(entry) = pending.iter().find(|entry| entry.id == id) else {
+    let session = read_session(data_dir);
+    let Some(entry) = pending.iter().find(|entry| {
+        entry.id == id
+            && (entry.user_id.is_empty()
+                || session.as_ref().is_some_and(|s| s.user_id == entry.user_id))
+    }) else {
         return;
     };
     let at = entry.deleted_at;
@@ -1383,13 +1407,13 @@ async fn patch_equivalent_tombstones(
     name: &str,
     signature: &[String],
     deleted_at: i64,
-) {
+) -> bool {
     if name.trim().is_empty() || signature.is_empty() {
-        return;
+        return true;
     }
     let wanted_name = name.trim().to_lowercase();
     let Ok(rows) = fetch_rows(data_dir).await else {
-        return;
+        return false;
     };
     for row in &rows {
         if row.deleted_at.is_some() {
@@ -1402,6 +1426,7 @@ async fn patch_equivalent_tombstones(
             let _ = patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await;
         }
     }
+    true
 }
 
 fn row_to_playlist(row: &SyncRow) -> Playlist {
@@ -1435,27 +1460,23 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     }
     set_marks_supported(true);
     let session = valid_session(data_dir).await?;
-    let pending = read_pending_tombstones(data_dir);
+    let pending = tombstones_for_session(&read_pending_tombstones(data_dir), &session);
+    let mut tombstone_succeeded: Vec<String> = Vec::with_capacity(pending.len());
     if !pending.is_empty() {
-        let mut succeeded: Vec<String> = Vec::with_capacity(pending.len());
         for entry in &pending {
-            if patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
-                succeeded.push(entry.id.clone());
+            if patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await
+                && patch_equivalent_tombstones(
+                    data_dir,
+                    &session,
+                    &entry.name,
+                    &entry.signature,
+                    entry.deleted_at,
+                )
+                .await
+            {
+                tombstone_succeeded.push(entry.id.clone());
             }
-            patch_equivalent_tombstones(
-                data_dir,
-                &session,
-                &entry.name,
-                &entry.signature,
-                entry.deleted_at,
-            )
-            .await;
         }
-        with_pending_tombstones_lock(|| {
-            let mut entries = read_pending_tombstones(data_dir);
-            entries.retain(|entry| !succeeded.contains(&entry.id));
-            write_pending_tombstones(data_dir, &entries);
-        });
     }
     let raw_rows = fetch_rows(data_dir).await?;
     let maps = library_mark_maps(data_dir);
@@ -1464,7 +1485,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     for row in &mut rows {
         translate_marks_inbound(row, &maps);
     }
-    let pending = read_pending_tombstones(data_dir);
+    let pending = tombstones_for_session(&read_pending_tombstones(data_dir), &session);
     if !pending.is_empty() {
         for row in &mut rows {
             if row.deleted_at.is_some() {
@@ -1493,6 +1514,13 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         }
     }
 
+    if !tombstone_succeeded.is_empty() {
+        with_pending_tombstones_lock(|| {
+            let mut entries = read_pending_tombstones(data_dir);
+            entries.retain(|entry| !tombstone_succeeded.contains(&entry.id));
+            write_pending_tombstones(data_dir, &entries);
+        });
+    }
     let local_order_updated = playlists::order_updated_at(output_dir);
 
     if let Ok(Some(row)) = fetch_order(data_dir).await {

@@ -52,7 +52,11 @@ class PlayerController(
     private val context: Context,
     private val repository: CatalogueRepository,
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private val failureHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
+        android.util.Log.e("Vynl", "player task failed", error)
+        _state.value = _state.value.copy(error = "Something went wrong — try again")
+    }
+    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob() + failureHandler)
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
@@ -232,7 +236,11 @@ class PlayerController(
         }.awaitAll()
         val failed = (from until end).filter { results[it - from] == null }
         if (failed.isNotEmpty()) {
+            val removedBeforeQueueStart = failed.count { it < queueStart }
             playlist = playlist.filterIndexed { idx, _ -> idx !in failed }
+            if (removedBeforeQueueStart > 0) {
+                queueStart = (queueStart - removedBeforeQueueStart).coerceAtLeast(0)
+            }
             resolved.clear()
             _state.value = _state.value.copy(
                 error = "${failed.size} track(s) can't be played from the catalog",

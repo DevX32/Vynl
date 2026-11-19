@@ -77,16 +77,31 @@ class Desktop(context: Context) {
             chain: Array<out java.security.cert.X509Certificate>,
             authType: String,
         ) {
+            val leaf = chain.firstOrNull()
+                ?: throw java.security.cert.CertificateException("the desktop presented no certificate")
+            try {
+                leaf.checkValidity()
+            } catch (error: java.security.cert.CertificateExpiredException) {
+                throw java.security.cert.CertificateException(
+                    "the desktop certificate expired — rotate it in the desktop app",
+                    error,
+                )
+            } catch (error: java.security.cert.CertificateNotYetValidException) {
+                throw java.security.cert.CertificateException(
+                    "the desktop certificate is not valid yet",
+                    error,
+                )
+            }
             val expected = fingerprint
             if (expected.isEmpty()) {
                 throw java.security.cert.CertificateException("the desktop certificate is not pinned — pair again with the QR code")
             }
-            val leaf = chain.firstOrNull()
-                ?: throw java.security.cert.CertificateException("the desktop presented no certificate")
-            val actual = java.security.MessageDigest.getInstance("SHA-256")
-                .digest(leaf.encoded)
-                .joinToString("") { "%02x".format(it) }
-            if (!actual.equals(expected, ignoreCase = true)) {
+            if (!expected.matches(Regex("^[0-9a-f]{64}$"))) {
+                throw java.security.cert.CertificateException("the desktop fingerprint is malformed — pair again with the QR code")
+            }
+            val actual = java.security.MessageDigest.getInstance("SHA-256").digest(leaf.encoded)
+            val expectedBytes = expected.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            if (!java.security.MessageDigest.isEqual(actual, expectedBytes)) {
                 throw java.security.cert.CertificateException("the desktop certificate changed")
             }
         }
@@ -137,7 +152,7 @@ class Desktop(context: Context) {
         }
 
     val paired: Boolean
-        get() = address.isNotEmpty() && token.isNotEmpty()
+        get() = address.isNotEmpty() && token.isNotEmpty() && fingerprint.isNotEmpty()
 
     private fun url(path: String): String {
         val host = address.trim().removePrefix("http://").removePrefix("https://").removeSuffix("/")

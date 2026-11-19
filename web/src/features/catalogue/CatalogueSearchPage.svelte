@@ -58,12 +58,14 @@
   const summary = $derived(getTasteSummary());
   const profileKey = $derived(getTasteProfileKey());
 
+  let lastMixKey = "";
   $effect(() => {
     const key = profileKey;
-    if (!key) return;
+    if (!key || key === lastMixKey) return;
     const current = untrack(() => getTasteSeeds(6));
     if (current.length === 0) return;
-    void loadCatalogueTaste(current);
+    lastMixKey = key;
+    void untrack(() => loadCatalogueTaste(current));
   });
 
   const playableSongs = $derived(

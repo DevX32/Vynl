@@ -38,10 +38,16 @@
               playlists: playlistCount,
             });
     if (!lastExport) return base;
+    if (lastExport.playlistCount > 0) {
+      return `${base} ${t("backup.lastExportPlaylists", {
+        tracks: lastExport.trackCount,
+        playlists: lastExport.playlistCount,
+        bytes: fmtBytes(lastExport.bytes),
+        format: lastExport.format.toUpperCase(),
+      })}`;
+    }
     return `${base} ${t("backup.lastExport", {
       tracks: lastExport.trackCount,
-      playlists:
-        lastExport.playlistCount > 0 ? ` and ${lastExport.playlistCount} playlists` : "",
       bytes: fmtBytes(lastExport.bytes),
       format: lastExport.format.toUpperCase(),
     })}`;

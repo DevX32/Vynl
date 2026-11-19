@@ -139,8 +139,18 @@
     }, ROLL_LOCK_MS);
   }
 
+  function flushDebouncedDisplayName(): void {
+    if (!_displayNameTimer) return;
+    clearTimeout(_displayNameTimer);
+    _displayNameTimer = null;
+    const value = _displayNameInput?.value;
+    if (value !== undefined && value !== getCurrentSettings().displayName) {
+      void patchSettings({ displayName: value });
+    }
+  }
+
   onDestroy(() => {
-    if (_displayNameTimer) clearTimeout(_displayNameTimer);
+    flushDebouncedDisplayName();
     if (_rollTimer) clearTimeout(_rollTimer);
   });
 </script>

@@ -2,5 +2,4 @@
 <paths>
     <files-path name="updates" path="updates/" />
     <files-path name="music" path="music/" />
-    <cache-path name="cache" path="." />
 </paths>

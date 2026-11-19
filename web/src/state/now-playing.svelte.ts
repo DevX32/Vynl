@@ -217,11 +217,13 @@ function takeShufflePath(
   const byPath = libraryByPath();
   _shuffleUpcoming = _shuffleUpcoming.filter((path) => scope.has(path) && byPath.has(path));
 
-  const path = _shuffleUpcoming[0] ?? null;
-  if (path) _shuffleUpcoming = _shuffleUpcoming.slice(1);
   if (_shuffleUpcoming.length === 0 && loop === "all") {
     refillShuffleSession(currentPath);
+    _shuffleUpcoming = _shuffleUpcoming.filter((path) => scope.has(path) && byPath.has(path));
   }
+
+  const path = _shuffleUpcoming[0] ?? null;
+  if (path) _shuffleUpcoming = _shuffleUpcoming.slice(1);
   return path;
 }
 

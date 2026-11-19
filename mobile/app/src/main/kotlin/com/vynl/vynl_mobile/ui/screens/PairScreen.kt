@@ -60,11 +60,16 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.guava.await
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.launch
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+
+private val teardownScope = kotlinx.coroutines.CoroutineScope(
+    Dispatchers.IO + SupervisorJob(),
+)
 
 data class PairingPayload(
     val host: String,
@@ -74,7 +79,9 @@ data class PairingPayload(
 )
 
 fun isLanHost(value: String): Boolean {
+    if (value.contains('@')) return false
     val stripped = value.removePrefix("http://").removePrefix("https://").substringBefore('/').trim()
+    if (stripped.contains('@')) return false
     val host = when {
         stripped.startsWith("[") -> stripped.substringAfter('[').substringBefore(']').trim()
         stripped.count { it == ':' } > 1 -> stripped 
@@ -116,6 +123,7 @@ fun parsePairingPayload(raw: String): PairingPayload? {
 
     val port = uri.getQueryParameter("p")?.trim().orEmpty()
     val fp = uri.getQueryParameter("fp")?.trim().orEmpty().lowercase()
+    if (fp.isNotEmpty() && !fp.matches(Regex("^[0-9a-f]{64}$"))) return null
 
     fun withPort(value: String): String {
         val cleaned = value.trim().removePrefix("http://").removePrefix("https://").removeSuffix("/")
@@ -300,7 +308,7 @@ fun PairScreen(
         onDispose {
             analyzer?.clearAnalyzer()
             scanner?.close()
-            scope.launch {
+            teardownScope.launch {
                 runCatching { cameraProviderFuture?.await()?.unbindAll() }
             }
         }

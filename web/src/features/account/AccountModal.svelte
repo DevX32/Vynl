@@ -63,9 +63,7 @@
   }
 
   const modeHint = $derived(
-    mode === "signin"
-      ? "Sync playlists already saved to your account"
-      : "Create an account to sync playlists from this device",
+    mode === "signin" ? t("account.modeSync") : t("account.modeCreate"),
   );
 
   const canSubmit = $derived(email.trim().length > 0 && password.length > 0);
@@ -221,21 +219,21 @@
       <div class="banner" class:connected={status.signedIn}>
         <Blobatar {...avatar} class="avatar" />
         <div class="banner-copy">
-          <span class="caption mono">Account</span>
+          <span class="caption mono">{t("account.caption")}</span>
           <span class="banner-title">
             {#if status.signedIn}
               {status.email}
             {:else if loaded}
-              Not signed in
+              {t("account.notSignedIn")}
             {:else}
-              Checking session
+              {t("account.checkingSession")}
             {/if}
           </span>
           <span class="banner-hint">
             {#if status.signedIn}
-              Playlist changes sync automatically.
+              {t("account.autoSyncHint")}
             {:else}
-              Keep everything on this device.
+              {t("account.localHint")}
             {/if}
           </span>
         </div>
@@ -255,8 +253,8 @@
       {:else if status.signedIn}
         <div class="row-group">
           <SettingRow
-            label="Playlist sync"
-            hint="Audio files and cover art stay on this device."
+            label={t("account.playlistSync")}
+            hint={t("account.localFilesHint")}
           >
             {#snippet control()}
               <Button size="sm" disabled={syncing} onclick={() => void syncNow()}>
@@ -272,8 +270,8 @@
           </SettingRow>
 
           <SettingRow
-            label="Sign out"
-            hint="Stop syncing playlists on this device."
+            label={t("account.signOut")}
+            hint={t("account.signOutHint")}
           >
             {#snippet control()}
               <Button
@@ -334,7 +332,7 @@
         {/if}
 
         <div class="row-group actions">
-          <SettingRow label={mode === "signin" ? "Sign in" : "Create account"} hint={modeHint}>
+          <SettingRow label={mode === "signin" ? t("account.signIn") : t("account.createAccount")} hint={modeHint}>
             {#snippet control()}
               <Button variant="primary" size="sm" disabled={busy || !canSubmit} onclick={() => void submit()}>
                 {#if busy}

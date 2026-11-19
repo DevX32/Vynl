@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -496,7 +496,7 @@ fn index_version() -> u32 {
 
 struct CacheState {
     index: CacheIndex,
-    active: HashSet<String>,
+    active: HashMap<String, String>,
     dirty: bool,
 }
 
@@ -522,7 +522,7 @@ impl StreamCache {
             dir,
             state: Mutex::new(CacheState {
                 index,
-                active: HashSet::new(),
+                active: HashMap::new(),
                 dirty: false,
             }),
         });
@@ -566,7 +566,7 @@ impl StreamCache {
             .index
             .entries
             .iter()
-            .filter(|(id, _)| !state.active.contains(*id))
+            .filter(|(id, _)| !state.active.contains_key(id.as_str()))
             .map(|(id, entry)| (id.clone(), entry.file.clone()))
             .collect();
         for (id, file) in to_remove {
@@ -666,7 +666,7 @@ impl StreamCache {
         drop(file);
 
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let has_active = state.active.contains(video_id);
+        let has_active = state.active.contains_key(video_id);
         let stale_file = match state.index.entries.get(video_id) {
             Some(entry) if !entry.complete && !has_active => Some(entry.file.clone()),
             _ => None,
@@ -690,7 +690,7 @@ impl StreamCache {
                 },
             );
         }
-        state.active.insert(video_id.to_string());
+        state.active.insert(video_id.to_string(), file_name.clone());
         state.dirty = true;
         self.save_locked(&mut state);
         Ok((path, file_name))
@@ -733,13 +733,17 @@ impl StreamCache {
             state.dirty = true;
             self.save_locked(&mut state);
         }
-        state.active.remove(video_id);
+        if state.active.get(video_id).is_some_and(|f| f == file_name) {
+            state.active.remove(video_id);
+        }
         let _ = std::fs::remove_file(self.dir.join(file_name));
     }
 
     pub fn finish(&self, video_id: &str, file_name: &str, complete: bool) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.active.remove(video_id);
+        if state.active.get(video_id).is_some_and(|f| f == file_name) {
+            state.active.remove(video_id);
+        }
 
         if state
             .index
@@ -792,7 +796,7 @@ impl StreamCache {
             if total <= CACHE_LIMIT {
                 break;
             }
-            if state.active.contains(&video_id) {
+            if state.active.contains_key(&video_id) {
                 continue;
             }
             if let Some(entry) = state.index.entries.remove(&video_id) {
@@ -975,6 +979,7 @@ fn fetch_loop(
 ) {
     let mut last_gen = 0u64;
     let mut attempts = 0u32;
+    let control = store.control.clone();
 
     loop {
         let Some((demand_start, demand_end, generation)) = store.wait_demand(last_gen) else {
@@ -983,6 +988,9 @@ fn fetch_loop(
         last_gen = generation;
 
         'demand: loop {
+            if control.is_cancelled() {
+                return;
+            }
             let total = {
                 let state = store.state.lock().unwrap_or_else(|e| e.into_inner());
                 state.total
@@ -1550,6 +1558,7 @@ impl Drop for StreamSession {
 
 fn abandon_cache(store: &RangeStore, cache: &StreamCache, video_id: &str, file_name: &str) {
     store.fail("the stream could not be decoded".to_string());
+    store.control.cancel();
     cache.discard_entry(video_id, file_name);
 }
 

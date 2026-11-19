@@ -6,18 +6,22 @@ export const MINI_COMMAND_EVENT = "vynl:mini:command";
 export const MINI_REQUEST_STATE_EVENT = "vynl:mini:request-state";
 export const MINI_CLOSED_EVENT = "vynl:mini:closed";
 
+function safeEmit(event: string, payload: unknown): void {
+  void emit(event, payload).catch(() => {});
+}
+
 export function sendMiniState(state: MiniSyncState): void {
-  void emit(MINI_STATE_EVENT, state);
+  safeEmit(MINI_STATE_EVENT, state);
 }
 
 export function requestMiniState(): void {
-  void emit(MINI_REQUEST_STATE_EVENT, null);
+  safeEmit(MINI_REQUEST_STATE_EVENT, null);
 }
 
 export function sendMiniCommand(command: MiniCommand): void {
-  void emit(MINI_COMMAND_EVENT, command);
+  safeEmit(MINI_COMMAND_EVENT, command);
 }
 
 export function sendMiniClosed(): void {
-  void emit(MINI_CLOSED_EVENT, null);
+  safeEmit(MINI_CLOSED_EVENT, null);
 }

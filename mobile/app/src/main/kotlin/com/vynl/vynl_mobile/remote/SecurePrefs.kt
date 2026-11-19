@@ -83,10 +83,7 @@ object SecurePrefs {
 
     fun putString(editor: SharedPreferences.Editor, key: String, value: String) {
         val encrypted = encrypt(value)
-        if (encrypted != null) {
-            editor.putString(key, encrypted)
-        } else {
-            editor.putString(key, value)
-        }
+            ?: throw IllegalStateException("could not encrypt the token — try again")
+        editor.putString(key, encrypted)
     }
 }

@@ -475,6 +475,7 @@ export function playTrack(
   }
 
   setPlayError(null);
+  pendingStreamError = null;
   resetCrossfade();
   consecutivePlayFailures = 0;
   cancelSeek(false);
@@ -626,7 +627,7 @@ function maybeStartCrossfade(position: number): boolean {
 
   crossfadeTried = true;
 
-  const generation = playGeneration + 1;
+  const generation = ++playGeneration;
   const crossfade = nextVideoId
     ? vynl.catalogueCrossfadeStream(
         nextVideoId,
@@ -638,8 +639,7 @@ function maybeStartCrossfade(position: number): boolean {
 
   void crossfade
     .then(() => {
-      if (generation !== playGeneration + 1) return;
-      playGeneration = generation;
+      if (generation !== playGeneration) return;
       if (nextVideoId) prebufferState.delete(nextVideoId);
       consumeNextTrack(nextTrack);
       setNowPlaying({
@@ -693,6 +693,7 @@ export function prev(): void {
 
   clearRetry();
   setPlayError(null);
+  pendingStreamError = null;
   resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
@@ -811,6 +812,7 @@ export function cancelSeek(restorePosition = true): void {
 
 export function clearPlayError(): void {
   setPlayError(null);
+  pendingStreamError = null;
 }
 
 export function removeQueueTrack(path: string): void {

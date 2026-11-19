@@ -1320,6 +1320,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                 Err(e) => {
                                     eprintln!("device change: could not resume {path}: {e}");
                                     emit_stream_error(&path, &e, generation);
+                                    seek_floor = None;
                                     PlayerResp::Ok
                                 }
                             }
@@ -1329,7 +1330,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                         if generation < playback_generation {
                             PlayerResp::Ok
                         } else {
-                            playback_generation = generation;
+                            playback_generation = generation.saturating_add(1);
                             active_generation = 0;
                             pending_seek = None;
                             pending_resume = None;
@@ -1354,7 +1355,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                             if let Some(out) = &fading {
                                 out.track.sink.pause();
                             }
-                            if sink.as_ref().is_none_or(|track| !track.sink.empty()) {
+                            if sink.as_ref().is_none_or(|track| !track.sink.empty())
+                                || fading.as_ref().is_some_and(|out| !out.track.sink.empty())
+                            {
                                 PAUSED.store(true, Ordering::Relaxed);
                             }
                             PlayerResp::Ok
@@ -1477,10 +1480,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                 if last_device_poll.elapsed() >= DEVICE_POLL_INTERVAL {
                     last_device_poll = Instant::now();
                     let now = default_output_device_name();
-                    if let Some(name) = now
-                        && output_device_name.as_deref() != Some(name.as_str())
-                    {
-                        output_device_name = Some(name);
+                    let changed = output_device_name.as_deref() != now.as_deref();
+                    if changed {
+                        output_device_name = now;
                         device_handoff_token += 1;
                         let token = device_handoff_token;
                         let resume_pos = sink
@@ -1548,6 +1550,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                                 "device change: could not resume {path}: {e}"
                                             );
                                             emit_stream_error(&path, &e, generation);
+                                            seek_floor = None;
                                         }
                                     }
                                 }
@@ -1559,6 +1562,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                     generation,
                                 );
                                 pending_resume = None;
+                                seek_floor = None;
                             }
                             None => {
                                 pending_resume = None;
