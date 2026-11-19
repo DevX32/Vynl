@@ -65,7 +65,20 @@ fun ArtTile(
         if (local != null) {
             val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, local) {
                 value = withContext(Dispatchers.IO) {
-                    runCatching { android.graphics.BitmapFactory.decodeFile(local)?.asImageBitmap() }.getOrNull()
+                    runCatching {
+                        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        android.graphics.BitmapFactory.decodeFile(local, bounds)
+                        var inSampleSize = 1
+                        var halfWidth = (bounds.outWidth / 2).coerceAtLeast(1)
+                        var halfHeight = (bounds.outHeight / 2).coerceAtLeast(1)
+                        while (halfWidth >= 128 && halfHeight >= 128) {
+                            inSampleSize *= 2
+                            halfWidth /= 2
+                            halfHeight /= 2
+                        }
+                        val options = android.graphics.BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+                        android.graphics.BitmapFactory.decodeFile(local, options)?.asImageBitmap()
+                    }.getOrNull()
                 }
             }
             val currentBitmap = bitmap

@@ -183,22 +183,33 @@ class Sync(context: Context) {
         val session = validSession()
         val folded = foldRows(fetchRows(session))
         val rows = folded.rows
-        val remoteOrder = fetchOrder(session)
-        if (remoteOrder != null) {
-            val remoteUpdated = remoteOrder.optLong("updated_at", 0L)
-            if (remoteUpdated > store.storedCustomOrderUpdatedAt()) {
-                val ids = remoteOrder
-                    .optJSONArray("order_ids")
-                    ?.let { array ->
-                        (0 until array.length())
-                            .map { array.optString(it) }
-                            .filter { it.isNotBlank() }
+        when (val order = fetchOrder(session)) {
+            is OrderFetch.Found -> {
+                val remoteUpdated = order.row.optLong("updated_at", 0L)
+                if (remoteUpdated > store.storedCustomOrderUpdatedAt()) {
+                    val ids = order.row
+                        .optJSONArray("order_ids")
+                        ?.let { array ->
+                            (0 until array.length())
+                                .map { array.optString(it) }
+                                .filter { it.isNotBlank() }
+                        }
+                        .orEmpty()
+                    runCatching {
+                        if (ids.isNotEmpty()) {
+                            store.setCustomOrder(ids, remoteUpdated)
+                        } else {
+                            store.setCustomOrder(emptyList(), remoteUpdated)
+                        }
                     }
-                    .orEmpty()
-                if (ids.isNotEmpty()) {
-                    runCatching { store.setCustomOrder(ids, remoteUpdated) }
                 }
             }
+            is OrderFetch.Absent -> {
+                if (store.storedCustomOrderUpdatedAt() > 0L) {
+                    runCatching { store.setCustomOrder(emptyList(), 0L) }
+                }
+            }
+            is OrderFetch.Failed -> {}
         }
         var pushed = 0
         var pulled = 0
@@ -335,7 +346,13 @@ class Sync(context: Context) {
         }
     }
 
-    private fun fetchOrder(session: SyncSession): org.json.JSONObject? {
+    private sealed class OrderFetch {
+        object Failed : OrderFetch()
+        object Absent : OrderFetch()
+        data class Found(val row: org.json.JSONObject) : OrderFetch()
+    }
+
+    private fun fetchOrder(session: SyncSession): OrderFetch {
         val request = Request.Builder()
             .url("$baseUrl/rest/v1/library_order?select=order_ids,updated_at&limit=1")
             .header("apikey", anonKey)
@@ -345,13 +362,13 @@ class Sync(context: Context) {
             .build()
         return runCatching {
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@runCatching null
+                if (!response.isSuccessful) return@runCatching OrderFetch.Failed
                 val body = response.body?.string().orEmpty()
                 val array = org.json.JSONArray(body)
-                if (array.length() == 0) return@runCatching null
-                array.optJSONObject(0)
+                if (array.length() == 0) return@runCatching OrderFetch.Absent
+                OrderFetch.Found(array.optJSONObject(0))
             }
-        }.getOrNull()
+        }.getOrElse { OrderFetch.Failed }
     }
 
     private fun foldRows(rows: List<JSONObject>): FoldResult {

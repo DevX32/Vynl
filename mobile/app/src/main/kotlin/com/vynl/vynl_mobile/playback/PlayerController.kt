@@ -1,4 +1,4 @@
-package com.vynl.vynl_mobile.playback
+﻿package com.vynl.vynl_mobile.playback
 
 import android.content.ComponentName
 import android.content.Context
@@ -54,7 +54,7 @@ class PlayerController(
 ) {
     private val failureHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
         android.util.Log.e("Vynl", "player task failed", error)
-        _state.value = _state.value.copy(error = "Something went wrong — try again")
+        _state.value = _state.value.copy(error = "Something went wrong â€” try again")
     }
     private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob() + failureHandler)
     private val _state = MutableStateFlow(PlaybackState())
@@ -65,6 +65,28 @@ class PlayerController(
     private var queueStart = 0
     private var localFiles: Map<String, String> = emptyMap()
     private val resolved = mutableMapOf<Int, String>()
+    private val resolvedAt = mutableMapOf<Int, Long>()
+    private val resolvedTtlMs = 5L * 60L * 60L * 1000L
+
+    private fun cachedUrl(index: Int): String? {
+        val at = resolvedAt[index] ?: return null
+        if (System.currentTimeMillis() - at > resolvedTtlMs) {
+            resolved.remove(index)
+            resolvedAt.remove(index)
+            return null
+        }
+        return resolved[index]
+    }
+
+    private fun cacheUrl(index: Int, url: String) {
+        resolved[index] = url
+        resolvedAt[index] = System.currentTimeMillis()
+    }
+
+    private fun clearResolved() {
+        resolved.clear()
+        resolvedAt.clear()
+    }
     private var poll: Job? = null
     private var filling = false
     private val connectMutex = Mutex()
@@ -109,6 +131,7 @@ class PlayerController(
             val player = controller ?: return
             val absolute = queueStart + player.currentMediaItemIndex
             resolved.remove(absolute)
+            resolvedAt.remove(absolute)
             val failedTrack = playlist.getOrNull(absolute)
             if (failedTrack != null && absolute != lastRetryIndex) {
                 lastRetryIndex = absolute
@@ -122,10 +145,12 @@ class PlayerController(
                         skipErroredItem(player)
                         return@launch
                     }
-                    resolved[absolute] = url
+                    cacheUrl(absolute, url)
+                    val position = player.currentPosition
                     val replacement = mediaItem(item, url)
                     player.replaceMediaItem(player.currentMediaItemIndex, replacement)
                     player.prepare()
+                    player.seekTo(position)
                     player.play()
                 }
                 return
@@ -139,14 +164,14 @@ class PlayerController(
     private fun skipErroredItem(player: androidx.media3.session.MediaController) {
         if (player.hasNextMediaItem()) {
             _state.value = _state.value.copy(
-                error = "could not play that track — skipping to the next one",
+                error = "could not play that track â€” skipping to the next one",
             )
             player.seekToNextMediaItem()
             player.prepare()
             player.play()
         } else {
             _state.value = _state.value.copy(
-                error = "that track can't be played — nothing else follows it",
+                error = "that track can't be played â€” nothing else follows it",
             )
         }
     }
@@ -166,7 +191,19 @@ class PlayerController(
     private suspend fun connectOnce() {
         if (controller != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        val controllerListener = object : MediaController.Listener {
+            override fun onDisconnected(controller: MediaController) {
+                poll?.cancel()
+                poll = null
+                if (this@PlayerController.controller === controller) {
+                    this@PlayerController.controller = null
+                }
+                _state.value = _state.value.copy(connected = false, playing = false, buffering = false)
+            }
+        }
+        val future = MediaController.Builder(context, token)
+            .setListener(controllerListener)
+            .buildAsync()
         val built = suspendCancellableCoroutine { continuation ->
             future.addListener(
                 {
@@ -208,7 +245,7 @@ class PlayerController(
             playlist = tracks
             queueStart = startIndex.coerceIn(0, tracks.lastIndex)
             localFiles = files
-            resolved.clear()
+            clearResolved()
             listEpoch += 1
             bumpQueueVersion()
             val expectedEpoch = listEpoch
@@ -255,6 +292,10 @@ class PlayerController(
             player.seekTo(0)
             return
         }
+        if (player.currentMediaItemIndex <= 0 && queueStart > 0) {
+            playAt(queueStart - 1)
+            return
+        }
         player.seekToPreviousMediaItem()
     }
 
@@ -284,9 +325,9 @@ class PlayerController(
                 if (local != null) {
                     mediaItem(track, android.net.Uri.fromFile(java.io.File(local)).toString())
                 } else {
-                    val url = resolved[index] ?: runCatching {
+                    val url = cachedUrl(index) ?: runCatching {
                         repository.stream(track.id).url
-                    }.getOrNull()?.takeIf { it.isNotBlank() }?.also { resolved[index] = it }
+                    }.getOrNull()?.takeIf { it.isNotBlank() }?.also { cacheUrl(index, it) }
                     url?.let { mediaItem(track, it) }
                 }
             }
@@ -299,13 +340,13 @@ class PlayerController(
                 if (removedBeforeQueueStart > 0) {
                     queueStart = (queueStart - removedBeforeQueueStart).coerceAtLeast(0)
                 }
-                resolved.clear()
+                clearResolved()
                 _state.value = _state.value.copy(
                     error = "${failed.size} track(s) can't be played from the catalog",
                 )
                 bumpQueueVersion()
             } else {
-                resolved.clear()
+                clearResolved()
             }
         }
         results.filterNotNull()
@@ -414,7 +455,7 @@ class PlayerController(
             else -> playing
         }
         queueStart = newPlaying
-        resolved.clear()
+        clearResolved()
         val player = controller ?: run {
             return
         }
@@ -469,7 +510,7 @@ class PlayerController(
         }
         listEpoch += 1
         bumpQueueVersion()
-        resolved.clear()
+        clearResolved()
         val oldPosition = player.currentPosition
         val wasPlaying = player.isPlaying
         val expectedEpoch = listEpoch
@@ -510,7 +551,7 @@ class PlayerController(
         listEpoch += 1
         bumpQueueVersion()
         val expectedEpoch = listEpoch
-        resolved.clear()
+        clearResolved()
         scope.launch {
             try {
                 connect()

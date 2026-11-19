@@ -457,18 +457,45 @@
     else toasts.info(t("vault.playlistAlreadyHas", { name }));
   }
 
+  async function savePathsToPlaylist(playlistId: string, paths: string[]): Promise<{ added: number; failed: number }> {
+    try {
+      await addToPlaylist(playlistId, paths);
+      return { added: paths.length, failed: 0 };
+    } catch (e) {
+      console.warn("addToPlaylist batch failed; retrying per track:", e);
+      let added = 0;
+      let failed = 0;
+      for (const path of paths) {
+        try {
+          await addToPlaylist(playlistId, [path]);
+          added += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      return { added, failed };
+    }
+  }
+
   async function addToSelectedPlaylist(playlistId: string): Promise<void> {
     if (pickerBusy) return;
     pickerBusy = true;
     const before = getCurrentPlaylists().find((p) => p.id === playlistId);
     try {
-      await addToPlaylist(playlistId, pendingPaths);
+      const result = await savePathsToPlaylist(playlistId, pendingPaths);
       await refreshPlaylists();
       const after = getCurrentPlaylists().find((p) => p.id === playlistId);
-      notifyPlaylistSaved(
-        after?.name ?? before?.name ?? "",
-        (after?.trackCount ?? 0) - (before?.trackCount ?? 0),
-      );
+      const delta = (after?.trackCount ?? 0) - (before?.trackCount ?? 0);
+      if (result.failed > 0 && result.added === 0) {
+        toasts.error(t("vault.playlistSaveFailed"));
+      } else if (result.failed > 0) {
+        toasts.warning(t("vault.playlistSaveFailed"), 6000);
+      } else {
+        notifyPlaylistSaved(
+          after?.name ?? before?.name ?? "",
+          delta,
+        );
+      }
     } catch (e) {
       console.warn("addToPlaylist error:", e);
       toasts.error(t("vault.playlistSaveFailed"));
@@ -481,11 +508,17 @@
     pickerBusy = true;
     try {
       const pl = await createPlaylist(name.trim() || "Untitled");
-      await addToPlaylist(pl.id, pendingPaths);
+      const result = await savePathsToPlaylist(pl.id, pendingPaths);
       await refreshPlaylists();
-      const added =
-        getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
-      notifyPlaylistSaved(pl.name, added);
+      const added = Math.max(
+        getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0,
+        result.added,
+      );
+      if (result.failed > 0) {
+        toasts.warning(t("vault.playlistSaveFailed"), 6000);
+      } else {
+        notifyPlaylistSaved(pl.name, added);
+      }
     } catch (e) {
       console.warn("createAndAddPlaylist error:", e);
       toasts.error(t("vault.playlistSaveFailed"));
@@ -567,6 +600,7 @@
 
   function clearAll(): void {
     searchGen++;
+    ++dlGeneration;
     dismissSearch();
     collection = null;
     progress = {};

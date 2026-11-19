@@ -716,7 +716,10 @@ impl StreamCache {
         drop(file);
 
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let has_active = state.active.contains_key(video_id);
+        let has_active = state
+            .active
+            .get(video_id)
+            .is_some_and(|files| !files.is_empty());
         let stale_file = match state.index.entries.get(video_id) {
             Some(entry) if !entry.complete && !has_active => Some(entry.file.clone()),
             _ => None,
@@ -730,17 +733,19 @@ impl StreamCache {
             if let Some(stale) = stale_file {
                 let _ = std::fs::remove_file(self.dir.join(stale));
             }
-            state.index.entries.insert(
-                video_id.to_string(),
-                CacheEntry {
-                    file: file_name.clone(),
-                    size: total,
-                    complete: false,
-                    last_used: now_secs(),
-                    itag: (itag != 0).then_some(itag),
-                    coverage: Vec::new(),
-                },
-            );
+            if !has_active {
+                state.index.entries.insert(
+                    video_id.to_string(),
+                    CacheEntry {
+                        file: file_name.clone(),
+                        size: total,
+                        complete: false,
+                        last_used: now_secs(),
+                        itag: (itag != 0).then_some(itag),
+                        coverage: Vec::new(),
+                    },
+                );
+            }
         }
         state
             .active
@@ -785,7 +790,11 @@ impl StreamCache {
         if entry.file != file_name {
             return;
         }
-        entry.coverage = coverage.to_vec();
+        let mut merged = std::mem::take(&mut entry.coverage);
+        for &(start, end) in coverage {
+            mark_range(&mut merged, start, end);
+        }
+        entry.coverage = merged;
         state.dirty = true;
         if due {
             state
@@ -863,7 +872,18 @@ impl StreamCache {
                     entry.last_used = now_secs();
                 }
             } else if !still_active {
-                state.index.entries.remove(video_id);
+                let resumable = state
+                    .index
+                    .entries
+                    .get(video_id)
+                    .is_some_and(|entry| !entry.coverage.is_empty());
+                if resumable {
+                    if let Some(entry) = state.index.entries.get_mut(video_id) {
+                        entry.last_used = now_secs();
+                    }
+                } else {
+                    state.index.entries.remove(video_id);
+                }
             }
         }
 

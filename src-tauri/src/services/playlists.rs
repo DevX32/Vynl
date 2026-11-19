@@ -20,6 +20,10 @@ fn playlist_file(output_dir: &Path, id: &str) -> std::path::PathBuf {
     playlists_dir(output_dir).join(format!("{}.json", id))
 }
 
+pub(crate) fn liked_playlist_file(output_dir: &Path) -> std::path::PathBuf {
+    playlist_file(output_dir, crate::services::sync::LIKED_PLAYLIST_ID)
+}
+
 const ORDER_FILE: &str = "order.json";
 const ORDER_META_FILE: &str = "order.json.meta";
 

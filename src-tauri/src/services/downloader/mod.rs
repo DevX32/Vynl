@@ -634,11 +634,12 @@ async fn download_track(
             buf
         });
 
+        let mut stdout_task = None;
         if let Some(out) = stdout {
             let track_for_stdout = track_clone.clone();
             let event_for_stdout = Arc::clone(&event_fn);
             let last_activity = Arc::clone(&last_activity);
-            tokio::spawn(async move {
+            stdout_task = Some(tokio::spawn(async move {
                 let mut reader = BufReader::new(out);
                 let mut last_emit = std::time::Instant::now();
                 let mut last_pct: f64 = -1.0;
@@ -666,7 +667,7 @@ async fn download_track(
                         }
                     }
                 }
-            });
+            }));
         }
 
         let code = child.wait().await.ok().and_then(|s| s.code());
@@ -698,6 +699,9 @@ async fn download_track(
             continue;
         }
 
+        if let Some(task) = stdout_task {
+            let _ = task.await;
+        }
         let stderr_text = stderr_task.await.unwrap_or_default();
 
         let stream_path = find_downloaded_stream(&tmp, &download_key);
@@ -721,23 +725,51 @@ async fn download_track(
                 }),
             );
 
-            let src = stream.clone();
-            let dest = raw_path.clone();
             let bitrate = settings.bitrate.filter(|b| *b > 0).map(|b| b as u32);
             let encoded = if keep_native {
                 if same_file {
                     Ok(())
                 } else {
-                    tokio::task::spawn_blocking(move || {
-                        crate::services::opusmux::remux(&src, &dest).map(|_| ())
+                    let remux_src = stream.clone();
+                    let remux_dest = raw_path.clone();
+                    let remux = tokio::task::spawn_blocking(move || {
+                        crate::services::opusmux::remux(&remux_src, &remux_dest).map(|_| ())
                     })
                     .await
                     .map_err(|e| format!("Remux task failed: {e}"))
-                    .and_then(|r| r)
+                    .and_then(|r| r);
+                    match remux {
+                        Ok(()) => Ok(()),
+                        Err(remux_error) => {
+                            eprintln!(
+                                "opusmux refused the source ({remux_error}); transcoding to mp3 instead"
+                            );
+                            let fallback_src = stream.clone();
+                            let fallback_dest = raw_path.clone();
+                            tokio::task::spawn_blocking(move || {
+                                audio::transcode_to_mp3(
+                                    &fallback_src,
+                                    &fallback_dest,
+                                    bitrate,
+                                    Some(&CANCELLED_DOWNLOAD),
+                                )
+                            })
+                            .await
+                            .map_err(|e| format!("Encoding task failed: {e}"))
+                            .and_then(|r| r)
+                        }
+                    }
                 }
             } else {
+                let transcode_src = stream.clone();
+                let transcode_dest = raw_path.clone();
                 tokio::task::spawn_blocking(move || {
-                    audio::transcode_to_mp3(&src, &dest, bitrate, Some(&CANCELLED_DOWNLOAD))
+                    audio::transcode_to_mp3(
+                        &transcode_src,
+                        &transcode_dest,
+                        bitrate,
+                        Some(&CANCELLED_DOWNLOAD),
+                    )
                 })
                 .await
                 .map_err(|e| format!("Encoding task failed: {e}"))
@@ -1065,6 +1097,13 @@ async fn process_track(
 
     if let Some(cp) = &cover_path {
         let _ = std::fs::remove_file(cp);
+    }
+
+    if CANCELLED_DOWNLOAD.load(Ordering::Relaxed) {
+        let _ = std::fs::remove_file(&tagged_file);
+        let _ = std::fs::remove_file(&raw_path);
+        emit_track(app, track, TrackStatus::Cancelled, 0.0, None);
+        return TrackOutcome::Cancelled;
     }
 
     match move_tagged_to_output(

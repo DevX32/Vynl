@@ -59,10 +59,7 @@ pub fn locked<R>(_user_data: &Path, f: impl FnOnce() -> R) -> R {
     f()
 }
 
-pub fn load(user_data: &Path) -> Vec<TasteEntry> {
-    let _guard = taste_mutex()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+fn load_unlocked(user_data: &Path) -> Vec<TasteEntry> {
     let path = taste_path(user_data);
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return Vec::new();
@@ -84,16 +81,42 @@ pub fn load(user_data: &Path) -> Vec<TasteEntry> {
     entries
 }
 
-pub fn save(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
-    let _guard = taste_mutex()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+fn save_unlocked(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
     let mut trimmed: Vec<&TasteEntry> = entries.iter().collect();
     if trimmed.len() > MAX_ENTRIES {
         trimmed = trimmed[trimmed.len() - MAX_ENTRIES..].to_vec();
     }
     let owned: Vec<TasteEntry> = trimmed.into_iter().cloned().collect();
     crate::services::util::write_json(&taste_path(user_data), &owned)
+}
+
+pub fn load(user_data: &Path) -> Vec<TasteEntry> {
+    let _guard = taste_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    load_unlocked(user_data)
+}
+
+pub fn save(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
+    let _guard = taste_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    save_unlocked(user_data, entries)
+}
+
+pub fn locked_update(
+    user_data: &Path,
+    f: impl FnOnce(&mut Vec<TasteEntry>) -> Result<bool, String>,
+) -> Result<bool, String> {
+    let _guard = taste_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut entries = load_unlocked(user_data);
+    let changed = f(&mut entries)?;
+    if changed {
+        save_unlocked(user_data, &entries)?;
+    }
+    Ok(changed)
 }
 
 pub fn summary(entries: &[TasteEntry]) -> TasteSummary {

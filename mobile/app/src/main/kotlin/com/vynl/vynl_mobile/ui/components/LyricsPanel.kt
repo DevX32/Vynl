@@ -151,11 +151,14 @@ private fun SyncedLines(
     val active = lyrics.activeIndex(positionMs)
     val instrumentals = remember(lyrics) { lines.map { isInstrumental(it.text) } }
     var userScrolling by remember(lyrics) { mutableStateOf(false) }
+    var programmaticScroll by remember { mutableStateOf(false) }
     val scrolling = listState.isScrollInProgress
 
     LaunchedEffect(scrolling) {
         if (scrolling) {
-            userScrolling = true
+            if (!programmaticScroll) {
+                userScrolling = true
+            }
         } else {
             delay(3_000)
             userScrolling = false
@@ -163,7 +166,9 @@ private fun SyncedLines(
     }
     LaunchedEffect(active, userScrolling) {
         if (!userScrolling && active >= 0 && active < lines.size) {
+            programmaticScroll = true
             listState.animateScrollToItem(active)
+            programmaticScroll = false
         }
     }
 

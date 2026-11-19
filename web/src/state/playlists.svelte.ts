@@ -349,7 +349,22 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
     if (isCataloguePath(path)) {
       const id = catalogueIdOf(path);
       const track = id ? streams.get(id) : undefined;
-      if (!track) continue;
+      if (!track) {
+        result.push({
+          id: id ?? path,
+          path,
+          title: "Catalogue track (details unavailable)",
+          artist: "",
+          album: "",
+          year: null,
+          duration: 0,
+          cover: null,
+          trackNumber: null,
+          lyrics: null,
+          ext: "",
+        });
+        continue;
+      }
       const stream = streamTrackOf(track);
       if (hasLocalMatch(stream)) continue;
       result.push(stream);

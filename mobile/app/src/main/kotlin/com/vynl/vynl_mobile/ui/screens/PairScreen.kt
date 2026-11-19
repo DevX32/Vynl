@@ -294,7 +294,12 @@ fun PairScreen(
                                                 )
                                             }.getOrElse { "Pairing failed." }
                                             busy = false
-                                            if (failure == null) onPaired() else error = failure
+                                            if (failure == null) {
+                                                onPaired()
+                                            } else {
+                                                error = failure
+                                                scanned = false
+                                            }
                                         }
                                     }
                                     break

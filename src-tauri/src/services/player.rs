@@ -721,6 +721,28 @@ impl TrackInput {
     }
 }
 
+fn apply_pending_pause(
+    sink: &mut Option<TrackSink>,
+    fading: &mut Option<FadingOut>,
+    pending_pause: &mut Option<u64>,
+    generation: u64,
+) {
+    if pending_pause.take() == Some(generation) {
+        let mut paused_any = false;
+        if let Some(t) = sink {
+            t.sink.pause();
+            paused_any = true;
+        }
+        if let Some(out) = fading {
+            out.track.sink.pause();
+            paused_any = true;
+        }
+        if paused_any {
+            PAUSED.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
 struct TrackSink {
     sink: Sink,
     fade: FadeControl,
@@ -1101,6 +1123,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
     let mut playback_generation = 0u64;
     let mut active_generation = 0u64;
     let mut pending_seek: Option<(f64, u64)> = None;
+    let mut pending_pause: Option<u64> = None;
     let mut seek_floor: Option<Duration> = None;
     let mut duration_secs: Option<f64> = None;
     let mut last_tick_key: Option<TickKey> = None;
@@ -1166,6 +1189,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                     active_generation = generation;
                                     seek_floor = requested_seek.and_then(seek_floor_for);
                                     PAUSED.store(false, Ordering::Relaxed);
+                                    apply_pending_pause(
+                                        &mut sink,
+                                        &mut fading,
+                                        &mut pending_pause,
+                                        generation,
+                                    );
                                     PlayerResp::Ok
                                 }
                                 Err(e) => {
@@ -1214,6 +1243,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                     seek_floor = seek_floor_for(start);
                                     current_path = Some(request.path);
                                     duration_secs = total;
+                                    apply_pending_pause(
+                                        &mut sink,
+                                        &mut fading,
+                                        &mut pending_pause,
+                                        request.generation,
+                                    );
                                     PlayerResp::Ok
                                 }
                                 Err(e) => PlayerResp::Err(e),
@@ -1243,6 +1278,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                 current_path = Some(path);
                                 duration_secs = total;
                                 PAUSED.store(false, Ordering::Relaxed);
+                                apply_pending_pause(
+                                    &mut sink,
+                                    &mut fading,
+                                    &mut pending_pause,
+                                    generation,
+                                );
                                 PlayerResp::Ok
                             }
                             Err(e) => PlayerResp::Err(e),
@@ -1277,6 +1318,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                 current_path = Some(path);
                                 duration_secs = total;
                                 PAUSED.store(false, Ordering::Relaxed);
+                                apply_pending_pause(
+                                    &mut sink,
+                                    &mut fading,
+                                    &mut pending_pause,
+                                    generation,
+                                );
                                 PlayerResp::Ok
                             }
                             Err(e) => PlayerResp::Err(e),
@@ -1353,6 +1400,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                     }
                     PlayerCmd::Pause(generation) => {
                         if generation < playback_generation || generation != active_generation {
+                            if generation == playback_generation && active_generation == 0 {
+                                pending_pause = Some(generation);
+                            }
                             PlayerResp::Ok
                         } else {
                             if let Some(t) = &sink {

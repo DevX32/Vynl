@@ -20,6 +20,7 @@ class PlaybackService : MediaSessionService() {
                     .build(),
                 true,
             )
+            setWakeMode(C.WAKE_MODE_LOCAL)
             setHandleAudioBecomingNoisy(true)
         }
         val service = this

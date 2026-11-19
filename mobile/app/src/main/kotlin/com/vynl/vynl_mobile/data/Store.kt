@@ -438,7 +438,7 @@ class Store(context: Context) {
             put("updatedAt", updatedAt)
         }
         val file = File(files, "library_order.json")
-        val tmp = File(files, "library_order.json.tmp")
+        val tmp = File(files, "library_order.json.${System.currentTimeMillis()}.${(0..0xffff).random().toString(16)}.tmp")
         tmp.writeText(json.toString(), Charsets.UTF_8)
         if (!tmp.renameTo(file)) {
             file.writeBytes(tmp.readBytes())

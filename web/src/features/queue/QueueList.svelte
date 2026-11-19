@@ -64,7 +64,7 @@
   ): void {
     const track = tracksOf(section)[idx];
     if (track) {
-      start(e, { section, idx, path: track.path });
+      start(e, { section, idx, path: track.path, paths: tracksOf(section).map((t) => t.path) });
     }
   }
 

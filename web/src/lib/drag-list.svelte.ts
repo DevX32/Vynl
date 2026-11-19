@@ -6,6 +6,7 @@ interface DragStartOptions {
   section?: string | null;
   idx: number;
   path: string;
+  paths?: string[];
 }
 
 interface DragListOptions {
@@ -38,6 +39,7 @@ export function useDragList(options: DragListOptions) {
   });
 
   let grabPath: string | null = null;
+  let snapshotPaths: string[] | null = null;
   let startY = 0;
   let pressed = false;
   let suppressClick = false;
@@ -145,6 +147,7 @@ export function useDragList(options: DragListOptions) {
     drag.overIdx = opts.idx;
     drag.dragging = false;
     grabPath = opts.path;
+    snapshotPaths = opts.paths ?? null;
     startY = e.clientY;
     pressed = true;
     suppressClick = false;
@@ -171,7 +174,7 @@ export function useDragList(options: DragListOptions) {
       const from = grabPath;
       const to =
         drag.overIdx !== null
-          ? options.pathAt(drag.section, drag.overIdx)
+          ? (snapshotPaths?.[drag.overIdx] ?? options.pathAt(drag.section, drag.overIdx))
           : undefined;
       if (from && to && to !== from) {
         options.onReorder(from, to);
@@ -187,6 +190,7 @@ export function useDragList(options: DragListOptions) {
     drag.overIdx = null;
     drag.dragging = false;
     grabPath = null;
+    snapshotPaths = null;
     invalidateCenters();
     detach();
   }

@@ -171,7 +171,7 @@ fn normalized_name(name: &str) -> String {
 
 struct FoldedRows {
     rows: Vec<SyncRow>,
-    stale: Vec<SyncRow>,
+    stale: Vec<(SyncRow, String)>,
 }
 
 fn signatures_compatible(
@@ -198,7 +198,7 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
         groups.entry(key).or_default().push(index);
     }
 
-    let mut stale: Vec<SyncRow> = Vec::new();
+    let mut stale: Vec<(SyncRow, String)> = Vec::new();
     let mut folded: std::collections::HashMap<usize, SyncRow> = std::collections::HashMap::new();
     let mut shadowed: std::collections::HashSet<usize> = std::collections::HashSet::new();
 
@@ -245,7 +245,11 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
         synthetic.adds = adds;
         synthetic.removals = removals;
         synthetic.updated_at = updated_at;
-        stale.extend(members.iter().map(|&index| rows[index].clone()));
+        stale.extend(
+            members
+                .iter()
+                .map(|&index| (rows[index].clone(), rows[canonical].local_id.clone())),
+        );
         for &index in &members {
             shadowed.insert(index);
         }
@@ -416,6 +420,13 @@ pub(crate) fn ensure_hidden_liked(
     if let Some(existing) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {
         return Ok(Some(existing));
     }
+    let liked_file = crate::services::playlists::liked_playlist_file(output_dir);
+    if liked_file.is_file() {
+        return Err(format!(
+            "the Liked Songs playlist exists but could not be read: {}",
+            liked_file.display()
+        ));
+    }
     let entries = crate::services::taste::load(user_data_dir);
     let liked: Vec<_> = entries.iter().filter(|entry| entry.liked).collect();
     if liked.is_empty() {
@@ -456,66 +467,65 @@ pub(crate) fn ensure_hidden_liked(
 }
 
 fn reconcile_taste(user_data_dir: &Path, liked: &Playlist) -> Result<(), String> {
-    let mut next = crate::services::taste::load(user_data_dir);
-    let add_map = mark_map(&liked.adds);
-    let rem_map = mark_map(&liked.removals);
-    let stream_by_id: std::collections::HashMap<&str, &CatalogueTrack> = liked
-        .streams
-        .iter()
-        .map(|track| (track.id.as_str(), track))
-        .collect();
-    let mut changed = false;
+    let liked = liked.clone();
+    crate::services::taste::locked_update(user_data_dir, |next| {
+        let add_map = mark_map(&liked.adds);
+        let rem_map = mark_map(&liked.removals);
+        let stream_by_id: std::collections::HashMap<&str, &CatalogueTrack> = liked
+            .streams
+            .iter()
+            .map(|track| (track.id.as_str(), track))
+            .collect();
+        let mut changed = false;
 
-    for entry in next.iter_mut() {
-        if !entry.liked {
-            continue;
-        }
-        let key = format!("ytm:{}", entry.track.id);
-        let removal = rem_map.get(key.as_str()).copied().unwrap_or(0);
-        if removal == 0 {
-            continue;
-        }
-        let add = add_map.get(key.as_str()).copied().unwrap_or(0);
-        if removal > add {
-            entry.liked = false;
-            changed = true;
-        }
-    }
-
-    for key in &liked.paths {
-        let Some(id) = key.strip_prefix("ytm:") else {
-            continue;
-        };
-        let removal = rem_map.get(key.as_str()).copied().unwrap_or(0);
-        let add = add_map.get(key.as_str()).copied().unwrap_or(0);
-        if removal > add {
-            continue;
-        }
-        if let Some(entry) = next.iter_mut().find(|entry| entry.track.id == id) {
-            if entry.liked {
+        for entry in next.iter_mut() {
+            if !entry.liked {
                 continue;
             }
-            entry.liked = true;
-            entry.liked_at = add_map.get(key.as_str()).copied().map(|at| at as u64);
-            changed = true;
-            continue;
+            let key = format!("ytm:{}", entry.track.id);
+            let removal = rem_map.get(key.as_str()).copied().unwrap_or(0);
+            if removal == 0 {
+                continue;
+            }
+            let add = add_map.get(key.as_str()).copied().unwrap_or(0);
+            if removal > add {
+                entry.liked = false;
+                changed = true;
+            }
         }
-        let Some(track) = stream_by_id.get(id) else {
-            continue;
-        };
-        next.push(crate::services::taste::TasteEntry {
-            track: (*track).clone(),
-            plays: 0,
-            last_played: 0,
-            liked: true,
-            liked_at: add_map.get(key.as_str()).copied().map(|at| at as u64),
-        });
-        changed = true;
-    }
 
-    if changed {
-        crate::services::taste::save(user_data_dir, &next)?;
-    }
+        for key in &liked.paths {
+            let Some(id) = key.strip_prefix("ytm:") else {
+                continue;
+            };
+            let removal = rem_map.get(key.as_str()).copied().unwrap_or(0);
+            let add = add_map.get(key.as_str()).copied().unwrap_or(0);
+            if removal > add {
+                continue;
+            }
+            if let Some(entry) = next.iter_mut().find(|entry| entry.track.id == id) {
+                if entry.liked {
+                    continue;
+                }
+                entry.liked = true;
+                entry.liked_at = add_map.get(key.as_str()).copied().map(|at| at as u64);
+                changed = true;
+                continue;
+            }
+            let Some(track) = stream_by_id.get(id) else {
+                continue;
+            };
+            next.push(crate::services::taste::TasteEntry {
+                track: (*track).clone(),
+                plays: 0,
+                last_played: 0,
+                liked: true,
+                liked_at: add_map.get(key.as_str()).copied().map(|at| at as u64),
+            });
+            changed = true;
+        }
+        Ok(changed)
+    })?;
     Ok(())
 }
 
@@ -1462,8 +1472,11 @@ async fn patch_equivalent_tombstones(
             continue;
         }
         let same_name = !wanted_name.is_empty() && row.name.trim().to_lowercase() == wanted_name;
-        let same_playlist =
-            same_name && signature_matches(&row.tracks, signature) && row.created_at <= deleted_at;
+        let same_playlist = same_name
+            && signature.len() >= 2
+            && row.tracks.len() >= 2
+            && signature_matches(&row.tracks, signature)
+            && row.created_at <= deleted_at;
         if same_playlist
             && !patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await
         {
@@ -1548,6 +1561,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                     if row.created_at > entry.deleted_at {
                         return false;
                     }
+                    if entry.signature.len() < 2 || row.tracks.len() < 2 {
+                        return false;
+                    }
                     signature_matches(&row.tracks, &entry.signature)
                 })
                 .map(|entry| entry.deleted_at)
@@ -1590,11 +1606,11 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     let mut result = SyncResult::default();
     result.failed += tombstone_undelivered;
     let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for row in &folded.stale {
+    for (row, _) in &folded.stale {
         known.insert(row.local_id.clone());
     }
     if !folded.stale.is_empty() {
-        for row in &folded.stale {
+        for (row, canonical_id) in &folded.stale {
             if row.local_id == LIKED_PLAYLIST_ID {
                 continue;
             }
@@ -1606,7 +1622,14 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                 row.created_at,
                 &signature,
             );
-            let _ = playlists::delete_playlist(output_dir, data_dir, &row.local_id);
+            let keep_local = playlists::get_playlist(output_dir, canonical_id).is_none()
+                && playlists::get_playlist(output_dir, &row.local_id).is_some();
+            let rekeyed = keep_local
+                && playlists::rekey_playlist(output_dir, data_dir, &row.local_id, canonical_id)
+                    .is_ok();
+            if !rekeyed {
+                let _ = playlists::delete_playlist(output_dir, data_dir, &row.local_id);
+            }
         }
     }
     if let Err(error) = ensure_hidden_liked(output_dir, data_dir) {
@@ -1766,18 +1789,26 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
 
     let order = playlists::read_order(output_dir);
     if !order.is_empty() {
-        let remote_at = fetch_order(data_dir)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|row| row.get("updated_at").and_then(|v| v.as_i64()))
-            .unwrap_or(0);
-        let local_at = playlists::order_updated_at(output_dir);
-        if local_at > remote_at
-            && let Err(error) = push_order(data_dir, &order, local_at).await
-        {
-            eprintln!("Vynl sync: could not save the playlist order: {error}");
-            result.failed += 1;
+        let remote = fetch_order(data_dir).await;
+        match remote {
+            Err(error) => {
+                eprintln!(
+                    "Vynl sync: could not read the remote order: {error} — skipping order sync"
+                );
+            }
+            Ok(remote_row) => {
+                let remote_at = remote_row
+                    .as_ref()
+                    .and_then(|row| row.get("updated_at").and_then(|v| v.as_i64()))
+                    .unwrap_or(0);
+                let local_at = playlists::order_updated_at(output_dir);
+                if local_at > remote_at
+                    && let Err(error) = push_order(data_dir, &order, local_at).await
+                {
+                    eprintln!("Vynl sync: could not save the playlist order: {error}");
+                    result.failed += 1;
+                }
+            }
         }
     }
 

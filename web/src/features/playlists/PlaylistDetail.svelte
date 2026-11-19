@@ -208,7 +208,7 @@
     if (!!q) return;
     const track = plHits[idx];
     if (track) {
-      start(e, { idx, path: track.path });
+      start(e, { idx, path: track.path, paths: plHits.map((t) => t.path) });
     }
   }
 

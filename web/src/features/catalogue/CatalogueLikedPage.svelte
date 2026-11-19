@@ -14,6 +14,7 @@
   import {
     cataloguePath,
     refreshAfterCatalogueSave,
+    registerCatalogueTracks,
     resetCatalogueTaste,
     saveCatalogueTrack,
   } from "@state/catalogue.svelte";
@@ -62,6 +63,9 @@
   let downloadOpen = $state(false);
 
   const tracks = $derived(getLikedTracks());
+  $effect(() => {
+    registerCatalogueTracks(tracks);
+  });
   const totalDur = $derived(totalSeconds(tracks));
   const currentTrackId = $derived(getCurrentTrack()?.id);
   const playlists = $derived(getCurrentPlaylists());

@@ -695,25 +695,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 store.clearAudio()
                 store.clearCovers()
             }
-            val freed = withContext(Dispatchers.IO) {
+            val (freed, failedDeletes) = withContext(Dispatchers.IO) {
                 val root = getApplication<Application>().filesDir
                 val music = java.io.File(root, "music")
                 var total = 0L
+                var failed = 0
                 for (folder in listOf("audio", "covers")) {
                     val dir = java.io.File(music, folder)
                     dir.listFiles()?.forEach { file ->
                         val length = file.length()
                         if (file.delete()) {
                             total += length
+                        } else {
+                            failed += 1
                         }
                     }
                 }
-                total
+                total to failed
             }
             measureDownloads()
             refreshStore()
             val megabytes = freed / (1024.0 * 1024.0)
-            notice = if (megabytes >= 1.0) {
+            notice = if (failedDeletes > 0) {
+                "Downloads removed ($failedDeletes file(s) could not be deleted)"
+            } else if (megabytes >= 1.0) {
                 String.format("Downloads removed — freed %.1f MB", megabytes)
             } else {
                 "Downloads removed"
