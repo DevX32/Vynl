@@ -278,17 +278,22 @@
   }
 
   async function findAndReview(): Promise<void> {
-    if (!collection || running) return;
+    const target = collection;
+    if (!target || running) return;
     running = true;
     error = null;
     summary = null;
 
     await refreshDone({ force: true });
+    if (collection !== target) {
+      running = false;
+      return;
+    }
 
-    const tracksToSearch = collection.tracks.filter((t) => !doneIds.includes(t.id));
-    const skippedIds = new Set(doneIds.filter((id) => collection!.tracks.some((t) => t.id === id)));
+    const tracksToSearch = target.tracks.filter((t) => !doneIds.includes(t.id));
+    const skippedIds = new Set(doneIds.filter((id) => target.tracks.some((t) => t.id === id)));
 
-    const searchCollection = { ...collection, tracks: tracksToSearch };
+    const searchCollection = { ...target, tracks: tracksToSearch };
 
     progress = {};
     for (const t of collection.tracks) {
@@ -352,9 +357,11 @@
   }
 
   async function confirmDownload(): Promise<void> {
-    if (!collection || running) return;
+    const target = collection;
+    if (!target || running) return;
     if (syncOnlyNew) {
       await refreshDone({ force: true });
+      if (collection !== target) return;
     }
     const gen = ++dlGeneration;
     running = true;
@@ -363,12 +370,12 @@
     summary = null;
     saveHint = null;
 
-    const skipIds = syncOnlyNew ? buildSkipIds(collection.tracks, doneIds) : [];
+    const skipIds = syncOnlyNew ? buildSkipIds(target.tracks, doneIds) : [];
     const baseProgress = initProgress("queued");
     for (const id of skipIds)
       baseProgress[id] = { trackId: id, status: "skipped", percent: 0 };
     progress = baseProgress;
-    const dlCollection = collection;
+    const dlCollection = target;
     try {
       await vynl.startDownload(dlCollection, {
         matches,

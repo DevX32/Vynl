@@ -415,6 +415,7 @@ export interface PlaybackTick {
 export interface StreamErrorEvent {
   videoId: string;
   message: string;
+  generation: number;
 }
 
 export interface TasteEntry {

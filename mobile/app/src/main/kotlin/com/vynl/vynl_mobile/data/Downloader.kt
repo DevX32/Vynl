@@ -67,7 +67,13 @@ class Downloader(context: Context, private val repository: CatalogueRepository) 
             if (file.exists()) return@runCatching file.absolutePath
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 val local = File(url.removePrefix("file://"))
-                return@runCatching if (local.exists()) local.absolutePath else null
+                val absolutePath = local.absolutePath
+                val filesPath = root.absolutePath
+                return@runCatching if (absolutePath.startsWith(filesPath + File.separator) && local.exists()) {
+                    local.absolutePath
+                } else {
+                    null
+                }
             }
             val request = Request.Builder().url(url).build()
             val temporary = File(folder, "${safeName(track.id)}.jpg.part")
@@ -105,6 +111,12 @@ class Downloader(context: Context, private val repository: CatalogueRepository) 
         }
     }
 
-    private fun safeName(value: String): String =
-        value.replace(Regex("[^A-Za-z0-9_\\-]"), "_").take(64)
+    private fun safeName(value: String): String {
+        val sanitized = value.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48)
+        if (sanitized == value) return sanitized
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+        val hex = digest.joinToString("") { "%02x".format(it) }.take(16)
+        return "${sanitized}_$hex".take(64)
+    }
 }

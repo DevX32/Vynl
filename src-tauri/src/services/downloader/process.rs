@@ -98,8 +98,6 @@ fn output_with_timeout(
             Ok(None) | Err(_) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = out_reader.join();
-                let _ = err_reader.join();
                 return None;
             }
         }
@@ -141,55 +139,8 @@ pub fn resolve_tool(name: &str, user_data_dir: &Path) -> Option<String> {
     tools::get_tool_path(name, user_data_dir)
 }
 
-#[cfg(windows)]
-fn process_is_ytdlp(id: u32) -> bool {
-    unsafe {
-        use std::os::windows::raw::HANDLE;
-        const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
-        const MAX_PATH: usize = 260;
-        unsafe extern "system" {
-            fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> HANDLE;
-            fn QueryFullProcessImageNameA(
-                hProcess: HANDLE,
-                dwFlags: u32,
-                lpExeName: *mut u8,
-                lpdwSize: *mut u32,
-            ) -> i32;
-            fn CloseHandle(hObject: HANDLE) -> i32;
-        }
-        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, id);
-        if handle.is_null() {
-            return false;
-        }
-        let mut buf = [0u8; MAX_PATH];
-        let mut size = buf.len() as u32;
-        let ok = QueryFullProcessImageNameA(handle, 0, buf.as_mut_ptr(), &mut size);
-        let _ = CloseHandle(handle);
-        if ok == 0 {
-            return false;
-        }
-        let path = String::from_utf8_lossy(&buf[..size as usize]).to_lowercase();
-        path.contains("yt-dlp")
-    }
-}
-
-#[cfg(not(windows))]
-fn process_is_ytdlp(id: u32) -> bool {
-    std::fs::read(format!("/proc/{id}/cmdline"))
-        .map(|bytes| {
-            String::from_utf8_lossy(&bytes)
-                .to_lowercase()
-                .contains("yt-dlp")
-        })
-        .unwrap_or(false)
-}
-
 pub(super) fn terminate_process(id: u32) {
     if id == 0 {
-        return;
-    }
-    if !process_is_ytdlp(id) {
-        eprintln!("[downloader] not terminating pid {id}: not a yt-dlp process");
         return;
     }
     #[cfg(windows)]

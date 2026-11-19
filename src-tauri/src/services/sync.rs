@@ -65,10 +65,20 @@ fn resolve_local(
     let wanted = row.name.trim().to_lowercase();
     let target = row_signature(row);
     let mut best: Option<Playlist> = None;
-    let mut has_consumed = false;
+    let mut has_consumed_compatible = false;
     for meta in playlists::list_playlists(output_dir) {
         if consumed.contains(&meta.id) {
-            has_consumed = true;
+            if let Some(playlist) = playlists::get_playlist(output_dir, &meta.id)
+                && playlist.name.trim().eq_ignore_ascii_case(&wanted)
+            {
+                let local_signature = catalogue_signature(&playlist);
+                if local_signature.is_empty()
+                    || target.is_empty()
+                    || local_signature.intersection(&target).next().is_some()
+                {
+                    has_consumed_compatible = true;
+                }
+            }
             continue;
         }
         let Some(playlist) = playlists::get_playlist(output_dir, &meta.id) else {
@@ -95,7 +105,7 @@ fn resolve_local(
         }
     }
     let Some(best) = best else {
-        return if has_consumed {
+        return if has_consumed_compatible {
             LocalResolution::Duplicate
         } else {
             LocalResolution::Missing
@@ -161,7 +171,7 @@ fn normalized_name(name: &str) -> String {
 
 struct FoldedRows {
     rows: Vec<SyncRow>,
-    stale: Vec<String>,
+    stale: Vec<SyncRow>,
 }
 
 fn signatures_compatible(
@@ -188,7 +198,7 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
         groups.entry(key).or_default().push(index);
     }
 
-    let mut stale: Vec<String> = Vec::new();
+    let mut stale: Vec<SyncRow> = Vec::new();
     let mut folded: std::collections::HashMap<usize, SyncRow> = std::collections::HashMap::new();
     let mut shadowed: std::collections::HashSet<usize> = std::collections::HashSet::new();
 
@@ -235,7 +245,7 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
         synthetic.adds = adds;
         synthetic.removals = removals;
         synthetic.updated_at = updated_at;
-        stale.extend(members.iter().map(|&index| rows[index].local_id.clone()));
+        stale.extend(members.iter().map(|&index| rows[index].clone()));
         for &index in &members {
             shadowed.insert(index);
         }
@@ -1065,17 +1075,23 @@ async fn fetch_rows_once(data_dir: &Path, query: &str) -> Result<reqwest::Respon
 
 const PAGE_SIZE: i64 = 500;
 
-fn page_query(select: &str, offset: i64) -> String {
-    format!("select={select}&limit={PAGE_SIZE}&offset={offset}")
+fn page_query(select: &str, user_id: &str, offset: i64) -> String {
+    format!(
+        "select={select}&user_id=eq.{user_id}&order=created_at.asc,local_id.asc&limit={PAGE_SIZE}&offset={offset}"
+    )
 }
 
 const NO_MARKS_SELECT: &str = "local_id,name,tracks,created_at,updated_at,deleted_at";
 const MARKS_SELECT: &str = "local_id,name,tracks,created_at,updated_at,deleted_at,adds,removals";
 
 async fn fetch_order(data_dir: &Path) -> Result<Option<serde_json::Value>, String> {
+    let Some(session) = read_session(data_dir) else {
+        return Err("Vynl Sync is not signed in.".into());
+    };
+    let uid = urlencoded_user_id(&session.user_id);
     let request = http()?
         .get(format!(
-            "{}/rest/v1/{}?select=order_ids,updated_at",
+            "{}/rest/v1/{}?select=order_ids,updated_at&user_id=eq.{uid}",
             base_url(),
             ORDER_TABLE
         ))
@@ -1131,32 +1147,47 @@ fn select_star() -> &'static str {
     }
 }
 
-fn parse_rows_page(body: &str) -> (Vec<SyncRow>, usize) {
+fn parse_rows_page(body: &str) -> (Vec<SyncRow>, usize, usize) {
     match serde_json::from_str::<Vec<serde_json::Value>>(body) {
         Ok(values) => {
             let total = values.len();
+            let mut dropped = 0;
             let rows = values
                 .into_iter()
-                .filter_map(|value| serde_json::from_value::<SyncRow>(value).ok())
+                .filter_map(|value| match serde_json::from_value::<SyncRow>(value) {
+                    Ok(row) => Some(row),
+                    Err(error) => {
+                        dropped += 1;
+                        eprintln!("sync: skipping malformed row: {error}");
+                        None
+                    }
+                })
                 .collect();
-            (rows, total)
+            (rows, total, dropped)
         }
-        Err(_) => (Vec::new(), 0),
+        Err(_) => (Vec::new(), 0, 0),
     }
 }
 
+fn urlencoded_user_id(user_id: &str) -> String {
+    urlencoding::encode(user_id).into_owned()
+}
+
 async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
+    let session =
+        read_session(data_dir).ok_or_else(|| "Vynl Sync is not signed in.".to_string())?;
+    let uid = urlencoded_user_id(&session.user_id);
     let mut out: Vec<SyncRow> = Vec::new();
     let mut offset: i64 = 0;
     loop {
         let select = select_star();
-        let once = page_query(select, offset);
+        let once = page_query(select, &uid, offset);
         let mut response = fetch_rows_once(data_dir, &once).await?;
         let mut status = response.status();
         let mut body = response.text().await.unwrap_or_default();
         if !status.is_success() && once.contains("adds") && body_missing_marks(&body) {
             set_marks_supported(false);
-            let fallback = page_query(NO_MARKS_SELECT, offset);
+            let fallback = page_query(NO_MARKS_SELECT, &uid, offset);
             response = fetch_rows_once(data_dir, &fallback).await?;
             status = response.status();
             body = response.text().await.unwrap_or_default();
@@ -1167,8 +1198,11 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
                 status.as_u16()
             ));
         }
-        let (rows, page) = parse_rows_page(&body);
+        let (rows, page, dropped) = parse_rows_page(&body);
         out.extend(rows);
+        if dropped > 0 {
+            eprintln!("sync: dropped {dropped} malformed row(s) on page at offset {offset}");
+        }
         if page == 0 || (page as i64) < PAGE_SIZE {
             break;
         }
@@ -1422,8 +1456,10 @@ async fn patch_equivalent_tombstones(
         let same_name = !wanted_name.is_empty() && row.name.trim().to_lowercase() == wanted_name;
         let same_playlist =
             same_name && signature_matches(&row.tracks, signature) && row.created_at <= deleted_at;
-        if same_playlist {
-            let _ = patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await;
+        if same_playlist
+            && !patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await
+        {
+            return false;
         }
     }
     true
@@ -1525,7 +1561,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
 
     if let Ok(Some(row)) = fetch_order(data_dir).await {
         let remote_updated = row.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(0);
-        if remote_updated > local_order_updated {
+        if remote_updated > playlists::order_updated_at(output_dir) {
             let ids: Vec<String> = row
                 .get("order_ids")
                 .and_then(|v| v.as_array())
@@ -1536,7 +1572,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                         .collect()
                 })
                 .unwrap_or_default();
-            if !ids.is_empty() {
+            if !ids.is_empty() && playlists::order_updated_at(output_dir) == local_order_updated {
                 let _ = playlists::write_order_at(output_dir, &ids, remote_updated);
             }
         }
@@ -1544,10 +1580,25 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
 
     let mut result = SyncResult::default();
     let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for id in &folded.stale {
-        known.insert(id.clone());
+    for row in &folded.stale {
+        known.insert(row.local_id.clone());
     }
-    let _ = ensure_hidden_liked(output_dir, data_dir);
+    if !folded.stale.is_empty() {
+        for row in &folded.stale {
+            let signature: Vec<String> = row.tracks.iter().map(|track| track.id.clone()).collect();
+            record_pending_tombstone(
+                data_dir,
+                &row.local_id,
+                row.name.clone(),
+                row.created_at,
+                &signature,
+            );
+            let _ = playlists::delete_playlist(output_dir, data_dir, &row.local_id);
+        }
+    }
+    if let Err(error) = ensure_hidden_liked(output_dir, data_dir) {
+        eprintln!("sync: could not ensure Liked Songs playlist: {error}");
+    }
 
     let mut consumed: std::collections::HashSet<String> = std::collections::HashSet::new();
     for row in &rows {
@@ -1587,7 +1638,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                             {
                                 if let Err(error) = upsert_rows(
                                     data_dir,
-                                    &[playlist_value(&session, &playlist, &maps)],
+                                    &[playlist_value_push(&session, &playlist, &maps)],
                                 )
                                 .await
                                 {
@@ -1649,7 +1700,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                                 }
                                 if let Err(error) = upsert_rows(
                                     data_dir,
-                                    &[playlist_value(&session, &merged, &maps)],
+                                    &[playlist_value_push(&session, &merged, &maps)],
                                 )
                                 .await
                                 {
@@ -1681,7 +1732,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         }
         if let Some(playlist) = playlists::get_playlist(output_dir, &meta.id) {
             if let Err(error) =
-                upsert_rows(data_dir, &[playlist_value(&session, &playlist, &maps)]).await
+                upsert_rows(data_dir, &[playlist_value_push(&session, &playlist, &maps)]).await
             {
                 eprintln!(
                     "Vynl sync: could not save playlist {}: {error}",
@@ -1712,7 +1763,10 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     }
 
     if let Some(liked) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {
-        let _ = reconcile_taste(data_dir, &liked);
+        if let Err(error) = reconcile_taste(data_dir, &liked) {
+            eprintln!("sync: could not reconcile taste: {error}");
+            result.failed += 1;
+        }
     }
 
     Ok(result)

@@ -128,11 +128,16 @@ pub fn write_json<T: serde::Serialize>(path: &Path, data: &T) -> Result<(), Stri
 
 pub fn norm_path_key(key: &str) -> String {
     let stripped = key.trim_start_matches(r"\\?\");
-    if cfg!(windows) {
-        stripped.replace('/', "\\").to_lowercase()
+    let normalized = stripped.replace('\\', "/");
+    if cfg!(windows) && is_windows_absolute_path(&normalized) {
+        normalized.to_ascii_lowercase()
     } else {
-        stripped.replace('\\', "/")
+        normalized
     }
+}
+
+fn is_windows_absolute_path(s: &str) -> bool {
+    (s.len() >= 3 && s.as_bytes()[1] == b':' && s.as_bytes()[2] == b'/') || s.starts_with("//")
 }
 
 #[macro_export]

@@ -47,7 +47,22 @@ fn is_entry(value: &serde_json::Value) -> bool {
     has_id && has_liked && has_plays
 }
 
+pub fn taste_mutex() -> &'static std::sync::Mutex<()> {
+    static TASTE_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    TASTE_MUTEX.get_or_init(|| std::sync::Mutex::new(()))
+}
+
+pub fn locked<R>(_user_data: &Path, f: impl FnOnce() -> R) -> R {
+    let _guard = taste_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    f()
+}
+
 pub fn load(user_data: &Path) -> Vec<TasteEntry> {
+    let _guard = taste_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let path = taste_path(user_data);
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return Vec::new();
@@ -70,6 +85,9 @@ pub fn load(user_data: &Path) -> Vec<TasteEntry> {
 }
 
 pub fn save(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
+    let _guard = taste_mutex()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut trimmed: Vec<&TasteEntry> = entries.iter().collect();
     if trimmed.len() > MAX_ENTRIES {
         trimmed = trimmed[trimmed.len() - MAX_ENTRIES..].to_vec();

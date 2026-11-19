@@ -621,6 +621,11 @@ impl StreamCache {
         }
     }
 
+    pub fn has_active(&self, video_id: &str) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.active.contains_key(video_id)
+    }
+
     pub fn lookup_complete(&self, video_id: &str) -> Option<PathBuf> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let entry = state.index.entries.get(video_id)?.clone();
@@ -1475,11 +1480,13 @@ impl StreamSession {
         let decode_cache = cache.clone();
         let decode_name = file_name.clone();
         let decode_refresh_count = refresh_count.clone();
+        let decode_panic_buffer = decode_buffer.clone();
         if let Err(error) = std::thread::Builder::new()
             .name("vynl-stream-decode".into())
             .spawn(move || {
                 let decode_control = decode_control.clone();
                 let panic_control = decode_control.clone();
+                let panic_buffer = decode_panic_buffer.clone();
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
                     decode_loop(
                         decode_buffer,
@@ -1498,6 +1505,7 @@ impl StreamSession {
                 if result.is_err() {
                     eprintln!("[Vynl] stream decode thread panicked");
                     panic_control.cancel();
+                    panic_buffer.fail("the stream decoder crashed".into());
                 }
             })
         {
@@ -1720,14 +1728,17 @@ fn decode_loop(
         }
     }
 
-    buffer.close();
     if decode_errors >= 10 && refresh_count.load(Ordering::Relaxed) > 0 {
         eprintln!(
             "catalogue: {video_id} had {decode_errors} decode errors after a URL refresh; dropping the poisoned cache"
         );
+        buffer.fail("the stream could not be decoded after a URL refresh".into());
         abandon_cache(&store, &cache, &video_id, &file_name);
-    } else if store.is_complete() {
-        cache.mark_complete(&video_id, &file_name, total);
+    } else {
+        if store.is_complete() {
+            cache.mark_complete(&video_id, &file_name, total);
+        }
+        buffer.close();
     }
 }
 
@@ -1783,6 +1794,13 @@ pub async fn prepare(
             audio: PreparedAudio::File(path),
             cached: true,
         });
+    }
+
+    if cache.has_active(video_id) {
+        return Err(
+            "this track is already being downloaded; wait for it to finish or restart it"
+                .to_string(),
+        );
     }
 
     let format = resolver.resolve(video_id, None).await?;

@@ -424,10 +424,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun unpairDesktop() {
-        desktop.address = ""
-        desktop.token = ""
-        desktop.fingerprint = ""
-        notice = "The desktop is forgotten"
+        runCatching {
+            desktop.address = ""
+            desktop.token = ""
+            desktop.fingerprint = ""
+        }.onSuccess {
+            notice = "The desktop is forgotten"
+        }.onFailure { error ->
+            Log.e("Vynl", "unpair failed", error)
+            notice = "The desktop could not be forgotten"
+        }
     }
 
     fun syncLibrary() {
@@ -526,8 +532,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             withContext(Dispatchers.IO) {
                                 store.setAudioPath(track.id, audioDest.absolutePath, m.mtime)
                             }
+                            done += 1
+                        } else {
+                            failed += 1
                         }
-                        done += 1
                         val ratio = done / toFetch.size.toFloat().coerceAtLeast(1f)
                         _syncProgress.value = ratio
                         syncStage = "Downloading $done of ${toFetch.size}"

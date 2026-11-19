@@ -79,7 +79,7 @@ data class PairingPayload(
 )
 
 fun isLanHost(value: String): Boolean {
-    if (value.contains('@')) return false
+    if (value.contains('@') || value.contains('/')) return false
     val stripped = value.removePrefix("http://").removePrefix("https://").substringBefore('/').trim()
     if (stripped.contains('@')) return false
     val host = when {
@@ -119,9 +119,17 @@ fun parsePairingPayload(raw: String): PairingPayload? {
     val host = uri.getQueryParameter("h")?.trim().orEmpty()
     val pin = uri.getQueryParameter("pin")?.trim().orEmpty()
     if (host.isEmpty() || pin.isEmpty()) return null
+    if (!host.matches(Regex("^[A-Za-z0-9.:\\-\\[\\]]+$"))) return null
+    if (!host.all { it != '/' && it != '?' && it != '#' && it != '@' }) return null
     if (!isLanHost(host)) return null
 
     val port = uri.getQueryParameter("p")?.trim().orEmpty()
+    if (port.isNotEmpty()) {
+        val parsed = port.toIntOrNull()
+        if (parsed == null || parsed !in 1..65535 || !port.matches(Regex("^[0-9]{1,5}$"))) {
+            return null
+        }
+    }
     val fp = uri.getQueryParameter("fp")?.trim().orEmpty().lowercase()
     if (fp.isNotEmpty() && !fp.matches(Regex("^[0-9a-f]{64}$"))) return null
 

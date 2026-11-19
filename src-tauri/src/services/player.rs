@@ -1178,7 +1178,6 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                         if request.generation < playback_generation {
                             PlayerResp::Ok
                         } else {
-                            playback_generation = request.generation;
                             pending_resume = None;
                             if handle.is_none()
                                 && let Ok((o, h)) = OutputStream::try_default()
@@ -1207,6 +1206,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                 request.preserve_pause,
                             ) {
                                 Ok(total) => {
+                                    playback_generation = request.generation;
                                     active_generation = request.generation;
                                     seek_floor = seek_floor_for(start);
                                     current_path = Some(request.path);
@@ -1321,6 +1321,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                     eprintln!("device change: could not resume {path}: {e}");
                                     emit_stream_error(&path, &e, generation);
                                     seek_floor = None;
+                                    if sink.is_none() {
+                                        PAUSED.store(false, Ordering::Relaxed);
+                                    }
                                     PlayerResp::Ok
                                 }
                             }
@@ -1355,7 +1358,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                             if let Some(out) = &fading {
                                 out.track.sink.pause();
                             }
-                            if sink.as_ref().is_none_or(|track| !track.sink.empty())
+                            if sink.as_ref().is_some_and(|track| !track.sink.empty())
                                 || fading.as_ref().is_some_and(|out| !out.track.sink.empty())
                             {
                                 PAUSED.store(true, Ordering::Relaxed);
@@ -1422,6 +1425,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                             Err(e) => PlayerResp::Err(e),
                                         }
                                     }
+                                    Some(path) if path.starts_with("ytm:") => {
+                                        pending_seek = None;
+                                        PlayerResp::Err(
+                                            "seek on an ended catalogue track is not supported — play it again".into(),
+                                        )
+                                    }
                                     _ => {
                                         pending_seek = Some((time, generation));
                                         PlayerResp::Ok
@@ -1487,6 +1496,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                         let token = device_handoff_token;
                         let resume_pos = sink
                             .as_ref()
+                            .filter(|t| !t.sink.empty())
                             .map(|t| reported_pos(Some(t), seek_floor))
                             .or_else(|| pending_resume.as_ref().map(|(_, pos)| *pos));
                         let reopened = stop_playback_for_device_change(
@@ -1551,6 +1561,9 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                             );
                                             emit_stream_error(&path, &e, generation);
                                             seek_floor = None;
+                                            if sink.is_none() {
+                                                PAUSED.store(false, Ordering::Relaxed);
+                                            }
                                         }
                                     }
                                 }
@@ -1563,6 +1576,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                 );
                                 pending_resume = None;
                                 seek_floor = None;
+                                PAUSED.store(false, Ordering::Relaxed);
                             }
                             None => {
                                 pending_resume = None;
@@ -1575,7 +1589,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
         }
         if fading
             .as_ref()
-            .is_some_and(|out| out.track.sink.get_pos() >= out.until)
+            .is_some_and(|out| out.track.sink.empty() || out.track.sink.get_pos() >= out.until)
         {
             stop_fading_out(&mut fading);
         }

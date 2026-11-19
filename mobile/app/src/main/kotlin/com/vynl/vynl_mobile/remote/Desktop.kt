@@ -149,6 +149,7 @@ class Desktop(context: Context) {
             val editor = prefs.edit()
             SecurePrefs.putString(editor, KEY_FINGERPRINT, value.trim().lowercase())
             editor.apply()
+            http.connectionPool.evictAll()
         }
 
     val paired: Boolean

@@ -432,12 +432,14 @@ fn mirror_taste_to_liked(
     entries: &[crate::services::taste::TasteEntry],
     app: &AppHandle,
 ) -> Result<(), String> {
-    let stored = crate::services::taste::load(user_data_dir);
-    let before: std::collections::HashSet<String> = stored
-        .iter()
-        .filter(|entry| entry.liked)
-        .map(|entry| format!("ytm:{}", entry.track.id))
-        .collect();
+    let before: std::collections::HashSet<String> =
+        crate::services::taste::locked(user_data_dir, || {
+            crate::services::taste::load(user_data_dir)
+                .iter()
+                .filter(|entry| entry.liked)
+                .map(|entry| format!("ytm:{}", entry.track.id))
+                .collect()
+        });
     let after: std::collections::HashSet<String> = entries
         .iter()
         .filter(|entry| entry.liked)

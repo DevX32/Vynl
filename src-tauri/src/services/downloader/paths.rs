@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::commands::types::{AudioFormat, TrackMeta};
 
 pub(crate) fn tmp_dir(user_data_dir: &Path) -> PathBuf {
-    let d = user_data_dir.join("tmp");
+    let d = user_data_dir.join("tmp").join("downloads");
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -47,15 +47,24 @@ pub fn sanitize(name: &str) -> String {
         return "track".to_string();
     }
     let truncated: String = trimmed.chars().take(150).collect();
-    let base = truncated.split('.').next().unwrap_or("").trim();
+    let after_truncate: String = truncated.trim_end_matches(['.', ' ']).to_string();
+    if after_truncate.is_empty() {
+        return "track".to_string();
+    }
+    let base = after_truncate
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
     let reserved = [
         "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
         "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
     ];
     if reserved.contains(&base.to_ascii_uppercase().as_str()) {
-        return format!("_{truncated}");
+        return format!("_{after_truncate}");
     }
-    truncated
+    after_truncate
 }
 
 pub fn render_pattern(pattern: &str, t: &TrackMeta) -> String {

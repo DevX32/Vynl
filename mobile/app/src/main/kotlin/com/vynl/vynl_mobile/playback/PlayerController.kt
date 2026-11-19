@@ -414,6 +414,7 @@ class PlayerController(
 
     fun playAt(index: Int) {
         if (index !in playlist.indices) return
+        bumpQueueVersion()
         scope.launch {
             queueStart = index
             try {

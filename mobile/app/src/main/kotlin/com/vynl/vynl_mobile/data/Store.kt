@@ -24,8 +24,14 @@ class Store(context: Context) {
         return File(folder, "${safeName(trackId)}.$safeExt")
     }
 
-    private fun safeName(value: String): String =
-        value.replace(Regex("[^A-Za-z0-9_\\-]"), "_").take(64)
+    private fun safeName(value: String): String {
+        val sanitized = value.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48)
+        if (sanitized == value) return sanitized
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+        val hex = digest.joinToString("") { "%02x".format(it) }.take(16)
+        return "${sanitized}_$hex".take(64)
+    }
 
     private class Helper(context: Context) :
         SQLiteOpenHelper(context, "vynl.db", null, SCHEMA_VERSION) {
@@ -580,6 +586,14 @@ class Store(context: Context) {
 
     private fun trackKey(track: CatalogueTrack): String = "ytm:${track.id.trim()}"
 
+    private fun isDesktopPlaylist(id: String): Boolean {
+        if (id.startsWith("dt-")) return true
+        return writableDb().rawQuery(
+            "SELECT 1 FROM desktop_playlists WHERE playlist_id = ?",
+            arrayOf(id),
+        ).use { cursor -> cursor.moveToFirst() }
+    }
+
     @Synchronized
     fun replaceDesktopPlaylists(lists: List<DesktopPlaylist>, protect: Set<String> = emptySet()) {
         rekeyLegacyDtPlaylists()
@@ -870,6 +884,7 @@ class Store(context: Context) {
         }
     }
 
+    @Synchronized
     fun findEquivalentPlaylist(name: String, trackIds: Set<String>): LocalPlaylist? {
         val wanted = name.trim().lowercase()
         var best: LocalPlaylist? = null
@@ -881,6 +896,7 @@ class Store(context: Context) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
                 if (!name.trim().lowercase().equals(wanted)) continue
+                if (id == "liked" || isDesktopPlaylist(id)) continue
                 val ids = mutableSetOf<String>()
                 readableDb().rawQuery(
                     "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?",
@@ -942,18 +958,48 @@ class Store(context: Context) {
         }
     }
 
+    @Synchronized
     fun snapshot(id: String): PlaylistSnapshot? {
-        val pl = playlist(id) ?: return null
-        val db = readableDb()
-        val marks = readMarks(db, id)
-        val ordered = readTrackKeys(db, id)
-        return PlaylistSnapshot(
-            name = pl.name,
-            createdAt = pl.createdAt,
-            updatedAt = pl.updatedAt,
-            orderedTrackIds = ordered,
-            marks = marks,
-        )
+        val db = writableDb()
+        db.beginTransaction()
+        try {
+            val pl = db.rawQuery(
+                """
+                SELECT p.id, p.name, p.created_at, p.updated_at,
+                       (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id)
+                FROM playlists p WHERE p.id = ?
+                """.trimIndent(),
+                arrayOf(id),
+            ).use { cursor ->
+                if (!cursor.moveToNext()) {
+                    null
+                } else {
+                    val name = cursor.getString(1)
+                    LocalPlaylist(
+                        id = cursor.getString(0),
+                        name = name,
+                        createdAt = cursor.getLong(2),
+                        updatedAt = cursor.getLong(3),
+                        trackCount = cursor.getInt(4),
+                    )
+                }
+            } ?: run {
+                db.endTransaction()
+                return null
+            }
+            val marks = readMarks(db, id)
+            val ordered = readTrackKeys(db, id)
+            db.setTransactionSuccessful()
+            return PlaylistSnapshot(
+                name = pl.name,
+                createdAt = pl.createdAt,
+                updatedAt = pl.updatedAt,
+                orderedTrackIds = ordered,
+                marks = marks,
+            )
+        } finally {
+            db.endTransaction()
+        }
     }
 
     @Synchronized
@@ -1112,6 +1158,7 @@ class Store(context: Context) {
         return null
     }
 
+    @Synchronized
     fun syncPayload(id: String): SyncPlaylistPayload? {
         val playlist = playlist(id) ?: return null
         val db = readableDb()

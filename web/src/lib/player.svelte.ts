@@ -192,8 +192,20 @@ function resetCrossfade(): void {
 
 function handleStreamError(event: StreamErrorEvent): void {
   const np = getCurrentTrack();
-  if (!np || catalogueIdOf(np.path) !== event.videoId) return;
-  pendingStreamError = event;
+  if (!np) return;
+  if (catalogueIdOf(np.path) !== event.videoId) return;
+  if (!np.playing) {
+    pendingStreamError = event;
+    return;
+  }
+  updatePlaying(false);
+  updateMediaSession();
+  consecutivePlayFailures += 1;
+  setPlayError(friendlyError(event.message, t("error.couldNotPlay")));
+  if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
+    return;
+  }
+  scheduleRetry(np.id);
 }
 
 function handleTick(tick: PlaybackTick): void {
@@ -652,6 +664,10 @@ function maybeStartCrossfade(position: number): boolean {
     })
     .catch((error) => {
       console.warn("[vynl] crossfade failed:", error);
+      if (playGeneration === generation && generation > 0) {
+        playGeneration = generation - 1;
+      }
+      resetCrossfade();
     });
 
   return true;

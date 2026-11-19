@@ -3,6 +3,8 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="vynl.xml" />
         <exclude domain="sharedpref" path="vynl_cloud.xml" />
+        <exclude domain="sharedpref" path="vynl_pending_tombstones.xml" />
+        <exclude domain="sharedpref" path="vynl_avatar.xml" />
         <exclude domain="database" path="vynl.db" />
         <exclude domain="database" path="vynl.db-shm" />
         <exclude domain="database" path="vynl.db-wal" />
@@ -11,6 +13,8 @@
     <device-transfer>
         <exclude domain="sharedpref" path="vynl.xml" />
         <exclude domain="sharedpref" path="vynl_cloud.xml" />
+        <exclude domain="sharedpref" path="vynl_pending_tombstones.xml" />
+        <exclude domain="sharedpref" path="vynl_avatar.xml" />
         <exclude domain="database" path="vynl.db" />
         <exclude domain="database" path="vynl.db-shm" />
         <exclude domain="database" path="vynl.db-wal" />

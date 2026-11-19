@@ -208,6 +208,14 @@ class Sync(context: Context) {
         val known = mutableSetOf<String>()
         known += folded.staleIds
 
+        if (folded.staleIds.isNotEmpty()) {
+            for (staleId in folded.staleIds) {
+                runCatching { tombstone(staleId) }
+                    .onFailure { failed += 1 }
+                store.deletePlaylist(staleId)
+            }
+        }
+
         for (row in rows) {
             val canonical = row.optString("local_id")
             if (canonical.isBlank()) continue

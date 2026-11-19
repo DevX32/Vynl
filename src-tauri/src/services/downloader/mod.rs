@@ -1069,6 +1069,7 @@ async fn process_track(
         user_data_dir,
         collection,
         used_url.as_deref(),
+        settings.overwrite,
     )
     .await
     {
@@ -1546,12 +1547,12 @@ async fn move_tagged_to_output(
     user_data_dir: &Path,
     collection: &Collection,
     used_url: Option<&str>,
+    overwrite: bool,
 ) -> Result<(), String> {
     tokio::fs::create_dir_all(final_path.parent().unwrap_or(Path::new(".")))
         .await
         .map_err(|e| e.to_string())?;
 
-    let overwrite = crate::services::settings::get_settings(user_data_dir).overwrite;
     if final_path.exists() {
         if overwrite {
             let _ = std::fs::remove_file(final_path);
