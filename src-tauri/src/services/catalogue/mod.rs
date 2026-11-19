@@ -301,7 +301,7 @@ impl CatalogueService {
                 let name = playlist_name
                     .map(|name| name.trim().to_string())
                     .filter(|name| !name.is_empty())
-                    .unwrap_or_else(|| "Liked Songs".to_string());
+                    .ok_or_else(|| "choose a playlist".to_string())?;
                 let playlist = playlist_by_name(output, &name)?;
                 Some(playlists::add_local_replacing_stream(
                     output,
@@ -708,7 +708,7 @@ pub async fn catalogue_save_to_playlist(
             let name = playlist_name
                 .map(|name| name.trim().to_string())
                 .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| "Liked Songs".to_string());
+                .ok_or_else(|| "choose a playlist".to_string())?;
             playlist_by_name(&output, &name)?.id
         }
     };

@@ -52,13 +52,11 @@ pub fn bound_public_client(url: &str) -> Result<reqwest::Client, String> {
     }
     let addrs = public_addrs(&host)
         .ok_or_else(|| "host resolves to a private or reserved address".to_string())?;
-    let builder = addrs.iter().fold(
-        reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(10))
-            .timeout(std::time::Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::none()),
-        |builder, addr| builder.resolve(&host, *addr),
-    );
+    let builder = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve_to_addrs(&host, &addrs);
     builder
         .build()
         .map_err(|e| format!("could not build the fetch client: {e}"))

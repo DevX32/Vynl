@@ -244,6 +244,20 @@ class Sync(context: Context) {
                     store.deletePlaylist(staleId)
                 } else {
                     failed += 1
+                    val lossless = canonicalId != null && runCatching {
+                        val staleTracks = store.snapshot(staleId)?.orderedTrackIds.orEmpty()
+                        val canonicalTracks =
+                            store.snapshot(canonicalId)?.orderedTrackIds.orEmpty().toHashSet()
+                        staleTracks.isNotEmpty() && staleTracks.all { it in canonicalTracks }
+                    }.getOrDefault(false)
+                    if (lossless) {
+                        store.deletePlaylist(staleId)
+                    }
+                    runCatching {
+                        pendingTombstonePrefs.edit()
+                            .putLong(staleId, System.currentTimeMillis())
+                            .apply()
+                    }
                 }
             }
         }

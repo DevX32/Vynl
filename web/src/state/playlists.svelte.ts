@@ -18,6 +18,7 @@ let _selecting = $state(false);
 let _selectGeneration = 0;
 let _metaGeneration = 0;
 let _refreshPromise: Promise<void> | null = null;
+let _refreshAgain = false;
 
 const currentPlaylists = $derived(_meta);
 const currentPlaylist = $derived(_current);
@@ -41,6 +42,7 @@ async function fetchAll(generation: number): Promise<void> {
   const map: Record<string, Playlist> = {};
   await Promise.all(
     _meta.map(async (pl) => {
+      if (generation !== _metaGeneration) return;
       try {
         const p = await vynl.getPlaylist(pl.id);
         if (p) map[p.id] = p;
@@ -67,7 +69,10 @@ export function refreshPlaylistMeta(): Promise<void> {
 }
 
 export function refreshPlaylists(): Promise<void> {
-  if (_refreshPromise) return _refreshPromise;
+  if (_refreshPromise) {
+    _refreshAgain = true;
+    return _refreshPromise;
+  }
 
   const generation = ++_metaGeneration;
   const promise = (async () => {
@@ -79,7 +84,7 @@ export function refreshPlaylists(): Promise<void> {
         const fresh = _all[_selected] ?? null;
         if (fresh) {
           _current = fresh;
-        } else if (!_selecting) {
+        } else if (!_selecting && !_meta.some((m) => m.id === _selected)) {
           _selected = null;
           _current = null;
         }
@@ -88,6 +93,10 @@ export function refreshPlaylists(): Promise<void> {
       console.warn("refreshPlaylists failed:", e);
     } finally {
       _refreshPromise = null;
+      if (_refreshAgain) {
+        _refreshAgain = false;
+        void refreshPlaylists();
+      }
     }
   })();
   _refreshPromise = promise;
@@ -110,15 +119,13 @@ export async function selectPlaylist(id: string | null): Promise<void> {
     console.warn("selectPlaylist failed:", e);
     if (gen === _selectGeneration) _current = null;
   } finally {
-    if (gen === _selectGeneration) _selecting = false;
+    _selecting = false;
   }
 }
 
 export async function createPlaylist(name: string): Promise<Playlist> {
   const pl = await vynl.createPlaylist(name);
-  _selectGeneration += 1;
-  _selected = pl.id;
-  _current = pl;
+  setCurrentPlaylist(pl);
   await refreshPlaylists();
   return pl;
 }
@@ -251,6 +258,7 @@ export async function saveStreamToPlaylist(
   track: CatalogueTrack,
   playlistId?: string | null,
   playlistName?: string | null,
+  refresh = true,
 ): Promise<Playlist> {
   const pl = await vynl.catalogueSaveToPlaylist(
     track,
@@ -258,7 +266,7 @@ export async function saveStreamToPlaylist(
     playlistName ?? null,
   );
   syncAfterMutation(pl);
-  await refreshMeta();
+  if (refresh) await refreshMeta();
   return pl;
 }
 
@@ -420,7 +428,7 @@ export function getPlaylistCustomCover(id: string): string | null {
 
 const _coversCache = new Map<
   string,
-  { failed: Set<string>; revision: number; result: string[] }
+  { failed: Set<string>; revision: number; meta: number; result: string[] }
 >();
 
 export function getPlaylistCovers(id: string): string[] {
@@ -428,11 +436,12 @@ export function getPlaylistCovers(id: string): string[] {
   if (!pl) return [];
   const cached = _coversCache.get(id);
   const revision = getLibraryRevision();
-  if (cached && cached.failed === _failedCovers && cached.revision === revision) {
+  const meta = _metaGeneration;
+  if (cached && cached.failed === _failedCovers && cached.revision === revision && cached.meta === meta) {
     return cached.result;
   }
   const result = resolvePlaylistCovers(pl.cover, tracksOf(pl));
-  _coversCache.set(id, { failed: _failedCovers, revision, result });
+  _coversCache.set(id, { failed: _failedCovers, revision, meta, result });
   if (_coversCache.size > 128) {
     const oldest = _coversCache.keys().next().value;
     if (oldest !== undefined) _coversCache.delete(oldest);

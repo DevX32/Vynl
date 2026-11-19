@@ -406,6 +406,12 @@
 
       await refreshPlaylists();
       if (gen !== dlGeneration) return;
+      if (showPlaylistPicker) {
+        const merged = [...new Set([...pendingPaths, ...existingPaths])];
+        pendingPaths = merged;
+        return;
+      }
+      saveHint = null;
       pendingPaths = existingPaths;
       pendingCollectionTitle = dlCollection.title;
       pickerBusy = false;
@@ -490,7 +496,8 @@
       const result = await savePathsToPlaylist(playlistId, pendingPaths);
       await refreshPlaylists();
       const after = getCurrentPlaylists().find((p) => p.id === playlistId);
-      const delta = (after?.trackCount ?? 0) - (before?.trackCount ?? 0);
+      const delta = after ? after.trackCount - (before?.trackCount ?? 0) : result.added;
+      const added = Math.max(0, delta);
       if (result.failed > 0 && result.added === 0) {
         toasts.error(t("vault.playlistSaveFailed"));
       } else if (result.failed > 0) {
@@ -498,7 +505,7 @@
       } else {
         notifyPlaylistSaved(
           after?.name ?? before?.name ?? "",
-          delta,
+          added,
         );
       }
     } catch (e) {
@@ -511,9 +518,10 @@
   async function createAndAddPlaylist(name: string): Promise<void> {
     if (pickerBusy) return;
     pickerBusy = true;
+    const targetPaths = [...pendingPaths];
     try {
       const pl = await createPlaylist(name.trim() || "Untitled");
-      const result = await savePathsToPlaylist(pl.id, pendingPaths);
+      const result = await savePathsToPlaylist(pl.id, targetPaths);
       await refreshPlaylists();
       const added = Math.max(
         getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0,

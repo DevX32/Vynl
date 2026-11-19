@@ -205,6 +205,9 @@ async fn do_import(
     let requested_id = playlist_id
         .map(|id| id.trim().to_string())
         .filter(|id| !id.is_empty());
+    if requested_id.as_deref() == Some(crate::services::sync::LIKED_PLAYLIST_ID) {
+        return Err("the Liked Songs playlist is managed automatically".into());
+    }
     let mut created_new = false;
     let playlist = match requested_id {
         Some(id) => {

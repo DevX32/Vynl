@@ -142,6 +142,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var authBusy by mutableStateOf(false)
         private set
     var syncBusy by mutableStateOf(false)
+    @Volatile
+    private var pendingSync = false
         private set
     var authError by mutableStateOf<String?>(null)
         private set
@@ -197,6 +199,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var syncStage by mutableStateOf("Syncing library")
         private set
     private val _syncProgress = MutableStateFlow(0f)
+    private val lyricMiss = mutableSetOf<String>()
     val syncProgress: StateFlow<Float> = _syncProgress.asStateFlow()
 
     init {
@@ -305,7 +308,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncNow(silent: Boolean = false) {
-        if (syncBusy) return
+        if (syncBusy) {
+            pendingSync = true
+            return
+        }
         if (!sync.status.signedIn) {
             if (!silent) notice = "Sign in to Vynl first"
             return
@@ -332,11 +338,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (!silent) notice = friendly(error)
             } finally {
                 syncBusy = false
+                if (pendingSync && sync.status.signedIn) {
+                    pendingSync = false
+                    syncNow(silent = true)
+                } else {
+                    pendingSync = false
+                }
             }
         }
     }
 
     private fun syncPlaylist(id: String) {
+        if (id == "liked") return
         if (!sync.status.signedIn) return
         safeLaunch {
             try {
@@ -359,6 +372,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun tombstonePrefs() =
         app.getSharedPreferences("vynl_pending_tombstones", android.content.Context.MODE_PRIVATE)
+
+    private fun isImageFile(file: java.io.File): Boolean {
+        if (file.length() < 4L) return false
+        val head = ByteArray(16)
+        val read = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(-1)
+        if (read < 4) return false
+        val jpeg = head[0] == 0xFF.toByte() && head[1] == 0xD8.toByte()
+        val png = head[0] == 0x89.toByte() && head[1] == 0x50.toByte()
+            && head[2] == 0x4E.toByte() && head[3] == 0x47.toByte()
+        val gif = head[0] == 0x47.toByte() && head[1] == 0x49.toByte() && head[2] == 0x46.toByte()
+        val webp = head[0] == 0x52.toByte() && head[1] == 0x49.toByte()
+            && head[2] == 0x46.toByte() && head[3] == 0x46.toByte()
+        return jpeg || png || gif || webp
+    }
 
     private suspend fun retryPendingTombstonesNow() {
         val pending = tombstonePrefs().all.keys
@@ -476,8 +503,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val previous = existing[track.id]
                     val lyrics = if (previous != null && previous.mtime == track.mtime && !previous.lyrics.isNullOrBlank()) {
                         previous.lyrics
+                    } else if (lyricMiss.contains(track.id)) {
+                        null
                     } else {
-                        desktop.syncedLyrics(track.id)?.text
+                        desktop.syncedLyrics(track.id)?.text ?: run {
+                            lyricMiss += track.id
+                            null
+                        }
                     }
                     val ext = track.ext.ifBlank { manifest[track.id]?.ext ?: "m4a" }
                     val coverValue = track.cover
@@ -532,6 +564,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         })
                         if (audio != null && audio > 0L) {
                             withContext(Dispatchers.IO) {
+                                existing[track.id]?.audioPath
+                                    ?.takeIf { it.isNotEmpty() && it != audioDest.absolutePath }
+                                    ?.let { java.io.File(it).delete() }
                                 store.setAudioPath(track.id, audioDest.absolutePath, m.mtime)
                             }
                             done += 1
@@ -542,12 +577,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         _syncProgress.value = ratio
                         syncStage = "Downloading $done of ${toFetch.size}"
                         val coverDest = store.coverFile(track.id, "jpg")
+                        if (coverDest.exists() && !isImageFile(coverDest)) {
+                            coverDest.delete()
+                        }
                         if (m.hasCover && !coverDest.exists()) {
                             val downloaded = desktop.downloadCover(track.id, coverDest)
-                            if (downloaded == true && coverDest.exists()) {
+                            if (downloaded == true && coverDest.exists() && isImageFile(coverDest)) {
                                 withContext(Dispatchers.IO) {
                                     store.setCoverPath(track.id, coverDest.absolutePath)
                                 }
+                            } else {
+                                coverDest.delete()
                             }
                         }
                     } catch (error: Exception) {
@@ -626,8 +666,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     playlists
                 }
 
-                val pendingTombstoneIds = withContext(Dispatchers.IO) {
-                    tombstonePrefs().all.keys
+                var pendingTombstoneIds: Set<String> = withContext(Dispatchers.IO) {
+                    tombstonePrefs().all.keys.toSet()
+                }
+                if (liked.isNotEmpty() && !likedFailed && pendingTombstoneIds.contains("liked")) {
+                    withContext(Dispatchers.IO) {
+                        tombstonePrefs().edit().remove("liked").apply()
+                    }
+                    pendingTombstoneIds = pendingTombstoneIds - "liked"
                 }
                 val hadLocalLiked = withContext(Dispatchers.IO) {
                     store.playlist("liked") != null
@@ -691,11 +737,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val bytes = withContext(Dispatchers.IO) {
                 val audioDir = java.io.File(getApplication<Application>().filesDir, "music/audio")
                 val coversDir = java.io.File(getApplication<Application>().filesDir, "music/covers")
-                val partCutoff = System.currentTimeMillis() - 5 * 60_000L
-                for (dir in listOf(audioDir, coversDir)) {
-                    dir.listFiles()?.forEach { file ->
-                        if (file.name.endsWith(".part") && file.lastModified() < partCutoff) {
-                            file.delete()
+                val partCutoff = System.currentTimeMillis() - 30 * 60_000L
+                val sweepAllowed = !syncBusy && cachingTracks.isEmpty()
+                if (sweepAllowed) {
+                    for (dir in listOf(audioDir, coversDir)) {
+                        dir.listFiles()?.forEach { file ->
+                            if (file.name.endsWith(".part") && file.lastModified() < partCutoff) {
+                                file.delete()
+                            }
                         }
                     }
                 }

@@ -612,6 +612,13 @@ impl StreamCache {
                 if state.index.entries.values().any(|e| e.file == name) {
                     continue;
                 }
+                if state
+                    .active
+                    .values()
+                    .any(|files| files.iter().any(|f| f == &name))
+                {
+                    continue;
+                }
                 let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
                 if std::fs::remove_file(entry.path()).is_ok() {
                     freed += size;
@@ -706,16 +713,8 @@ impl StreamCache {
             .collect();
         let file_name = format!("{}-{}-{}.{}", safe_id, now_secs(), serial, ext);
         let path = self.dir.join(&file_name);
-        let file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .read(true)
-            .write(true)
-            .open(&path)
-            .map_err(|e| format!("could not create the stream cache: {e}"))?;
-        drop(file);
-
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+
         let has_active = state
             .active
             .get(video_id)
@@ -724,6 +723,14 @@ impl StreamCache {
             Some(entry) if !entry.complete && !has_active => Some(entry.file.clone()),
             _ => None,
         };
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+            .map_err(|e| format!("could not create the stream cache: {e}"))?;
+        drop(file);
         if !state
             .index
             .entries

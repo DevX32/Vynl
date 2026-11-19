@@ -486,6 +486,12 @@ pub fn mux(
     if packets.is_empty() {
         return Err("No packets to write.".into());
     }
+    if let Some(packet) = packets.iter().find(|packet| packet.data.len() > 65_025) {
+        return Err(format!(
+            "Packet too large to mux ({} bytes).",
+            packet.data.len()
+        ));
+    }
 
     let mut writer = OggWriter::new();
 

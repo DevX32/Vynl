@@ -191,6 +191,9 @@ fn fold_equivalent_rows(rows: Vec<SyncRow>) -> FoldedRows {
         if row.deleted_at.is_some() {
             continue;
         }
+        if row.local_id == LIKED_PLAYLIST_ID {
+            continue;
+        }
         let key = normalized_name(&row.name);
         if key.is_empty() {
             continue;
@@ -1366,43 +1369,6 @@ pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
     let _ = upsert_rows(data_dir, &[playlist_value_push(&session, playlist, &maps)]).await;
 }
 
-fn signature_hits(row_tracks: &[SyncTrack], signature: &[String]) -> usize {
-    let wanted: std::collections::HashSet<String> = signature.iter().map(|s| norm_id(s)).collect();
-    if wanted.is_empty() {
-        return 0;
-    }
-    row_tracks
-        .iter()
-        .map(|track| norm_id(&track.id))
-        .filter(|id| wanted.contains(id))
-        .collect::<std::collections::HashSet<_>>()
-        .len()
-}
-
-fn signature_matches(row_tracks: &[SyncTrack], signature: &[String]) -> bool {
-    if signature.is_empty() || row_tracks.is_empty() {
-        return false;
-    }
-    let wanted_len = signature
-        .iter()
-        .map(|s| norm_id(s))
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-    let row_len = row_tracks
-        .iter()
-        .map(|track| norm_id(&track.id))
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-    let overlap = signature_hits(row_tracks, signature);
-    let wanted_needed = (wanted_len as f64 * 0.8).ceil() as usize;
-    let row_needed = (row_len.min(wanted_len) as f64 * 0.8).ceil() as usize;
-    overlap >= wanted_needed && overlap >= row_needed
-}
-
-fn norm_id(id: &str) -> String {
-    util::norm_path_key(id)
-}
-
 pub(crate) fn record_pending_tombstone(
     data_dir: &Path,
     id: &str,
@@ -1434,7 +1400,6 @@ pub async fn tombstone_playlist_remote(data_dir: &Path, id: &str) {
     };
     let at = entry.deleted_at;
     let name = entry.name.clone();
-    let signature = entry.signature.clone();
     if read_session(data_dir).is_none() {
         eprintln!(
             "[Vynl sync] playlist deletion recorded locally; not signed in — will sync later"
@@ -1449,7 +1414,6 @@ pub async fn tombstone_playlist_remote(data_dir: &Path, id: &str) {
         }
     };
     let own_row = patch_remote_tombstone(data_dir, &session, id, at).await;
-    patch_equivalent_tombstones(data_dir, &session, &name, &signature, at).await;
     eprintln!(
         "[Vynl sync] playlist {name} deleted (own row: {})",
         if own_row {
@@ -1458,39 +1422,6 @@ pub async fn tombstone_playlist_remote(data_dir: &Path, id: &str) {
             "failed — kept pending"
         },
     );
-}
-
-async fn patch_equivalent_tombstones(
-    data_dir: &Path,
-    session: &Session,
-    name: &str,
-    signature: &[String],
-    deleted_at: i64,
-) -> bool {
-    if name.trim().is_empty() || signature.is_empty() {
-        return true;
-    }
-    let wanted_name = name.trim().to_lowercase();
-    let Ok(rows) = fetch_rows(data_dir).await else {
-        return false;
-    };
-    for row in &rows {
-        if row.deleted_at.is_some() {
-            continue;
-        }
-        let same_name = !wanted_name.is_empty() && row.name.trim().to_lowercase() == wanted_name;
-        let same_playlist = same_name
-            && signature.len() >= 2
-            && row.tracks.len() >= 2
-            && signature_matches(&row.tracks, signature)
-            && row.created_at <= deleted_at;
-        if same_playlist
-            && !patch_remote_tombstone(data_dir, session, &row.local_id, deleted_at).await
-        {
-            return false;
-        }
-    }
-    true
 }
 
 fn row_to_playlist(row: &SyncRow) -> Playlist {
@@ -1528,16 +1459,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     let mut tombstone_succeeded: Vec<String> = Vec::with_capacity(pending.len());
     if !pending.is_empty() {
         for entry in &pending {
-            if patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await
-                && patch_equivalent_tombstones(
-                    data_dir,
-                    &session,
-                    &entry.name,
-                    &entry.signature,
-                    entry.deleted_at,
-                )
-                .await
-            {
+            if patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
                 tombstone_succeeded.push(entry.id.clone());
             }
         }
@@ -1555,24 +1477,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
             if row.deleted_at.is_some() {
                 continue;
             }
-            let wanted = normalized_name(&row.name);
             let forced = pending
                 .iter()
-                .filter(|entry| {
-                    if entry.id == row.local_id {
-                        return true;
-                    }
-                    if entry.name.is_empty() || normalized_name(&entry.name) != wanted {
-                        return false;
-                    }
-                    if row.created_at > entry.deleted_at {
-                        return false;
-                    }
-                    if entry.signature.len() < 2 || row.tracks.len() < 2 {
-                        return false;
-                    }
-                    signature_matches(&row.tracks, &entry.signature)
-                })
+                .filter(|entry| entry.id == row.local_id)
                 .map(|entry| entry.deleted_at)
                 .max();
             if let Some(at) = forced {

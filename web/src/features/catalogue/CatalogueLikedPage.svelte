@@ -193,13 +193,18 @@
     let failed = 0;
     for (const track of list) {
       try {
-        await saveStreamToPlaylist(track, playlistId, playlistName ?? undefined);
+        await saveStreamToPlaylist(track, playlistId, playlistName ?? undefined, false);
         done += 1;
       } catch (error) {
         failed += 1;
         console.warn("catalogue bulk add failed for", track.id, error);
       }
       bulkDone = done + failed;
+    }
+    try {
+      await refreshAfterCatalogueSave();
+    } catch (error) {
+      console.warn("catalogue bulk add: refresh failed:", error);
     }
     bulkBusy = false;
     bulkDone = 0;

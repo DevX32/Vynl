@@ -348,12 +348,25 @@ class Desktop(context: Context) {
                         if (total > 0) onProgress(read.toFloat() / total)
                     }
                 }
-                if (dest.exists()) {
-                    dest.delete()
-                }
                 if (!tmp.renameTo(dest)) {
-                    tmp.copyTo(dest, overwrite = true)
-                    tmp.delete()
+                    val staged = File(
+                        dest.parentFile ?: dest.absoluteFile.parentFile,
+                        "${dest.name}.${System.nanoTime()}.part",
+                    )
+                    try {
+                        tmp.copyTo(staged, overwrite = true)
+                        tmp.delete()
+                    } catch (error: Exception) {
+                        staged.delete()
+                        throw error
+                    }
+                    if (dest.exists()) {
+                        dest.delete()
+                    }
+                    if (!staged.renameTo(dest)) {
+                        staged.copyTo(dest, overwrite = true)
+                        staged.delete()
+                    }
                 }
                 dest.length()
             }

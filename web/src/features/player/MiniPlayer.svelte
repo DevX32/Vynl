@@ -49,9 +49,9 @@
   const MUTED_KEY = "vynl.muted";
 
   function loadVolume(): number {
-    if (typeof localStorage === "undefined") return 1;
-    const raw = Number(localStorage.getItem(VOLUME_KEY) ?? "1");
-    return Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.5;
+    if (typeof localStorage === "undefined") return 0.3;
+    const raw = Number(localStorage.getItem(VOLUME_KEY) ?? "0.3");
+    return Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.3;
   }
 
   function loadMuted(): boolean {
@@ -109,9 +109,17 @@
     sendMiniCommand({ type: "seek", value: time });
   }
 
+  let seekEnd: (() => void) | null = null;
+
+  function endSeekDrag(): void {
+    if (!seeking) return;
+    seekEnd?.();
+  }
+
   function onSeekPointerDown(e: PointerEvent): void {
     const el = e.currentTarget as HTMLDivElement;
     seeking = true;
+    el.setPointerCapture(e.pointerId);
     const target = pointerRatio(el, e.clientX);
     previewSeekAt(target);
     const move = (ev: PointerEvent): void => {
@@ -123,16 +131,26 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      seekEnd = null;
       commitSeek(value);
     };
+    seekEnd = up;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
   }
 
+  let volEnd: (() => void) | null = null;
+
+  function endVolDrag(): void {
+    if (!volDragging) return;
+    volEnd?.();
+  }
+
   function onVolumePointerDown(e: PointerEvent): void {
     const el = e.currentTarget as HTMLDivElement;
     volDragging = true;
+    el.setPointerCapture(e.pointerId);
     const move = (ev: PointerEvent): void => {
       setVolume(pointerRatio(el, ev.clientX));
     };
@@ -141,7 +159,9 @@
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      volEnd = null;
     };
+    volEnd = up;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -400,6 +420,7 @@
         aria-valuenow={Math.round(displayTime)}
         tabindex="0"
         onpointerdown={onSeekPointerDown}
+        onlostpointercapture={endSeekDrag}
       >
         <div class="rail">
           <div class="fill" style:width={`${seekRatio * 100}%`}></div>
@@ -464,6 +485,7 @@
         aria-valuenow={Math.round(volRatio * 100)}
         tabindex="0"
         onpointerdown={onVolumePointerDown}
+        onlostpointercapture={endVolDrag}
       >
         <div class="rail">
           <div class="fill" style:width={`${volRatio * 100}%`}></div>
