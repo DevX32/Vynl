@@ -496,7 +496,7 @@ fn index_version() -> u32 {
 
 struct CacheState {
     index: CacheIndex,
-    active: HashMap<String, String>,
+    active: HashMap<String, Vec<String>>,
     dirty: bool,
 }
 
@@ -621,11 +621,6 @@ impl StreamCache {
         }
     }
 
-    pub fn has_active(&self, video_id: &str) -> bool {
-        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.active.contains_key(video_id)
-    }
-
     pub fn lookup_complete(&self, video_id: &str) -> Option<PathBuf> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let entry = state.index.entries.get(video_id)?.clone();
@@ -695,7 +690,11 @@ impl StreamCache {
                 },
             );
         }
-        state.active.insert(video_id.to_string(), file_name.clone());
+        state
+            .active
+            .entry(video_id.to_string())
+            .or_default()
+            .push(file_name.clone());
         state.dirty = true;
         self.save_locked(&mut state);
         Ok((path, file_name))
@@ -738,16 +737,22 @@ impl StreamCache {
             state.dirty = true;
             self.save_locked(&mut state);
         }
-        if state.active.get(video_id).is_some_and(|f| f == file_name) {
-            state.active.remove(video_id);
+        if let Some(active) = state.active.get_mut(video_id) {
+            active.retain(|f| f != file_name);
+            if active.is_empty() {
+                state.active.remove(video_id);
+            }
         }
         let _ = std::fs::remove_file(self.dir.join(file_name));
     }
 
     pub fn finish(&self, video_id: &str, file_name: &str, complete: bool) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.active.get(video_id).is_some_and(|f| f == file_name) {
-            state.active.remove(video_id);
+        if let Some(active) = state.active.get_mut(video_id) {
+            active.retain(|f| f != file_name);
+            if active.is_empty() {
+                state.active.remove(video_id);
+            }
         }
 
         if state
@@ -1809,19 +1814,6 @@ pub async fn prepare(
             audio: PreparedAudio::File(path),
             cached: true,
         });
-    }
-
-    if cache.has_active(video_id) {
-        return Err(
-            "that track is already downloading — wait for it or restart playback".to_string(),
-        );
-    }
-
-    if cache.has_active(video_id) {
-        return Err(
-            "this track is already being downloaded; wait for it to finish or restart it"
-                .to_string(),
-        );
     }
 
     let format = resolver.resolve(video_id, None).await?;
