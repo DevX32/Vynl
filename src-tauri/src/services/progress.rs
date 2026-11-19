@@ -35,10 +35,10 @@ pub(crate) fn set_emitter(app: Option<tauri::AppHandle>) -> u64 {
 }
 
 pub(crate) fn clear_emitter(generation: u64) {
-    if let Ok(mut guard) = emitter().lock() {
-        if guard.as_ref().map(|state| state.generation) == Some(generation) {
-            guard.take();
-        }
+    if let Ok(mut guard) = emitter().lock()
+        && guard.as_ref().map(|state| state.generation) == Some(generation)
+    {
+        guard.take();
     }
 }
 

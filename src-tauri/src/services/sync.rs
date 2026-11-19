@@ -1762,11 +1762,11 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
         }
     }
 
-    if let Some(liked) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {
-        if let Err(error) = reconcile_taste(data_dir, &liked) {
-            eprintln!("sync: could not reconcile taste: {error}");
-            result.failed += 1;
-        }
+    if let Some(liked) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID)
+        && let Err(error) = reconcile_taste(data_dir, &liked)
+    {
+        eprintln!("sync: could not reconcile taste: {error}");
+        result.failed += 1;
     }
 
     Ok(result)

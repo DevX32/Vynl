@@ -1539,6 +1539,7 @@ async fn process_lyrics_lookup(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn move_tagged_to_output(
     tagged_file: &Path,
     final_path: &Path,

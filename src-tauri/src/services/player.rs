@@ -81,21 +81,20 @@ fn emit_playback_tick(
     *last_key = Some(key);
 
     let Some(app) = APP.get() else { return };
-    if has_sink && empty {
-        if let Some(track) = sink {
-            if let Some(session) = &track._session {
-                if let Some(message) = session.error() {
-                    let _ = app.emit(
-                        "vynl:player:stream-error",
-                        StreamErrorEvent {
-                            video_id: session.video_id.clone(),
-                            message,
-                            generation,
-                        },
-                    );
-                }
-            }
-        }
+    if has_sink
+        && empty
+        && let Some(track) = sink
+        && let Some(session) = &track._session
+        && let Some(message) = session.error()
+    {
+        let _ = app.emit(
+            "vynl:player:stream-error",
+            StreamErrorEvent {
+                video_id: session.video_id.clone(),
+                message,
+                generation,
+            },
+        );
     }
     let _ = app.emit(
         PLAYBACK_TICK_EVENT,
@@ -967,7 +966,7 @@ fn begin_crossfade(
     let stream = input.is_stream();
     let seek_file = !stream && start > 0.0;
     let offset = if stream {
-        Duration::from_secs_f64(start.max(0.0).min(STREAM_OFFSET_CAP_SECS))
+        Duration::from_secs_f64(start.clamp(0.0, STREAM_OFFSET_CAP_SECS))
     } else {
         Duration::ZERO
     };
@@ -1007,7 +1006,7 @@ fn install_source(
     let stream = input.is_stream();
     let seek_file = !stream && start > 0.0;
     let offset = if stream {
-        Duration::from_secs_f64(start.max(0.0).min(STREAM_OFFSET_CAP_SECS))
+        Duration::from_secs_f64(start.clamp(0.0, STREAM_OFFSET_CAP_SECS))
     } else {
         Duration::ZERO
     };

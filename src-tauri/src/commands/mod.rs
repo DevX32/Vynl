@@ -33,12 +33,12 @@ fn user_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 pub(crate) fn output_dir_from_settings(app: &AppHandle) -> Result<PathBuf, String> {
     let state = app.state::<AppState>();
     let guard = state.settings.lock().map_err(|e| e.to_string())?;
-    Ok(guard
+    guard
         .as_ref()
         .map(|s| PathBuf::from(&s.output_dir))
         .filter(|p| !p.as_os_str().is_empty())
         .or_else(dirs::audio_dir)
-        .ok_or_else(|| "No output directory is configured".to_string())?)
+        .ok_or_else(|| "No output directory is configured".to_string())
 }
 
 fn canonicalize_in_output(file: &str, canonical_output: &Path) -> Result<PathBuf, String> {
@@ -92,12 +92,11 @@ const DELETABLE_EXTS: &[&str] = &[
 fn require_deletable_path(file: &str, app: &AppHandle) -> Result<PathBuf, String> {
     let path = require_path_in_output(file, app)?;
     let canonical = fs::canonicalize(&path).unwrap_or(path);
-    if let Some(output) = output_dir_from_settings(app).ok() {
-        if let Ok(canonical_output) = fs::canonicalize(&output)
-            && canonical.starts_with(canonical_output.join("playlists"))
-        {
-            return Err("Path is inside the playlists directory".into());
-        }
+    if let Ok(output) = output_dir_from_settings(app)
+        && let Ok(canonical_output) = fs::canonicalize(&output)
+        && canonical.starts_with(canonical_output.join("playlists"))
+    {
+        return Err("Path is inside the playlists directory".into());
     }
     let ext = canonical
         .extension()
@@ -765,10 +764,7 @@ pub async fn remove_from_playlist(
         return Ok(playlist);
     }
 
-    let canonical = match require_deletable_path(&track_path, &app) {
-        Ok(path) => Some(path),
-        Err(_) => None,
-    };
+    let canonical = require_deletable_path(&track_path, &app).ok();
     let exists = canonical.as_ref().is_some_and(|path| path.exists());
     if exists {
         let canonical = canonical.as_ref().expect("canonical checked");

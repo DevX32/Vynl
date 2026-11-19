@@ -283,8 +283,7 @@ pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
     let fingerprint = tls::fingerprint(user_data_dir);
     let qr_svg = fingerprint
         .as_deref()
-        .map(|fp| qr_for_payload(&pairing_payload(&hosts, cfg.port, &cfg.pairing_pin, fp)))
-        .flatten();
+        .and_then(|fp| qr_for_payload(&pairing_payload(&hosts, cfg.port, &cfg.pairing_pin, fp)));
     MobileSyncStatus {
         enabled: cfg.enabled,
         running,
