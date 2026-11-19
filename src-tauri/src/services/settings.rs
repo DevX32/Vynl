@@ -27,17 +27,11 @@ const FIXED_FORMAT: crate::commands::types::AudioFormat = crate::commands::types
 const FIXED_BITRATE: i64 = 320;
 
 fn defaults() -> Settings {
-    let music = dirs::audio_dir().unwrap_or_default();
-    let dir = if music.exists() {
-        let vynl = music.join("Vynl");
-        let _ = fs::create_dir_all(&vynl);
-        vynl
-    } else {
-        let _ = fs::create_dir_all(&music);
-        let vynl = music.join("Vynl");
-        let _ = fs::create_dir_all(&vynl);
-        vynl
-    };
+    let music = dirs::audio_dir()
+        .or_else(|| dirs::home_dir().map(|home| home.join("Music")))
+        .unwrap_or_else(|| Path::new(".").to_path_buf());
+    let dir = music.join("Vynl");
+    let _ = fs::create_dir_all(&dir);
     let dir = dir.canonicalize().unwrap_or(dir);
     Settings {
         output_dir: dir.to_string_lossy().to_string(),

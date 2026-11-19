@@ -744,7 +744,9 @@ async fn download_track(
                 .and_then(|r| r)
             };
 
-            let _ = std::fs::remove_file(&stream);
+            if !same_file {
+                let _ = std::fs::remove_file(&stream);
+            }
 
             match encoded {
                 Ok(()) => {
@@ -837,10 +839,16 @@ fn start_cover_prefetch(
 
         if let Some(url) = cover_url {
             handles.push(tokio::spawn(async move {
+                if CANCELLED_DOWNLOAD.load(Ordering::Relaxed) {
+                    return;
+                }
                 let _permit = match semaphore.acquire().await {
                     Ok(p) => p,
                     Err(_) => return,
                 };
+                if CANCELLED_DOWNLOAD.load(Ordering::Relaxed) {
+                    return;
+                }
                 let cp = tmp.join(format!("cover-{}.jpg", sanitize_key_component(&track_id)));
                 let _ = std::fs::remove_file(&cp);
                 let success = fetch_cover(&url, &cp.to_string_lossy()).await;

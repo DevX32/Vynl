@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
@@ -114,6 +114,7 @@
   let _rollTimer: ReturnType<typeof setTimeout> | null = null;
 
   const ROLL_LOCK_MS = 450;
+  const _initialDisplayName = untrack(() => settings.displayName);
 
   function debouncedDisplayNamePatch(value: string): void {
     if (_displayNameTimer) clearTimeout(_displayNameTimer);
@@ -165,7 +166,7 @@
     <input
       class="text"
       bind:this={_displayNameInput}
-      value={settings.displayName}
+      value={_initialDisplayName}
       oninput={(e) => debouncedDisplayNamePatch(e.currentTarget.value)}
       spellcheck={false}
       placeholder={getNickname()}

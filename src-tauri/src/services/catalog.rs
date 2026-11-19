@@ -113,10 +113,11 @@ async fn fetch_embed_inner(client: &Client, url: &str, depth: u32) -> Result<Emb
         return Err(format!("Remote service responded with HTTP {status}"));
     }
 
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read body: {e}"))?;
+    let body_bytes =
+        crate::services::util::read_body_limited(resp, crate::services::util::MAX_BODY_BYTES)
+            .await?;
+    let body =
+        String::from_utf8(body_bytes).map_err(|e| format!("response was not valid text: {e}"))?;
 
     extract_embed_entity(&body)
 }
@@ -248,13 +249,36 @@ fn artists_of(entity: &Value) -> String {
         .to_string()
 }
 
-fn track_id(item: &Value, index: usize) -> String {
+fn track_id(item: &Value) -> String {
     item.get("uri")
         .and_then(|v| v.as_str())
         .and_then(|uri| uri.rsplit(':').next())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("t{}", index))
+        .unwrap_or_else(|| {
+            let title = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let artist = item
+                .get("artists")
+                .and_then(|v| v.as_array())
+                .map(|artists| {
+                    artists
+                        .iter()
+                        .filter_map(|a| a.get("name").and_then(|n| n.as_str()))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                })
+                .unwrap_or_default();
+            let duration = item.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let key = format!(
+                "{}|{}|{}",
+                title.trim().to_lowercase(),
+                artist.trim().to_lowercase(),
+                duration.round() as i64
+            );
+            use sha2::{Digest, Sha256};
+            let digest = Sha256::digest(key.as_bytes());
+            format!("t{}", &hex::encode(digest)[..16])
+        })
 }
 
 fn to_track(
@@ -265,7 +289,7 @@ fn to_track(
 ) -> TrackMeta {
     let duration_ms = item.get("duration").and_then(|v| v.as_f64());
 
-    let id = track_id(item, index);
+    let id = track_id(item);
     let title = item
         .get("title")
         .and_then(|v| v.as_str())

@@ -105,6 +105,7 @@
 
   let accountMenuOpen = $state(false);
   let accountMenuStyle = $state("");
+  let syncing = $state(false);
   let accountWrap: HTMLDivElement | undefined = $state();
   let accountButton: HTMLButtonElement | undefined = $state();
 
@@ -192,6 +193,8 @@
   }
 
   async function syncNow(): Promise<void> {
+    if (syncing) return;
+    syncing = true;
     accountMenuOpen = false;
     try {
       const result = await vynl.syncNow();
@@ -227,6 +230,8 @@
         }),
         6000,
       );
+    } finally {
+      syncing = false;
     }
   }
 
@@ -429,6 +434,7 @@
             <button
               class="menu-item"
               role="menuitem"
+              disabled={syncing}
               onclick={() => void syncNow()}
             >
               <RefreshCw size={14} stroke-width={1.5} />

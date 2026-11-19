@@ -13,6 +13,15 @@ use super::resolve_tool;
 use super::{clean_title, filter_and_rank_candidates};
 
 pub(super) static CANCELLED_FIND: AtomicBool = AtomicBool::new(false);
+static MATCH_BUSY: AtomicBool = AtomicBool::new(false);
+
+struct MatchBusyGuard;
+
+impl Drop for MatchBusyGuard {
+    fn drop(&mut self) {
+        MATCH_BUSY.store(false, Ordering::SeqCst);
+    }
+}
 
 pub(super) fn build_query(track: &TrackMeta) -> String {
     let title = clean_title(&track.title);
@@ -365,6 +374,13 @@ pub async fn find_matches(
     collection: &Collection,
     user_data_dir: &Path,
 ) -> Result<HashMap<String, Vec<SearchCandidate>>, String> {
+    if MATCH_BUSY
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err("matching is already in progress".to_string());
+    }
+    let _match_busy = MatchBusyGuard;
     CANCELLED_FIND.store(false, Ordering::SeqCst);
     let ytdlp = resolve_tool("yt-dlp", user_data_dir);
 

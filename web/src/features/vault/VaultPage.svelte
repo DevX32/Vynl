@@ -172,6 +172,7 @@
     if (!url.trim() || resolving) return;
     const query = url.trim();
     const gen = ++searchGen;
+    ++dlGeneration;
     searching = false;
     showSearchResults = false;
     searchResults = [];
@@ -180,6 +181,7 @@
     error = null;
     progress = {};
     summary = null;
+    running = false;
     matches = {};
     picks = {};
     reviewing = false;
@@ -306,6 +308,9 @@
 
     try {
       const list = await vynl.matches(searchCollection);
+      if (collection !== target) {
+        return;
+      }
       matches = list;
       picks = {};
       reviewing = true;

@@ -168,7 +168,7 @@ onMuteChange(applyVolume);
 
 setSeekHandler(seekToTime);
 
-if ("mediaSession" in navigator) {
+if ("mediaSession" in navigator && !IS_MINI) {
   navigator.mediaSession.setActionHandler("play", handleMediaPlay);
   navigator.mediaSession.setActionHandler("pause", handleMediaPause);
   navigator.mediaSession.setActionHandler("nexttrack", next);
@@ -460,6 +460,7 @@ function loadAndPlayNative(
         patchNowPlaying({ duration: info.duration });
       }
     }
+    if (pendingStreamError) return;
     updatePlaying(true);
     updateMediaSession();
     schedulePrebuffers();
@@ -567,12 +568,16 @@ export function toggle(): void {
     if (np.path) {
       resumeToken += 1;
       resumePending += 1;
+      const resumeGeneration = playGeneration;
       void resumeOrPlay(
         np.path,
         seekTo > 0 ? seekTo : undefined,
-        playGeneration,
+        resumeGeneration,
       )
-        .catch(handlePlayReject)
+        .catch((error) => {
+          if (resumeGeneration !== playGeneration) return;
+          handlePlayReject(error);
+        })
         .finally(() => {
           resumePending -= 1;
         });
@@ -620,7 +625,6 @@ function startTrack(nextTrack: LibraryTrack): void {
   setPlayError(null);
   pendingStreamError = null;
   resetCrossfade();
-  consecutivePlayFailures = 0;
   cancelSeek(false);
   const gen = ++playGeneration;
   setNowPlaying(nowPlayingFromTrack(nextTrack));
@@ -652,6 +656,7 @@ function maybeStartCrossfade(position: number): boolean {
   crossfadeTried = true;
 
   const generation = ++playGeneration;
+  const pauseToken = pauseIntent;
   const crossfade = nextVideoId
     ? vynl.catalogueCrossfadeStream(
         nextVideoId,
@@ -663,12 +668,12 @@ function maybeStartCrossfade(position: number): boolean {
 
   void crossfade
     .then(() => {
-      if (generation !== playGeneration) return;
       if (nextVideoId) prebufferState.delete(nextVideoId);
+      if (generation !== playGeneration) return;
       consumeNextTrack(nextTrack);
       setNowPlaying({
         ...nowPlayingFromTrack(nextTrack),
-        playing: true,
+        playing: pauseToken === pauseIntent,
       });
       updateMediaSession();
       resetCrossfade();

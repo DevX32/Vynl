@@ -159,7 +159,13 @@ pub async fn init_session(client: &Client) -> Result<Session, String> {
         .await
         .map_err(|e| format!("Session init failed: {e}"))?;
 
-    let body = session_page.text().await.unwrap_or_default();
+    let body_bytes = crate::services::util::read_body_limited(
+        session_page,
+        crate::services::util::MAX_BODY_BYTES,
+    )
+    .await
+    .unwrap_or_default();
+    let body = String::from_utf8(body_bytes).unwrap_or_default();
     let client_version = extract_client_version(&body);
 
     let client_token = get_client_token(client, &client_id, &device_id, &client_version).await?;
@@ -248,10 +254,7 @@ async fn get_access_token(
         }
 
         if status.is_success() {
-            let data: Value = resp
-                .json()
-                .await
-                .map_err(|e| format!("Failed to parse access token response: {e}"))?;
+            let data: Value = read_json(resp).await?;
 
             let access_token = data
                 .get("accessToken")
@@ -267,13 +270,29 @@ async fn get_access_token(
             return Ok((access_token, client_id, cookies));
         }
 
-        let body = resp.text().await.unwrap_or_default();
+        let body = error_body(resp).await;
         eprintln!("[Vynl] access token request failed: HTTP {status}");
         last_err = token_failure_message(status, &body);
         tokio::time::sleep(Duration::from_millis(800)).await;
     }
 
     Err(last_err)
+}
+
+async fn read_json(resp: reqwest::Response) -> Result<Value, String> {
+    let bytes =
+        crate::services::util::read_body_limited(resp, crate::services::util::MAX_BODY_BYTES)
+            .await?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("failed to parse the response: {e}"))
+}
+
+async fn error_body(resp: reqwest::Response) -> String {
+    const ERROR_BODY_CAP: u64 = 1024 * 1024;
+    crate::services::util::read_body_limited(resp, ERROR_BODY_CAP)
+        .await
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .unwrap_or_default()
 }
 
 async fn get_client_token(
@@ -309,15 +328,12 @@ async fn get_client_token(
 
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
+        let body = error_body(resp).await;
         eprintln!("[Vynl] Client token HTTP {status}: {body}");
         return Err(token_failure_message(status, &body));
     }
 
-    let data: Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse client token response: {e}"))?;
+    let data: Value = read_json(resp).await?;
 
     data.get("granted_token")
         .and_then(|gt| gt.get("token"))
@@ -362,14 +378,11 @@ pub async fn graphql_query(
         }
 
         if !status.is_success() {
-            let _body = resp.text().await.unwrap_or_default();
+            let _body = error_body(resp).await;
             return Err(format!("GraphQL HTTP {status}"));
         }
 
-        return resp
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse GraphQL response: {e}"));
+        return read_json(resp).await;
     }
 
     Err("GraphQL: too many 429 retries".to_string())
@@ -851,14 +864,11 @@ pub async fn search_tracks(
 
     let status = resp.status();
     if !status.is_success() {
-        let _body = resp.text().await.unwrap_or_default();
+        let _body = error_body(resp).await;
         return Err(format!("Search HTTP {status}"));
     }
 
-    let data: Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse search response: {e}"))?;
+    let data: Value = read_json(resp).await?;
 
     let mut results = Vec::new();
 

@@ -64,6 +64,22 @@ pub fn bound_public_client(url: &str) -> Result<reqwest::Client, String> {
         .map_err(|e| format!("could not build the fetch client: {e}"))
 }
 
+pub const MAX_BODY_BYTES: u64 = 8 * 1024 * 1024;
+
+pub async fn read_body_limited(resp: reqwest::Response, limit: u64) -> Result<Vec<u8>, String> {
+    use futures_util::StreamExt;
+    let mut out = Vec::new();
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("failed to read the response: {e}"))?;
+        if out.len() as u64 + chunk.len() as u64 > limit {
+            return Err("the response was too large".into());
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
 pub async fn follow_public_https(
     _http: &reqwest::Client,
     url: &str,

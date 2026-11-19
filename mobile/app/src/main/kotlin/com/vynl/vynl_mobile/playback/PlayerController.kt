@@ -81,6 +81,9 @@ class PlayerController(
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _state.value = _state.value.copy(playing = isPlaying)
+            if (isPlaying) {
+                lastRetryIndex = -1
+            }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -104,19 +107,47 @@ class PlayerController(
 
         override fun onPlayerError(error: PlaybackException) {
             val player = controller ?: return
-            resolved.remove(queueStart + player.currentMediaItemIndex)
-            if (player.hasNextMediaItem()) {
-                _state.value = _state.value.copy(
-                    error = "could not play that track — skipping to the next one",
-                )
-                player.seekToNextMediaItem()
-                player.prepare()
-                player.play()
-            } else {
-                _state.value = _state.value.copy(
-                    error = "that track can't be played — nothing else follows it",
-                )
+            val absolute = queueStart + player.currentMediaItemIndex
+            resolved.remove(absolute)
+            val failedTrack = playlist.getOrNull(absolute)
+            if (failedTrack != null && absolute != lastRetryIndex) {
+                lastRetryIndex = absolute
+                scope.launch {
+                    val item = playlist.getOrNull(absolute) ?: return@launch
+                    val local = localFiles[item.id]
+                    val url = local?.let { android.net.Uri.fromFile(java.io.File(it)).toString() }
+                        ?: runCatching { repository.stream(item.id).url }.getOrNull()
+                        ?.takeIf { it.isNotBlank() }
+                    if (url == null) {
+                        skipErroredItem(player)
+                        return@launch
+                    }
+                    resolved[absolute] = url
+                    val replacement = mediaItem(item, url)
+                    player.replaceMediaItem(player.currentMediaItemIndex, replacement)
+                    player.prepare()
+                    player.play()
+                }
+                return
             }
+            skipErroredItem(player)
+        }
+    }
+
+    private var lastRetryIndex = -1
+
+    private fun skipErroredItem(player: androidx.media3.session.MediaController) {
+        if (player.hasNextMediaItem()) {
+            _state.value = _state.value.copy(
+                error = "could not play that track — skipping to the next one",
+            )
+            player.seekToNextMediaItem()
+            player.prepare()
+            player.play()
+        } else {
+            _state.value = _state.value.copy(
+                error = "that track can't be played — nothing else follows it",
+            )
         }
     }
 
@@ -262,16 +293,20 @@ class PlayerController(
         }.awaitAll()
         val failed = (from until end).filter { results[it - from] == null }
         if (failed.isNotEmpty()) {
-            val removedBeforeQueueStart = failed.count { it < snapStart }
-            playlist = playlist.filterIndexed { idx, _ -> idx !in failed }
-            if (removedBeforeQueueStart > 0) {
-                queueStart = (queueStart - removedBeforeQueueStart).coerceAtLeast(0)
+            if (playlist === snapshot) {
+                val removedBeforeQueueStart = failed.count { it < snapStart }
+                playlist = playlist.filterIndexed { idx, _ -> idx !in failed }
+                if (removedBeforeQueueStart > 0) {
+                    queueStart = (queueStart - removedBeforeQueueStart).coerceAtLeast(0)
+                }
+                resolved.clear()
+                _state.value = _state.value.copy(
+                    error = "${failed.size} track(s) can't be played from the catalog",
+                )
+                bumpQueueVersion()
+            } else {
+                resolved.clear()
             }
-            resolved.clear()
-            _state.value = _state.value.copy(
-                error = "${failed.size} track(s) can't be played from the catalog",
-            )
-            bumpQueueVersion()
         }
         results.filterNotNull()
     }
@@ -340,7 +375,7 @@ class PlayerController(
         val player = controller ?: return
         val index = player.currentMediaItemIndex
         val absolute = queueStart + index
-        val track = playlist.getOrNull(absolute)
+        val track = playlist.getOrNull(absolute) ?: _state.value.track
         val duration = player.duration.takeIf { it > 0 } ?: 0L
         _state.value = _state.value.copy(
             track = track,

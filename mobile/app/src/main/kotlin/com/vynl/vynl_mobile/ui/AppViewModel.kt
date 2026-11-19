@@ -691,6 +691,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearDownloads() {
         safeLaunch {
+            withContext(Dispatchers.IO) {
+                store.clearAudio()
+                store.clearCovers()
+            }
             val freed = withContext(Dispatchers.IO) {
                 val root = getApplication<Application>().filesDir
                 val music = java.io.File(root, "music")
@@ -698,15 +702,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 for (folder in listOf("audio", "covers")) {
                     val dir = java.io.File(music, folder)
                     dir.listFiles()?.forEach { file ->
-                        total += file.length()
-                        file.delete()
+                        val length = file.length()
+                        if (file.delete()) {
+                            total += length
+                        }
                     }
                 }
                 total
-            }
-            withContext(Dispatchers.IO) {
-                store.clearAudio()
-                store.clearCovers()
             }
             measureDownloads()
             refreshStore()

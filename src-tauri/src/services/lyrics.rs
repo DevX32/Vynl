@@ -127,9 +127,7 @@ pub fn remove_stale_sidecars(file: &str, ext: &str) {
             continue;
         }
         let _ = fs::remove_file(sidecar_path(file, other));
-        let _ = fs::remove_file(legacy_sidecar_path(file, other));
     }
-    let _ = fs::remove_file(legacy_sidecar_path(file, ext));
 }
 
 pub fn save_manual_lyrics(file: &str, kind: LyricsKind, text: &str) -> Result<(), String> {

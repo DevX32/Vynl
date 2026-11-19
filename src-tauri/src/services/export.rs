@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 
 use crate::commands::types::{LibraryTrack, PlaylistMeta, Settings};
 use crate::services::{history, library, playlists, util};
@@ -219,6 +220,22 @@ pub fn read_backup_file(path: &Path) -> Result<LibraryBackup, String> {
     parse_backup(&content)
 }
 
+fn backup_source_url_host_ok(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_ascii_lowercase))
+        .is_some_and(|host| {
+            matches!(
+                host.as_str(),
+                "youtube.com"
+                    | "www.youtube.com"
+                    | "music.youtube.com"
+                    | "youtu.be"
+                    | "m.youtube.com"
+            )
+        })
+}
+
 pub fn restore(backup: &LibraryBackup) -> RestoredBackup {
     use crate::commands::types::{
         Collection, CollectionKind, MatchSource, SearchCandidate, TrackMeta,
@@ -230,10 +247,23 @@ pub fn restore(backup: &LibraryBackup) -> RestoredBackup {
     let tracks: Vec<TrackMeta> = backup
         .tracks
         .iter()
-        .enumerate()
-        .map(|(i, t)| {
-            let id = format!("restored-{i}");
-            if let Some(url) = t.source_url.as_ref().filter(|u| !u.trim().is_empty()) {
+        .map(|t| {
+            let digest = sha2::Sha256::digest(
+                format!(
+                    "{}|{}|{}",
+                    t.title.trim().to_lowercase(),
+                    t.artist.trim().to_lowercase(),
+                    t.duration
+                )
+                .as_bytes(),
+            );
+            let id = format!("restored-{}", &hex::encode(digest)[..12]);
+            if let Some(url) = t
+                .source_url
+                .as_ref()
+                .filter(|u| !u.trim().is_empty())
+                .filter(|u| backup_source_url_host_ok(u))
+            {
                 matches.insert(
                     id.clone(),
                     vec![SearchCandidate {
