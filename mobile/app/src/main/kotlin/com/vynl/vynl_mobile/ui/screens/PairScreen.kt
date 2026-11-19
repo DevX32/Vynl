@@ -166,6 +166,10 @@ fun PairScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = context as? android.app.Activity
+    val cameraPermanentlyDenied = permissionRequested
+        && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        && !(activity?.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) ?: false)
 
     BackHandler { onClose() }
 
@@ -174,7 +178,12 @@ fun PairScreen(
     ) { granted ->
         cameraGranted = granted
         permissionRequested = true
-        if (!granted) error = "Vynl needs the camera to read the pairing code."
+        if (!granted) {
+            val rationale = (context as? android.app.Activity)
+                ?.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) ?: false
+            error = if (rationale) "Vynl needs the camera to read the pairing code."
+            else "Vynl can't use the camera — enable it in Settings to scan a code."
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -386,14 +395,22 @@ fun PairScreen(
                 Spacer(Modifier.height(20.dp))
                 androidx.compose.material3.OutlinedButton(
                     onClick = {
-                        error = null
-                        permissionRequested = false
-                        requestPermission.launch(Manifest.permission.CAMERA)
+                        if (cameraPermanentlyDenied) {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", context.packageName, null),
+                            )
+                            context.startActivity(intent)
+                        } else {
+                            error = null
+                            permissionRequested = false
+                            requestPermission.launch(Manifest.permission.CAMERA)
+                        }
                     },
                     shape = RoundedCornerShape(VynlRadius.control),
                 ) {
                     Text(
-                        text = "Try again",
+                        text = if (cameraPermanentlyDenied) "Open app settings" else "Try again",
                         color = VynlColors.text,
                         fontFamily = VynlFonts.display,
                     )

@@ -320,7 +320,10 @@ class Desktop(context: Context) {
         crossinline onProgress: (Float) -> Unit,
     ): Long? = withContext(Dispatchers.IO) {
         val request = request(path).build()
-        val tmp = File(dest.parentFile ?: dest.absoluteFile.parentFile, "${dest.name}.part")
+        val tmp = File(
+            dest.parentFile ?: dest.absoluteFile.parentFile,
+            "${dest.name}.${System.nanoTime()}.part",
+        )
         try {
             http.newCall(request).execute().use httpUse@{ response ->
                 if (!response.isSuccessful) {

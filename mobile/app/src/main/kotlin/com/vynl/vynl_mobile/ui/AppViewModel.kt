@@ -318,11 +318,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 retryPendingTombstonesNow()
                 syncStatus = withContext(Dispatchers.IO) { sync.status }
                 refreshStore()
-                if (!silent) {
+                if (!silent || result.failed > 0 || result.pending > 0) {
                     val counts = buildString {
                         append("Sync — ${result.pulled} pulled, ${result.pushed} pushed")
                         if (result.deleted > 0) append(", ${result.deleted} deleted")
                         if (result.failed > 0) append(", ${result.failed} failed")
+                        if (result.pending > 0) append(", ${result.pending} deletion(s) pending sync")
                     }
                     notice = counts
                 }
@@ -625,9 +626,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     playlists
                 }
 
-                val protected = if (likedFailed) setOf("liked") else emptySet()
+                val pendingTombstoneIds = withContext(Dispatchers.IO) {
+                    tombstonePrefs().all.keys
+                }
+                val hadLocalLiked = withContext(Dispatchers.IO) {
+                    store.playlist("liked") != null
+                }
+                val protected = (if (likedFailed) setOf("liked") else emptySet()) + pendingTombstoneIds
+                val filteredLists = syncLists.filterNot { pendingTombstoneIds.contains(it.id) }
                 withContext(Dispatchers.IO) {
-                    store.replaceDesktopPlaylists(syncLists, protected)
+                    store.replaceDesktopPlaylists(filteredLists, protected)
+                }
+                if (hadLocalLiked && liked.isEmpty() && !likedFailed) {
+                    syncPlaylistDelete("liked")
                 }
                 refreshStore()
                 val likedNote = if (liked.isNotEmpty()) " and liked songs"
@@ -679,10 +690,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         safeLaunch {
             val bytes = withContext(Dispatchers.IO) {
                 val audioDir = java.io.File(getApplication<Application>().filesDir, "music/audio")
+                val coversDir = java.io.File(getApplication<Application>().filesDir, "music/covers")
                 val partCutoff = System.currentTimeMillis() - 5 * 60_000L
-                audioDir.listFiles()?.forEach { file ->
-                    if (file.name.endsWith(".part") && file.lastModified() < partCutoff) {
-                        file.delete()
+                for (dir in listOf(audioDir, coversDir)) {
+                    dir.listFiles()?.forEach { file ->
+                        if (file.name.endsWith(".part") && file.lastModified() < partCutoff) {
+                            file.delete()
+                        }
                     }
                 }
                 audioDir.listFiles()?.sumOf { it.length() } ?: 0L

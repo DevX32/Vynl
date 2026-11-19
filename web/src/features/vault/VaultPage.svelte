@@ -390,7 +390,7 @@
         skipIds,
       });
       if (gen !== dlGeneration) return;
-      await postDownload(dlCollection);
+      await postDownload(dlCollection, gen);
     } catch (e) {
       if (gen !== dlGeneration) return;
       error = friendlyVaultError(e, t("vault.downloadFailed"));
@@ -399,12 +399,13 @@
     }
   }
 
-  async function postDownload(dlCollection: Collection): Promise<void> {
+  async function postDownload(dlCollection: Collection, gen: number): Promise<void> {
     try {
       const existingPaths = await collectDownloadedPaths(dlCollection);
       if (existingPaths.length === 0) return;
 
       await refreshPlaylists();
+      if (gen !== dlGeneration) return;
       pendingPaths = existingPaths;
       pendingCollectionTitle = dlCollection.title;
       pickerBusy = false;
@@ -428,6 +429,7 @@
     if (!collection || savingPlaylist) return;
     savingPlaylist = true;
     saveHint = null;
+    const gen = dlGeneration;
     try {
       const existingPaths = await collectDownloadedPaths(collection);
       if (existingPaths.length === 0) {
@@ -435,6 +437,7 @@
         return;
       }
       await refreshPlaylists();
+      if (gen !== dlGeneration) return;
       pendingPaths = existingPaths;
       pendingCollectionTitle = collection.title;
       pickerBusy = false;

@@ -623,10 +623,16 @@ pub async fn install_tool(
     invalidate_tool_path_cache(None);
 
     let final_statuses = probe_all(user_data_dir, &app_handle, false).await;
-    final_statuses
+    let status = final_statuses
         .iter()
         .find(|s| s.name == tool)
         .ok_or_else(|| format!("Tool {name} not found after install"))?;
+    if !matches!(status.state, ToolState::Ok) {
+        return Err(format!(
+            "Tool {name} was installed but cannot run{}",
+            status.error.as_deref().unwrap_or("")
+        ));
+    }
 
     Ok(())
 }

@@ -5,7 +5,7 @@ import type {
   Playlist,
   PlaylistMeta,
 } from "@lib/types";
-import { getLibrary, refreshLibrary } from "./library.svelte";
+import { getLibrary, getLibraryRevision, onLibraryChanged, refreshLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
 import { songKey } from "@lib/format";
 import { vynl } from "@lib/vynl";
@@ -75,6 +75,15 @@ export function refreshPlaylists(): Promise<void> {
       const meta = await vynl.listPlaylists();
       if (generation === _metaGeneration) _meta = meta;
       await fetchAll(generation);
+      if (generation === _metaGeneration && _selected) {
+        const fresh = _all[_selected] ?? null;
+        if (fresh) {
+          _current = fresh;
+        } else if (!_selecting) {
+          _selected = null;
+          _current = null;
+        }
+      }
     } catch (e) {
       console.warn("refreshPlaylists failed:", e);
     } finally {
@@ -123,6 +132,7 @@ export async function reorderPlaylists(
   if (from < 0 || to < 0 || from === to) return;
 
   const next = moveItem(_meta, from, to);
+  _metaGeneration += 1;
   _meta = next;
   try {
     await vynl.reorderPlaylists(next.map((p) => p.id));
@@ -255,6 +265,12 @@ export async function saveStreamToPlaylist(
 let _pathSource: LibraryTrack[] | null = null;
 let _pathMap = new Map<string, LibraryTrack>();
 
+let _failedCovers = $state<Set<string>>(new Set());
+
+onLibraryChanged(() => {
+  _failedCovers = new Set();
+});
+
 export function isCataloguePath(path: string): boolean {
   return path.startsWith("ytm:");
 }
@@ -382,8 +398,6 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
   return result;
 }
 
-let _failedCovers = $state<Set<string>>(new Set());
-
 export function markCoverFailed(path: string | null | undefined): void {
   if (!path || _failedCovers.has(path)) return;
   _failedCovers = new Set(_failedCovers).add(path);
@@ -405,17 +419,20 @@ export function getPlaylistCustomCover(id: string): string | null {
 }
 
 const _coversCache = new Map<
-  Playlist,
-  { failed: Set<string>; result: string[] }
+  string,
+  { failed: Set<string>; revision: number; result: string[] }
 >();
 
 export function getPlaylistCovers(id: string): string[] {
   const pl = _all[id];
   if (!pl) return [];
-  const cached = _coversCache.get(pl);
-  if (cached && cached.failed === _failedCovers) return cached.result;
+  const cached = _coversCache.get(id);
+  const revision = getLibraryRevision();
+  if (cached && cached.failed === _failedCovers && cached.revision === revision) {
+    return cached.result;
+  }
   const result = resolvePlaylistCovers(pl.cover, tracksOf(pl));
-  _coversCache.set(pl, { failed: _failedCovers, result });
+  _coversCache.set(id, { failed: _failedCovers, revision, result });
   if (_coversCache.size > 128) {
     const oldest = _coversCache.keys().next().value;
     if (oldest !== undefined) _coversCache.delete(oldest);

@@ -23,7 +23,7 @@ class Downloader(context: Context, private val repository: CatalogueRepository) 
             val folder = File(root, "audio").apply { mkdirs() }
             val name = safeName(track.id)
             val file = File(folder, "$name.$extension")
-            val temporary = File(folder, "$name.$extension.part")
+            val temporary = File(folder, "$name.$extension.${System.nanoTime()}.${System.currentTimeMillis()}.part")
 
             try {
                 val request = Request.Builder().url(stream.url).build()
@@ -43,6 +43,10 @@ class Downloader(context: Context, private val repository: CatalogueRepository) 
                                 output.write(buffer, 0, read)
                                 written += read
                                 if (total > 0) onProgress(written.toFloat() / total)
+                            }
+                            if (written == 0L) {
+                                temporary.delete()
+                                throw IllegalStateException("the download was empty")
                             }
                         }
                     }
@@ -76,16 +80,25 @@ class Downloader(context: Context, private val repository: CatalogueRepository) 
                 }
             }
             val request = Request.Builder().url(url).build()
-            val temporary = File(folder, "${safeName(track.id)}.jpg.part")
+            val temporary = File(folder, "${safeName(track.id)}.jpg.${System.nanoTime()}.part")
             if (temporary.exists()) temporary.delete()
             try {
                 http.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@use null
+                    val contentType = response.header("Content-Type")?.lowercase().orEmpty()
+                    if (!contentType.startsWith("image/") && !contentType.startsWith("application/octet-stream")) {
+                        return@use null
+                    }
                     val body = response.body ?: return@use null
                     temporary.outputStream().use { output ->
                         body.byteStream().use { input -> input.copyTo(output) }
                     }
                     null
+                }
+                if (!temporary.exists() || temporary.length() == 0L) return@runCatching null
+                if (!looksLikeImage(temporary)) {
+                    temporary.delete()
+                    return@runCatching null
                 }
                 if (!temporary.exists()) return@runCatching null
                 if (!temporary.renameTo(file)) {
@@ -109,6 +122,22 @@ class Downloader(context: Context, private val repository: CatalogueRepository) 
             "ogg" in value || "vorbis" in value -> "ogg"
             else -> "m4a"
         }
+    }
+
+    private fun looksLikeImage(file: File): Boolean {
+        if (file.length() < 4L) return false
+        val head = ByteArray(16)
+        val read = runCatching {
+            file.inputStream().use { it.read(head) }
+        }.getOrDefault(-1)
+        if (read < 4) return false
+        val jpeg = head[0] == 0xFF.toByte() && head[1] == 0xD8.toByte()
+        val png = head[0] == 0x89.toByte() && head[1] == 0x50.toByte()
+            && head[2] == 0x4E.toByte() && head[3] == 0x47.toByte()
+        val gif = head[0] == 0x47.toByte() && head[1] == 0x49.toByte() && head[2] == 0x46.toByte()
+        val webp = head[0] == 0x52.toByte() && head[1] == 0x49.toByte() && head[2] == 0x46.toByte()
+            && head[3] == 0x46.toByte()
+        return jpeg || png || gif || webp
     }
 
     private fun safeName(value: String): String {

@@ -34,6 +34,7 @@ data class SyncResult(
     val pulled: Int,
     val deleted: Int,
     val failed: Int = 0,
+    val pending: Int = 0,
 )
 
 private data class FoldResult(
@@ -51,6 +52,7 @@ private data class SyncSession(
 )
 
 class Sync(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("vynl_cloud", Context.MODE_PRIVATE)
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -58,6 +60,10 @@ class Sync(context: Context) {
         .writeTimeout(20, TimeUnit.SECONDS)
         .build()
     private val refreshLock = Any()
+    private val pendingTombstonePrefs = appContext.getSharedPreferences(
+        "vynl_pending_tombstones",
+        Context.MODE_PRIVATE,
+    )
 
     private val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
     private val anonKey = BuildConfig.SUPABASE_ANON_KEY
@@ -182,6 +188,11 @@ class Sync(context: Context) {
     suspend fun refresh(store: Store): SyncResult = withContext(Dispatchers.IO) {
         store.rekeyLegacyDtPlaylists()
         val session = validSession()
+        val pendingTombstoneIds = pendingTombstonePrefs.all
+            .entries
+            .filter { it.value is Long }
+            .map { it.key }
+            .toSet()
         val folded = foldRows(fetchRows(session))
         val rows = folded.rows
         when (val order = fetchOrder(session)) {
@@ -216,6 +227,7 @@ class Sync(context: Context) {
         var pulled = 0
         var deleted = 0
         var failed = 0
+        var pending = 0
         val reviveFailed = mutableSetOf<String>()
         val consumed = mutableSetOf<String>()
         val known = mutableSetOf<String>()
@@ -239,6 +251,14 @@ class Sync(context: Context) {
         for (row in rows) {
             val canonical = row.optString("local_id")
             if (canonical.isBlank()) continue
+            if (canonical == "liked") {
+                if (pendingTombstoneIds.contains(canonical)) pending += 1
+                continue
+            }
+            if (pendingTombstoneIds.contains(canonical)) {
+                pending += 1
+                continue
+            }
             known += canonical
             val deletedAt = if (row.isNull("deleted_at")) null else row.optLong("deleted_at")
 
@@ -296,14 +316,15 @@ class Sync(context: Context) {
         }
 
         for (playlist in store.playlists()) {
+            if (playlist.id == "liked") continue
             val payload = store.syncPayload(playlist.id) ?: continue
             if (known.contains(payload.localId)) continue
             val includeDeletedAt = reviveFailed.contains(payload.localId)
             val ok = runCatching { pushPlaylist(payload, includeDeletedAt = includeDeletedAt) }.isSuccess
-            if (ok) pushed += 1 else failed += 1
+            if (ok) pushed += 1 else if (!includeDeletedAt) failed += 1
         }
 
-        SyncResult(pushed = pushed, pulled = pulled, deleted = deleted, failed = failed)
+        SyncResult(pushed = pushed, pulled = pulled, deleted = deleted, failed = failed, pending = pending)
     }
 
     private fun resolveLocalId(
@@ -382,7 +403,8 @@ class Sync(context: Context) {
         }.getOrElse { OrderFetch.Failed }
     }
 
-    private fun foldRows(rows: List<JSONObject>): FoldResult {
+    private fun foldRows(inputRows: List<JSONObject>): FoldResult {
+        val rows = inputRows.filterNot { it.optString("local_id") == "liked" }
         fun nameKey(raw: String?): String =
             raw.orEmpty()
                 .split(Regex("\\s+"))

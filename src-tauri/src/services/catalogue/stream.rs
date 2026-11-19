@@ -818,15 +818,30 @@ impl StreamCache {
                 itag: None,
                 coverage: Vec::new(),
             });
-        if entry.file != file_name {
+        let previous = if entry.file != file_name {
             if entry.complete {
                 return;
             }
-            entry.file = file_name.to_string();
+            let previous = std::mem::replace(&mut entry.file, file_name.to_string());
+            entry.coverage.clear();
+            Some(previous)
+        } else {
+            None
+        };
+        if let Some(entry) = state.index.entries.get_mut(video_id) {
+            entry.complete = true;
+            entry.size = total;
+            entry.last_used = now_secs();
         }
-        entry.complete = true;
-        entry.size = total;
-        entry.last_used = now_secs();
+        if let Some(previous) = previous {
+            let previous_active = state
+                .active
+                .get(video_id)
+                .is_some_and(|files| files.contains(&previous));
+            if !previous_active {
+                let _ = std::fs::remove_file(self.dir.join(&previous));
+            }
+        }
         state.dirty = true;
         self.save_locked(&mut state);
     }

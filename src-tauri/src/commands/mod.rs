@@ -498,6 +498,12 @@ fn mirror_taste_to_liked(
             None => playlist.streams.push(entry.track.clone()),
         }
     }
+    for key in &removals {
+        playlist.paths.retain(|p| p != key);
+        if let Some(id) = key.strip_prefix("ytm:") {
+            playlist.streams.retain(|track| track.id != id);
+        }
+    }
     crate::services::playlists::record_marks(&mut playlist, &adds, &removals);
     playlist.updated_at = now;
     crate::services::playlists::upsert_playlist(output_dir, &playlist)?;
@@ -591,6 +597,9 @@ pub async fn list_playlists(app: AppHandle) -> Result<Vec<PlaylistMeta>, String>
 
 #[tauri::command]
 pub async fn get_playlist(id: String, app: AppHandle) -> Result<Option<Playlist>, String> {
+    if id == crate::services::sync::LIKED_PLAYLIST_ID {
+        return Ok(None);
+    }
     let output = output_dir_from_settings(&app)?;
     Ok(crate::services::playlists::get_playlist(&output, &id))
 }
@@ -609,8 +618,16 @@ pub async fn reorder_playlists(ids: Vec<String>, app: AppHandle) -> Result<(), S
     crate::services::playlists::reorder_playlists(&output, &ids)
 }
 
+fn ensure_not_hidden_playlist(id: &str) -> Result<(), String> {
+    if id == crate::services::sync::LIKED_PLAYLIST_ID {
+        return Err("the Liked Songs playlist is managed automatically".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn rename_playlist(id: String, name: String, app: AppHandle) -> Result<Playlist, String> {
+    ensure_not_hidden_playlist(&id)?;
     let output = output_dir_from_settings(&app)?;
     let playlist = crate::services::playlists::rename_playlist(&output, &id, &name)?;
     sync_playlist(&app, &playlist);
@@ -656,6 +673,7 @@ fn prune_empty_dirs(root: &Path) {
 
 #[tauri::command]
 pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksResult, String> {
+    ensure_not_hidden_playlist(&id)?;
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
     let mut deleted = 0_u64;
@@ -709,10 +727,14 @@ pub async fn delete_all_library_tracks(app: AppHandle) -> Result<DeleteTracksRes
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
     let files = crate::services::library::list_audio_files(&output);
+    let playlists_dir = output.join("playlists");
     let mut deleted = 0_u64;
     let mut failed = 0_u64;
     let mut stale = Vec::with_capacity(files.len());
     for file in &files {
+        if file.starts_with(&playlists_dir) {
+            continue;
+        }
         let path = file.to_string_lossy().to_string();
         if delete_track_file(&user_data, &path, file) {
             deleted += 1;
@@ -741,6 +763,7 @@ pub async fn add_to_playlist(
     paths: Vec<String>,
     app: AppHandle,
 ) -> Result<Playlist, String> {
+    ensure_not_hidden_playlist(&id)?;
     let output = output_dir_from_settings(&app)?;
     let validated_paths: Vec<String> = paths
         .iter()
@@ -757,6 +780,7 @@ pub async fn remove_from_playlist(
     track_path: String,
     app: AppHandle,
 ) -> Result<Playlist, String> {
+    ensure_not_hidden_playlist(&id)?;
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
     if track_path.starts_with("ytm:") {
@@ -803,6 +827,7 @@ pub async fn move_in_playlist(
     if from < 0 || to < 0 {
         return Err("from and to must be non-negative".into());
     }
+    ensure_not_hidden_playlist(&id)?;
     let output = output_dir_from_settings(&app)?;
     let output_clone = output.clone();
     let playlist =
@@ -828,6 +853,7 @@ pub async fn set_playlist_cover(
     cover: Option<String>,
     app: AppHandle,
 ) -> Result<Playlist, String> {
+    ensure_not_hidden_playlist(&id)?;
     let output = output_dir_from_settings(&app)?;
     let user_data = user_data_dir(&app)?;
     let playlist = crate::services::playlists::set_playlist_cover(&output, &user_data, &id, cover)?;
@@ -836,6 +862,9 @@ pub async fn set_playlist_cover(
 }
 
 pub(crate) fn sync_playlist(app: &AppHandle, playlist: &Playlist) {
+    if playlist.id == crate::services::sync::LIKED_PLAYLIST_ID {
+        return;
+    }
     let Ok(user_data) = user_data_dir(app) else {
         return;
     };
@@ -949,6 +978,7 @@ pub async fn save_playlist_cover(
     data: Vec<u8>,
     app: AppHandle,
 ) -> Result<String, String> {
+    ensure_not_hidden_playlist(&id)?;
     if !crate::services::playlists::validate_id(&id) {
         return Err("invalid playlist id".into());
     }

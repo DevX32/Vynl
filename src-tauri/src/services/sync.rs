@@ -1350,6 +1350,9 @@ fn strip_marks(row: &Value) -> Value {
 }
 
 pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
+    if playlist.id == LIKED_PLAYLIST_ID {
+        return;
+    }
     if !sync_enabled() {
         return;
     }

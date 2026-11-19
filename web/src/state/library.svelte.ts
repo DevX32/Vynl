@@ -125,6 +125,10 @@ export function getLibrary(): LibraryTrack[] {
   return _library;
 }
 
+export function getLibraryRevision(): number {
+  return _libraryRevision;
+}
+
 export function getLibraryError(): string | null {
   return _libraryError;
 }

@@ -110,6 +110,10 @@ pub fn build_backup(settings: &Settings, user_data_dir: &Path) -> LibraryBackup 
         tracks.iter().map(|t| (t.file.clone(), t)).collect();
 
     let metas = playlists::list_playlists(&output_dir);
+    let metas: Vec<PlaylistMeta> = metas
+        .into_iter()
+        .filter(|meta| meta.id != crate::services::sync::LIKED_PLAYLIST_ID)
+        .collect();
     let playlists = metas
         .iter()
         .map(|meta: &PlaylistMeta| {
