@@ -56,6 +56,17 @@ async function fetchAll(generation: number): Promise<void> {
   }
 }
 
+function syncCurrentFromFetched(): void {
+  if (!_selected) return;
+  const fresh = _all[_selected] ?? null;
+  if (fresh) {
+    _current = fresh;
+  } else if (!_selecting && !_meta.some((m) => m.id === _selected)) {
+    _selected = null;
+    _current = null;
+  }
+}
+
 export function refreshPlaylistMeta(): Promise<void> {
   const generation = ++_metaGeneration;
   return (async () => {
@@ -80,15 +91,7 @@ export function refreshPlaylists(): Promise<void> {
       const meta = await vynl.listPlaylists();
       if (generation === _metaGeneration) _meta = meta;
       await fetchAll(generation);
-      if (generation === _metaGeneration && _selected) {
-        const fresh = _all[_selected] ?? null;
-        if (fresh) {
-          _current = fresh;
-        } else if (!_selecting && !_meta.some((m) => m.id === _selected)) {
-          _selected = null;
-          _current = null;
-        }
-      }
+      if (generation === _metaGeneration) syncCurrentFromFetched();
     } catch (e) {
       console.warn("refreshPlaylists failed:", e);
     } finally {
@@ -193,6 +196,7 @@ async function refreshMeta(): Promise<void> {
     const meta = await vynl.listPlaylists();
     if (generation === _metaGeneration) _meta = meta;
     await fetchAll(generation);
+    if (generation === _metaGeneration) syncCurrentFromFetched();
   } catch (e) {
     console.warn("refreshMeta failed:", e);
   }
