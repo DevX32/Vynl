@@ -136,6 +136,7 @@ class PlayerController(
             if (failedTrack != null && absolute != lastRetryIndex) {
                 lastRetryIndex = absolute
                 scope.launch {
+                    if (player.currentMediaItemIndex != absolute - queueStart) return@launch
                     val item = playlist.getOrNull(absolute) ?: return@launch
                     val local = localFiles[item.id]
                     val url = local?.let { android.net.Uri.fromFile(java.io.File(it)).toString() }
@@ -146,6 +147,7 @@ class PlayerController(
                         return@launch
                     }
                     cacheUrl(absolute, url)
+                    if (player.currentMediaItemIndex != absolute - queueStart) return@launch
                     val position = player.currentPosition
                     val replacement = mediaItem(item, url)
                     player.replaceMediaItem(player.currentMediaItemIndex, replacement)
@@ -363,17 +365,18 @@ class PlayerController(
                 val absolute = queueStart + player.currentMediaItemIndex
                 val wanted = absolute + window + 1
                 if (wanted > queueStart + have) {
-                    var next = resolve(queueStart + have)
+                    val next = resolve(queueStart + have)
                     if (expectedEpoch != listEpoch) {
-                        next = resolve(queueStart + have)
+                        return@launch
                     }
                     val currentPlayer = controller ?: return@launch
                     val currentHave = currentPlayer.mediaItemCount.coerceAtLeast(0)
-                    if (have <= currentHave && next.isNotEmpty()) {
-                        try {
-                            currentPlayer.addMediaItems(have, next)
-                        } catch (_: IndexOutOfBoundsException) {
-                        }
+                    if (currentHave < have || next.isEmpty()) {
+                        return@launch
+                    }
+                    try {
+                        currentPlayer.addMediaItems(have, next)
+                    } catch (_: IndexOutOfBoundsException) {
                     }
                 }
             } finally {
@@ -546,6 +549,7 @@ class PlayerController(
 
     fun playShuffled() {
         if (playlist.isEmpty()) return
+        canonicalPlaylist = playlist
         playlist = playlist.shuffled()
         queueStart = 0
         listEpoch += 1

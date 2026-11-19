@@ -477,7 +477,10 @@ export function playTrack(
   seekTo?: number,
 ): void {
   const track = findTrackById(id);
-  if (!track) return;
+  if (!track) {
+    setPlayError(t("error.couldNotPlay"));
+    return;
+  }
   clearRetry();
 
   if (contextPaths && contextPaths.length > 0) {

@@ -192,8 +192,7 @@ class Store(context: Context) {
         recreateCorruptedDb()
         call()
     } catch (error: IllegalStateException) {
-        android.util.Log.e("Vynl", "database connection was closed; rebuilding and retrying", error)
-        recreateCorruptedDb()
+        android.util.Log.e("Vynl", "database connection was closed during the operation; reopening and retrying", error)
         call()
     }
 

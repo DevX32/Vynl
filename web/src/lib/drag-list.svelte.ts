@@ -172,10 +172,14 @@ export function useDragList(options: DragListOptions) {
     if (drag.dragging) {
       suppressClick = true;
       const from = grabPath;
-      const to =
-        drag.overIdx !== null
-          ? (snapshotPaths?.[drag.overIdx] ?? options.pathAt(drag.section, drag.overIdx))
-          : undefined;
+      let to: string | undefined;
+      if (drag.overIdx !== null) {
+        const count = snapshotPaths?.length ?? boxes?.length ?? 0;
+        if (count > 0) {
+          const idx = Math.max(0, Math.min(count - 1, drag.overIdx));
+          to = snapshotPaths?.[idx] ?? options.pathAt(drag.section, idx);
+        }
+      }
       if (from && to && to !== from) {
         options.onReorder(from, to);
       }

@@ -1593,6 +1593,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                     array
                         .iter()
                         .filter_map(|v| v.as_str().map(String::from))
+                        .filter(|id| id != LIKED_PLAYLIST_ID)
                         .collect()
                 })
                 .unwrap_or_default();
@@ -1788,6 +1789,10 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     }
 
     let order = playlists::read_order(output_dir);
+    let order: Vec<String> = order
+        .into_iter()
+        .filter(|id| id != LIKED_PLAYLIST_ID)
+        .collect();
     if !order.is_empty() {
         let remote = fetch_order(data_dir).await;
         match remote {

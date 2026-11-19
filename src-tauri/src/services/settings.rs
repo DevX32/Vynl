@@ -122,6 +122,18 @@ fn get_settings_unlocked(user_data_dir: &Path) -> Settings {
     let def = defaults();
     if loaded.output_dir.is_empty() {
         loaded.output_dir = def.output_dir;
+    } else {
+        let abs = std::path::PathBuf::from(&loaded.output_dir);
+        if !abs.is_absolute() {
+            loaded.output_dir = def.output_dir;
+        } else {
+            let canonical = fs::canonicalize(&abs).unwrap_or(abs);
+            if canonical.parent().is_none() {
+                loaded.output_dir = def.output_dir;
+            } else {
+                loaded.output_dir = canonical.to_string_lossy().to_string();
+            }
+        }
     }
     if loaded.filename_pattern.is_empty() {
         loaded.filename_pattern = def.filename_pattern;

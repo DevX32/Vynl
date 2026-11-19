@@ -136,7 +136,12 @@ export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void
     if (!track.id) continue;
     const entry = libraryTrackOf(track);
     const current = next.get(entry.id);
-    if (current && sameMetadata(current, entry)) continue;
+    if (current && sameMetadata(current, entry)) {
+      next.delete(entry.id);
+      next.set(entry.id, entry);
+      continue;
+    }
+    if (current) next.delete(entry.id);
     next.set(entry.id, entry);
     changed = true;
   }

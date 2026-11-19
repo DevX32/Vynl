@@ -166,7 +166,7 @@ class Desktop(context: Context) {
         return builder
     }
 
-    suspend fun pair(pin: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun pair(pin: String): String? = withContext(Dispatchers.IO) {
         val body = JSONObject().put("pin", pin.trim()).toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
@@ -175,14 +175,16 @@ class Desktop(context: Context) {
             .build()
         runCatching {
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use false
+                if (!response.isSuccessful) return@use "That pin was not accepted"
                 val json = JSONObject(response.body?.string().orEmpty())
                 val newToken = json.optString("token", "")
-                if (newToken.isEmpty()) return@use false
+                if (newToken.isEmpty()) return@use "That pin was not accepted"
                 token = newToken
-                true
+                null
             }
-        }.getOrDefault(false)
+        }.getOrElse { error ->
+            error.message?.takeIf { it.isNotBlank() } ?: "Could not reach the desktop"
+        }
     }
 
     suspend fun catalog(): List<DesktopTrack> = withContext(Dispatchers.IO) {

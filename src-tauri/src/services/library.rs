@@ -54,7 +54,21 @@ pub(crate) fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let name = entry.file_name();
-            if name.to_string_lossy().starts_with('.') {
+            let name_str = name.to_string_lossy();
+            if let Some(marker) = name_str.find(".overwrite-backup-") {
+                let backup_suffix = &name_str[marker + ".overwrite-backup-".len()..];
+                if backup_suffix.chars().all(|c| c.is_ascii_digit()) {
+                    let base_name = &name_str[..marker];
+                    let base = entry.path().with_file_name(base_name);
+                    if base.exists() {
+                        let _ = fs::remove_file(entry.path());
+                    } else {
+                        let _ = fs::rename(entry.path(), &base);
+                    }
+                    continue;
+                }
+            }
+            if name_str.starts_with('.') {
                 continue;
             }
             let full = entry.path();

@@ -937,7 +937,16 @@ fn default_output_device_name() -> Option<String> {
     use rodio::cpal::traits::{DeviceTrait, HostTrait};
     let host = rodio::cpal::default_host();
     let device = host.default_output_device()?;
-    device.name().ok()
+    let name = device.name().ok()?;
+    let config = device.default_output_config().ok();
+    match config {
+        Some(config) => Some(format!(
+            "{name}:{}/{}",
+            config.sample_format(),
+            config.channels()
+        )),
+        None => Some(name),
+    }
 }
 
 const STREAM_OFFSET_CAP_SECS: f64 = 86_400.0 * 3650.0;
@@ -1403,6 +1412,12 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                             if generation == playback_generation && active_generation == 0 {
                                 pending_pause = Some(generation);
                             }
+                            PlayerResp::Ok
+                        } else if generation == playback_generation
+                            && sink.is_none()
+                            && pending_resume.is_some()
+                        {
+                            PAUSED.store(true, Ordering::Relaxed);
                             PlayerResp::Ok
                         } else {
                             if let Some(t) = &sink {

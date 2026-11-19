@@ -13,6 +13,34 @@ pub struct ConfirmRequest {
     pub email_type: String,
 }
 
+fn percent_decode(input: &str) -> Option<String> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return None;
+                }
+                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?;
+                let value = u8::from_str_radix(hex, 16).ok()?;
+                out.push(value);
+                i += 3;
+            }
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
 pub fn parse_confirm_url(url: &str) -> Option<ConfirmRequest> {
     let prefix = "vynl://confirm";
     if !url.starts_with(prefix) {
@@ -34,7 +62,7 @@ pub fn parse_confirm_url(url: &str) -> Option<ConfirmRequest> {
             continue;
         }
         match key.as_str() {
-            "token_hash" => token_hash = Some(value.to_string()),
+            "token_hash" => token_hash = Some(percent_decode(value)?),
             "type" => email_type = Some(value.to_string()),
             _ => {}
         }

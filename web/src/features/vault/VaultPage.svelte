@@ -156,6 +156,7 @@
   function dismissSearch(): void {
     searchGen++;
     searching = false;
+    resolving = false;
     url = "";
     showSearchResults = false;
     searchResults = [];
@@ -282,12 +283,13 @@
   async function findAndReview(): Promise<void> {
     const target = collection;
     if (!target || running) return;
+    const gen = dlGeneration;
     running = true;
     error = null;
     summary = null;
 
     await refreshDone({ force: true });
-    if (collection !== target) {
+    if (collection !== target || gen !== dlGeneration) {
       running = false;
       return;
     }
@@ -308,7 +310,7 @@
 
     try {
       const list = await vynl.matches(searchCollection);
-      if (collection !== target) {
+      if (collection !== target || gen !== dlGeneration) {
         return;
       }
       matches = list;
@@ -617,6 +619,7 @@
     savingPlaylist = false;
     saveHint = null;
     closePicker();
+    resolving = false;
   }
 
   function totalDur(): number {

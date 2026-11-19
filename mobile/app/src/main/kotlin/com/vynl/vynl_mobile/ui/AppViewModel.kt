@@ -396,12 +396,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 desktop.address = candidate
                 desktop.token = ""
                 desktop.fingerprint = fingerprint
-                if (desktop.pair(pin)) {
+                val pairError = desktop.pair(pin)
+                if (pairError == null) {
                     notice = "Paired with the desktop"
                     if (autoSync) syncLibrary()
                     return null
                 }
-                failure = "That pin was not accepted"
+                failure = pairError
             }
             desktop.address = previousAddress
             desktop.token = previousToken
@@ -771,6 +772,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 updateDownloaded = true
                 stagedBuild = found.build
             } catch (error: Exception) {
+                java.io.File(getApplication<Application>().filesDir, "updates/vynl-update.apk").delete()
                 updateFile = null
                 updateDownloaded = false
                 stagedBuild = null
@@ -783,6 +785,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun installUpdate() {
+        if (updateBusy) return
         val file = updateFile ?: return
         if (!updater.canInstall()) {
             updater.installSettingsIntent().addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
