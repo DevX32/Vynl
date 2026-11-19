@@ -286,6 +286,9 @@ function writeTasteCache(cache: TasteCache): void {
 }
 
 const cachedTaste = readTasteCache();
+if (cachedTaste && cachedTaste.tracks.length > 0) {
+  registerCatalogueTracks(cachedTaste.tracks);
+}
 
 let _taste = $state<CatalogueTrack[]>(cachedTaste?.tracks ?? []);
 let _tasteKey = $state(cachedTaste?.seedsKey ?? "");

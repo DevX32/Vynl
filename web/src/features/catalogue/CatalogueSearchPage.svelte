@@ -63,7 +63,7 @@
   $effect(() => {
     const key = profileKey;
     if (!key || key === lastMixKey) return;
-    if (getCatalogueTasteProfileKey() === key && taste.length > 0) {
+    if (getCatalogueTasteProfileKey() === key) {
       lastMixKey = key;
       return;
     }
