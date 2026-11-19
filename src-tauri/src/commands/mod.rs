@@ -674,7 +674,7 @@ pub async fn delete_playlist(id: String, app: AppHandle) -> Result<DeleteTracksR
             .iter()
             .filter(|path| !path.starts_with("ytm:"))
         {
-            match validate_path_in_output(path, &app) {
+            match require_deletable_path(path, &app) {
                 Ok(canonical) if canonical.exists() => {
                     if delete_track_file(&user_data, path, &canonical) {
                         deleted += 1;
@@ -743,7 +743,7 @@ pub async fn add_to_playlist(
     let output = output_dir_from_settings(&app)?;
     let validated_paths: Vec<String> = paths
         .iter()
-        .map(|p| require_path_in_output(p, &app).map(|c| c.to_string_lossy().to_string()))
+        .map(|p| require_deletable_path(p, &app).map(|c| c.to_string_lossy().to_string()))
         .collect::<Result<Vec<String>, String>>()?;
     let playlist = crate::services::playlists::add_to_playlist(&output, &id, &validated_paths)?;
     sync_playlist(&app, &playlist);

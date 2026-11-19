@@ -216,17 +216,25 @@ export function useDragList(options: DragListOptions) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") cancel();
     };
+    const onBlurEvent = () => cancel();
+    const onVis = () => {
+      if (document.visibilityState === "hidden") cancel();
+    };
     window.addEventListener("pointermove", onMoveEvent);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancelEvent);
     window.addEventListener("scroll", onScrollEvent, true);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", onBlurEvent);
+    document.addEventListener("visibilitychange", onVis);
     teardown = () => {
       window.removeEventListener("pointermove", onMoveEvent);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancelEvent);
       window.removeEventListener("scroll", onScrollEvent, true);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onBlurEvent);
+      document.removeEventListener("visibilitychange", onVis);
       teardown = null;
     };
   }

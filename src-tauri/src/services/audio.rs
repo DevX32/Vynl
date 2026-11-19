@@ -242,7 +242,14 @@ pub fn embed_lyrics(file: &Path, text: &str) -> Result<(), String> {
 
     tag.insert_text(ItemKey::Lyrics, text.to_string());
     tag.insert_text(ItemKey::UnsyncLyrics, text.to_string());
-    let tmp = file.with_file_name(format!(".vynl-lyrics-{}.tmp", std::process::id()));
+    static LYRICS_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let serial = LYRICS_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = file.with_file_name(format!(
+        ".vynl-lyrics-{}-{}-{}.tmp",
+        std::process::id(),
+        serial,
+        crate::services::util::now_ms()
+    ));
     let result = tagged
         .save_to_path(&tmp, lofty::config::WriteOptions::new().use_id3v23(true))
         .map_err(|e| format!("lofty save failed: {e}"));

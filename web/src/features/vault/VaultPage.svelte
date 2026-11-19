@@ -121,6 +121,7 @@
   function handleEvent(e: DownloadEvent): void {
     if (e.type === "track") {
       if (!running) return;
+      if (!Object.prototype.hasOwnProperty.call(progress, e.payload.trackId)) return;
       progress = { ...progress, [e.payload.trackId]: e.payload };
     } else if (e.type === "summary") {
       if (!running) return;

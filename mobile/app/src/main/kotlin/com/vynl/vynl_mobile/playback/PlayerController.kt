@@ -187,7 +187,14 @@ class PlayerController(
 
     fun toggle() {
         val player = controller ?: return
-        if (player.isPlaying) player.pause() else player.play()
+        if (player.isPlaying) {
+            player.pause()
+            return
+        }
+        if (player.playbackState == Player.STATE_ENDED || player.playerError != null) {
+            player.prepare()
+        }
+        player.play()
     }
 
     fun next() {
@@ -376,25 +383,34 @@ class PlayerController(
     private var canonicalPlaylist: List<CatalogueTrack>? = null
 
     fun toggleShuffle() {
-        val controller = controller ?: return
+        val player = controller ?: return
         val want = !_state.value.shuffle
-        val currentTrack = playlist.getOrNull(queueStart)
+        if (playlist.isEmpty()) {
+            player.shuffleModeEnabled = false
+            _state.value = _state.value.copy(shuffle = want)
+            return
+        }
+        val playing = (queueStart + player.currentMediaItemIndex).coerceIn(0, playlist.lastIndex)
+        val currentTrack = playlist.getOrNull(playing)
         if (want) {
             canonicalPlaylist = playlist
-            val preserveThrough = (queueStart + 1).coerceAtMost(playlist.size)
-            val head = playlist.subList(0, preserveThrough)
-            val tail = playlist.subList(preserveThrough, playlist.size).shuffled()
+            val head = playlist.subList(0, playing + 1)
+            val tail = playlist.subList(playing + 1, playlist.size).shuffled()
             playlist = head + tail
+            queueStart = playing
         } else {
-            val saved = canonicalPlaylist
-            if (saved != null && currentTrack != null) {
-                val index = saved.indexOfFirst { it.id == currentTrack.id }
-                playlist = saved
-                queueStart = if (index >= 0) index else 0
-            }
+            val restored = canonicalPlaylist ?: playlist
+            playlist = restored
             canonicalPlaylist = null
+            queueStart = currentTrack
+                ?.let { track -> restored.indexOfFirst { it.id == track.id } }
+                ?.takeIf { it >= 0 }
+                ?: playing.coerceAtMost(restored.lastIndex)
         }
         bumpQueueVersion()
+        resolved.clear()
+        val oldPosition = player.currentPosition
+        val wasPlaying = player.isPlaying
         scope.launch {
             try {
                 connect()
@@ -403,13 +419,15 @@ class PlayerController(
                     _state.value = _state.value.copy(error = "could not play that track")
                     return@launch
                 }
-                val position = controller.currentPosition
-                controller.setMediaItems(items, 0, position)
-                controller.prepare()
+                player.setMediaItems(items, 0, oldPosition)
+                player.prepare()
+                if (wasPlaying) {
+                    player.play()
+                }
             } catch (_: Exception) {
             }
         }
-        controller.shuffleModeEnabled = false
+        player.shuffleModeEnabled = false
         _state.value = _state.value.copy(shuffle = want)
     }
 

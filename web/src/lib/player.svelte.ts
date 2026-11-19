@@ -54,6 +54,9 @@ import type {
   StreamErrorEvent,
 } from "@lib/types";
 
+const IS_MINI =
+  typeof window !== "undefined" && window.location.hash.startsWith("#mini");
+
 function normalizeDuration(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? value
@@ -282,8 +285,10 @@ function handleTick(tick: PlaybackTick): void {
   }
 }
 
-vynl.onPlaybackTick(handleTick);
-vynl.onStreamError(handleStreamError);
+if (typeof window !== "undefined" && !IS_MINI) {
+  vynl.onPlaybackTick(handleTick);
+  vynl.onStreamError(handleStreamError);
+}
 
 async function reconcilePlaybackState(): Promise<void> {
   const np = getCurrentTrack();
@@ -501,6 +506,10 @@ export async function resumeOrPlay(
   seekTo?: number,
   generation = playGeneration,
 ): Promise<void> {
+  if (generation === playGeneration) {
+    clearRetry();
+    pendingStreamError = null;
+  }
   beginPlayReconcile(generation);
   try {
     let resumed = false;
@@ -948,7 +957,7 @@ function handleMediaControl(event: MediaControlEvent): void {
   }
 }
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && !IS_MINI) {
   $effect.root(() => {
     $effect(() => {
       const np = getCurrentTrack();

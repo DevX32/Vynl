@@ -154,7 +154,7 @@ class Store(context: Context) {
     private fun recreateCorruptedDb() {
         synchronized(dbMutex) {
             runCatching { helper.close() }
-            for (suffix in listOf("", "-wal", "-shm")) {
+            for (suffix in listOf("", "-wal", "-shm", "-journal")) {
                 runCatching { appContext.getDatabasePath("vynl.db$suffix")?.delete() }
             }
             helper = Helper(appContext)
@@ -188,23 +188,10 @@ class Store(context: Context) {
         lyrics: String? = null,
     ) {
         val db = writableDb()
-        val exists = db.rawQuery("SELECT 1 FROM tracks WHERE id = ?", arrayOf(track.id)).use {
-            it.moveToFirst()
-        }
-        if (exists) {
-            val values = ContentValues().apply {
-                put("title", track.title)
-                put("artist", track.artist)
-                put("album", track.album)
-                put("duration", track.duration)
-                put("cover", track.cover)
-                if (ext != null) put("ext", ext)
-                if (mtime != null) put("mtime", mtime)
-                if (lyrics != null) put("lyrics", lyrics)
-            }
-            db.update("tracks", values, "id = ?", arrayOf(track.id))
-        } else {
-            val values = ContentValues().apply {
+        db.insertWithOnConflict(
+            "tracks",
+            null,
+            ContentValues().apply {
                 put("id", track.id)
                 put("title", track.title)
                 put("artist", track.artist)
@@ -215,9 +202,20 @@ class Store(context: Context) {
                 put("mtime", mtime)
                 put("lyrics", lyrics)
                 put("added_at", System.currentTimeMillis())
-            }
-            db.insertWithOnConflict("tracks", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            },
+            SQLiteDatabase.CONFLICT_IGNORE,
+        )
+        val values = ContentValues().apply {
+            put("title", track.title)
+            put("artist", track.artist)
+            put("album", track.album)
+            put("duration", track.duration)
+            put("cover", track.cover)
+            if (ext != null) put("ext", ext)
+            if (mtime != null) put("mtime", mtime)
+            if (lyrics != null) put("lyrics", lyrics)
         }
+        db.update("tracks", values, "id = ?", arrayOf(track.id))
     }
 
     fun setAudioPath(trackId: String, path: String, mtime: Long? = null) {
@@ -869,9 +867,6 @@ class Store(context: Context) {
     }
 
     private fun upsertTrackDisplay(db: SQLiteDatabase, track: CatalogueTrack) {
-        val exists = db.rawQuery("SELECT 1 FROM tracks WHERE id = ?", arrayOf(track.id)).use {
-            it.moveToFirst()
-        }
         val values = ContentValues().apply {
             put("title", track.title)
             put("artist", track.artist)
@@ -879,16 +874,19 @@ class Store(context: Context) {
             put("duration", track.duration)
             put("cover", track.cover)
         }
-        if (exists) {
-            db.update("tracks", values, "id = ?", arrayOf(track.id))
-        } else {
-            values.put("id", track.id)
-            values.put("ext", "m4a")
-            values.put("mtime", 0L)
-            values.put("lyrics", "")
-            values.put("added_at", System.currentTimeMillis())
-            db.insertWithOnConflict("tracks", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        }
+        db.insertWithOnConflict(
+            "tracks",
+            null,
+            ContentValues(values).apply {
+                put("id", track.id)
+                put("ext", "m4a")
+                put("mtime", 0L)
+                put("lyrics", "")
+                put("added_at", System.currentTimeMillis())
+            },
+            SQLiteDatabase.CONFLICT_IGNORE,
+        )
+        db.update("tracks", values, "id = ?", arrayOf(track.id))
     }
 
     @Synchronized
@@ -990,10 +988,7 @@ class Store(context: Context) {
                         trackCount = cursor.getInt(4),
                     )
                 }
-            } ?: run {
-                db.endTransaction()
-                return null
-            }
+            } ?: return null
             val marks = readMarks(db, id)
             val ordered = readTrackKeys(db, id)
             db.setTransactionSuccessful()

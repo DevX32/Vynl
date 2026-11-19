@@ -1554,16 +1554,40 @@ async fn move_tagged_to_output(
         .await
         .map_err(|e| e.to_string())?;
 
-    if final_path.exists() {
+    let backup = if final_path.exists() {
         if overwrite {
-            let _ = std::fs::remove_file(final_path);
+            let backup = final_path.with_extension(format!(
+                "{}.overwrite-backup-{}",
+                final_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or(""),
+                std::process::id()
+            ));
+            match std::fs::rename(final_path, &backup) {
+                Ok(()) => Some(backup),
+                Err(error) => {
+                    let _ = std::fs::remove_file(tagged_file);
+                    return Err(format!("could not move the existing file aside: {error}"));
+                }
+            }
         } else {
             let _ = std::fs::remove_file(tagged_file);
             return Err("track already exists".to_string());
         }
-    }
+    } else {
+        None
+    };
 
-    move_file(tagged_file, final_path)?;
+    if let Err(error) = move_file(tagged_file, final_path) {
+        if let Some(backup) = &backup {
+            let _ = std::fs::rename(backup, final_path);
+        }
+        return Err(error);
+    }
+    if let Some(backup) = backup {
+        let _ = std::fs::remove_file(backup);
+    }
 
     if let Some((ext, text)) = lyrics_sidecar
         && !text.trim().is_empty()

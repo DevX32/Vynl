@@ -518,13 +518,18 @@ pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {
             continue;
         };
         let before = pl.paths.len();
+        let stale_keys: std::collections::HashSet<String> = paths
+            .iter()
+            .map(|p| crate::services::util::norm_path_key(p))
+            .collect();
         let removed: Vec<String> = pl
             .paths
             .iter()
-            .filter(|p| paths.iter().any(|stale| stale == *p))
+            .filter(|p| stale_keys.contains(&crate::services::util::norm_path_key(p)))
             .cloned()
             .collect();
-        pl.paths.retain(|p| !paths.iter().any(|stale| stale == p));
+        pl.paths
+            .retain(|p| !stale_keys.contains(&crate::services::util::norm_path_key(p)));
         if pl.paths.len() != before {
             record_marks(&mut pl, &[], &removed);
             touch(&mut pl);

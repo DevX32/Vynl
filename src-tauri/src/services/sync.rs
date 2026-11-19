@@ -704,8 +704,12 @@ fn record_pending_tombstone_impl(
         });
         if entries.len() > MAX_PENDING_TOMBSTONES {
             entries.sort_by_key(|entry| entry.deleted_at);
-            let keep = entries.split_off(entries.len() - MAX_PENDING_TOMBSTONES);
-            write_pending_tombstones(data_dir, &keep);
+            let evicted = entries.len() - MAX_PENDING_TOMBSTONES;
+            let ids: Vec<String> = entries.drain(..evicted).map(|entry| entry.id).collect();
+            eprintln!(
+                "Vynl sync: dropping {evicted} pending tombstone(s) for deleted playlists {ids:?}; those remote rows will not be deleted"
+            );
+            write_pending_tombstones(data_dir, &entries);
         } else {
             write_pending_tombstones(data_dir, &entries);
         }
@@ -1585,6 +1589,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     }
     if !folded.stale.is_empty() {
         for row in &folded.stale {
+            if row.local_id == LIKED_PLAYLIST_ID {
+                continue;
+            }
             let signature: Vec<String> = row.tracks.iter().map(|track| track.id.clone()).collect();
             record_pending_tombstone(
                 data_dir,
@@ -1603,6 +1610,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
     let mut consumed: std::collections::HashSet<String> = std::collections::HashSet::new();
     for row in &rows {
         known.insert(row.local_id.clone());
+        if row.local_id == LIKED_PLAYLIST_ID {
+            continue;
+        }
         if !crate::services::playlists::validate_id(&row.local_id) {
             eprintln!(
                 "Vynl sync: skipping remote row with invalid local_id: {}",
@@ -1638,7 +1648,7 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
                             {
                                 if let Err(error) = upsert_rows(
                                     data_dir,
-                                    &[playlist_value_push(&session, &playlist, &maps)],
+                                    &[playlist_value(&session, &playlist, &maps)],
                                 )
                                 .await
                                 {
@@ -1728,6 +1738,9 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
 
     for meta in playlists::list_playlists(output_dir) {
         if known.contains(&meta.id) {
+            continue;
+        }
+        if meta.id == LIKED_PLAYLIST_ID {
             continue;
         }
         if let Some(playlist) = playlists::get_playlist(output_dir, &meta.id) {

@@ -320,7 +320,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 refreshStore()
                 if (!silent) {
                     val counts = buildString {
-                        append("Sync sync — ${result.pulled} pulled, ${result.pushed} pushed")
+                        append("Sync — ${result.pulled} pulled, ${result.pushed} pushed")
                         if (result.deleted > 0) append(", ${result.deleted} deleted")
                         if (result.failed > 0) append(", ${result.failed} failed")
                     }
