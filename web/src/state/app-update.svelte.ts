@@ -102,12 +102,12 @@ export async function checkForAppUpdate(force = true, notify = false): Promise<v
     const next = await vynl.checkAppUpdate(force);
     applyStatus(next);
     if (next.error) {
-      toasts.error(t("update.checkFailed", { error: next.error }));
+      if (notify) toasts.error(t("update.checkFailed", { error: next.error }));
     } else if (notify && !next.available) {
       toasts.success(t("update.upToDate"));
     }
   } catch (e) {
-    toasts.error(t("update.checkFailed", { error: errText(e) }));
+    if (notify) toasts.error(t("update.checkFailed", { error: errText(e) }));
   } finally {
     _checking = false;
     _checkedAt = Date.now();
