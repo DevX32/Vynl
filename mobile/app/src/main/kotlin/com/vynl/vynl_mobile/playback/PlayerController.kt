@@ -69,6 +69,7 @@ class PlayerController(
     private var filling = false
     private val connectMutex = Mutex()
     private var queueVersion = 0
+    private var listEpoch = 0
 
     private val window = 3
 
@@ -102,14 +103,19 @@ class PlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            _state.value = _state.value.copy(
-                error = "could not play that track — skipping to the next one",
-            )
             val player = controller ?: return
+            resolved.remove(queueStart + player.currentMediaItemIndex)
             if (player.hasNextMediaItem()) {
+                _state.value = _state.value.copy(
+                    error = "could not play that track — skipping to the next one",
+                )
                 player.seekToNextMediaItem()
                 player.prepare()
                 player.play()
+            } else {
+                _state.value = _state.value.copy(
+                    error = "that track can't be played — nothing else follows it",
+                )
             }
         }
     }
@@ -172,9 +178,12 @@ class PlayerController(
             queueStart = startIndex.coerceIn(0, tracks.lastIndex)
             localFiles = files
             resolved.clear()
+            listEpoch += 1
             bumpQueueVersion()
+            val expectedEpoch = listEpoch
             val c = controller ?: return@launch
             val items = resolve(queueStart)
+            if (expectedEpoch != listEpoch) return@launch
             if (items.isEmpty()) {
                 _state.value = _state.value.copy(error = "could not play that track")
                 return@launch
@@ -191,7 +200,15 @@ class PlayerController(
             player.pause()
             return
         }
-        if (player.playbackState == Player.STATE_ENDED || player.playerError != null) {
+        if (player.playerError != null) {
+            if (player.hasNextMediaItem()) {
+                player.seekToNextMediaItem()
+                player.prepare()
+                player.play()
+            }
+            return
+        }
+        if (player.playbackState == Player.STATE_ENDED) {
             player.prepare()
         }
         player.play()
@@ -224,12 +241,15 @@ class PlayerController(
     }
 
     private suspend fun resolve(from: Int): List<MediaItem> = coroutineScope {
-        val end = minOf(playlist.size, from + window)
+        val snapshot = playlist
+        val locals = localFiles
+        val snapStart = queueStart
+        val end = minOf(snapshot.size, from + window)
         if (from >= end) return@coroutineScope emptyList()
         val results = (from until end).map { index ->
             async {
-                val track = playlist[index]
-                val local = localFiles[track.id]
+                val track = snapshot[index]
+                val local = locals[track.id]
                 if (local != null) {
                     mediaItem(track, android.net.Uri.fromFile(java.io.File(local)).toString())
                 } else {
@@ -242,7 +262,7 @@ class PlayerController(
         }.awaitAll()
         val failed = (from until end).filter { results[it - from] == null }
         if (failed.isNotEmpty()) {
-            val removedBeforeQueueStart = failed.count { it < queueStart }
+            val removedBeforeQueueStart = failed.count { it < snapStart }
             playlist = playlist.filterIndexed { idx, _ -> idx !in failed }
             if (removedBeforeQueueStart > 0) {
                 queueStart = (queueStart - removedBeforeQueueStart).coerceAtLeast(0)
@@ -261,14 +281,16 @@ class PlayerController(
         filling = true
         scope.launch {
             try {
-                val expectedVersion = queueVersion
+                val expectedEpoch = listEpoch
                 val player = controller ?: return@launch
                 val have = player.mediaItemCount
                 val absolute = queueStart + player.currentMediaItemIndex
                 val wanted = absolute + window + 1
                 if (wanted > queueStart + have) {
-                    val next = resolve(queueStart + have)
-                    if (expectedVersion != queueVersion) return@launch
+                    var next = resolve(queueStart + have)
+                    if (expectedEpoch != listEpoch) {
+                        next = resolve(queueStart + have)
+                    }
                     val currentPlayer = controller ?: return@launch
                     val currentHave = currentPlayer.mediaItemCount.coerceAtLeast(0)
                     if (have <= currentHave && next.isNotEmpty()) {
@@ -347,6 +369,7 @@ class PlayerController(
         val item = mutable.removeAt(from)
         mutable.add(to, item)
         playlist = mutable
+        listEpoch += 1
         bumpQueueVersion()
         val playing = controller?.let { queueStart + it.currentMediaItemIndex } ?: from
         val newPlaying = when {
@@ -363,8 +386,10 @@ class PlayerController(
         if (player.mediaItemCount == 0) {
             return
         }
+        val expectedEpoch = listEpoch
         scope.launch {
             val items = resolve(newPlaying)
+            if (expectedEpoch != listEpoch) return@launch
             if (items.isEmpty()) {
                 return@launch
             }
@@ -387,7 +412,7 @@ class PlayerController(
         val want = !_state.value.shuffle
         if (playlist.isEmpty()) {
             player.shuffleModeEnabled = false
-            _state.value = _state.value.copy(shuffle = want)
+            _state.value = _state.value.copy(shuffle = false)
             return
         }
         val playing = (queueStart + player.currentMediaItemIndex).coerceIn(0, playlist.lastIndex)
@@ -407,14 +432,17 @@ class PlayerController(
                 ?.takeIf { it >= 0 }
                 ?: playing.coerceAtMost(restored.lastIndex)
         }
+        listEpoch += 1
         bumpQueueVersion()
         resolved.clear()
         val oldPosition = player.currentPosition
         val wasPlaying = player.isPlaying
+        val expectedEpoch = listEpoch
         scope.launch {
             try {
                 connect()
                 val items = resolve(queueStart)
+                if (expectedEpoch != listEpoch) return@launch
                 if (items.isEmpty()) {
                     _state.value = _state.value.copy(error = "could not play that track")
                     return@launch
@@ -444,7 +472,9 @@ class PlayerController(
         if (playlist.isEmpty()) return
         playlist = playlist.shuffled()
         queueStart = 0
+        listEpoch += 1
         bumpQueueVersion()
+        val expectedEpoch = listEpoch
         resolved.clear()
         scope.launch {
             try {
@@ -453,6 +483,7 @@ class PlayerController(
                 return@launch
             }
             val items = resolve(0)
+            if (expectedEpoch != listEpoch) return@launch
             if (items.isEmpty()) {
                 _state.value = _state.value.copy(error = "could not play that track")
                 return@launch
@@ -465,7 +496,9 @@ class PlayerController(
 
     fun playAt(index: Int) {
         if (index !in playlist.indices) return
+        listEpoch += 1
         bumpQueueVersion()
+        val expectedEpoch = listEpoch
         scope.launch {
             queueStart = index
             try {
@@ -474,6 +507,7 @@ class PlayerController(
                 return@launch
             }
             val items = resolve(index)
+            if (expectedEpoch != listEpoch) return@launch
             if (items.isEmpty()) {
                 _state.value = _state.value.copy(error = "could not play that track")
                 return@launch

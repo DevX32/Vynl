@@ -1184,13 +1184,19 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
         let once = page_query(select, &uid, offset);
         let mut response = fetch_rows_once(data_dir, &once).await?;
         let mut status = response.status();
-        let mut body = response.text().await.unwrap_or_default();
+        let mut body = response
+            .text()
+            .await
+            .map_err(|e| format!("could not read the synced playlists body: {e}"))?;
         if !status.is_success() && once.contains("adds") && body_missing_marks(&body) {
             set_marks_supported(false);
             let fallback = page_query(NO_MARKS_SELECT, &uid, offset);
             response = fetch_rows_once(data_dir, &fallback).await?;
             status = response.status();
-            body = response.text().await.unwrap_or_default();
+            body = response
+                .text()
+                .await
+                .map_err(|e| format!("could not read the synced playlists body: {e}"))?;
         }
         if !status.is_success() {
             return Err(format!(
@@ -1201,7 +1207,9 @@ async fn fetch_rows(data_dir: &Path) -> Result<Vec<SyncRow>, String> {
         let (rows, page, dropped) = parse_rows_page(&body);
         out.extend(rows);
         if dropped > 0 {
-            eprintln!("sync: dropped {dropped} malformed row(s) on page at offset {offset}");
+            return Err(format!(
+                "could not parse {dropped} synced playlist(s); refusing to push anything"
+            ));
         }
         if page == 0 || (page as i64) < PAGE_SIZE {
             break;

@@ -183,8 +183,16 @@ class Store(context: Context) {
 
     private fun <T> dbCall(call: () -> T): T = try {
         call()
+    } catch (error: android.database.sqlite.SQLiteDatabaseLockedException) {
+        android.util.Log.e("Vynl", "database is locked; retrying", error)
+        Thread.sleep(120)
+        call()
     } catch (error: android.database.sqlite.SQLiteDatabaseCorruptException) {
         android.util.Log.e("Vynl", "database is corrupt; rebuilding and retrying", error)
+        recreateCorruptedDb()
+        call()
+    } catch (error: IllegalStateException) {
+        android.util.Log.e("Vynl", "database connection was closed; rebuilding and retrying", error)
         recreateCorruptedDb()
         call()
     }

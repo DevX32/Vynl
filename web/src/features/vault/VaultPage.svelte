@@ -127,7 +127,6 @@
       if (!running) return;
       summary = e.payload;
     } else if (e.type === "finished") {
-      running = false;
     }
   }
 
@@ -590,6 +589,8 @@
     dismissSearch();
     searchGen++;
     ++dlGeneration;
+    closePicker();
+    savingPlaylist = false;
     collection = payload.collection;
     matches = payload.matches;
     picks = payload.picks;

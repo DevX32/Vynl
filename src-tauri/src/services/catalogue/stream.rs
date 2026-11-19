@@ -95,7 +95,14 @@ pub async fn fetch_complete_file(
             Ok(()) => at = end,
             Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
                 refreshes += 1;
-                format = resolver.resolve(video_id, Some(format.itag)).await?;
+                match resolver.resolve(video_id, Some(format.itag)).await {
+                    Ok(next) => format = next,
+                    Err(error) => {
+                        let _ = std::fs::remove_file(&path);
+                        cache.finish(video_id, &file_name, false);
+                        return Err(format!("stream download failed: {error}"));
+                    }
+                }
             }
             Err(error) => {
                 let _ = std::fs::remove_file(&path);
@@ -765,7 +772,7 @@ impl StreamCache {
         false
     }
 
-    pub fn record_coverage(&self, video_id: &str, coverage: &[(u64, u64)]) {
+    pub fn record_coverage(&self, video_id: &str, file_name: &str, coverage: &[(u64, u64)]) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let due = state
             .last_coverage_save
@@ -775,6 +782,9 @@ impl StreamCache {
         let Some(entry) = state.index.entries.get_mut(video_id) else {
             return;
         };
+        if entry.file != file_name {
+            return;
+        }
         entry.coverage = coverage.to_vec();
         state.dirty = true;
         if due {
@@ -852,7 +862,7 @@ impl StreamCache {
                     entry.complete = true;
                     entry.last_used = now_secs();
                 }
-            } else {
+            } else if !still_active {
                 state.index.entries.remove(video_id);
             }
         }
@@ -928,7 +938,7 @@ pub struct RangeStore {
     state: Mutex<RangeState>,
     cv: Condvar,
     control: Arc<SessionControl>,
-    sink: Option<(Arc<StreamCache>, String)>,
+    sink: Option<(Arc<StreamCache>, String, String)>,
 }
 
 impl RangeStore {
@@ -936,7 +946,7 @@ impl RangeStore {
         total: u64,
         control: Arc<SessionControl>,
         coverage: Vec<(u64, u64)>,
-        sink: Option<(Arc<StreamCache>, String)>,
+        sink: Option<(Arc<StreamCache>, String, String)>,
     ) -> Self {
         let mut merged = Vec::new();
         let mut sorted = coverage;
@@ -969,8 +979,8 @@ impl RangeStore {
         if !self.control.complete.load(Ordering::Relaxed) && Self::covered(&state, 0, state.total) {
             self.control.complete.store(true, Ordering::SeqCst);
         }
-        if let Some((cache, video_id)) = &self.sink {
-            cache.record_coverage(video_id, &state.coverage);
+        if let Some((cache, video_id, file_name)) = &self.sink {
+            cache.record_coverage(video_id, file_name, &state.coverage);
         }
         self.cv.notify_all();
     }
@@ -1554,7 +1564,7 @@ impl StreamSession {
             total,
             control.clone(),
             coverage,
-            Some((cache.clone(), video_id.clone())),
+            Some((cache.clone(), video_id.clone(), file_name.clone())),
         ));
 
         let refresh_count = Arc::new(std::sync::atomic::AtomicU32::new(0));

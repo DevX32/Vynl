@@ -64,7 +64,7 @@ export function checkpointNowPlaying(): void {
   persistNowPlaying();
 }
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && !window.location.hash.startsWith("#mini")) {
   const flush = () => flushNowPlaying();
   window.addEventListener("pagehide", flush);
   window.addEventListener("beforeunload", flush);

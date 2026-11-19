@@ -1627,9 +1627,13 @@ fn move_file(from: &Path, to: &Path) -> Result<(), String> {
     match std::fs::rename(from, to) {
         Ok(()) => Ok(()),
         Err(_) => {
+            static MOVE_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let serial = MOVE_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let tmp = to.with_extension(format!(
-                "{}.tmp",
-                to.extension().and_then(|e| e.to_str()).unwrap_or("")
+                "{}.{}-{}.tmp",
+                to.extension().and_then(|e| e.to_str()).unwrap_or(""),
+                std::process::id(),
+                serial
             ));
             std::fs::copy(from, &tmp).map_err(|e| e.to_string())?;
             match std::fs::rename(&tmp, to) {

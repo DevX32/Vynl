@@ -556,6 +556,7 @@ export function pausePlayback(): void {
 }
 
 export function toggle(): void {
+  if (pendingPlayGeneration !== null) return;
   const np = getCurrentTrack();
   if (!np) return;
   const effectivelyPlaying = np.playing !== (pauseIntent > 0) || resumePending > 0;
@@ -678,7 +679,8 @@ function maybeStartCrossfade(position: number): boolean {
       if (playGeneration === generation && generation > 0) {
         playGeneration = generation - 1;
       }
-      resetCrossfade();
+      if (nextVideoId) prebufferState.delete(nextVideoId);
+      crossfadeTried = true;
     });
 
   return true;

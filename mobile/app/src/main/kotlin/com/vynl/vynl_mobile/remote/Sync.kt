@@ -196,7 +196,7 @@ class Sync(context: Context) {
                     }
                     .orEmpty()
                 if (ids.isNotEmpty()) {
-                    store.setCustomOrder(ids, remoteUpdated)
+                    runCatching { store.setCustomOrder(ids, remoteUpdated) }
                 }
             }
         }
