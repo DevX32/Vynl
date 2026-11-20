@@ -175,14 +175,26 @@ if ("mediaSession" in navigator && !IS_MINI) {
   navigator.mediaSession.setActionHandler("previoustrack", prev);
 }
 
+let playReconcileStartedAt = 0;
+const RECONCILE_STALE_MS = 10_000;
+
 function beginPlayReconcile(generation: number): void {
   pendingPlayGeneration = generation;
+  playReconcileStartedAt = Date.now();
 }
 
 function finishPlayReconcile(generation: number): void {
   if (pendingPlayGeneration === generation) {
     pendingPlayGeneration = null;
+    playReconcileStartedAt = 0;
   }
+}
+
+function reconcileIsStale(): boolean {
+  return (
+    pendingPlayGeneration !== null &&
+    Date.now() - playReconcileStartedAt >= RECONCILE_STALE_MS
+  );
 }
 
 const CROSSFADE_TAIL = 0.75;
@@ -561,7 +573,10 @@ export function pausePlayback(): void {
 }
 
 export function toggle(): void {
-  if (pendingPlayGeneration !== null) return;
+  if (reconcileIsStale()) {
+    pendingPlayGeneration = null;
+    playReconcileStartedAt = 0;
+  }
   const np = getCurrentTrack();
   if (!np) return;
   const effectivelyPlaying = np.playing !== (pauseIntent > 0) || resumePending > 0;
