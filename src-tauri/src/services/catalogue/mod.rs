@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use futures_util::future::{FutureExt, Shared};
+
 use crate::catalogue::CatalogueClient;
 use tauri::{AppHandle, Manager};
 use ytmusic::YtMusic;
@@ -16,8 +18,8 @@ use stream::{PreparedAudio, PreparedStream, StreamCache, UrlResolver};
 
 const STREAM_CACHE_DIR: &str = "catalogue";
 const CACHE_TAG: &str = "stream-cache";
-const PREPARED_LIMIT: usize = 4;
-const PREPARED_TTL: Duration = Duration::from_secs(120);
+const PREPARED_LIMIT: usize = 6;
+const PREPARED_TTL: Duration = Duration::from_secs(180);
 
 pub(super) fn sanitize_error(message: &str) -> String {
     let mut out = String::with_capacity(message.len());
@@ -47,12 +49,16 @@ static SERVICE: OnceLock<Arc<CatalogueService>> = OnceLock::new();
 
 type RuntimeHolder = Arc<tokio::runtime::Runtime>;
 
+type SharedPrepare =
+    Shared<futures_util::future::BoxFuture<'static, Result<PreparedStream, Arc<String>>>>;
+
 pub struct CatalogueService {
     client: CatalogueClient,
     resolver: Arc<UrlResolver>,
     cache: Arc<StreamCache>,
     runtime: RuntimeHolder,
     prepared: Mutex<HashMap<String, PreparedEntry>>,
+    inflight: Mutex<HashMap<String, SharedPrepare>>,
     seeks: Mutex<(u64, u64)>,
 }
 
@@ -93,6 +99,7 @@ impl CatalogueService {
             cache,
             runtime,
             prepared: Mutex::new(HashMap::new()),
+            inflight: Mutex::new(HashMap::new()),
             seeks: Mutex::new((0, 0)),
         })
     }
@@ -140,6 +147,47 @@ impl CatalogueService {
         duration_hint: Option<f64>,
     ) -> Result<PreparedStream, String> {
         stream::prepare(&self.cache, &self.resolver, video_id, start, duration_hint).await
+    }
+
+    fn inflight_for(&self, video_id: &str) -> Option<SharedPrepare> {
+        let inflight = self.inflight.lock().unwrap_or_else(|e| e.into_inner());
+        inflight.get(video_id).cloned()
+    }
+
+    async fn prepare_shared(
+        &self,
+        video_id: &str,
+        duration_hint: Option<f64>,
+    ) -> Result<PreparedStream, String> {
+        let key = video_id.to_string();
+        let shared = {
+            let mut inflight = self.inflight.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(existing) = inflight.get(&key) {
+                existing.clone()
+            } else {
+                let cache = self.cache.clone();
+                let resolver = self.resolver.clone();
+                let vid = key.clone();
+                let fut = async move {
+                    stream::prepare(&cache, &resolver, &vid, 0.0, duration_hint)
+                        .await
+                        .map_err(Arc::new)
+                }
+                .boxed()
+                .shared();
+                inflight.insert(key.clone(), fut.clone());
+                fut
+            }
+        };
+        let result = shared.clone().await.map_err(|e| e.as_ref().clone());
+        let mut inflight = self.inflight.lock().unwrap_or_else(|e| e.into_inner());
+        if inflight
+            .get(&key)
+            .is_some_and(|s| Shared::ptr_eq(s, &shared))
+        {
+            inflight.remove(&key);
+        }
+        result
     }
 
     fn prepare_blocking(
@@ -212,7 +260,7 @@ impl CatalogueService {
             }
         }
 
-        let prepared = self.prepare(video_id, 0.0, duration_hint).await?;
+        let prepared = self.prepare_shared(video_id, duration_hint).await?;
         let info = CatalogueStreamInfo {
             video_id: video_id.to_string(),
             duration: prepared.duration.or(duration_hint),
@@ -410,10 +458,20 @@ pub async fn prepare_for_playback(
     duration_hint: Option<f64>,
 ) -> Result<PreparedStream, String> {
     let service = service()?;
-    if start <= 0.01
-        && let Some(prepared) = service.take_prepared(video_id, start)
-    {
-        return Ok(prepared);
+    if start <= 0.01 {
+        if let Some(prepared) = service.take_prepared(video_id, start) {
+            return Ok(prepared);
+        }
+        // A prebuffer for this track may still be resolving. Join it instead
+        // of issuing a duplicate network resolve, then take the single owner
+        // from the stash so the session is never shared with a cached entry.
+        let inflight = service.inflight_for(video_id);
+        if let Some(shared) = inflight {
+            let _ = shared.await;
+            if let Some(prepared) = service.take_prepared(video_id, start) {
+                return Ok(prepared);
+            }
+        }
     }
     service.prepare(video_id, start, duration_hint).await
 }

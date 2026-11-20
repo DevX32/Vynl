@@ -464,6 +464,9 @@ function loadAndPlayNative(
   seekTo?: number,
 ): void {
   beginPlayReconcile(gen);
+  // Start prebuffering the next/prev tracks immediately so a quick skip is
+  // already warm, rather than waiting for the first 5s tick.
+  schedulePrebuffers();
   void playNative(path, seekTo, gen).then((info) => {
     finishPlayReconcile(gen);
     if (gen !== playGeneration) return;
