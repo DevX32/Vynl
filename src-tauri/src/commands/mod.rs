@@ -433,7 +433,7 @@ fn mirror_taste_to_liked(
 ) -> Result<(), String> {
     let before: std::collections::HashSet<String> =
         crate::services::taste::locked(user_data_dir, || {
-            crate::services::taste::load(user_data_dir)
+            crate::services::taste::load_unlocked(user_data_dir)
                 .iter()
                 .filter(|entry| entry.liked)
                 .map(|entry| format!("ytm:{}", entry.track.id))

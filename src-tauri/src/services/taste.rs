@@ -59,7 +59,7 @@ pub fn locked<R>(_user_data: &Path, f: impl FnOnce() -> R) -> R {
     f()
 }
 
-fn load_unlocked(user_data: &Path) -> Vec<TasteEntry> {
+pub fn load_unlocked(user_data: &Path) -> Vec<TasteEntry> {
     let path = taste_path(user_data);
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return Vec::new();
