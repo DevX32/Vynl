@@ -1322,48 +1322,68 @@ pub async fn player_play(
     seek_to: Option<f64>,
     generation: u64,
 ) -> Result<(), String> {
-    crate::services::player::play(&path, seek_to, generation)
+    tokio::task::spawn_blocking(move || crate::services::player::play(&path, seek_to, generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_crossfade(path: String, generation: u64, fade_secs: f64) -> Result<(), String> {
-    crate::services::player::crossfade(&path, generation, fade_secs)
+    tokio::task::spawn_blocking(move || {
+        crate::services::player::crossfade(&path, generation, fade_secs)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_stop(generation: u64) -> Result<(), String> {
-    crate::services::player::stop(generation)
+    tokio::task::spawn_blocking(move || crate::services::player::stop(generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_pause(generation: u64) -> Result<(), String> {
-    crate::services::player::pause(generation)
+    tokio::task::spawn_blocking(move || crate::services::player::pause(generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_resume(generation: u64) -> Result<bool, String> {
-    crate::services::player::resume(generation)
+    tokio::task::spawn_blocking(move || crate::services::player::resume(generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_seek(time: f64, generation: u64) -> Result<(), String> {
-    crate::services::player::seek(time, generation)
+    tokio::task::spawn_blocking(move || crate::services::player::seek(time, generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_set_volume(vol: u32) -> Result<(), String> {
-    crate::services::player::set_volume(vol);
+    tokio::task::spawn_blocking(move || crate::services::player::set_volume(vol))
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn player_get_position(generation: u64) -> Result<f64, String> {
-    crate::services::player::get_position(generation)
+    tokio::task::spawn_blocking(move || crate::services::player::get_position(generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn player_is_playing(generation: u64) -> Result<bool, String> {
-    crate::services::player::is_playing(generation)
+    tokio::task::spawn_blocking(move || crate::services::player::is_playing(generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
