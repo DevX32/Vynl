@@ -136,14 +136,26 @@ export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void
     if (!track.id) continue;
     const entry = libraryTrackOf(track);
     const current = next.get(entry.id);
-    if (current && sameMetadata(current, entry)) {
-      next.delete(entry.id);
-      next.set(entry.id, entry);
-      continue;
-    }
-    if (current) next.delete(entry.id);
+    if (!current || !sameMetadata(current, entry)) changed = true;
+    // Move the seen entry to the most-recent slot (LRU touch).
+    next.delete(entry.id);
     next.set(entry.id, entry);
-    changed = true;
+  }
+  if (!changed) {
+    // The LRU touch only counts when the resulting order differs from the
+    // current one; otherwise skip the write and the revision bump.
+    const prevIds = _tracks.map((track) => track.id);
+    const nextIds = [...next.keys()];
+    if (nextIds.length !== prevIds.length) {
+      changed = true;
+    } else {
+      for (let i = 0; i < nextIds.length; i += 1) {
+        if (prevIds[i] !== nextIds[i]) {
+          changed = true;
+          break;
+        }
+      }
+    }
   }
   if (!changed) return;
 
@@ -354,6 +366,13 @@ export async function loadCatalogueTaste(
     return;
   }
   if (!force && key === _tasteKey && (_taste.length > 0 || _tasteLoading)) {
+    if (profileKey && _tasteProfileKey !== profileKey) {
+      // The mix is already current for these seeds, but it belongs to a
+      // different profile — reconcile the bookkeeping so callers that check
+      // `getCatalogueTasteProfileKey()` stop re-fetching for this profile.
+      _tasteProfileKey = profileKey;
+      writeTasteCache({ profileKey, seedsKey: key, tracks: _taste });
+    }
     return;
   }
 

@@ -70,6 +70,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var mixError by mutableStateOf<String?>(null)
         private set
 
+    var mixLoadedAt = 0L
+        private set
+
     private val _results = MutableStateFlow<CatalogueResults?>(null)
     val results: StateFlow<CatalogueResults?> = _results.asStateFlow()
 
@@ -260,6 +263,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     authNotice = "Check your email to confirm your account, then sign in."
                 } else {
                     authNotice = "Signed in — playlists sync automatically"
+                    _mix.value = emptyList()
+                    mixLoadedAt = 0
                     syncNow()
                 }
             } catch (error: Exception) {
@@ -889,7 +894,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTab(index: Int) {
         tab = index
-        if (index == 3 && _mix.value.isEmpty() && !mixLoading && mixError == null) {
+        if (index == 3 && !mixLoading && mixError == null &&
+            (_mix.value.isEmpty() || System.currentTimeMillis() - mixLoadedAt >= MIX_REFRESH_MS)
+        ) {
             loadMix()
         }
     }
@@ -967,6 +974,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     (kept + fresh.filter { it.id !in keptIds }.take(60 - kept.size)).shuffled()
                 }
                 _mix.value = merged
+                mixLoadedAt = System.currentTimeMillis()
                 withContext(Dispatchers.IO) {
                     runCatching {
                         java.io.File(getApplication<Application>().filesDir, "mix.json")
@@ -1265,6 +1273,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val DISCOVERY_QUERY = "daft punk"
+        private const val MIX_REFRESH_MS = 10 * 60_000
     }
 }
 

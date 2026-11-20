@@ -194,6 +194,7 @@ function resetCrossfade(): void {
 }
 
 function handleStreamError(event: StreamErrorEvent): void {
+  if (event.generation !== playGeneration) return;
   const np = getCurrentTrack();
   if (!np) return;
   if (catalogueIdOf(np.path) !== event.videoId) return;

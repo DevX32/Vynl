@@ -82,33 +82,9 @@ function markSynced(): void {
   } catch {}
 }
 
-function mergeTasteEntries(local: TasteEntry[], remote: TasteEntry[]): TasteEntry[] {
-  const merged = new Map<string, TasteEntry>();
-  for (const entry of local) merged.set(entry.track.id, entry);
-  for (const r of remote) {
-    const l = merged.get(r.track.id);
-    if (!l) {
-      merged.set(r.track.id, r);
-      continue;
-    }
-    const liked = l.liked || r.liked;
-    const likedAt = [l.likedAt, r.likedAt].filter(
-      (value): value is number => typeof value === "number",
-    );
-    const newer = r.lastPlayed >= l.lastPlayed ? r : l;
-    merged.set(r.track.id, {
-      track: newer.track,
-      plays: Math.max(l.plays, r.plays),
-      lastPlayed: Math.max(l.lastPlayed, r.lastPlayed),
-      liked,
-      likedAt: !liked
-        ? null
-        : likedAt.length === 0
-          ? null
-          : Math.max(...likedAt),
-    });
-  }
-  return [...merged.values()];
+function hasSynced(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(TASTE_SYNCED_KEY) === "1";
 }
 
 function persist(): void {
@@ -130,12 +106,15 @@ export async function hydrateTaste(): Promise<void> {
   try {
     const stored = await vynl.tasteLoad();
     if (stored.length > 0) {
-      _entries = mergeTasteEntries(_entries, stored);
+      _entries = stored;
       markSynced();
       persistLocal();
       return;
     }
-    if (_entries.length > 0) {
+    if (hasSynced() && _entries.length > 0) {
+      _entries = [];
+      persistLocal();
+    } else if (_entries.length > 0) {
       await vynl.tasteSave(_entries);
       markSynced();
     }
