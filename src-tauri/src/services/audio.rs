@@ -27,6 +27,17 @@ pub(crate) fn codec_registry() -> &'static CodecRegistry {
     })
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackTags {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub year: Option<i64>,
+    pub track_number: Option<i64>,
+    pub genre: Option<String>,
+    pub comment: Option<String>,
+}
 pub struct FileSource {
     format_reader: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
@@ -183,6 +194,100 @@ pub fn duration_secs(path: &Path) -> Option<f64> {
     let tagged = Probe::open(path).ok()?.read().ok()?;
     let secs = tagged.properties().duration().as_secs_f64();
     (secs.is_finite() && secs > 0.0).then(|| secs.round())
+}
+
+pub fn read_tags(path: &Path) -> TrackTags {
+    use lofty::prelude::*;
+    use lofty::probe::Probe;
+    use lofty::tag::ItemKey;
+
+    let Ok(tagged) = Probe::open(path).and_then(|p| p.read()) else {
+        return TrackTags::default();
+    };
+    let tag = tagged.primary_tag().or_else(|| tagged.tags().first());
+
+    let get = |key: ItemKey| -> Option<String> {
+        tag.and_then(|t| t.get_string(key)).map(|s| s.to_string())
+    };
+    let parse = |value: Option<String>| -> Option<i64> {
+        value.and_then(|v| v.trim().parse::<i64>().ok())
+    };
+
+    TrackTags {
+        title: get(ItemKey::TrackTitle),
+        artist: get(ItemKey::TrackArtist),
+        album: get(ItemKey::AlbumTitle),
+        year: parse(get(ItemKey::Year)),
+        track_number: parse(get(ItemKey::TrackNumber)),
+        genre: get(ItemKey::Genre),
+        comment: get(ItemKey::Comment),
+    }
+}
+
+pub fn write_tags(path: &Path, tags: &TrackTags) -> Result<(), String> {
+    use lofty::prelude::*;
+    use lofty::probe::Probe;
+    use lofty::tag::{ItemKey, Tag, TagType};
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let mut tagged = Probe::open(path)
+        .and_then(|p| p.read())
+        .map_err(|e| format!("lofty probe failed: {e}"))?;
+
+    let tag_type = match tagged.primary_tag().map(|t| t.tag_type()) {
+        Some(t) => t,
+        None => match ext.as_str() {
+            "mp3" => TagType::Id3v2,
+            "flac" | "ogg" | "oga" | "opus" => TagType::VorbisComments,
+            "m4a" | "mp4" | "m4b" | "aac" => TagType::Mp4Ilst,
+            _ => return Err("this format cannot store tags.".into()),
+        },
+    };
+    if tagged.tag(tag_type).is_none() {
+        tagged.insert_tag(Tag::new(tag_type));
+    }
+    let tag = tagged
+        .tag_mut(tag_type)
+        .ok_or_else(|| "could not access tag.".to_string())?;
+
+    let set_or_remove = |tag: &mut Tag, key: ItemKey, value: Option<&str>| {
+        if let Some(v) = value {
+            if !v.trim().is_empty() {
+                tag.insert_text(key, v.trim().to_string());
+                return;
+            }
+        }
+        tag.remove_key(key);
+    };
+
+    set_or_remove(tag, ItemKey::TrackTitle, tags.title.as_deref());
+    set_or_remove(tag, ItemKey::TrackArtist, tags.artist.as_deref());
+    set_or_remove(tag, ItemKey::AlbumTitle, tags.album.as_deref());
+    set_or_remove(tag, ItemKey::Genre, tags.genre.as_deref());
+    set_or_remove(tag, ItemKey::Comment, tags.comment.as_deref());
+
+    if let Some(year) = tags.year {
+        tag.insert_text(ItemKey::Year, year.to_string());
+    } else {
+        tag.remove_key(ItemKey::Year);
+    }
+    if let Some(number) = tags.track_number {
+        tag.insert_text(ItemKey::TrackNumber, number.to_string());
+    } else {
+        tag.remove_key(ItemKey::TrackNumber);
+    }
+
+    let staged = staged_path(path);
+    tagged
+        .save_to_path(&staged, lofty::config::WriteOptions::new().use_id3v23(true))
+        .map_err(|e| format!("lofty save failed: {e}"))?;
+    replace_file(&staged, path).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn replay_gain_db(path: &Path) -> Option<f32> {

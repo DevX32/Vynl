@@ -1024,6 +1024,19 @@ pub async fn save_playlist_cover(
 }
 
 #[tauri::command]
+pub async fn library_read_tags(file: String) -> Result<crate::services::audio::TrackTags, String> {
+    Ok(crate::services::audio::read_tags(std::path::Path::new(&file)))
+}
+
+#[tauri::command]
+pub async fn library_write_tags(
+    file: String,
+    tags: crate::services::audio::TrackTags,
+) -> Result<(), String> {
+    crate::services::audio::write_tags(std::path::Path::new(&file), &tags)
+}
+
+#[tauri::command]
 pub async fn lyrics_local(file: String, app: AppHandle) -> Result<Option<LyricsResult>, String> {
     match require_path_in_output(&file, &app) {
         Ok(validated) => Ok(crate::services::lyrics::local_lyrics(

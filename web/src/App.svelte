@@ -42,8 +42,10 @@
   import PlayerPage from "./features/player/PlayerPage.svelte";
   import PlayerBar from "./features/player/PlayerBar.svelte";
   import FullscreenPlayer from "./features/player/FullscreenPlayer.svelte";
-  import QueueList from "./features/queue/QueueList.svelte";
+  import TagEditorModal from "./features/library/TagEditorModal.svelte";
   import { getQueueOpen } from "@state/queue.svelte";
+  import QueueList from "./features/queue/QueueList.svelte";
+  import { getTagEditorOpen } from "@state/tag-editor.svelte";
   import LibraryPage from "./features/playlists/LibraryPage.svelte";
   import PlaylistDetail from "./features/playlists/PlaylistDetail.svelte";
   import SettingsPage from "./features/settings/SettingsPage.svelte";
@@ -557,6 +559,10 @@
 
 {#if accountOpen}
   <AccountModal onclose={() => (accountOpen = false)} />
+{/if}
+
+{#if getTagEditorOpen()}
+  <TagEditorModal />
 {/if}
 
 {#if getMobileSyncUiOpen()}

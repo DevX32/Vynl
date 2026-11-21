@@ -22,6 +22,7 @@ import type {
   SearchResult,
   ToolName,
   ToolStatus,
+  TrackTags,
   MobileSyncStatus,
   SyncStatus,
   SyncAuthResult,
@@ -325,6 +326,12 @@ export const vynl = {
 
   onStreamError: (cb: (event: StreamErrorEvent) => void): (() => void) =>
     onEvent<StreamErrorEvent>("vynl:player:stream-error", cb),
+
+  libraryReadTags: (file: string): Promise<TrackTags> =>
+    cmd("library_read_tags", { file }),
+
+  libraryWriteTags: (file: string, tags: TrackTags): Promise<void> =>
+    cmd("library_write_tags", { file, tags }),
 
   tasteLoad: (): Promise<TasteEntry[]> => cmd("taste_load"),
 
