@@ -10,6 +10,7 @@
     Trash2,
     Clock,
     AlertCircle,
+    Tag,
   } from "lucide-svelte";
   import { vynl } from "../../lib/vynl";
   import { refreshLibrary, getLibrary, getLibraryError } from "@state/library.svelte";
@@ -24,6 +25,7 @@
   import { toggle } from "@lib/player.svelte";
   import { setShuffle } from "@state/player.svelte";
   import { isInputField } from "@state/shortcuts.svelte";
+  import { openTagEditor } from "@state/tag-editor.svelte";
   import {
     fmtTotalDuration,
     fmtTime,
@@ -147,6 +149,12 @@
         label: t("library.addToPlaylist"),
         icon: ListPlus,
         action: () => openPicker(trk),
+      },
+      { type: "separator" },
+      {
+        label: t("library.editTags"),
+        icon: Tag,
+        action: () => openTagEditor(trk.path),
       },
       { type: "separator" },
       {

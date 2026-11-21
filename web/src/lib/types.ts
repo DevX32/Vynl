@@ -205,6 +205,16 @@ export interface RpcPresence {
 
 export type ToolName = "yt-dlp";
 
+export interface TrackTags {
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  year: number | null;
+  trackNumber: number | null;
+  genre: string | null;
+  comment: string | null;
+}
+
 export interface LibraryTrack {
   id: string;
   path: string;

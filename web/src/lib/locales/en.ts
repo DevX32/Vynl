@@ -533,6 +533,15 @@ export const en = {
       '"{title}" will be permanently removed from your library and deleted from disk. This action cannot be undone.',
     deleteFailed: "Failed to delete track",
     deleted: 'Deleted "{title}"',
+    editTags: "Edit tags",
+    tagsSaved: "Tags saved",
+    tagTitle: "Title",
+    tagArtist: "Artist",
+    tagAlbum: "Album",
+    tagYear: "Year",
+    tagTrackNumber: "Track #",
+    tagGenre: "Genre",
+    tagComment: "Comment",
   },
   playlist: {
     searchPlaceholder: "Search this playlist",
@@ -671,6 +680,7 @@ export const en = {
   },
   common: {
     close: "Close",
+    cancel: "Cancel",
     select: "Select",
     previousPage: "Previous page",
     nextPage: "Next page",
@@ -678,6 +688,8 @@ export const en = {
     dismiss: "Dismiss",
     loading: "Loading",
     open: "Open",
+    saving: "Saving...",
+    save: "Save",
   },
 
 } as const;

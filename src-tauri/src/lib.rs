@@ -447,6 +447,8 @@ pub fn run() {
             commands::player_set_volume,
             commands::player_set_speed,
             commands::player_set_replay_gain,
+            commands::library_read_tags,
+            commands::library_write_tags,
             commands::player_get_position,
             commands::player_is_playing,
             commands::cache_remote_audio,
