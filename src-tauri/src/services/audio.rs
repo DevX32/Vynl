@@ -209,9 +209,8 @@ pub fn read_tags(path: &Path) -> TrackTags {
     let get = |key: ItemKey| -> Option<String> {
         tag.and_then(|t| t.get_string(key)).map(|s| s.to_string())
     };
-    let parse = |value: Option<String>| -> Option<i64> {
-        value.and_then(|v| v.trim().parse::<i64>().ok())
-    };
+    let parse =
+        |value: Option<String>| -> Option<i64> { value.and_then(|v| v.trim().parse::<i64>().ok()) };
 
     TrackTags {
         title: get(ItemKey::TrackTitle),
@@ -256,11 +255,11 @@ pub fn write_tags(path: &Path, tags: &TrackTags) -> Result<(), String> {
         .ok_or_else(|| "could not access tag.".to_string())?;
 
     let set_or_remove = |tag: &mut Tag, key: ItemKey, value: Option<&str>| {
-        if let Some(v) = value {
-            if !v.trim().is_empty() {
-                tag.insert_text(key, v.trim().to_string());
-                return;
-            }
+        if let Some(v) = value
+            && !v.trim().is_empty()
+        {
+            tag.insert_text(key, v.trim().to_string());
+            return;
         }
         tag.remove_key(key);
     };

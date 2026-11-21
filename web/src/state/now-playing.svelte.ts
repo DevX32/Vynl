@@ -387,8 +387,10 @@ export function updateTime(time: number, forcePersist = false): void {
   if (!_state) return;
   const seeked = forcePersist || Math.abs(time - _currentTime) > 2;
   _currentTime = time;
-  syncRpc(seeked);
-  if (seeked) persistNowPlaying();
+  if (seeked) {
+    syncRpc(true);
+    persistNowPlaying();
+  }
 }
 
 export function updatePlaying(playing: boolean): void {
