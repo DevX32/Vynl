@@ -35,11 +35,20 @@ import {
   getCurrentMuted,
   getCurrentLoop,
   getCurrentShuffle,
+  getPlaybackSpeed,
+  getReplayGain,
   setPlayError,
   setVolume,
   onMuteChange,
+  onSpeedChange,
+  onReplayGainChange,
 } from "@state/player.svelte";
 import type { LoopMode } from "@state/player.svelte";
+import {
+  consumeEndOfTrack,
+  getSleepMode,
+  setSleepPauseHandler,
+} from "@state/sleep-timer.svelte";
 import { vynl } from "@lib/vynl";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { clamp01 } from "@lib/pointer";
@@ -64,7 +73,7 @@ function normalizeDuration(value: number | undefined): number {
 }
 
 let playGeneration = Date.now();
-let pendingRetry: ReturnType<typeof setTimeout> | null = null;
+let pendingRetry: number | null = null;
 let consecutivePlayFailures = 0;
 const MAX_CONSECUTIVE_PLAY_FAILURES = 3;
 let seekPending = false;
@@ -165,8 +174,12 @@ function schedulePrebuffers(force = false): void {
 }
 
 onMuteChange(applyVolume);
+onSpeedChange(applySpeed);
+onReplayGainChange(applyReplayGain);
 
 setSeekHandler(seekToTime);
+
+setSleepPauseHandler(pausePlayback);
 
 if ("mediaSession" in navigator && !IS_MINI) {
   navigator.mediaSession.setActionHandler("play", handleMediaPlay);
@@ -242,6 +255,10 @@ function handleTick(tick: PlaybackTick): void {
           return;
         }
         scheduleRetry(np.id);
+        return;
+      }
+      if (consumeEndOfTrack()) {
+        checkpointNowPlaying();
         return;
       }
       nextAutomatic();
@@ -345,6 +362,14 @@ if (typeof document !== "undefined") {
 export function applyVolume(): void {
   const raw = getCurrentMuted() ? 0 : getCurrentVolume();
   void vynl.playerSetVolume(Math.round(raw * 100)).catch(() => {});
+}
+
+export function applySpeed(): void {
+  void vynl.playerSetSpeed(getPlaybackSpeed()).catch(() => {});
+}
+
+export function applyReplayGain(): void {
+  void vynl.playerSetReplayGain(getReplayGain()).catch(() => {});
 }
 
 export function setVolumeAt(ratio: number): void {
@@ -661,6 +686,7 @@ function maybeStartCrossfade(position: number): boolean {
   if (!np?.playing || !np.path || !Number.isFinite(np.duration) || np.duration <= 0) return false;
   if (isSeekDragging() || seekPending) return false;
   if (getCurrentLoop() === "one") return false;
+  if (getSleepMode() === "end") return false;
 
   const remaining = np.duration - position;
   if (!Number.isFinite(remaining)) return false;

@@ -12,6 +12,13 @@ use crate::services::catalogue::stream::{PreparedAudio, StreamSession, StreamSou
 
 static VOLUME: AtomicU32 = AtomicU32::new(75);
 static PAUSED: AtomicBool = AtomicBool::new(false);
+static SPEED: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
+static REPLAY_GAIN: AtomicBool = AtomicBool::new(false);
+
+const MIN_SPEED: f32 = 0.5;
+const MAX_SPEED: f32 = 2.0;
+const REPLAY_GAIN_MIN_LINEAR: f32 = 0.25;
+const REPLAY_GAIN_MAX_LINEAR: f32 = 4.0;
 
 pub const PLAYBACK_TICK_EVENT: &str = "vynl:player:tick";
 const TICK_INTERVAL: Duration = Duration::from_millis(100);
@@ -124,6 +131,28 @@ fn emit_stream_error(path: &str, message: &str, generation: u64) {
 fn scale_volume(raw: u32) -> f32 {
     let v = raw as f32 / 100.0;
     (v * v).min(0.8)
+}
+
+fn clamp_speed(speed: f32) -> f32 {
+    if speed.is_finite() {
+        speed.clamp(MIN_SPEED, MAX_SPEED)
+    } else {
+        1.0
+    }
+}
+
+fn playback_speed() -> f32 {
+    f32::from_bits(SPEED.load(Ordering::Relaxed))
+}
+
+fn replay_gain_linear(db: f32) -> f32 {
+    if db.is_finite() {
+        10f32
+            .powf(db / 20.0)
+            .clamp(REPLAY_GAIN_MIN_LINEAR, REPLAY_GAIN_MAX_LINEAR)
+    } else {
+        1.0
+    }
 }
 
 pub const EQ_BAND_COUNT: usize = 10;
@@ -721,6 +750,18 @@ impl TrackInput {
     }
 }
 
+fn track_replay_gain(input: &TrackInput) -> Option<f32> {
+    if !REPLAY_GAIN.load(Ordering::Relaxed) {
+        return None;
+    }
+    match input {
+        TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
+            crate::services::audio::replay_gain_db(path)
+        }
+        TrackInput::Stream(_) => None,
+    }
+}
+
 fn apply_pending_pause(
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
@@ -759,6 +800,7 @@ impl TrackSink {
         fade_secs: f64,
         position_offset: Duration,
     ) -> Result<(Self, Option<f64>), String> {
+        let replay_gain = track_replay_gain(&input);
         let (source, total, session): DecodedStream = match input {
             TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
                 let source = crate::services::audio::FileSource::open(&path)?;
@@ -784,9 +826,10 @@ impl TrackSink {
         }
         let sink = Sink::try_new(handle).map_err(|e| format!("sink: {e}"))?;
         sink.append(FadeSource::new(
-            EqualizerSource::new(source),
+            EqualizerSource::new(source).amplify(replay_gain_linear(replay_gain.unwrap_or(0.0))),
             control.clone(),
         ));
+        sink.set_speed(playback_speed());
         Ok((
             Self {
                 sink,
@@ -864,6 +907,8 @@ enum PlayerCmd {
     Resume(u64),
     Seek(f64, u64),
     Volume(u32),
+    Speed(f32),
+    ReplayGain(bool),
     GetPosition(u64),
     IsPlaying(u64),
     Status,
@@ -1522,6 +1567,21 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                         }
                         PlayerResp::Ok
                     }
+                    PlayerCmd::Speed(speed) => {
+                        let speed = clamp_speed(speed);
+                        SPEED.store(speed.to_bits(), Ordering::Relaxed);
+                        if let Some(t) = &sink {
+                            t.sink.set_speed(speed);
+                        }
+                        if let Some(out) = &fading {
+                            out.track.sink.set_speed(speed);
+                        }
+                        PlayerResp::Ok
+                    }
+                    PlayerCmd::ReplayGain(enabled) => {
+                        REPLAY_GAIN.store(enabled, Ordering::Relaxed);
+                        PlayerResp::Ok
+                    }
                     PlayerCmd::GetPosition(generation) => {
                         let pos = if generation == active_generation {
                             reported_pos(sink.as_ref(), seek_floor)
@@ -1803,6 +1863,14 @@ pub fn seek(time: f64, generation: u64) -> Result<(), String> {
 
 pub fn set_volume(vol: u32) {
     let _ = send(PlayerCmd::Volume(vol));
+}
+
+pub fn set_speed(speed: f32) {
+    let _ = send(PlayerCmd::Speed(speed));
+}
+
+pub fn set_replay_gain(enabled: bool) {
+    let _ = send(PlayerCmd::ReplayGain(enabled));
 }
 
 pub fn get_position(generation: u64) -> Result<f64, String> {

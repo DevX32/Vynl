@@ -308,6 +308,12 @@ export const vynl = {
   playerSetVolume: (vol: number): Promise<void> =>
     cmd("player_set_volume", { vol }),
 
+  playerSetSpeed: (speed: number): Promise<void> =>
+    cmd("player_set_speed", { speed }),
+
+  playerSetReplayGain: (enabled: boolean): Promise<void> =>
+    cmd("player_set_replay_gain", { enabled }),
+
   playerGetPosition: (generation?: number): Promise<number> =>
     cmd("player_get_position", { generation: generation ?? 0 }),
 

@@ -17,7 +17,6 @@
   import { refreshLibrary } from "@state/library.svelte";
   import { playTrack } from "@lib/player.svelte";
   import { handleGlobalKey, getShowShortcutsOverlay, toggleShortcutsOverlay } from "@state/shortcuts.svelte";
-  import { getEqOpen } from "@state/equalizer.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
   import { wasOnboarded } from "@lib/onboarding.svelte";
   import Onboarding from "./features/onboarding/Onboarding.svelte";
@@ -49,7 +48,6 @@
   import PlaylistDetail from "./features/playlists/PlaylistDetail.svelte";
   import SettingsPage from "./features/settings/SettingsPage.svelte";
   import AccountModal from "./features/account/AccountModal.svelte";
-  import EqualizerModal from "./features/settings/EqualizerModal.svelte";
   import MobileSyncModal from "./features/settings/MobileSyncModal.svelte";
   import VaultPage from "./features/vault/VaultPage.svelte";
   import HomePage from "./features/home/HomePage.svelte";
@@ -559,10 +557,6 @@
 
 {#if accountOpen}
   <AccountModal onclose={() => (accountOpen = false)} />
-{/if}
-
-{#if getEqOpen()}
-  <EqualizerModal />
 {/if}
 
 {#if getMobileSyncUiOpen()}
