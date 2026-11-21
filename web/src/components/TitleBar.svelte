@@ -12,12 +12,29 @@
     MessageCircleQuestionMark,
     PanelLeftClose,
     PanelLeftOpen,
+    Download,
+    LoaderCircle,
   } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import {
+    getUpdateAvailable,
+    getUpdateInstalling,
+    getUpdateStatus,
+    installAppUpdate,
+  } from "@state/app-update.svelte";
 
   const win = getCurrentWindow();
 
   let maximized = $state(false);
+
+  const updateStatus = $derived(getUpdateStatus());
+  const updateAvailable = $derived(getUpdateAvailable());
+  const updateInstalling = $derived(getUpdateInstalling());
+  const updateDownloading = $derived(!!updateStatus?.downloading);
+  const updateReady = $derived(!!updateStatus?.ready);
+  const showUpdateButton = $derived(
+    updateAvailable || updateDownloading || updateReady || updateInstalling,
+  );
 
   let {
     onBack,
@@ -120,6 +137,26 @@
   </div>
 
   <div class="controls">
+    {#if showUpdateButton}
+      <button
+        class="update-btn"
+        aria-label={t("update.availableTitle")}
+        title={t("update.updateAvailableTo", { version: updateStatus?.version ?? "" })}
+        onclick={() => void installAppUpdate()}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          void installAppUpdate();
+        }}
+        disabled={updateInstalling || updateDownloading}
+      >
+        {#if updateInstalling || updateDownloading}
+          <span class="spin"><LoaderCircle size={15} stroke-width={1.5} aria-hidden="true" /></span>
+        {:else}
+          <Download size={15} stroke-width={1.5} />
+        {/if}
+      </button>
+      <span class="controls-divider" aria-hidden="true"></span>
+    {/if}
     <button
       class="shortcut-btn"
       aria-label={t("shortcuts.actions.showShortcuts")}
@@ -271,6 +308,57 @@
     height: 100%;
     -webkit-app-region: no-drag;
     z-index: 2;
+  }
+
+  .update-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    transition:
+      color 0.1s,
+      background 0.1s;
+    animation: update-pulse 1.6s ease-in-out infinite;
+  }
+
+  .update-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  .update-btn:active:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  .update-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+    animation: none;
+  }
+
+  .spin {
+    display: inline-flex;
+    animation: spin 0.85s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes update-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
+    }
   }
 
   .shortcut-btn {
