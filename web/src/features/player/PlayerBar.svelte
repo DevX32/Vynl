@@ -6,7 +6,6 @@
     VolumeOff,
     Expand,
     Shrink,
-    AudioLines,
     PictureInPicture2,
     Heart,
     Music2,
@@ -17,7 +16,7 @@
   import { MINI_CLOSED_EVENT } from "@lib/mini-sync";
   import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
   import { getCurrentMuted, getCurrentVolume, toggleMute, getLyricsOpen, toggleLyrics } from "@state/player.svelte";
-  import { applyVolume } from "@lib/player.svelte";
+  import { applyReplayGain, applySpeed, applyVolume } from "@lib/player.svelte";
   import { catalogueIdFromPath } from "@state/catalogue.svelte";
   import {
     getTasteLikedIds,
@@ -29,8 +28,6 @@
   import SeekSlider from "./SeekSlider.svelte";
   import TransportControls from "./TransportControls.svelte";
   import VolumeSlider from "./VolumeSlider.svelte";
-  import { getCurrentSettings } from "@state/settings.svelte";
-  import { getEqOpen, openEq } from "@state/equalizer.svelte";
   import { getQueueOpen, toggleQueue } from "@state/queue.svelte";
 
   let {
@@ -108,6 +105,8 @@
 
   onMount(() => {
     applyVolume();
+    applySpeed();
+    applyReplayGain();
 
     let disposed = false;
     let offMini: (() => void) | null = null;
@@ -225,15 +224,6 @@
       aria-pressed={active && getLyricsOpen()}
     >
       <Music2 size={12} stroke-width={1.5} />
-    </button>
-    <button
-      class="icon-btn small"
-      class:on={getCurrentSettings().eqEnabled}
-      onclick={openEq}
-      aria-label={t("player.equalizer")}
-      aria-pressed={getEqOpen()}
-    >
-      <AudioLines size={14} stroke-width={1.5} />
     </button>
     <button
       class="icon-btn small"

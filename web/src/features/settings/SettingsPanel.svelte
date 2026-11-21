@@ -17,8 +17,30 @@
   import MobileSyncSettings from "./MobileSyncSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
   import TasteSettings from "./TasteSettings.svelte";
+  import Equalizer from "./Equalizer.svelte";
+  import CrossfadeControl from "./CrossfadeControl.svelte";
+  import { SPEED_STEPS, SLEEP_STEPS, formatSpeed } from "@lib/playback";
+  import {
+    getPlaybackSpeed,
+    setPlaybackSpeed,
+    getReplayGain,
+    setReplayGain,
+  } from "@state/player.svelte";
+  import {
+    cancelSleepTimer,
+    getSleepMinutes,
+    getSleepMode,
+    getSleepRemainingLabel,
+    sleepAtEndOfTrack,
+    startSleepTimer,
+  } from "@state/sleep-timer.svelte";
 
   const settings = $derived(getCurrentSettings());
+
+  const playbackSpeed = $derived(getPlaybackSpeed());
+  const replayGain = $derived(getReplayGain());
+  const sleepMode = $derived(getSleepMode());
+  const sleepMinutes = $derived(getSleepMinutes());
 
   let _clearingCache = $state(false);
   let _confirmingClear = $state(false);
@@ -229,6 +251,87 @@
           />
         {/snippet}
       </SettingRow>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-head">
+      <span class="label mono">{t("settings.groupEqualizer")}</span>
+    </div>
+    <div class="section flush">
+      <Equalizer />
+      <CrossfadeControl />
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="section flush">
+      <div class="label mono">{t("player.playbackSpeed")}</div>
+      <div class="chips">
+        {#each SPEED_STEPS as step (step)}
+          <Button
+            size="sm"
+            selected={step === playbackSpeed}
+            onclick={() => setPlaybackSpeed(step)}
+          >
+            {formatSpeed(step)}
+          </Button>
+        {/each}
+      </div>
+      <div class="hint mono">{t("player.playbackSpeedHint")}</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="rows">
+      <SettingRow
+        label={t("player.replayGain")}
+        hint={t("player.replayGainHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={replayGain}
+            label={t("player.replayGainToggle")}
+            onclick={() => setReplayGain(!replayGain)}
+          />
+        {/snippet}
+      </SettingRow>
+    </div>
+
+    <div class="section flush divider">
+      <div class="label mono">{t("player.sleepTimer")}</div>
+      <div class="hint mono">{t("player.sleepTimerHint")}</div>
+      {#if sleepMode === "time"}
+        <div class="hint mono">
+          {t("player.sleepRemaining", { time: getSleepRemainingLabel() })}
+        </div>
+      {:else if sleepMode === "end"}
+        <div class="hint mono">{t("player.sleepEndOfTrack")}</div>
+      {/if}
+      <div class="chips">
+        <Button
+          size="sm"
+          selected={sleepMode === "off"}
+          onclick={cancelSleepTimer}
+        >
+          {t("player.sleepOff")}
+        </Button>
+        {#each SLEEP_STEPS as minutes (minutes)}
+          <Button
+            size="sm"
+            selected={sleepMode === "time" && sleepMinutes === minutes}
+            onclick={() => startSleepTimer(minutes)}
+          >
+            {t("player.sleepMinutes", { n: minutes })}
+          </Button>
+        {/each}
+        <Button
+          size="sm"
+          selected={sleepMode === "end"}
+          onclick={sleepAtEndOfTrack}
+        >
+          {t("player.sleepEndOfTrack")}
+        </Button>
+      </div>
     </div>
   </div>
 
@@ -455,6 +558,12 @@
     font-size: 11px;
     color: var(--faint);
     line-height: 1.5;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .hint-row {

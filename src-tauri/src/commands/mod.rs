@@ -1373,6 +1373,22 @@ pub async fn player_set_volume(vol: u32) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn player_set_speed(speed: f32) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || crate::services::player::set_speed(speed))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn player_set_replay_gain(enabled: bool) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || crate::services::player::set_replay_gain(enabled))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn player_get_position(generation: u64) -> Result<f64, String> {
     tokio::task::spawn_blocking(move || crate::services::player::get_position(generation))
         .await

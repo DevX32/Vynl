@@ -1,4 +1,5 @@
 import { resetShuffleForMode } from "./now-playing.svelte";
+import { normalizeSpeed } from "@lib/playback";
 
 export type LoopMode = "off" | "all" | "one";
 
@@ -29,7 +30,19 @@ function loadCrossfade(): number {
   return Number.isFinite(v) && v >= 0 && v <= MAX_CROSSFADE_SECS ? v : 0;
 }
 
+function loadSpeed(): number {
+  const raw = localStorage.getItem("vynl.speed");
+  if (raw === null) return 1;
+  return normalizeSpeed(Number(raw));
+}
+
+function loadReplayGain(): boolean {
+  return localStorage.getItem("vynl.replayGain") === "1";
+}
+
 let _crossfade = $state(loadCrossfade());
+let _speed = $state(loadSpeed());
+let _replayGain = $state(loadReplayGain());
 let _volume = $state(loadVolume());
 let _muted = $state(localStorage.getItem("vynl.muted") === "1");
 let _shuffle = $state(localStorage.getItem("vynl.shuffle") === "1");
@@ -48,6 +61,47 @@ export function setCrossfade(secs: number): void {
   if (next === _crossfade) return;
   _crossfade = next;
   localStorage.setItem("vynl.crossfade", String(next));
+}
+
+export function getPlaybackSpeed(): number {
+  return _speed;
+}
+
+let _onSpeedChange: (() => void)[] = [];
+
+export function onSpeedChange(fn: () => void): () => void {
+  _onSpeedChange.push(fn);
+  return () => {
+    _onSpeedChange = _onSpeedChange.filter((f) => f !== fn);
+  };
+}
+
+export function setPlaybackSpeed(value: number): void {
+  const next = normalizeSpeed(value);
+  if (next === _speed) return;
+  _speed = next;
+  localStorage.setItem("vynl.speed", String(next));
+  _onSpeedChange.forEach((fn) => fn());
+}
+
+export function getReplayGain(): boolean {
+  return _replayGain;
+}
+
+let _onReplayGainChange: (() => void)[] = [];
+
+export function onReplayGainChange(fn: () => void): () => void {
+  _onReplayGainChange.push(fn);
+  return () => {
+    _onReplayGainChange = _onReplayGainChange.filter((f) => f !== fn);
+  };
+}
+
+export function setReplayGain(enabled: boolean): void {
+  if (enabled === _replayGain) return;
+  _replayGain = enabled;
+  localStorage.setItem("vynl.replayGain", enabled ? "1" : "0");
+  _onReplayGainChange.forEach((fn) => fn());
 }
 
 export function getCurrentVolume(): number {

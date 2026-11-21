@@ -185,6 +185,24 @@ pub fn duration_secs(path: &Path) -> Option<f64> {
     (secs.is_finite() && secs > 0.0).then(|| secs.round())
 }
 
+pub fn replay_gain_db(path: &Path) -> Option<f32> {
+    use lofty::prelude::*;
+    use lofty::probe::Probe;
+    use lofty::tag::ItemKey;
+
+    let tagged = Probe::open(path).ok()?.read().ok()?;
+    tagged.tags().iter().find_map(|tag| {
+        tag.get_string(ItemKey::ReplayGainTrackGain)
+            .and_then(parse_replay_gain)
+    })
+}
+
+fn parse_replay_gain(value: &str) -> Option<f32> {
+    let number = value.split_whitespace().next()?;
+    let db = number.parse::<f32>().ok()?;
+    db.is_finite().then_some(db)
+}
+
 pub fn extract_cover(file: &Path, dest: &Path) -> bool {
     use lofty::prelude::*;
     use lofty::probe::Probe;

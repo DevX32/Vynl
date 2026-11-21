@@ -115,6 +115,23 @@ export const en = {
     crossfadeHint:
       "Blend the end of one track into the start of the next.",
     crossfadeOff: "Off",
+    playbackSettings: "Playback",
+    playbackSpeed: "Playback speed",
+    playbackSpeedHint:
+      "Change how fast tracks play. Higher speeds also raise the pitch.",
+    replayGain: "ReplayGain",
+    replayGainHint:
+      "Normalize loudness using ReplayGain tags in your files. Applies from the next track.",
+    replayGainToggle: "ReplayGain toggle",
+    sleepTimer: "Sleep timer",
+    sleepTimerHint:
+      "Pause playback after a set time, or when the current track ends.",
+    sleepOff: "Off",
+    sleepMinutes: "{n} min",
+    sleepEndOfTrack: "End of track",
+    sleepRemaining: "{time} left",
+    sleepTimerDone: "Sleep timer finished. Playback paused.",
+    sleepAtEndDone: "Last track finished. Playback paused.",
     seek: "Seek",
     unmute: "Unmute",
     mute: "Mute",
@@ -286,6 +303,8 @@ export const en = {
     groupProfile: "Profile",
     groupAppearance: "Appearance",
     groupDownloads: "Downloads",
+    groupEqualizer: "Equalizer",
+    groupPlayback: "Playback",
     groupSystem: "System",
     groupStorage: "Storage",
     downloadedSongs: "Downloaded Songs",
