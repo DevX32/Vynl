@@ -1025,7 +1025,9 @@ pub async fn save_playlist_cover(
 
 #[tauri::command]
 pub async fn library_read_tags(file: String) -> Result<crate::services::audio::TrackTags, String> {
-    Ok(crate::services::audio::read_tags(std::path::Path::new(&file)))
+    Ok(crate::services::audio::read_tags(std::path::Path::new(
+        &file,
+    )))
 }
 
 #[tauri::command]

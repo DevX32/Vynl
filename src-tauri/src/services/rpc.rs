@@ -1,12 +1,15 @@
-use discord_rich_presence::activity::{Activity, ActivityType, Assets, Timestamps};
+use discord_rich_presence::activity::{Activity, ActivityType, Assets, Button, Timestamps};
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use once_cell::sync::Lazy;
 use std::sync::{Mutex, mpsc};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::commands::types::RpcPresence;
 
 const APP_ID: u64 = 1538939101225427014;
+const RECONNECT_MIN: Duration = Duration::from_secs(1);
+const RECONNECT_MAX: Duration = Duration::from_secs(30);
+const WORKER_TICK: Duration = Duration::from_secs(2);
 
 static WORKER_TX: Lazy<Mutex<Option<mpsc::Sender<Option<RpcPresence>>>>> =
     Lazy::new(|| Mutex::new(None));
@@ -116,48 +119,76 @@ pub fn is_public_cover(url: &str) -> bool {
     is_public_host(host)
 }
 
+static COVER_CACHE: Lazy<Mutex<std::collections::HashMap<String, String>>> =
+    Lazy::new(|| Mutex::new(std::collections::HashMap::new()));
+
+fn normalize_cover(cover: &str) -> Option<String> {
+    if !is_public_cover(cover) {
+        return None;
+    }
+    let mut cache = COVER_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(cached) = cache.get(cover) {
+        return Some(cached.clone());
+    }
+    let normalized = crate::services::cover_cache::normalize_cover_url(cover).into_owned();
+    cache.insert(cover.to_string(), normalized.clone());
+    Some(normalized)
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        s.chars().take(max.saturating_sub(1)).collect::<String>() + "…"
+    }
+}
+
+fn content_key(p: &RpcPresence) -> (String, String, String, i64, bool, Option<String>) {
+    (
+        p.title.clone(),
+        p.artist.clone(),
+        p.album.clone(),
+        (p.duration * 1000.0) as i64,
+        p.playing,
+        p.cover.clone(),
+    )
+}
+
 fn build_activity(p: &RpcPresence) -> Activity<'static> {
     let title = if p.title.is_empty() {
         "Vynl".to_string()
     } else {
-        p.title.clone()
+        truncate(&p.title, 128)
     };
     let state = if p.artist.is_empty() {
         if p.album.is_empty() {
             "Vynl".to_string()
         } else {
-            p.album.clone()
+            truncate(&p.album, 128)
         }
     } else {
-        p.artist.clone()
+        truncate(&p.artist, 128)
     };
 
-    let activity = Activity::new()
-        .details(title)
+    let mut activity = Activity::new()
+        .details(title.clone())
         .state(state)
         .activity_type(ActivityType::Listening);
 
-    let activity = if p.playing {
+    if p.playing {
         let start = (now_secs() as i64 - p.time as i64).max(0);
         if p.duration > 0.0 {
-            activity.timestamps(
+            activity = activity.timestamps(
                 Timestamps::new()
                     .start(start)
                     .end(start + p.duration as i64),
-            )
+            );
         } else {
-            activity.timestamps(Timestamps::new().start(start))
+            activity = activity.timestamps(Timestamps::new().start(start));
         }
-    } else {
-        activity
-    };
+    }
 
-    let public_cover = p
-        .cover
-        .as_deref()
-        .filter(|cover| is_public_cover(cover))
-        .map(crate::services::cover_cache::normalize_cover_url)
-        .map(|cover| cover.into_owned());
+    let public_cover = p.cover.as_deref().and_then(normalize_cover);
     let has_cover = public_cover.is_some();
     let img = public_cover.unwrap_or_else(|| "vynl".to_string());
     let mut assets = Assets::new().large_image(img);
@@ -166,37 +197,74 @@ fn build_activity(p: &RpcPresence) -> Activity<'static> {
         assets = assets.small_image("vynl").small_text("Vynl");
     }
     if !p.album.is_empty() {
-        assets = assets.large_text(p.album.clone());
+        assets = assets.large_text(truncate(&p.album, 128));
     }
+    activity = activity.assets(assets);
 
-    activity.assets(assets)
+    activity = activity.buttons(vec![Button::new("Vynl", "https://github.com/DevX32/Vynl")]);
+
+    activity
 }
 
 fn rpc_worker(rx: mpsc::Receiver<Option<RpcPresence>>) {
     let mut client: Option<DiscordIpcClient> = None;
-    while let Ok(presence) = rx.recv() {
-        for attempt in 0..2 {
-            if client.is_none() {
-                let mut candidate = DiscordIpcClient::new(APP_ID.to_string());
-                if candidate.connect().is_ok() {
-                    client = Some(candidate);
-                } else {
-                    break;
+    let mut last_presence: Option<RpcPresence> = None;
+    let mut applied_key: Option<(String, String, String, i64, bool, Option<String>)> = None;
+    let mut backoff = RECONNECT_MIN;
+    let mut next_retry = Instant::now();
+
+    loop {
+        match rx.recv_timeout(WORKER_TICK) {
+            Ok(presence) => {
+                last_presence = presence;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+
+        if client.is_none() && last_presence.is_some() && Instant::now() >= next_retry {
+            let mut candidate = DiscordIpcClient::new(APP_ID.to_string());
+            if candidate.connect().is_ok() {
+                client = Some(candidate);
+                backoff = RECONNECT_MIN;
+                next_retry = Instant::now();
+                applied_key = None;
+            } else {
+                next_retry = Instant::now() + backoff;
+                backoff = (backoff * 2).min(RECONNECT_MAX);
+            }
+        }
+
+        if let Some(c) = client.as_mut() {
+            let desired = last_presence.clone();
+            let key = desired.as_ref().map(content_key);
+            if applied_key != key {
+                let result = match &desired {
+                    Some(p) => c.set_activity(build_activity(p)),
+                    None => c.clear_activity(),
+                };
+                match result {
+                    Ok(_) => {
+                        applied_key = key;
+                        backoff = RECONNECT_MIN;
+                    }
+                    Err(_) => {
+                        client = None;
+                        applied_key = None;
+                        next_retry = Instant::now() + backoff;
+                        backoff = (backoff * 2).min(RECONNECT_MAX);
+                    }
                 }
             }
-            let activity = presence.as_ref().map(build_activity);
-            let ok = match (client.as_mut(), activity) {
-                (Some(c), Some(a)) => c.set_activity(a).is_ok(),
-                (Some(c), None) => c.clear_activity().is_ok(),
-                _ => false,
-            };
-            if ok {
-                break;
+        } else {
+            applied_key = None;
+        }
+
+        if last_presence.is_none() && client.is_some() && applied_key.is_some() {
+            if let Some(c) = client.as_mut() {
+                let _ = c.clear_activity();
             }
-            client = None;
-            if attempt == 0 {
-                std::thread::sleep(Duration::from_millis(200));
-            }
+            applied_key = None;
         }
     }
 }
