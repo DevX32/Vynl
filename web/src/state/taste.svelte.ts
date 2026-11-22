@@ -1,5 +1,6 @@
 import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
 import { vynl } from "@lib/vynl";
+import { scheduleCloudSyncPush } from "./sync.svelte";
 
 const TASTE_KEY = "vynl.taste.v1";
 const TASTE_SYNCED_KEY = "vynl.taste.synced";
@@ -100,6 +101,7 @@ function persist(): void {
 function commit(next: TasteEntry[]): void {
   _entries = next;
   persist();
+  scheduleCloudSyncPush();
 }
 
 export async function hydrateTaste(): Promise<void> {

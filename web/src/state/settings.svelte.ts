@@ -8,6 +8,7 @@ import { DEFAULT_ACCENT_COLOR, applyAccentColor } from "@lib/color";
 import { DEFAULT_THEME, applyTheme, isThemeId } from "@lib/theme";
 import { extractVibrantColor } from "@lib/art-color";
 import { getCurrentTrack } from "./now-playing.svelte";
+import { scheduleCloudSyncPush } from "./sync.svelte";
 
 function defaultSettings(): Settings {
   return {
@@ -125,6 +126,7 @@ export async function patchSettings(patch: Partial<Settings>): Promise<void> {
     _settings = updated;
     if (patch.theme !== undefined) applyTheme(updated.theme);
     if (patch.accentColor !== undefined) applyAccentColor(updated.accentColor);
+    scheduleCloudSyncPush();
   });
   _settingsQueue = job.catch(() => {});
   job.catch(() => {

@@ -20,10 +20,6 @@ fn playlist_file(output_dir: &Path, id: &str) -> std::path::PathBuf {
     playlists_dir(output_dir).join(format!("{}.json", id))
 }
 
-pub(crate) fn liked_playlist_file(output_dir: &Path) -> std::path::PathBuf {
-    playlist_file(output_dir, crate::services::sync::LIKED_PLAYLIST_ID)
-}
-
 const ORDER_FILE: &str = "order.json";
 const ORDER_META_FILE: &str = "order.json.meta";
 
@@ -72,17 +68,6 @@ pub fn write_order(output_dir: &Path, ids: &[String]) -> Result<(), String> {
             updated_at: util::now_ms(),
         },
     )
-}
-
-pub(crate) fn write_order_at(
-    output_dir: &Path,
-    ids: &[String],
-    updated_at: i64,
-) -> Result<(), String> {
-    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
-    let _order = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    util::write_json(&order_file(output_dir), &ids)?;
-    util::write_json(&order_meta_file(output_dir), &OrderMeta { updated_at })
 }
 
 fn prune_order(output_dir: &Path, id: &str) {
@@ -428,33 +413,6 @@ pub fn rename_playlist(output_dir: &Path, id: &str, name: &str) -> Result<Playli
     touch(&mut pl);
     write_playlist(output_dir, &pl)?;
     Ok(pl)
-}
-
-pub(crate) fn merge_playlist_with_remote(
-    output_dir: &Path,
-    id: &str,
-    merge: impl FnOnce(&Playlist) -> Playlist,
-    changed: impl FnOnce(&Playlist, &Playlist) -> bool,
-) -> Result<Option<(Playlist, Playlist, bool)>, String> {
-    if !validate_id(id) {
-        return Err("invalid playlist id".into());
-    }
-    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
-    let Some(before) = read_playlist(output_dir, id) else {
-        return Ok(None);
-    };
-    let merged = merge(&before);
-    let changed = changed(&before, &merged);
-    if !changed {
-        return Ok(Some((before, merged, false)));
-    }
-    let mut order = read_order(output_dir);
-    if !order.iter().any(|eid| eid == &merged.id) {
-        order.push(merged.id.clone());
-        write_order(output_dir, &order)?;
-    }
-    write_playlist(output_dir, &merged)?;
-    Ok(Some((before, merged, true)))
 }
 
 pub(crate) fn delete_playlist_locked(

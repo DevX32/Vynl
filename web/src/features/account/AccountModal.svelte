@@ -8,6 +8,7 @@
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
   import { refreshPlaylists } from "@state/playlists.svelte";
+  import { hydrateTaste } from "@state/taste.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import {
@@ -110,6 +111,7 @@
       email = "";
       password = "";
       await refreshPlaylists();
+      await hydrateTaste();
       toasts.success(
         mode === "signup"
           ? t("account.signUpSuccess")

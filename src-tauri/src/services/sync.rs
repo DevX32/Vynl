@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -423,7 +425,9 @@ pub(crate) fn ensure_hidden_liked(
     if let Some(existing) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID) {
         return Ok(Some(existing));
     }
-    let liked_file = crate::services::playlists::liked_playlist_file(output_dir);
+    let liked_file = output_dir
+        .join("playlists")
+        .join(format!("{LIKED_PLAYLIST_ID}.json"));
     if liked_file.is_file() {
         return Err(format!(
             "the Liked Songs playlist exists but could not be read: {}",
@@ -1352,78 +1356,6 @@ fn strip_marks(row: &Value) -> Value {
     row
 }
 
-pub async fn push_playlist(data_dir: &Path, playlist: &Playlist) {
-    if playlist.id == LIKED_PLAYLIST_ID {
-        return;
-    }
-    if !sync_enabled() {
-        return;
-    }
-    if read_session(data_dir).is_none() {
-        return;
-    }
-    let Ok(session) = valid_session(data_dir).await else {
-        return;
-    };
-    let maps = library_mark_maps(data_dir);
-    let _ = upsert_rows(data_dir, &[playlist_value_push(&session, playlist, &maps)]).await;
-}
-
-pub(crate) fn record_pending_tombstone(
-    data_dir: &Path,
-    id: &str,
-    name: String,
-    created_at: i64,
-    signature: &[String],
-) -> i64 {
-    if !crate::services::playlists::validate_id(id) {
-        return now_ms();
-    }
-    record_pending_tombstone_impl(data_dir, id, &name, created_at, signature)
-}
-
-pub async fn tombstone_playlist_remote(data_dir: &Path, id: &str) {
-    if !crate::services::playlists::validate_id(id) {
-        return;
-    }
-    if !sync_enabled() {
-        return;
-    }
-    let pending = read_pending_tombstones(data_dir);
-    let session = read_session(data_dir);
-    let Some(entry) = pending.iter().find(|entry| {
-        entry.id == id
-            && (entry.user_id.is_empty()
-                || session.as_ref().is_some_and(|s| s.user_id == entry.user_id))
-    }) else {
-        return;
-    };
-    let at = entry.deleted_at;
-    let name = entry.name.clone();
-    if read_session(data_dir).is_none() {
-        eprintln!(
-            "[Vynl sync] playlist deletion recorded locally; not signed in — will sync later"
-        );
-        return;
-    }
-    let session = match valid_session(data_dir).await {
-        Ok(session) => session,
-        Err(error) => {
-            eprintln!("[Vynl sync] playlist deletion waiting for session: {error}");
-            return;
-        }
-    };
-    let own_row = patch_remote_tombstone(data_dir, &session, id, at).await;
-    eprintln!(
-        "[Vynl sync] playlist {name} deleted (own row: {})",
-        if own_row {
-            "tombstoned"
-        } else {
-            "failed — kept pending"
-        },
-    );
-}
-
 fn row_to_playlist(row: &SyncRow) -> Playlist {
     let mut playlist = Playlist {
         id: row.local_id.clone(),
@@ -1449,325 +1381,216 @@ fn row_to_playlist(row: &SyncRow) -> Playlist {
     playlist
 }
 
-pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, String> {
-    if !sync_enabled() {
-        return Err("Vynl isn't configured.".into());
-    }
-    set_marks_supported(true);
-    let session = valid_session(data_dir).await?;
-    let pending = tombstones_for_session(&read_pending_tombstones(data_dir), &session);
-    let mut tombstone_succeeded: Vec<String> = Vec::with_capacity(pending.len());
-    if !pending.is_empty() {
-        for entry in &pending {
-            if patch_remote_tombstone(data_dir, &session, &entry.id, entry.deleted_at).await {
-                tombstone_succeeded.push(entry.id.clone());
-            }
-        }
-    }
-    let raw_rows = fetch_rows(data_dir).await?;
-    let maps = library_mark_maps(data_dir);
-    let folded = fold_equivalent_rows(raw_rows);
-    let mut rows = folded.rows;
-    for row in &mut rows {
-        translate_marks_inbound(row, &maps);
-    }
-    let pending = tombstones_for_session(&read_pending_tombstones(data_dir), &session);
-    if !pending.is_empty() {
-        for row in &mut rows {
-            if row.deleted_at.is_some() {
-                continue;
-            }
-            let forced = pending
-                .iter()
-                .filter(|entry| entry.id == row.local_id)
-                .map(|entry| entry.deleted_at)
-                .max();
-            if let Some(at) = forced {
-                row.deleted_at = Some(at);
-            }
-        }
-    }
-
-    if !tombstone_succeeded.is_empty() {
-        with_pending_tombstones_lock(|| {
-            let mut entries = read_pending_tombstones(data_dir);
-            entries.retain(|entry| !tombstone_succeeded.contains(&entry.id));
-            write_pending_tombstones(data_dir, &entries);
-        });
-    }
-    let local_order_updated = playlists::order_updated_at(output_dir);
-
-    if let Ok(Some(row)) = fetch_order(data_dir).await {
-        let remote_updated = row.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(0);
-        if remote_updated > playlists::order_updated_at(output_dir) {
-            let ids: Vec<String> = row
-                .get("order_ids")
-                .and_then(|v| v.as_array())
-                .map(|array| {
-                    array
-                        .iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .filter(|id| id != LIKED_PLAYLIST_ID)
-                        .collect()
-                })
-                .unwrap_or_default();
-            if !ids.is_empty() && playlists::order_updated_at(output_dir) == local_order_updated {
-                let _ = playlists::write_order_at(output_dir, &ids, remote_updated);
-            }
-        }
-    }
-
-    let tombstone_undelivered = pending.len().saturating_sub(tombstone_succeeded.len());
-    let mut result = SyncResult::default();
-    result.failed += tombstone_undelivered;
-    let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for (row, _) in &folded.stale {
-        known.insert(row.local_id.clone());
-    }
-    if !folded.stale.is_empty() {
-        for (row, canonical_id) in &folded.stale {
-            if row.local_id == *canonical_id {
-                continue;
-            }
-            if row.local_id == LIKED_PLAYLIST_ID {
-                continue;
-            }
-            let signature: Vec<String> = row.tracks.iter().map(|track| track.id.clone()).collect();
-            record_pending_tombstone(
-                data_dir,
-                &row.local_id,
-                row.name.clone(),
-                row.created_at,
-                &signature,
-            );
-            let keep_local = playlists::get_playlist(output_dir, canonical_id).is_none()
-                && playlists::get_playlist(output_dir, &row.local_id).is_some();
-            let rekeyed = keep_local
-                && playlists::rekey_playlist(output_dir, data_dir, &row.local_id, canonical_id)
-                    .is_ok();
-            if !rekeyed {
-                let _ = playlists::delete_playlist(output_dir, data_dir, &row.local_id);
-            }
-        }
-    }
-    if let Err(error) = ensure_hidden_liked(output_dir, data_dir) {
-        eprintln!("sync: could not ensure Liked Songs playlist: {error}");
-    }
-
-    let mut consumed: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for row in &rows {
-        known.insert(row.local_id.clone());
-        if row.local_id == LIKED_PLAYLIST_ID {
-            continue;
-        }
-        if !crate::services::playlists::validate_id(&row.local_id) {
-            eprintln!(
-                "Vynl sync: skipping remote row with invalid local_id: {}",
-                row.local_id
-            );
-            result.failed += 1;
-            continue;
-        }
-        let local = match resolve_local(
-            output_dir,
-            data_dir,
-            row,
-            &mut consumed,
-            row.deleted_at.is_some(),
-        ) {
-            LocalResolution::Present(playlist) => Some(playlist),
-            LocalResolution::Duplicate => continue,
-            LocalResolution::Missing => None,
-        };
-        match row.deleted_at {
-            Some(deleted_at) => {
-                if local.is_some() {
-                    match playlists::delete_playlist_if_stale(
-                        output_dir,
-                        data_dir,
-                        &row.local_id,
-                        deleted_at,
-                    ) {
-                        Ok(true) => result.deleted += 1,
-                        Ok(false) => {
-                            if let Some(playlist) =
-                                playlists::get_playlist(output_dir, &row.local_id)
-                            {
-                                if let Err(error) = upsert_rows(
-                                    data_dir,
-                                    &[playlist_value(&session, &playlist, &maps)],
-                                )
-                                .await
-                                {
-                                    eprintln!(
-                                        "Vynl sync: could not save playlist {}: {error}",
-                                        playlist.id
-                                    );
-                                    result.failed += 1;
-                                } else {
-                                    result.pushed += 1;
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            eprintln!(
-                                "Vynl sync: could not delete playlist {}: {error}",
-                                row.local_id
-                            );
-                            result.failed += 1;
-                        }
-                    }
-                }
-            }
-            None => match local {
-                None => {
-                    let synced = row_to_playlist(row);
-                    match playlists::upsert_playlist(output_dir, &synced) {
-                        Ok(_) => result.pulled += 1,
-                        Err(error) => {
-                            eprintln!(
-                                "Vynl sync: could not create playlist {}: {error}",
-                                synced.id
-                            );
-                            result.failed += 1;
-                        }
-                    }
-                }
-                Some(_playlist) => {
-                    match playlists::merge_playlist_with_remote(
-                        output_dir,
-                        &row.local_id,
-                        |current| union_playlist(current, row),
-                        |before, merged| merge_signature(before) != merge_signature(merged),
-                    ) {
-                        Ok(Some((before, merged, changed))) => {
-                            if changed {
-                                let remote_change =
-                                    merged.paths.iter().any(|p| !before.paths.contains(p))
-                                        || merged.removals.iter().any(|m| {
-                                            before
-                                                .removals
-                                                .iter()
-                                                .all(|r| r.track_id != m.track_id || r.at < m.at)
-                                        });
-                                if remote_change {
-                                    result.pulled += 1;
-                                } else {
-                                    result.pushed += 1;
-                                }
-                                if let Err(error) = upsert_rows(
-                                    data_dir,
-                                    &[playlist_value_push(&session, &merged, &maps)],
-                                )
-                                .await
-                                {
-                                    eprintln!(
-                                        "Vynl sync: could not save playlist {}: {error}",
-                                        merged.id
-                                    );
-                                    result.failed += 1;
-                                }
-                            }
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            eprintln!(
-                                "Vynl sync: could not merge playlist {}: {error}",
-                                row.local_id
-                            );
-                            result.failed += 1;
-                        }
-                    }
-                }
-            },
-        }
-    }
-
-    for meta in playlists::list_playlists(output_dir) {
-        if known.contains(&meta.id) {
-            continue;
-        }
-        if meta.id == LIKED_PLAYLIST_ID {
-            continue;
-        }
-        if let Some(playlist) = playlists::get_playlist(output_dir, &meta.id) {
-            if let Err(error) =
-                upsert_rows(data_dir, &[playlist_value_push(&session, &playlist, &maps)]).await
-            {
-                eprintln!(
-                    "Vynl sync: could not save playlist {}: {error}",
-                    playlist.id
-                );
-                result.failed += 1;
-            } else {
-                result.pushed += 1;
-            }
-        }
-    }
-
-    let order = playlists::read_order(output_dir);
-    let order: Vec<String> = order
-        .into_iter()
-        .filter(|id| id != LIKED_PLAYLIST_ID)
-        .collect();
-    if !order.is_empty() {
-        let remote = fetch_order(data_dir).await;
-        match remote {
-            Err(error) => {
-                eprintln!(
-                    "Vynl sync: could not read the remote order: {error} — skipping order sync"
-                );
-            }
-            Ok(remote_row) => {
-                let remote_at = remote_row
-                    .as_ref()
-                    .and_then(|row| row.get("updated_at").and_then(|v| v.as_i64()))
-                    .unwrap_or(0);
-                let local_at = playlists::order_updated_at(output_dir);
-                if local_at > remote_at
-                    && let Err(error) = push_order(data_dir, &order, local_at).await
-                {
-                    eprintln!("Vynl sync: could not save the playlist order: {error}");
-                    result.failed += 1;
-                }
-            }
-        }
-    }
-
-    if let Some(liked) = playlists::get_playlist(output_dir, LIKED_PLAYLIST_ID)
-        && let Err(error) = reconcile_taste(data_dir, &liked)
-    {
-        eprintln!("sync: could not reconcile taste: {error}");
-        result.failed += 1;
-    }
-
-    Ok(result)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTrackMeta {
+    pub id: String,
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub year: Option<i64>,
+    pub duration: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_at: Option<u64>,
 }
 
-pub async fn backup_to_cloud(
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPlaylist {
+    pub id: String,
+    pub name: String,
+    pub cover: Option<String>,
+    pub paths: Vec<String>,
+    pub tracks: Vec<SyncTrackMeta>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncState {
+    pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<crate::commands::types::Settings>,
+    #[serde(default)]
+    pub order: Vec<String>,
+    #[serde(default)]
+    pub playlists: Vec<SyncPlaylist>,
+    #[serde(default)]
+    pub tracks: Vec<SyncTrackMeta>,
+    #[serde(default)]
+    pub missing: Vec<String>,
+    #[serde(default)]
+    pub taste: Vec<crate::services::taste::TasteEntry>,
+}
+
+fn sync_track_meta(
+    track: &crate::commands::types::LibraryTrack,
+    source_url: Option<String>,
+) -> SyncTrackMeta {
+    SyncTrackMeta {
+        id: track.id.clone(),
+        path: track.path.clone(),
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        album: track.album.clone(),
+        year: track.year,
+        duration: (track.duration > 0.0).then_some(track.duration),
+        source_url,
+        added_at: track.added_at,
+    }
+}
+
+fn sync_state_cache_path(data_dir: &Path) -> std::path::PathBuf {
+    data_dir.join("sync_state.json")
+}
+
+fn write_sync_state_cache_rs(data_dir: &Path, state: &SyncState) {
+    let path = sync_state_cache_path(data_dir);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(data) = serde_json::to_vec_pretty(state) {
+        let _ = std::fs::write(path, data);
+    }
+}
+
+pub fn read_sync_state_cache(data_dir: &Path) -> Option<SyncState> {
+    let path = sync_state_cache_path(data_dir);
+    let data = std::fs::read(path).ok()?;
+    serde_json::from_slice(&data).ok()
+}
+
+fn deleted_playlists_path(data_dir: &Path) -> std::path::PathBuf {
+    data_dir.join("sync_deleted.json")
+}
+
+fn read_deleted_playlists(data_dir: &Path) -> std::collections::HashMap<String, i64> {
+    let path = deleted_playlists_path(data_dir);
+    std::fs::read(&path)
+        .ok()
+        .and_then(|data| serde_json::from_slice(&data).ok())
+        .unwrap_or_default()
+}
+
+fn write_deleted_playlists(data_dir: &Path, map: &std::collections::HashMap<String, i64>) {
+    let path = deleted_playlists_path(data_dir);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(data) = serde_json::to_vec_pretty(map) {
+        let _ = std::fs::write(path, data);
+    }
+}
+
+pub fn record_deleted_playlist(data_dir: &Path, id: &str) {
+    let mut map = read_deleted_playlists(data_dir);
+    map.insert(id.to_string(), util::now_ms());
+    write_deleted_playlists(data_dir, &map);
+}
+
+pub fn build_sync_state(
     data_dir: &Path,
+    output_dir: &Path,
+    settings: &crate::commands::types::Settings,
+) -> SyncState {
+    let (tracks, _) = crate::services::library::scan_cached_library(output_dir, data_dir);
+
+    let mut url_by_file: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for entry in crate::services::history::ok_entries(data_dir) {
+        url_by_file.entry(entry.file).or_insert(entry.url);
+    }
+
+    let track_meta: Vec<SyncTrackMeta> = tracks
+        .iter()
+        .map(|t| sync_track_meta(t, url_by_file.get(&t.path).cloned()))
+        .collect();
+    let by_path: std::collections::HashMap<&str, &SyncTrackMeta> =
+        track_meta.iter().map(|t| (t.path.as_str(), t)).collect();
+
+    let mut missing = std::collections::BTreeSet::new();
+    let mut playlists_out = Vec::new();
+    for meta in playlists::list_playlists(output_dir) {
+        let Some(full) = playlists::get_playlist(output_dir, &meta.id) else {
+            continue;
+        };
+        let playlist_tracks = full
+            .paths
+            .iter()
+            .filter_map(|p| by_path.get(p.as_str()).map(|t| (*t).clone()))
+            .collect::<Vec<_>>();
+        for path in &full.paths {
+            if !by_path.contains_key(path.as_str()) && !path.starts_with("ytm:") {
+                missing.insert(path.clone());
+            }
+        }
+        playlists_out.push(SyncPlaylist {
+            id: meta.id.clone(),
+            name: meta.name.clone(),
+            cover: full.cover.clone(),
+            paths: full.paths.clone(),
+            tracks: playlist_tracks,
+            created_at: meta.created_at,
+            updated_at: meta.updated_at,
+            deleted_at: None,
+        });
+    }
+
+    let active_ids: std::collections::HashSet<String> =
+        playlists_out.iter().map(|p| p.id.clone()).collect();
+    for (id, deleted_at) in read_deleted_playlists(data_dir) {
+        if active_ids.contains(&id) {
+            continue;
+        }
+        playlists_out.push(SyncPlaylist {
+            id,
+            name: String::new(),
+            cover: None,
+            paths: Vec::new(),
+            tracks: Vec::new(),
+            created_at: 0,
+            updated_at: deleted_at,
+            deleted_at: Some(deleted_at),
+        });
+    }
+
+    SyncState {
+        version: 1,
+        settings: Some(settings.clone()),
+        order: playlists::read_order(output_dir),
+        playlists: playlists_out,
+        tracks: track_meta,
+        missing: missing.into_iter().collect(),
+        taste: crate::services::taste::load(data_dir),
+    }
+}
+
+pub async fn push_sync_state(
+    data_dir: &Path,
+    output_dir: &Path,
     settings: &crate::commands::types::Settings,
 ) -> Result<(), String> {
-    if read_session(data_dir).is_none() {
-        return Err("Vynl Sync is not signed in.".to_string());
-    }
-    let backup = crate::services::export::build_backup(settings, data_dir);
-    let content = crate::services::export::render(&backup)?;
-    let payload: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| format!("Could not encode the backup: {e}"))?;
-
-    let client = http()?;
-    let request = client
+    let session = valid_session(data_dir).await?;
+    let state = build_sync_state(data_dir, output_dir, settings);
+    write_sync_state_cache_rs(data_dir, &state);
+    let data =
+        serde_json::to_value(&state).map_err(|e| format!("Could not encode sync state: {e}"))?;
+    let request = http()?
         .post(format!(
-            "{}/rest/v1/backups?on_conflict=user_id",
+            "{}/rest/v1/sync_state?on_conflict=user_id",
             base_url()
         ))
         .header("Content-Type", "application/json")
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
         .json(&[serde_json::json!({
-            "user_id": read_session(data_dir).unwrap().user_id,
-            "data": payload,
-            "updated_at": backup.exported_at,
+            "user_id": session.user_id,
+            "data": data,
+            "updated_at": util::now_ms(),
         })]);
     let response = rest_headers(data_dir, request)
         .await?
@@ -1777,21 +1600,17 @@ pub async fn backup_to_cloud(
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Cloud backup failed (HTTP {status}): {body}"));
+        return Err(format!("Sync push failed (HTTP {status}): {body}"));
     }
     Ok(())
 }
 
-pub async fn restore_from_cloud(
-    data_dir: &Path,
-) -> Result<crate::services::export::LibraryBackup, String> {
-    let session =
-        read_session(data_dir).ok_or_else(|| "Vynl Sync is not signed in.".to_string())?;
+pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncState, String> {
+    let session = valid_session(data_dir).await?;
     let uid = urlencoded_user_id(&session.user_id);
-    let client = http()?;
-    let request = client
+    let request = http()?
         .get(format!(
-            "{}/rest/v1/backups?select=data,updated_at&user_id=eq.{uid}",
+            "{}/rest/v1/sync_state?select=data,updated_at&user_id=eq.{uid}",
             base_url()
         ))
         .header("Accept", "application/json");
@@ -1803,20 +1622,104 @@ pub async fn restore_from_cloud(
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Cloud restore failed (HTTP {status}): {body}"));
+        return Err(format!("Sync pull failed (HTTP {status}): {body}"));
     }
     let body = response.text().await.unwrap_or_default();
     let list: Vec<serde_json::Value> =
-        serde_json::from_str(&body).map_err(|e| format!("Could not read the cloud backup: {e}"))?;
+        serde_json::from_str(&body).map_err(|e| format!("Could not read the sync state: {e}"))?;
     let row = list
         .into_iter()
         .next()
-        .ok_or_else(|| "No cloud backup found.".to_string())?;
+        .ok_or_else(|| "No cloud sync state found.".to_string())?;
     let data = row
         .get("data")
         .cloned()
-        .ok_or_else(|| "Cloud backup is empty.".to_string())?;
-    let backup: crate::services::export::LibraryBackup = serde_json::from_value(data)
-        .map_err(|e| format!("That cloud backup isn't readable: {e}"))?;
-    Ok(backup)
+        .ok_or_else(|| "Cloud sync state is empty.".to_string())?;
+    let state: SyncState = serde_json::from_value(data)
+        .map_err(|e| format!("That cloud sync state isn't readable: {e}"))?;
+
+    write_sync_state_cache_rs(data_dir, &state);
+
+    let local_metas = playlists::list_playlists(output_dir);
+    let mut local_ids: std::collections::HashSet<String> =
+        local_metas.iter().map(|meta| meta.id.clone()).collect();
+    let mut local_names: std::collections::HashSet<String> = local_metas
+        .iter()
+        .map(|meta| meta.name.trim().to_lowercase())
+        .collect();
+
+    for remote in &state.playlists {
+        if let Some(deleted_at) = remote.deleted_at {
+            if local_ids.contains(&remote.id)
+                && let Some(local) = playlists::get_playlist(output_dir, &remote.id)
+                && local.updated_at <= deleted_at
+            {
+                let _ =
+                    crate::services::playlists::delete_playlist(output_dir, data_dir, &remote.id);
+                local_ids.remove(&remote.id);
+                let key = local.name.trim().to_lowercase();
+                local_names.remove(&key);
+            }
+            continue;
+        }
+        let name_key = remote.name.trim().to_lowercase();
+        if local_ids.contains(&remote.id) || local_names.contains(&name_key) {
+            continue;
+        }
+        let synced = Playlist {
+            id: remote.id.clone(),
+            name: remote.name.clone(),
+            paths: remote.paths.clone(),
+            streams: Vec::new(),
+            adds: Vec::new(),
+            removals: Vec::new(),
+            cover: remote.cover.clone(),
+            created_at: remote.created_at,
+            updated_at: remote.updated_at,
+        };
+        if playlists::upsert_playlist(output_dir, &synced).is_ok() {
+            local_ids.insert(remote.id.clone());
+            local_names.insert(name_key);
+        } else {
+            eprintln!("sync: could not create playlist {}", remote.id);
+        }
+    }
+
+    if !state.order.is_empty() {
+        let _ = playlists::write_order(output_dir, &state.order);
+    }
+
+    if !state.taste.is_empty() {
+        let local_taste = crate::services::taste::load(data_dir);
+        let mut merged: std::collections::HashMap<String, crate::services::taste::TasteEntry> =
+            std::collections::HashMap::new();
+        for entry in local_taste.into_iter().chain(state.taste.clone()) {
+            let id = entry.track.id.clone();
+            match merged.get_mut(&id) {
+                Some(existing) => {
+                    existing.plays = existing.plays.max(entry.plays);
+                    if entry.last_played > existing.last_played {
+                        existing.last_played = entry.last_played;
+                        existing.track = entry.track.clone();
+                    }
+                    if entry.liked {
+                        existing.liked = true;
+                        existing.liked_at = match (existing.liked_at, entry.liked_at) {
+                            (Some(a), Some(b)) => Some(a.max(b)),
+                            (Some(a), None) => Some(a),
+                            (None, Some(b)) => Some(b),
+                            (None, None) => None,
+                        };
+                    }
+                }
+                None => {
+                    merged.insert(id, entry);
+                }
+            }
+        }
+        let merged: Vec<crate::services::taste::TasteEntry> = merged.into_values().collect();
+        let _ = crate::services::taste::save(data_dir, &merged);
+    }
+
+    Ok(state)
 }

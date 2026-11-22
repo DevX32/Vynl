@@ -108,10 +108,7 @@ export const vynl = {
 
   importBackup: (): Promise<RestoredBackup | null> => cmd("import_backup"),
 
-  backupToCloud: (): Promise<void> => cmd("backup_to_cloud", {}),
 
-  restoreFromCloud: (): Promise<RestoredBackup | null> =>
-    cmd("restore_from_cloud"),
 
   matches: (
     collection: Collection,
@@ -214,6 +211,15 @@ export const vynl = {
     cmd("take_pending_confirm_url"),
 
   syncSignOut: (): Promise<void> => cmd("sync_sign_out"),
+
+  syncPull: (): Promise<unknown> => cmd("sync_pull", {}),
+
+  syncPush: (): Promise<void> => cmd("sync_push", {}),
+
+  syncNow: (): Promise<unknown> => cmd("sync_now", {}),
+
+  syncResolveMissingSource: (path: string): Promise<string | null> =>
+    cmd("sync_resolve_missing_source", { path }),
 
 
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>

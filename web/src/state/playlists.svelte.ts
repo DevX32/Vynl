@@ -9,6 +9,7 @@ import { getLibrary, getLibraryRevision, onLibraryChanged, refreshLibrary } from
 import { moveItem } from "@lib/reorder";
 import { songKey } from "@lib/format";
 import { vynl } from "@lib/vynl";
+import { scheduleCloudSyncPush } from "./sync.svelte";
 
 let _meta = $state<PlaylistMeta[]>([]);
 let _all = $state<Record<string, Playlist>>({});
@@ -129,6 +130,7 @@ export async function selectPlaylist(id: string | null): Promise<void> {
 export async function createPlaylist(name: string): Promise<Playlist> {
   const pl = await vynl.createPlaylist(name);
   setCurrentPlaylist(pl);
+  scheduleCloudSyncPush();
   await refreshPlaylists();
   return pl;
 }
@@ -146,6 +148,7 @@ export async function reorderPlaylists(
   _meta = next;
   try {
     await vynl.reorderPlaylists(next.map((p) => p.id));
+    scheduleCloudSyncPush();
   } catch (e) {
     console.warn("reorderPlaylists failed:", e);
     try {
@@ -182,6 +185,7 @@ function syncAfterMutation(pl: Playlist): void {
   _metaGeneration += 1;
   _all = { ..._all, [pl.id]: pl };
   if (_current?.id === pl.id) _current = pl;
+  scheduleCloudSyncPush();
 }
 
 export async function renamePlaylist(id: string, name: string): Promise<void> {
@@ -215,6 +219,7 @@ export async function deletePlaylist(id: string): Promise<DeleteTracksResult> {
     _selected = null;
     _current = null;
   }
+  scheduleCloudSyncPush();
   return result;
 }
 

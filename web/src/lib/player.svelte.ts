@@ -448,6 +448,52 @@ function isSeekUnsupported(error: unknown): boolean {
   return message.includes("seek:") && message.includes("support");
 }
 
+function extractVideoId(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  if (/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0];
+      return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+    }
+    if (host.endsWith("youtube.com")) {
+      const v = url.searchParams.get("v");
+      if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+      const parts = url.pathname.split("/").filter(Boolean);
+      const idx = parts.findIndex((p) => p === "shorts" || p === "embed");
+      const id = idx >= 0 ? parts[idx + 1] : null;
+      return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+    }
+  } catch {}
+  return null;
+}
+
+async function resolveMissingStreamVideoId(path: string): Promise<string | null> {
+  try {
+    const source = await vynl.syncResolveMissingSource(path);
+    const fromSource = source ? extractVideoId(source) : null;
+    if (fromSource) return fromSource;
+  } catch (e) {
+    console.warn("[player] missing source lookup failed", e);
+  }
+
+  const np = getCurrentTrack();
+  if (!np) return null;
+  const query = [np.artist, np.title].filter(Boolean).join(" ").trim();
+  if (!query) return null;
+  try {
+    const results = await vynl.searchTracks(query, 5);
+    const top = results[0];
+    if (top?.id) return top.id;
+  } catch (e) {
+    console.warn("[player] missing track search failed", e);
+  }
+  return null;
+}
+
 async function playNative(
   path: string,
   seekTo: number | undefined,
@@ -472,9 +518,21 @@ async function playNative(
   try {
     await vynl.playerPlay(path, normalizedSeek, generation);
   } catch (error) {
+    if (generation !== playGeneration) throw error;
+    const missingId = await resolveMissingStreamVideoId(path);
+    if (missingId) {
+      const np = getCurrentTrack();
+      const info = await vynl.catalogueStream(
+        missingId,
+        normalizedSeek,
+        np?.duration,
+        generation,
+      );
+      if (normalizedSeek === undefined) prebufferState.delete(missingId);
+      return info;
+    }
     if (
       normalizedSeek === undefined ||
-      generation !== playGeneration ||
       !isSeekUnsupported(error)
     ) {
       throw error;

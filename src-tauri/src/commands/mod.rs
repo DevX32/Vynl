@@ -304,26 +304,6 @@ pub async fn import_backup(
 }
 
 #[tauri::command]
-pub async fn backup_to_cloud(app: AppHandle) -> Result<(), String> {
-    let user_data = user_data_dir(&app)?;
-    let settings = load_settings(&app)?;
-    crate::services::sync::backup_to_cloud(&user_data, &settings).await
-}
-
-#[tauri::command]
-pub async fn restore_from_cloud(
-    app: AppHandle,
-) -> Result<Option<crate::services::export::RestoredBackup>, String> {
-    let user_data = user_data_dir(&app)?;
-    let backup = crate::services::sync::restore_from_cloud(&user_data).await?;
-    let restored = crate::services::export::restore(&backup);
-    if restored.total == 0 {
-        return Err("That cloud backup doesn't contain any tracks.".into());
-    }
-    Ok(Some(restored))
-}
-
-#[tauri::command]
 pub async fn matches(
     collection: Collection,
     app: AppHandle,
@@ -893,46 +873,109 @@ pub async fn set_playlist_cover(
     Ok(playlist)
 }
 
-pub(crate) fn sync_playlist(app: &AppHandle, playlist: &Playlist) {
-    if playlist.id == crate::services::sync::LIKED_PLAYLIST_ID {
-        return;
-    }
+pub(crate) fn sync_playlist(app: &AppHandle, _playlist: &Playlist) {
     let Ok(user_data) = user_data_dir(app) else {
         return;
     };
-    if crate::services::sync::status(&user_data).signed_in {
-        let playlist = playlist.clone();
-        tauri::async_runtime::spawn(async move {
-            crate::services::sync::push_playlist(&user_data, &playlist).await;
-        });
+    if !crate::services::sync::status(&user_data).signed_in {
+        return;
     }
+    let Ok(output) = output_dir_from_settings(app) else {
+        return;
+    };
+    let Ok(settings) = load_settings(app) else {
+        return;
+    };
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
+        {
+            eprintln!("[Vynl sync] background push failed: {e}");
+        }
+    });
 }
 
 pub(crate) fn sync_playlist_delete(
     app: &AppHandle,
     id: &str,
-    name: Option<&str>,
-    created_at: Option<i64>,
-    signature: &[String],
+    _name: Option<&str>,
+    _created_at: Option<i64>,
+    _signature: &[String],
 ) {
     let Ok(user_data) = user_data_dir(app) else {
         return;
     };
-    let id = id.to_string();
-    let name = name.unwrap_or_default().to_string();
-    let created_at = created_at.unwrap_or(0);
-    let signature = signature.to_vec();
-    crate::services::sync::record_pending_tombstone(&user_data, &id, name, created_at, &signature);
+    crate::services::sync::record_deleted_playlist(&user_data, id);
+    if !crate::services::sync::status(&user_data).signed_in {
+        return;
+    }
+    let Ok(output) = output_dir_from_settings(app) else {
+        return;
+    };
+    let Ok(settings) = load_settings(app) else {
+        return;
+    };
     tauri::async_runtime::spawn(async move {
-        crate::services::sync::tombstone_playlist_remote(&user_data, &id).await;
+        if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
+        {
+            eprintln!("[Vynl sync] background delete push failed: {e}");
+        }
     });
 }
 
 #[tauri::command]
-pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncResult, String> {
+pub async fn sync_pull(app: AppHandle) -> Result<crate::services::sync::SyncState, String> {
     let user_data = user_data_dir(&app)?;
     let output = output_dir_from_settings(&app)?;
-    crate::services::sync::sync(&user_data, &output).await
+    crate::services::sync::pull_sync_state(&user_data, &output).await
+}
+
+#[tauri::command]
+pub async fn sync_push(app: AppHandle) -> Result<(), String> {
+    let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+    let settings = load_settings(&app)?;
+    crate::services::sync::push_sync_state(&user_data, &output, &settings).await
+}
+
+#[tauri::command]
+pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncState, String> {
+    let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+    let settings = load_settings(&app)?;
+    let state = match crate::services::sync::pull_sync_state(&user_data, &output).await {
+        Ok(state) => state,
+        Err(e) if e.contains("No cloud sync state found") => {
+            crate::services::sync::build_sync_state(&user_data, &output, &settings)
+        }
+        Err(e) => return Err(e),
+    };
+    crate::services::sync::push_sync_state(&user_data, &output, &settings).await?;
+    Ok(state)
+}
+
+#[tauri::command]
+pub async fn sync_resolve_missing_source(
+    app: AppHandle,
+    path: String,
+) -> Result<Option<String>, String> {
+    let user_data = user_data_dir(&app)?;
+    let state = crate::services::sync::read_sync_state_cache(&user_data);
+    let Some(state) = state else {
+        return Ok(None);
+    };
+    if let Some(track) = state.tracks.iter().find(|t| t.path == path)
+        && let Some(url) = &track.source_url
+    {
+        return Ok(Some(url.clone()));
+    }
+    for pl in &state.playlists {
+        if let Some(track) = pl.tracks.iter().find(|t| t.path == path)
+            && let Some(url) = &track.source_url
+        {
+            return Ok(Some(url.clone()));
+        }
+    }
+    Ok(None)
 }
 
 #[tauri::command]
@@ -954,10 +997,17 @@ async fn sync_auth(
     } else {
         crate::services::sync::sign_in(&user_data, &email, &password).await?
     };
-    if result.status.signed_in
-        && let Err(error) = crate::services::sync::sync(&user_data, &output).await
-    {
-        eprintln!("[Vynl sync] auto sync after sign-in failed: {error}");
+    if result.status.signed_in {
+        let settings = load_settings(app)?;
+        match crate::services::sync::pull_sync_state(&user_data, &output).await {
+            Ok(_) => {}
+            Err(e) if e.contains("No cloud sync state found") => {}
+            Err(e) => eprintln!("[Vynl sync] auto pull after sign-in failed: {e}"),
+        }
+        if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
+        {
+            eprintln!("[Vynl sync] auto push after sign-in failed: {e}");
+        }
     }
     Ok(result)
 }

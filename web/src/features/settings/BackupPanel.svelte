@@ -5,6 +5,7 @@
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
   import { getCurrentPlaylists, refreshPlaylists } from "@state/playlists.svelte";
+  import { hydrateTaste } from "@state/taste.svelte";
   import { queueRestore } from "@state/vault-restore.svelte";
   import Button from "@components/Button.svelte";
   import SettingRow from "./SettingRow.svelte";
@@ -18,7 +19,6 @@
 
   let exporting = $state(false);
   let importing = $state(false);
-  let cloudBackingUp = $state(false);
   let cloudRestoring = $state(false);
   let signedIn = $state(false);
   let lastExport = $state<ExportSummary | null>(null);
@@ -161,52 +161,14 @@
     }
   }
 
-  async function runCloudBackup(): Promise<void> {
-    if (cloudBackingUp) return;
-    cloudBackingUp = true;
-    try {
-      await vynl.backupToCloud();
-      toasts.success(t("backup.cloudSaved"), 6000);
-    } catch (e) {
-      toasts.error(
-        t("backup.cloudFailed", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-        6000,
-      );
-    } finally {
-      cloudBackingUp = false;
-    }
-  }
-
   async function runCloudRestore(): Promise<void> {
     if (cloudRestoring) return;
     cloudRestoring = true;
     try {
-      const restored = await vynl.restoreFromCloud();
-      if (!restored) return;
-      const confirmed = window.confirm(
-        t("backup.restoreConfirm", { tracks: restored.total }),
-      );
-      if (!confirmed) return;
-      queueRestore(
-        {
-          ...restored,
-          collection: {
-            ...restored.collection,
-            title: t("backup.restoredTitle"),
-          },
-        },
-        true,
-      );
-      toasts.success(
-        t("backup.restored", {
-          tracks: restored.total,
-          known: restored.knownSources,
-        }),
-        6000,
-      );
-      onOpenVault?.();
+      await vynl.syncPull();
+      await refreshPlaylists();
+      await hydrateTaste();
+      toasts.success(t("backup.cloudRestored", {}), 6000);
     } catch (e) {
       toasts.error(
         t("backup.restoreFailed", {
@@ -266,14 +228,6 @@
       >
         {#snippet control()}
           <div class="export-controls">
-            <Button
-              size="sm"
-              disabled={cloudBackingUp}
-              onclick={runCloudBackup}
-            >
-              <Upload size={13} stroke-width={1.5} />
-              {cloudBackingUp ? t("backup.cloudBackingUp") : t("backup.cloudBackup")}
-            </Button>
             <Button
               size="sm"
               disabled={cloudRestoring}
