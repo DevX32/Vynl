@@ -18,6 +18,9 @@
 
   let exporting = $state(false);
   let importing = $state(false);
+  let cloudBackingUp = $state(false);
+  let cloudRestoring = $state(false);
+  let signedIn = $state(false);
   let lastExport = $state<ExportSummary | null>(null);
   let trackCount = $state<number | null>(null);
   let libraryError = $state<string | null>(null);
@@ -69,6 +72,12 @@
     let cancelled = false;
     void (async () => {
       await loadLibrary();
+      try {
+        const status = await vynl.SyncStatus();
+        signedIn = status.signedIn;
+      } catch {
+        signedIn = false;
+      }
       if (cancelled) return;
     })();
     return () => {
@@ -144,6 +153,57 @@
       exporting = false;
     }
   }
+
+  async function runCloudBackup(): Promise<void> {
+    if (cloudBackingUp) return;
+    cloudBackingUp = true;
+    try {
+      await vynl.backupToCloud();
+      toasts.success(t("backup.cloudSaved"), 6000);
+    } catch (e) {
+      toasts.error(
+        t("backup.cloudFailed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+        6000,
+      );
+    } finally {
+      cloudBackingUp = false;
+    }
+  }
+
+  async function runCloudRestore(): Promise<void> {
+    if (cloudRestoring) return;
+    cloudRestoring = true;
+    try {
+      const restored = await vynl.restoreFromCloud();
+      if (!restored) return;
+      queueRestore({
+        ...restored,
+        collection: {
+          ...restored.collection,
+          title: t("backup.restoredTitle"),
+        },
+      });
+      toasts.success(
+        t("backup.restored", {
+          tracks: restored.total,
+          known: restored.knownSources,
+        }),
+        6000,
+      );
+      onOpenVault?.();
+    } catch (e) {
+      toasts.error(
+        t("backup.restoreFailed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+        6000,
+      );
+    } finally {
+      cloudRestoring = false;
+    }
+  }
 </script>
 
 <div class="panel">
@@ -184,6 +244,34 @@
         </Button>
       {/snippet}
     </SettingRow>
+
+    {#if signedIn}
+      <SettingRow
+        label={t("backup.cloudTitle")}
+        hint={t("backup.cloudHint")}
+      >
+        {#snippet control()}
+          <div class="export-controls">
+            <Button
+              size="sm"
+              disabled={cloudBackingUp}
+              onclick={runCloudBackup}
+            >
+              <Upload size={13} stroke-width={1.5} />
+              {cloudBackingUp ? t("backup.cloudBackingUp") : t("backup.cloudBackup")}
+            </Button>
+            <Button
+              size="sm"
+              disabled={cloudRestoring}
+              onclick={runCloudRestore}
+            >
+              <Download size={13} stroke-width={1.5} />
+              {cloudRestoring ? t("backup.cloudRestoring") : t("backup.cloudRestore")}
+            </Button>
+          </div>
+        {/snippet}
+      </SettingRow>
+    {/if}
   </div>
 
 </div>

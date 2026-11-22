@@ -11,15 +11,14 @@
     ChevronUp,
     LogIn,
     LogOut,
-    RefreshCw,
-    UserRound,
+      UserRound,
     Import,
   } from "lucide-svelte";
   import { Blobatar } from "@blobatar/svelte";
   import { blobSrc } from "../lib/format";
   import { avatarProps, avatarRevision } from "@lib/blobatar.svelte";
   import { t } from "@lib/i18n";
-  import { getPlaylistCovers, markCoverFailed, refreshPlaylists } from "@state/playlists.svelte";
+  import { getPlaylistCovers, markCoverFailed } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
   import {
     getSyncStatus,
@@ -105,7 +104,6 @@
 
   let accountMenuOpen = $state(false);
   let accountMenuStyle = $state("");
-  let syncing = $state(false);
   let accountWrap: HTMLDivElement | undefined = $state();
   let accountButton: HTMLButtonElement | undefined = $state();
 
@@ -190,49 +188,6 @@
   function openAccountSettings(): void {
     accountMenuOpen = false;
     onSettings();
-  }
-
-  async function syncNow(): Promise<void> {
-    if (syncing) return;
-    syncing = true;
-    accountMenuOpen = false;
-    try {
-      const result = await vynl.syncNow();
-      await refreshPlaylists();
-      if (result.failed > 0) {
-        toasts.warning(
-          t("account.syncPartialFailed", {
-            pulled: result.pulled,
-            pushed: result.pushed,
-            failed: result.failed,
-          }),
-          6000,
-        );
-      } else {
-        toasts.success(
-          result.deleted > 0
-            ? t("account.syncDoneDeleted", {
-                pulled: result.pulled,
-                pushed: result.pushed,
-                deleted: result.deleted,
-              })
-            : t("account.syncDone", {
-                pulled: result.pulled,
-                pushed: result.pushed,
-              }),
-          5000,
-        );
-      }
-    } catch (e) {
-      toasts.error(
-        t("account.syncFailed", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-        6000,
-      );
-    } finally {
-      syncing = false;
-    }
   }
 
   async function signOutSync(): Promise<void> {
@@ -430,15 +385,6 @@
             >
               <UserRound size={14} stroke-width={1.5} />
               <span>{t("account.menuLabel")}</span>
-            </button>
-            <button
-              class="menu-item"
-              role="menuitem"
-              disabled={syncing}
-              onclick={() => void syncNow()}
-            >
-              <RefreshCw size={14} stroke-width={1.5} />
-              <span>{t("account.syncNow")}</span>
             </button>
           {:else}
             <button

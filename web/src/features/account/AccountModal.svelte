@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
-  import { LoaderCircle, RefreshCw, X, Dices } from "lucide-svelte";
+  import { LoaderCircle, X, Dices } from "lucide-svelte";
   import { avatarProps, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar.svelte";
   import { Blobatar } from "@blobatar/svelte";
   import { t } from "@lib/i18n";
@@ -42,7 +42,6 @@
   let email = $state("");
   let password = $state("");
   let busy = $state(false);
-  let syncing = $state(false);
   let signingOut = $state(false);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -121,48 +120,6 @@
       error = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
-    }
-  }
-
-  async function syncNow(): Promise<void> {
-    if (syncing) return;
-    syncing = true;
-    try {
-      const result = await vynl.syncNow();
-      await refreshPlaylists();
-      if (result.failed > 0) {
-        toasts.warning(
-          t("account.syncPartialFailed", {
-            pulled: result.pulled,
-            pushed: result.pushed,
-            failed: result.failed,
-          }),
-          6000,
-        );
-      } else {
-        toasts.success(
-          result.deleted > 0
-            ? t("account.syncDoneDeleted", {
-                pulled: result.pulled,
-                pushed: result.pushed,
-                deleted: result.deleted,
-              })
-            : t("account.syncDone", {
-                pulled: result.pulled,
-                pushed: result.pushed,
-              }),
-          5000,
-        );
-      }
-    } catch (e) {
-      toasts.error(
-        t("account.syncFailed", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-        6000,
-      );
-    } finally {
-      syncing = false;
     }
   }
 
@@ -253,23 +210,6 @@
       {:else if status.signedIn}
         <div class="row-group">
           <SettingRow
-            label={t("account.playlistSync")}
-            hint={t("account.localFilesHint")}
-          >
-            {#snippet control()}
-              <Button size="sm" disabled={syncing} onclick={() => void syncNow()}>
-                {#if syncing}
-                  <span class="spin"><LoaderCircle size={13} stroke-width={1.6} /></span>
-                  {t("account.syncing")}
-                {:else}
-                  <RefreshCw size={13} stroke-width={1.6} />
-                  {t("account.syncNow")}
-                {/if}
-              </Button>
-            {/snippet}
-          </SettingRow>
-
-          <SettingRow
             label={t("account.signOut")}
             hint={t("account.signOutHint")}
           >
@@ -277,7 +217,7 @@
               <Button
                 variant="danger"
                 size="sm"
-                disabled={signingOut || syncing}
+                disabled={signingOut}
                 onclick={() => void signOut()}
               >
                 {#if signingOut}

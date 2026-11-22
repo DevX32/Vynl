@@ -196,19 +196,9 @@
       try {
         const session = await refreshSyncStatus();
         if (!session.signedIn) return;
-        const result = await vynl.syncNow();
-        if (result.pulled > 0 || result.deleted > 0) {
-          await refreshPlaylists();
-        }
         await hydrateTaste();
       } catch (e) {
-        console.warn("sync failed", e);
-        toasts.error(
-          t("account.syncFailed", {
-            error: e instanceof Error ? e.message : String(e),
-          }),
-          6000,
-        );
+        console.warn("sync status failed", e);
       }
     })();
     return () => { off(); };

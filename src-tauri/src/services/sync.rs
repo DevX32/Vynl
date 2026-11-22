@@ -1743,3 +1743,80 @@ pub async fn sync(data_dir: &Path, output_dir: &Path) -> Result<SyncResult, Stri
 
     Ok(result)
 }
+
+pub async fn backup_to_cloud(
+    data_dir: &Path,
+    settings: &crate::commands::types::Settings,
+) -> Result<(), String> {
+    if read_session(data_dir).is_none() {
+        return Err("Vynl Sync is not signed in.".to_string());
+    }
+    let backup = crate::services::export::build_backup(settings, data_dir);
+    let content = crate::services::export::render(&backup)?;
+    let payload: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Could not encode the backup: {e}"))?;
+
+    let client = http()?;
+    let request = client
+        .post(format!(
+            "{}/rest/v1/backups?on_conflict=user_id",
+            base_url()
+        ))
+        .header("Content-Type", "application/json")
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&[serde_json::json!({
+            "user_id": read_session(data_dir).unwrap().user_id,
+            "data": payload,
+            "updated_at": backup.exported_at,
+        })]);
+    let response = rest_headers(data_dir, request)
+        .await?
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Cloud backup failed (HTTP {status}): {body}"));
+    }
+    Ok(())
+}
+
+pub async fn restore_from_cloud(
+    data_dir: &Path,
+) -> Result<crate::services::export::LibraryBackup, String> {
+    let session =
+        read_session(data_dir).ok_or_else(|| "Vynl Sync is not signed in.".to_string())?;
+    let uid = urlencoded_user_id(&session.user_id);
+    let client = http()?;
+    let request = client
+        .get(format!(
+            "{}/rest/v1/backups?select=data,updated_at&user_id=eq.{uid}",
+            base_url()
+        ))
+        .header("Accept", "application/json");
+    let response = rest_headers(data_dir, request)
+        .await?
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Cloud restore failed (HTTP {status}): {body}"));
+    }
+    let body = response.text().await.unwrap_or_default();
+    let list: Vec<serde_json::Value> =
+        serde_json::from_str(&body).map_err(|e| format!("Could not read the cloud backup: {e}"))?;
+    let row = list
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No cloud backup found.".to_string())?;
+    let data = row
+        .get("data")
+        .cloned()
+        .ok_or_else(|| "Cloud backup is empty.".to_string())?;
+    let backup: crate::services::export::LibraryBackup = serde_json::from_value(data)
+        .map_err(|e| format!("That cloud backup isn't readable: {e}"))?;
+    Ok(backup)
+}

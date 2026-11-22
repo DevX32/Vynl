@@ -26,7 +26,6 @@ import type {
   MobileSyncStatus,
   SyncStatus,
   SyncAuthResult,
-  SyncResult,
   UpdateStatus,
   EqDesign,
   MediaUpdate,
@@ -108,6 +107,11 @@ export const vynl = {
     cmd("export_backup", {}),
 
   importBackup: (): Promise<RestoredBackup | null> => cmd("import_backup"),
+
+  backupToCloud: (): Promise<void> => cmd("backup_to_cloud", {}),
+
+  restoreFromCloud: (): Promise<RestoredBackup | null> =>
+    cmd("restore_from_cloud"),
 
   matches: (
     collection: Collection,
@@ -211,7 +215,6 @@ export const vynl = {
 
   syncSignOut: (): Promise<void> => cmd("sync_sign_out"),
 
-  syncNow: (): Promise<SyncResult> => cmd("sync_now"),
 
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>
     cmd("lyrics_local", { file }),

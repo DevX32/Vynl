@@ -304,6 +304,26 @@ pub async fn import_backup(
 }
 
 #[tauri::command]
+pub async fn backup_to_cloud(app: AppHandle) -> Result<(), String> {
+    let user_data = user_data_dir(&app)?;
+    let settings = load_settings(&app)?;
+    crate::services::sync::backup_to_cloud(&user_data, &settings).await
+}
+
+#[tauri::command]
+pub async fn restore_from_cloud(
+    app: AppHandle,
+) -> Result<Option<crate::services::export::RestoredBackup>, String> {
+    let user_data = user_data_dir(&app)?;
+    let backup = crate::services::sync::restore_from_cloud(&user_data).await?;
+    let restored = crate::services::export::restore(&backup);
+    if restored.total == 0 {
+        return Err("That cloud backup doesn't contain any tracks.".into());
+    }
+    Ok(Some(restored))
+}
+
+#[tauri::command]
 pub async fn matches(
     collection: Collection,
     app: AppHandle,
@@ -921,17 +941,11 @@ async fn sync_auth(
     create: bool,
 ) -> Result<crate::services::sync::SyncAuthResult, String> {
     let user_data = user_data_dir(app)?;
-    let output = output_dir_from_settings(app)?;
     let result = if create {
         crate::services::sync::sign_up(&user_data, &email, &password).await?
     } else {
         crate::services::sync::sign_in(&user_data, &email, &password).await?
     };
-    if result.status.signed_in
-        && let Err(error) = crate::services::sync::sync(&user_data, &output).await
-    {
-        eprintln!("[Vynl sync] sync after sign-in failed: {error}");
-    }
     Ok(result)
 }
 
@@ -974,13 +988,6 @@ pub fn take_pending_confirm_url(app: AppHandle) -> Result<Option<String>, String
         .lock()
         .unwrap_or_else(|e| e.into_inner());
     Ok(pending.take())
-}
-
-#[tauri::command]
-pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncResult, String> {
-    let user_data = user_data_dir(&app)?;
-    let output = output_dir_from_settings(&app)?;
-    crate::services::sync::sync(&user_data, &output).await
 }
 
 #[tauri::command]
