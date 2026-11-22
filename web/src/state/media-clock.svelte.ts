@@ -2,46 +2,48 @@ import { getCurrentTime } from "./now-playing.svelte";
 
 const DRIFT_TOLERANCE_SECS = 0.4;
 
-let _anchorMedia = 0;
-let _anchorPerf = 0;
-let _running = false;
-let _subs = 0;
-let _raf = 0;
+let anchorMedia = 0;
+let anchorPerf = 0;
+let running = false;
+let subs = 0;
+let raf = 0;
+let tick = $state(0);
 
 function predictedNow(): number {
   const perf = performance.now();
-  const predicted = _anchorMedia + (perf - _anchorPerf) / 1000;
-
+  const predicted = anchorMedia + (perf - anchorPerf) / 1000;
   if (Math.abs(getCurrentTime() - predicted) > DRIFT_TOLERANCE_SECS) {
-    _anchorMedia = getCurrentTime();
-    _anchorPerf = perf;
+    anchorMedia = getCurrentTime();
+    anchorPerf = perf;
   }
-
-  return _anchorMedia + (perf - _anchorPerf) / 1000;
+  return anchorMedia + (perf - anchorPerf) / 1000;
 }
 
 function frame(): void {
-  predictedNow();
-  _raf = requestAnimationFrame(frame);
+  tick = performance.now();
+  raf = requestAnimationFrame(frame);
 }
 
 export function startClock(): void {
-  _subs += 1;
-  if (_running) return;
-  _running = true;
-  _anchorMedia = getCurrentTime();
-  _anchorPerf = performance.now();
-  _raf = requestAnimationFrame(frame);
+  subs += 1;
+  if (running) return;
+  running = true;
+  anchorMedia = getCurrentTime();
+  anchorPerf = performance.now();
+  tick = anchorPerf;
+  raf = requestAnimationFrame(frame);
 }
 
 export function stopClock(): void {
-  if (_subs > 0) _subs -= 1;
-  if (_subs > 0 || !_running) return;
-  _running = false;
-  if (_raf) cancelAnimationFrame(_raf);
-  _raf = 0;
+  if (subs > 0) subs -= 1;
+  if (subs > 0 || !running) return;
+  running = false;
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0;
 }
 
 export function getSmoothTime(): number {
-  return _running ? predictedNow() : getCurrentTime();
+  // Read reactive tick so consumers re-render while the clock runs.
+  void tick;
+  return running ? predictedNow() : getCurrentTime();
 }

@@ -1,208 +1,176 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { t } from "@lib/i18n";
-  import { vynl } from "../../lib/vynl";
-  import type { LyricsResult, LrcSearchResult } from "../../lib/types";
+  import { vynl } from "@lib/vynl";
+  import type { LrcSearchResult, LyricsResult } from "@lib/types";
   import { getCurrentId, getCurrentTrack } from "@state/now-playing.svelte";
-  import {
-    setLyricsManual,
-    lyricsKindOf,
-    toLyricLines,
-  } from "@state/lyrics.svelte";
+  import { lyricsKindOf, setLyricsManual, toLyricLines } from "@state/lyrics.svelte";
 
-  let {
-    onClose,
-  }: {
-    onClose: () => void;
-  } = $props();
+  let { onClose }: { onClose: () => void } = $props();
 
-  let searchQuery = $state("");
-  let searchResults = $state<LrcSearchResult[]>([]);
-  let searchLoading = $state(false);
-  let searchError = $state<string | null>(null);
-  let searchVersion = 0;
+  let query = $state("");
+  let results = $state<LrcSearchResult[]>([]);
+  let loading = $state(false);
+  let error = $state<string | null>(null);
+  let version = 0;
   let autoQuery = "";
 
   $effect(() => {
     const id = getCurrentId();
     untrack(() => {
       const track = getCurrentTrack();
-      const next = track ? `${track.title} ${track.artist}` : "";
+      const next = track ? `${track.title} ${track.artist}`.trim() : "";
       autoQuery = next;
-      searchQuery = next;
-      searchResults = [];
-      searchError = null;
-      if (id && next.trim()) void runSearch(next, true);
+      query = next;
+      results = [];
+      error = null;
+      if (id && next) void run(next, true);
     });
   });
 
-  async function runSearch(
-    query = searchQuery,
-    scoped = query.trim() === autoQuery.trim(),
-  ): Promise<void> {
-    const trimmed = query.trim();
+  async function run(q = query, scoped = q.trim() === autoQuery.trim()): Promise<void> {
+    const trimmed = q.trim();
     if (!trimmed) return;
-    searchLoading = true;
-    searchError = null;
-    const ver = ++searchVersion;
+    const ver = ++version;
+    loading = true;
+    error = null;
     try {
       const track = getCurrentTrack();
-      const results = await vynl.lyricsSearch({
+      const data = await vynl.lyricsSearch({
         query: trimmed,
-        ...(scoped && track
-          ? { trackName: track.title, artistName: track.artist }
-          : {}),
+        ...(scoped && track ? { trackName: track.title, artistName: track.artist } : {}),
       });
-      if (ver === searchVersion) searchResults = results;
+      if (ver === version) results = data;
     } catch (e) {
-      if (ver === searchVersion) {
-        searchResults = [];
-        searchError = e instanceof Error && e.message ? e.message : t("lyrics.searchFailed");
+      if (ver === version) {
+        results = [];
+        error = e instanceof Error && e.message ? e.message : t("lyrics.searchFailed");
       }
     } finally {
-      if (ver === searchVersion) searchLoading = false;
+      if (ver === version) loading = false;
     }
   }
 
-  function applySearchResult(item: LrcSearchResult): void {
+  function apply(item: LrcSearchResult): void {
     const text = item.syncedLyrics ?? item.plainLyrics ?? "";
     if (!text) return;
-
-    const result: LyricsResult = {
-      kind: lyricsKindOf(text),
-      text,
-      source: "remote",
-    };
+    const result: LyricsResult = { kind: lyricsKindOf(text), text, source: "remote" };
     setLyricsManual(result, toLyricLines(result));
     onClose();
   }
 </script>
 
-<div class="search-input-row">
+<div class="row">
   <input
-    class="search-input mono"
+    class="input mono"
     type="text"
-    bind:value={searchQuery}
+    bind:value={query}
     placeholder={t("lyrics.searchPlaceholder")}
-    onkeydown={(e) => e.key === "Enter" && runSearch()}
+    onkeydown={(e) => e.key === "Enter" && run()}
   />
-  <button
-    class="btn-ghost"
-    onclick={() => runSearch()}
-    disabled={searchLoading}
-  >
-    {t("lyrics.search")}
-  </button>
+  <button class="btn" onclick={() => run()} disabled={loading}>{t("lyrics.search")}</button>
 </div>
 
-{#if searchResults.length > 0}
-  <div class="search-results">
-    {#each searchResults as item (item.id)}
-      <button class="search-item" onclick={() => applySearchResult(item)}>
-        <div class="search-item-track display">{item.trackName}</div>
-        <div class="search-item-artist mono">
-          {item.artistName} · {item.albumName}
-        </div>
-        <div class="search-item-meta mono">
-          {item.syncedLyrics
-            ? t("lyrics.synced")
-            : t("lyrics.plain")}{#if item.duration}
-            · {Math.round(item.duration)}s{/if}
+{#if results.length > 0}
+  <div class="results">
+    {#each results as item (item.id)}
+      <button class="item" onclick={() => apply(item)}>
+        <div class="track display">{item.trackName}</div>
+        <div class="artist mono">{item.artistName}{item.albumName ? ` · ${item.albumName}` : ""}</div>
+        <div class="meta mono">
+          {item.syncedLyrics ? t("lyrics.synced") : t("lyrics.plain")}{#if item.duration} · {Math.round(item.duration)}s{/if}
         </div>
       </button>
     {/each}
   </div>
-{:else if !searchLoading && searchQuery}
-  <div class="search-empty mono" class:bad={!!searchError}>
-    {searchError ?? t("lyrics.noResults")}
-  </div>
+{:else if !loading && query.trim()}
+  <div class="empty mono" class:bad={!!error}>{error ?? t("lyrics.noResults")}</div>
 {/if}
 
 <style>
-  .search-input-row {
+  .row {
     display: flex;
     gap: 8px;
   }
-  .search-input {
+
+  .input {
     flex: 1;
-    background: var(--bg-raise);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
+    min-width: 0;
     padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-strong);
+    background: var(--bg-raise);
     color: var(--text);
     font-size: 11px;
-    letter-spacing: 0.05em;
     outline: none;
   }
-  .search-results {
+
+  .results {
     max-height: 300px;
     overflow-y: auto;
-    scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    scrollbar-width: none;
   }
 
-  .search-results::-webkit-scrollbar {
+  .results::-webkit-scrollbar {
     display: none;
   }
-  .search-item {
-    background: none;
-    border: none;
+
+  .item {
     text-align: left;
     padding: 8px 10px;
+    border: none;
     border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
     cursor: pointer;
-    transition: background 0.12s;
   }
-  .search-item:hover {
+
+  .item:hover {
     background: var(--bg-raise);
   }
-  .search-item-track {
+
+  .track {
     font-size: 13px;
-    margin-bottom: 2px;
   }
-  .search-item-artist {
+
+  .artist,
+  .meta {
     font-size: 10px;
     color: var(--faint);
     letter-spacing: 0.05em;
   }
-  .search-item-meta {
-    font-size: 9px;
+
+  .meta {
     color: var(--dim);
-    letter-spacing: 0.05em;
-    margin-top: 2px;
   }
-  .search-empty {
-    text-align: center;
-    color: var(--faint);
-    font-size: 11px;
+
+  .empty {
     padding: 20px 0;
-    overflow-wrap: anywhere;
+    text-align: center;
+    font-size: 11px;
+    color: var(--faint);
   }
-  .search-empty.bad {
+
+  .empty.bad {
     color: var(--red);
   }
 
-  .btn-ghost {
+  .btn {
     appearance: none;
-    -webkit-appearance: none;
-    background: none;
     border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
     border-radius: var(--radius-sm);
+    background: none;
     color: var(--dim);
-    box-shadow: none;
-    text-shadow: none;
     padding: 7px 16px;
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
-    transition:
-      color 0.15s,
-      border-color 0.15s,
-      opacity 0.15s;
   }
-  .btn-ghost:disabled {
+
+  .btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }

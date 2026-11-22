@@ -1,156 +1,64 @@
 <script lang="ts">
   import { ClipboardPaste, Copy, Keyboard, Search, Settings2, X } from "lucide-svelte";
-  import { fly, fade } from "svelte/transition";
-  import { cubicOut, cubicIn } from "svelte/easing";
+  import { cubicIn, cubicOut } from "svelte/easing";
+  import { fade, fly } from "svelte/transition";
   import { t } from "@lib/i18n";
-  import { vynl } from "../../lib/vynl";
-  import { blobSrc } from "../../lib/format";
+  import { vynl } from "@lib/vynl";
+  import { blobSrc } from "@lib/format";
   import {
-    getCurrentTrack,
     getCurrentId,
+    getCurrentTrack,
     getIsTrackPlaying,
     seekTo,
   } from "@state/now-playing.svelte";
   import {
-    loadLyrics,
-    getLyricsLoading,
-    getLyricsResult,
-    getLyricsLines,
-    getLyricsSynced,
     getLyricsActiveIndex,
     getLyricsError,
+    getLyricsLines,
+    getLyricsLoading,
+    getLyricsResult,
+    getLyricsSynced,
     isInstrumental,
+    loadLyrics,
   } from "@state/lyrics.svelte";
   import { startClock, stopClock } from "@state/media-clock.svelte";
+  import { toggleLyrics } from "@state/player.svelte";
+  import NowPlayingArt from "../player/NowPlayingArt.svelte";
   import KaraokeWords from "./KaraokeWords.svelte";
-import NowPlayingArt from "../player/NowPlayingArt.svelte";
-import { toggleLyrics } from "@state/player.svelte";
-  import LyricsSearchOverlay from "./LyricsSearchOverlay.svelte";
-  import LyricsPasteOverlay from "./LyricsPasteOverlay.svelte";
   import LyricsHelpOverlay from "./LyricsHelpOverlay.svelte";
+  import LyricsPasteOverlay from "./LyricsPasteOverlay.svelte";
+  import LyricsSearchOverlay from "./LyricsSearchOverlay.svelte";
 
   let { onclose, fullscreen = false }: { onclose: () => void; fullscreen?: boolean } = $props();
 
-  let lineEls = $state<HTMLElement[]>([]);
-  let container = $state<HTMLDivElement>();
-  let settingsEl = $state<HTMLDivElement>();
-
-  let autoScroll = $state(readAutoScrollPref());
-  let selected = $state<number[]>([]);
-  let settingsOpen = $state(false);
-
   type Overlay = "help" | "search" | "paste" | null;
+
+  let container = $state<HTMLDivElement>();
+  let lineEls = $state<HTMLElement[]>([]);
+  let settingsEl = $state<HTMLDivElement>();
+  let settingsOpen = $state(false);
   let overlay = $state<Overlay>(null);
-
-  let toast = $state("");
-  let toastTimer: ReturnType<typeof setTimeout> | null = null;
-  let didInitialScroll = false;
+  let selected = $state<number[]>([]);
+  let autoScroll = $state(readAutoScroll());
   let userScrolling = $state(false);
-  let scrollAnim: number | null = null;
-  let scrollAim: number | null = null;
+  let toast = $state("");
+
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
   let resumeTimer: ReturnType<typeof setTimeout> | null = null;
-  let settleTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const prefersReducedMotion = () =>
-    typeof matchMedia === "function" &&
-    matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  function cancelScrollAnim(): void {
-    if (scrollAnim !== null) {
-      cancelAnimationFrame(scrollAnim);
-      scrollAnim = null;
-    }
-    scrollAim = null;
-  }
-
-  const TOP_FADE_PX = 56;
-  const TOP_GAP_PX = 28;
-  const ACTIVE_SCALE = 1.04;
-
-  let lastActiveIndex = -1;
-  let collapsingLine: HTMLElement | null = null;
-
-  function romanExtra(line: HTMLElement): number {
-    const roman = line.querySelector(".lyr-roman");
-    if (!roman) return 0;
-    return roman.getBoundingClientRect().height + (parseFloat(getComputedStyle(roman).marginTop) || 0);
-  }
-
-  function scrollTarget(c: HTMLElement, activeIndex: number): number | null {
-    const el = lineEls[activeIndex];
-    if (!el) return null;
-    if (activeIndex !== lastActiveIndex) {
-      collapsingLine = lastActiveIndex >= 0 ? (lineEls[lastActiveIndex] ?? null) : null;
-      lastActiveIndex = activeIndex;
-    }
-    const lines = getLyricsLines();
-    const base =
-      el.offsetParent === c
-        ? el.offsetTop
-        : el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop;
-    let above = base;
-    for (let i = 0; i < lineEls.length; i++) {
-      const line = lineEls[i];
-      const item = lines[i];
-      if (!line || !item || i === activeIndex) continue;
-      if (!isInstrumental(item.text) || line.offsetTop >= base) continue;
-      above -= line.offsetHeight + (parseFloat(getComputedStyle(line).marginBottom) || 0);
-    }
-    if (collapsingLine && collapsingLine !== el && collapsingLine.offsetTop < base) {
-      const extra = romanExtra(collapsingLine);
-      if (extra > 0.5) above -= extra;
-      else collapsingLine = null;
-    }
-    const offset = above - (el.offsetHeight * (ACTIVE_SCALE - 1)) / 2;
-    const max = Math.max(0, c.scrollHeight - c.clientHeight);
-    return Math.max(0, Math.min(offset - (TOP_FADE_PX + TOP_GAP_PX), max));
-  }
-
-  function animateScroll(c: HTMLElement, to: number): void {
-    if (scrollAnim !== null && scrollAim !== null && Math.abs(scrollAim - to) <= 1.5) return;
-    cancelScrollAnim();
-    const from = c.scrollTop;
-    const delta = to - from;
-    if (Math.abs(delta) < 1) {
-      c.scrollTop = to;
-      return;
-    }
-    if (prefersReducedMotion()) {
-      c.scrollTop = to;
-      return;
-    }
-    scrollAim = to;
-    const duration = Math.min(620, 200 + Math.abs(delta) * 0.32);
-    const start = performance.now();
-    const step = (now: number): void => {
-      const p = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      c.scrollTop = from + delta * eased;
-      if (p < 1) {
-        scrollAnim = requestAnimationFrame(step);
-        return;
-      }
-      scrollAnim = null;
-      scrollAim = null;
-    };
-    scrollAnim = requestAnimationFrame(step);
-  }
-
-  function noteUserScroll(): void {
-    cancelScrollAnim();
-    userScrolling = true;
-    if (resumeTimer) clearTimeout(resumeTimer);
-    resumeTimer = setTimeout(() => {
-      userScrolling = false;
-    }, 2600);
-  }
+  let scrollRaf: number | null = null;
+  let lastTrackId: string | null = null;
+  let didInitialScroll = false;
 
   const np = $derived(getCurrentTrack());
-  const selectedCharCount = $derived(
-    selected.reduce((sum, i) => sum + (getLyricsLines()[i]?.text?.length ?? 0), 0),
-  );
+  const lines = $derived(getLyricsLines());
+  const activeIndex = $derived(getLyricsActiveIndex());
+  const synced = $derived(getLyricsSynced());
+  const loading = $derived(getLyricsLoading());
+  const result = $derived(getLyricsResult());
+  const error = $derived(getLyricsError());
+  const playing = $derived(getIsTrackPlaying());
 
-  function readAutoScrollPref(): boolean {
+  function readAutoScroll(): boolean {
     if (typeof localStorage === "undefined") return true;
     return localStorage.getItem("vynl.autoscroll") !== "false";
   }
@@ -166,204 +74,148 @@ import { toggleLyrics } from "@state/player.svelte";
     toastTimer = setTimeout(() => (toast = ""), 1600);
   }
 
-  function copyText(
-    text: string,
-    successKey: string = "lyrics.copied",
-    values: Record<string, string | number> = {},
-  ): void {
+  function copy(text: string, key = "lyrics.copied", values: Record<string, string | number> = {}): void {
     vynl
       .copyText(text)
-      .then(() => showToast(t(successKey, values)))
-      .catch((e) => {
-        console.warn("clipboard write failed:", e);
-        showToast(t("lyrics.copyFailed"));
-      });
+      .then(() => showToast(t(key, values)))
+      .catch(() => showToast(t("lyrics.copyFailed")));
   }
 
-  function closeOverlay(): void {
+  function cancelScroll(): void {
+    if (scrollRaf !== null) cancelAnimationFrame(scrollRaf);
+    scrollRaf = null;
+  }
+
+  function prefersReducedMotion(): boolean {
+    return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function targetScrollTop(index: number): number | null {
+    const c = container;
+    const el = lineEls[index];
+    if (!c || !el) return null;
+    const cRect = c.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    const current = c.scrollTop;
+    const offset = eRect.top - cRect.top + current;
+    const topPad = 84;
+    const target = offset - topPad - Math.max(0, (c.clientHeight - eRect.height) * 0.18);
+    const max = Math.max(0, c.scrollHeight - c.clientHeight);
+    return Math.max(0, Math.min(target, max));
+  }
+
+  function scrollToActive(immediate = false): void {
+    if (!autoScroll || userScrolling || activeIndex < 0) return;
+    const c = container;
+    const target = targetScrollTop(activeIndex);
+    if (!c || target === null) return;
+    const delta = target - c.scrollTop;
+    if (Math.abs(delta) < 1) return;
+    if (immediate || prefersReducedMotion()) {
+      cancelScroll();
+      c.scrollTop = target;
+      return;
+    }
+    cancelScroll();
+    const start = c.scrollTop;
+    const distance = target - start;
+    const duration = Math.min(560, 180 + Math.abs(distance) * 0.28);
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      c.scrollTop = start + distance * eased;
+      if (p < 1) scrollRaf = requestAnimationFrame(step);
+      else scrollRaf = null;
+    };
+    scrollRaf = requestAnimationFrame(step);
+  }
+
+  function noteUserScroll(): void {
+    userScrolling = true;
+    cancelScroll();
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(() => (userScrolling = false), 2400);
+  }
+
+  $effect(() => {
+    const id = getCurrentId();
+    if (id === lastTrackId) return;
+    lastTrackId = id;
+    didInitialScroll = false;
+    selected = [];
     overlay = null;
-  }
-
-  function openOverlay(next: Exclude<Overlay, null>): void {
-    overlay = next;
     settingsOpen = false;
-  }
+    cancelScroll();
+    loadLyrics(id);
+  });
+
+  $effect(() => {
+    if (!playing || lines.length === 0) return;
+    startClock();
+    return () => stopClock();
+  });
+
+  $effect(() => {
+    // Track result/track changes to reset scroll.
+    result;
+    getCurrentId();
+    didInitialScroll = false;
+  });
+
+  $effect(() => {
+    if (activeIndex < 0) return;
+    if (!didInitialScroll) {
+      didInitialScroll = true;
+      // Wait a tick for layout.
+      requestAnimationFrame(() => scrollToActive(true));
+      return;
+    }
+    scrollToActive(false);
+  });
 
   $effect(() => {
     return () => {
       if (toastTimer) clearTimeout(toastTimer);
       if (resumeTimer) clearTimeout(resumeTimer);
-      cancelScrollAnim();
-    };
-  });
-
-  $effect(() => {
-    const id = getCurrentId();
-    didInitialScroll = false;
-    loadLyrics(id);
-    selected = [];
-    overlay = null;
-  });
-
-  function retryLyrics(): void {
-    const id = getCurrentId();
-    loadLyrics(id);
-  }
-
-  $effect(() => {
-    if (!getIsTrackPlaying() || getLyricsLines().length === 0) return;
-    startClock();
-    return () => stopClock();
-  });
-
-  function activeScrollTarget(): number | null {
-    if (!autoScroll || userScrolling) return null;
-    const activeIndex = getLyricsActiveIndex();
-    if (activeIndex < 0) return null;
-    const c = container;
-    if (!c) return null;
-    return scrollTarget(c, activeIndex);
-  }
-
-  let scrollContent: unknown = null;
-
-  $effect(() => {
-    const content = getLyricsResult();
-    const c = container;
-    if (content !== scrollContent) {
-      scrollContent = content;
-      didInitialScroll = false;
-      lastActiveIndex = -1;
-      collapsingLine = null;
-      cancelScrollAnim();
-      if (c) c.scrollTop = 0;
-    }
-    const target = activeScrollTarget();
-    if (target === null || !c) return;
-    if (Math.abs(c.scrollTop - target) <= 2) return;
-    if (didInitialScroll) {
-      animateScroll(c, target);
-      scheduleSettle();
-      return;
-    }
-    didInitialScroll = true;
-    cancelScrollAnim();
-    c.scrollTop = target;
-    scheduleSettle();
-  });
-
-  function retargetScroll(): void {
-    const c = container;
-    const target = activeScrollTarget();
-    if (!c || target === null) return;
-    if (Math.abs(c.scrollTop - target) <= 1) return;
-    animateScroll(c, target);
-  }
-
-  function scheduleSettle(): void {
-    if (settleTimer !== null) clearTimeout(settleTimer);
-    const deadline = performance.now() + 1600;
-    const tick = (): void => {
-      retargetScroll();
-      if (performance.now() < deadline) {
-        settleTimer = setTimeout(tick, 120);
-        return;
-      }
-      settleTimer = null;
-    };
-    settleTimer = setTimeout(tick, 120);
-  }
-
-  $effect(() => () => {
-    if (settleTimer !== null) clearTimeout(settleTimer);
-  });
-
-  $effect(() => {
-    const c = container;
-    const els = lineEls;
-    if (!c || typeof ResizeObserver !== "function") return;
-    const ro = new ResizeObserver(() => {
-      retargetScroll();
-      scheduleSettle();
-    });
-    ro.observe(c);
-    for (const el of els) if (el) ro.observe(el);
-    return () => ro.disconnect();
-  });
-
-  $effect(() => {
-    const c = container;
-    if (!c) return;
-    const onTransitionEnd = (e: TransitionEvent): void => {
-      if (e.target !== c || e.propertyName !== "grid-template-rows") return;
-      retargetScroll();
-      scheduleSettle();
-    };
-    c.addEventListener("transitionend", onTransitionEnd);
-    return () => c.removeEventListener("transitionend", onTransitionEnd);
-  });
-
-  $effect(() => {
-    const c = container;
-    if (!c) return;
-    const onWheel = (): void => noteUserScroll();
-    const onTouchMove = (): void => noteUserScroll();
-    const onPointerDownScroll = (e: PointerEvent): void => {
-      const target = e.target as HTMLElement;
-      if (target.closest(".lyr-line")) return;
-      noteUserScroll();
-    };
-    c.addEventListener("wheel", onWheel, { passive: true });
-    c.addEventListener("touchmove", onTouchMove, { passive: true });
-    c.addEventListener("pointerdown", onPointerDownScroll);
-    return () => {
-      c.removeEventListener("wheel", onWheel);
-      c.removeEventListener("touchmove", onTouchMove);
-      c.removeEventListener("pointerdown", onPointerDownScroll);
+      cancelScroll();
     };
   });
 
   $effect(() => {
     if (!settingsOpen) return;
-    const onPointerDown = (e: PointerEvent): void => {
+    const onDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
       if (settingsEl?.contains(target) || target.closest(".lyr-icon")) return;
       settingsOpen = false;
     };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
   });
 
   $effect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (overlay) {
         e.preventDefault();
-        closeOverlay();
+        overlay = null;
       } else if (settingsOpen) {
         e.preventDefault();
         settingsOpen = false;
       }
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   });
-
-  function toggleLine(i: number): void {
-    selected = selected.includes(i)
-      ? selected.filter((x) => x !== i)
-      : [...selected, i].sort((a, b) => a - b);
-  }
 
   function onLineClick(e: MouseEvent, i: number): void {
     e.stopPropagation();
-
     if (e.ctrlKey || e.metaKey) {
-      toggleLine(i);
+      selected = selected.includes(i) ? selected.filter((x) => x !== i) : [...selected, i].sort((a, b) => a - b);
       return;
     }
-    const line = getLyricsLines()[i];
-    if (getLyricsSynced() && line?.time >= 0) {
+    const line = lines[i];
+    if (synced && line?.time >= 0) {
       seekTo(line.time);
       return;
     }
@@ -371,52 +223,38 @@ import { toggleLyrics } from "@state/player.svelte";
   }
 
   function onLineContextMenu(e: MouseEvent, i: number): void {
-    const text = getLyricsLines()[i]?.text;
+    const text = lines[i]?.text;
     if (!text) return;
     e.preventDefault();
-    copyText(text);
+    copy(text);
   }
 
-  function clearSelectionOnBackground(e: PointerEvent): void {
+  function clearSelection(e: PointerEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest(".lyr-line") || e.ctrlKey || e.metaKey) return;
     selected = [];
   }
 
-  function copyAllLyrics(): void {
-    const lines = getLyricsLines()
-      .map((l) => l.text.trim())
-      .filter(Boolean);
-    if (lines.length === 0) return;
-    copyText(lines.join("\n\n"), "lyrics.copiedAll", { n: lines.length });
+  function copyAll(): void {
+    const text = lines.map((l) => l.text.trim()).filter(Boolean).join("\n\n");
+    if (text) copy(text, "lyrics.copiedAll", { n: lines.filter((l) => l.text.trim()).length });
   }
 
-  function copySelectedLyrics(): void {
-    const lines = getLyricsLines();
-    const joined = selected
-      .map((i) => lines[i]?.text?.trim())
-      .filter((line): line is string => !!line);
-    if (joined.length === 0) return;
-    copyText(joined.join("\n\n"), "lyrics.copiedN", { n: joined.length });
+  function copySelected(): void {
+    const text = selected.map((i) => lines[i]?.text?.trim()).filter((v): v is string => !!v).join("\n\n");
+    if (text) copy(text, "lyrics.copiedN", { n: selected.length });
   }
 
-  function openSearch(): void {
-    openOverlay("search");
-  }
-
-  function openPaste(): void {
-    openOverlay("paste");
+  function open(next: Exclude<Overlay, null>): void {
+    overlay = next;
+    settingsOpen = false;
   }
 </script>
 
-{#snippet modalShell(title: string, close: () => void, body: import("svelte").Snippet)}
+{#snippet modal(title: string, close: () => void, body: import("svelte").Snippet)}
   <div class="modal" transition:fade={{ duration: 120 }}>
-    <button class="modal-backdrop" onclick={close} aria-label={t("lyrics.helpEsc")}></button>
-    <div
-      class="modal-content"
-      in:fly={{ y: 8, duration: 200, easing: cubicOut }}
-      out:fly={{ y: 8, duration: 150, easing: cubicIn }}
-    >
+    <button class="backdrop" onclick={close} aria-label={t("lyrics.helpEsc")}></button>
+    <div class="modal-card" in:fly={{ y: 8, duration: 180, easing: cubicOut }} out:fly={{ y: 8, duration: 120, easing: cubicIn }}>
       <div class="modal-title display">{title}</div>
       {@render body()}
     </div>
@@ -426,10 +264,10 @@ import { toggleLyrics } from "@state/player.svelte";
 <section class="lyrics-page" class:fullscreen>
   {#if np}
     {#if fullscreen}
-      <aside class="lyr-art">
+      <aside class="art-col">
         <NowPlayingArt
           current={np}
-          playing={getIsTrackPlaying()}
+          playing={playing}
           playError={null}
           scanning={false}
           lyricsOpen={true}
@@ -438,194 +276,152 @@ import { toggleLyrics } from "@state/player.svelte";
         />
       </aside>
     {/if}
-    {#if !fullscreen}
-      <header class="lyr-head">
-        <div class="lyr-track">
-          {#if np.cover}
-            <img class="lyr-cover" use:blobSrc={np.cover} alt="" draggable="false" />
-          {:else}
-            <div class="lyr-cover placeholder">{np.title.charAt(0).toUpperCase()}</div>
+
+    <div class="main-col">
+      {#if !fullscreen}
+        <header class="head">
+          <div class="track">
+            {#if np.cover}
+              <img class="cover" use:blobSrc={np.cover} alt="" draggable="false" />
+            {:else}
+              <div class="cover placeholder">{np.title.charAt(0).toUpperCase()}</div>
+            {/if}
+            <div class="track-text">
+              <div class="title display" title={np.title}>{np.title}</div>
+              <div class="meta mono">
+                <span>{np.artist || t("lyrics.unknownArtist")}</span>
+                {#if np.album}<span class="sep">·</span><span class="album" title={np.album}>{np.album}</span>{/if}
+              </div>
+            </div>
+          </div>
+
+          <div class="lyr-controls">
+            <button class="lyr-icon" onclick={copyAll} aria-label={t("lyrics.copyAllLyrics")}>
+              <Copy size={14} stroke-width={1.5} />
+            </button>
+            <button class="lyr-icon" class:active={settingsOpen} onclick={() => (settingsOpen = !settingsOpen)} aria-label={t("lyrics.settings")}>
+              <Settings2 size={14} stroke-width={1.5} />
+            </button>
+            <span class="lyr-divider" aria-hidden="true"></span>
+            <button class="lyr-icon" onclick={onclose} aria-label={t("lyrics.closeLyrics")}>
+              <X size={14} stroke-width={1.5} />
+            </button>
+          </div>
+
+          {#if settingsOpen}
+            <div class="lyr-settings" bind:this={settingsEl} transition:fly={{ y: -6, duration: 150, easing: cubicOut }}>
+              <div class="settings-row">
+                <span class="settings-label mono">{t("lyrics.autoScroll")}</span>
+                <button class="mini-switch" class:on={autoScroll} onclick={() => setAutoScroll(!autoScroll)} aria-label={t("lyrics.toggleAutoScroll")}><span></span></button>
+              </div>
+              <div class="settings-row">
+                <button class="btn-ghost settings-action mono" onclick={() => open("search")}>
+                  <Search size={13} stroke-width={1.5} />
+                  {t("lyrics.search")}
+                </button>
+              </div>
+              <div class="settings-row">
+                <button class="btn-ghost settings-action mono" onclick={() => open("paste")}>
+                  <ClipboardPaste size={13} stroke-width={1.5} />
+                  {t("lyrics.paste")}
+                </button>
+              </div>
+              <div class="settings-row">
+                <button class="btn-ghost settings-action mono" onclick={() => open("help")}>
+                  <Keyboard size={13} stroke-width={1.5} />
+                  {t("lyrics.shortcuts")}
+                </button>
+              </div>
+            </div>
           {/if}
-          <div class="lyr-track-text">
-            <div class="lyr-title display" title={np.title}>{np.title}</div>
-            <div class="lyr-meta mono">
-              <span class="lyr-artist">{np.artist || t("lyrics.unknownArtist")}</span>
-              {#if np.album}
-                <span class="lyr-sep">·</span>
-                <span class="lyr-album" title={np.album}>{np.album}</span>
-              {/if}
-            </div>
-          </div>
-        </div>
+        </header>
+      {/if}
 
-        <div class="lyr-controls">
-          <button
-            class="lyr-icon"
-            onclick={copyAllLyrics}
-            aria-label={t("lyrics.copyAllLyrics")}
-          >
-            <Copy size={14} stroke-width={1.5} />
-          </button>
-          <button
-            class="lyr-icon"
-            class:active={settingsOpen}
-            onclick={() => (settingsOpen = !settingsOpen)}
-            aria-label={t("lyrics.settings")}
-          >
-            <Settings2 size={14} stroke-width={1.5} />
-          </button>
-          <span class="lyr-divider" aria-hidden="true"></span>
-          <button
-            class="lyr-icon"
-            onclick={onclose}
-            aria-label={t("lyrics.closeLyrics")}
-          >
-            <X size={14} stroke-width={1.5} />
-          </button>
-        </div>
-
-        {#if settingsOpen}
-          <div class="lyr-settings" transition:fly={{ y: -6, duration: 150, easing: cubicOut }} bind:this={settingsEl}>
-            <div class="settings-row">
-              <span class="settings-label mono">{t("lyrics.autoScroll")}</span>
-              <button
-                class="mini-switch"
-                class:on={autoScroll}
-                onclick={() => setAutoScroll(!autoScroll)}
-                aria-label={t("lyrics.toggleAutoScroll")}
-              ><span></span></button>
-            </div>
-            <div class="settings-row">
-              <button class="btn-ghost settings-action mono" onclick={openSearch}>
-                <Search size={13} stroke-width={1.5} />
-                {t("lyrics.search")}
-              </button>
-            </div>
-            <div class="settings-row">
-              <button class="btn-ghost settings-action mono" onclick={openPaste}>
-                <ClipboardPaste size={13} stroke-width={1.5} />
-                {t("lyrics.paste")}
-              </button>
-            </div>
-            <div class="settings-row">
-              <button class="btn-ghost settings-action mono" onclick={() => openOverlay("help")}>
-                <Keyboard size={13} stroke-width={1.5} />
-                {t("lyrics.shortcuts")}
-              </button>
-            </div>
+      <div
+        class="scroll"
+        class:synced
+        class:paused={!playing}
+        bind:this={container}
+        role="presentation"
+        onpointerdown={clearSelection}
+        onwheel={noteUserScroll}
+        ontouchmove={noteUserScroll}
+      >
+        {#if loading && lines.length === 0}
+          <div class="empty mono" transition:fade={{ duration: 120 }}>{t("lyrics.loadingLyrics")}</div>
+        {:else if !result && error}
+          <div class="empty" transition:fade={{ duration: 120 }}>
+            <div class="empty-title display">{t("lyrics.loadFailed")}</div>
+            <button class="btn-ghost settings-action mono" style="margin-top:12px; justify-content:center; width:auto;" onclick={() => loadLyrics(getCurrentId())}>{t("common.retry")}</button>
           </div>
+        {:else if !result}
+          <div class="empty" transition:fade={{ duration: 120 }}>
+            <div class="empty-title display">{t("lyrics.noLyricsFound")}</div>
+          </div>
+        {:else if lines.length === 0}
+          <div class="empty mono" transition:fade={{ duration: 120 }}>{t("lyrics.emptyLyricsFile")}</div>
+        {:else}
+          {#each lines as line, i (i)}
+            {@const active = i === activeIndex}
+            {@const instrumental = isInstrumental(line.text)}
+            {@const hidden = instrumental && !active}
+            <button
+              type="button"
+              class="line"
+              class:active
+              class:before={synced && activeIndex >= 0 && i < activeIndex}
+              class:selected={selected.includes(i)}
+              class:bg={!!line.bg}
+              class:hidden-line={hidden}
+              inert={hidden}
+              bind:this={lineEls[i]}
+              onclick={(e) => onLineClick(e, i)}
+              oncontextmenu={(e) => onLineContextMenu(e, i)}
+            >
+              <span class="line-inner">
+                {#if instrumental}
+                  <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                {:else if active && line.words?.length}
+                  <KaraokeWords words={line.words} lineEnd={line.end} />
+                {:else}
+                  <span class="text">{line.text || "\u00A0"}</span>
+                {/if}
+                {#if line.roman}
+                  <span class="roman" class:open={active}><span class="roman-text">{line.roman}</span></span>
+                {/if}
+              </span>
+            </button>
+          {/each}
         {/if}
-      </header>
-    {/if}
+      </div>
 
-    <div
-      class="lyrics-scroll"
-      role="presentation"
-      class:paused={!getIsTrackPlaying()}
-      class:synced={getLyricsSynced()}
-      bind:this={container}
-      onpointerdown={clearSelectionOnBackground}
-    >
-      {#if getLyricsLoading() && getLyricsLines().length === 0}
-        <div class="lyr-empty" transition:fade={{ duration: 120 }}>
-          <div class="lyr-empty-sub mono">{t("lyrics.loadingLyrics")}</div>
+      {#if selected.length > 0}
+        <div class="selection" transition:fly={{ y: 8, duration: 140, easing: cubicOut }}>
+          <span class="selection-count mono">{t("lyrics.nLines", { n: selected.length, s: selected.length > 1 ? "s" : "", c: selected.reduce((n, i) => n + (lines[i]?.text?.length ?? 0), 0) })}</span>
+          <button class="sel-btn" onclick={copySelected} aria-label={t("lyrics.copySelected")}><Copy size={13} stroke-width={1.5} /></button>
+          <button class="sel-btn" onclick={() => (selected = [])} aria-label={t("lyrics.clearSelection")}><X size={13} stroke-width={1.5} /></button>
         </div>
-      {:else if !getLyricsResult() && getLyricsError()}
-        <div class="lyr-empty" transition:fade={{ duration: 120 }}>
-          <div class="lyr-empty-title display">{t("lyrics.loadFailed")}</div>
-          <button class="btn-ghost settings-action mono" style="margin-top:12px" onclick={retryLyrics}>
-            {t("common.retry")}
-          </button>
-        </div>
-      {:else if !getLyricsResult()}
-        <div class="lyr-empty" transition:fade={{ duration: 120 }}>
-          <div class="lyr-empty-title display">{t("lyrics.noLyricsFound")}</div>
-        </div>
-      {:else if getLyricsLines().length === 0}
-        <div class="lyr-empty mono" transition:fade={{ duration: 120 }}>
-          {t("lyrics.emptyLyricsFile")}
-        </div>
-      {:else}
-        {#each getLyricsLines() as line, i (i)}
-          {@const activeIndex = getLyricsActiveIndex()}
-          {@const synced = getLyricsSynced()}
-          {@const instrumental = isInstrumental(line.text)}
-          {@const active = i === activeIndex}
-          <button
-            type="button"
-            class="lyr-line"
-            class:active={active}
-            class:before={synced && activeIndex >= 0 && i < activeIndex}
-            class:selected={selected.includes(i)}
-            class:seekable={synced && line.time >= 0}
-            class:hidden-line={instrumental && !active}
-            inert={instrumental && !active}
-            class:bg={!!line.bg}
-            bind:this={lineEls[i]}
-            onclick={(e) => onLineClick(e, i)}
-            oncontextmenu={(e) => onLineContextMenu(e, i)}
-          >
-            <span class="lyr-inner">
-              {#if instrumental}
-                <span class="lyr-dots" aria-hidden="true">
-                  <span></span><span></span><span></span>
-                </span>
-              {:else if active && line.words?.length}
-                <KaraokeWords words={line.words} lineEnd={line.end} />
-              {:else}
-                <span class="lyr-text">{line.text || "\u00A0"}</span>
-              {/if}
-              {#if line.roman}
-                <span class="lyr-roman" class:open={active} aria-hidden={!active}>
-                  <span class="lyr-roman-text">{line.roman}</span>
-                </span>
-              {/if}
-            </span>
-          </button>
-        {/each}
       {/if}
     </div>
 
-    {#if selected.length > 0}
-      <div class="selection-bar" transition:fly={{ y: 8, duration: 160, easing: cubicOut }}>
-        <span class="selection-count mono">
-          {t("lyrics.nLines", { n: selected.length, s: selected.length > 1 ? "s" : "", c: selectedCharCount })}
-        </span>
-        <button class="sel-btn" onclick={copySelectedLyrics} aria-label={t("lyrics.copySelected")}>
-          <Copy size={13} stroke-width={1.5} />
-        </button>
-        <button class="sel-btn" onclick={() => (selected = [])} aria-label={t("lyrics.clearSelection")}>
-          <X size={13} stroke-width={1.5} />
-        </button>
-      </div>
-    {/if}
-
-    {#if overlay === "help"}{@render modalShell(t("lyrics.helpTitle"), closeOverlay, helpBody)}{/if}
-    {#if overlay === "search"}{@render modalShell(t("lyrics.searchLyrics"), closeOverlay, searchBody)}{/if}
-    {#if overlay === "paste"}{@render modalShell(t("lyrics.pasteLyrics"), closeOverlay, pasteBody)}{/if}
+    {#if overlay === "help"}{@render modal(t("lyrics.helpTitle"), () => (overlay = null), helpBody)}{/if}
+    {#if overlay === "search"}{@render modal(t("lyrics.searchLyrics"), () => (overlay = null), searchBody)}{/if}
+    {#if overlay === "paste"}{@render modal(t("lyrics.pasteLyrics"), () => (overlay = null), pasteBody)}{/if}
 
     {#if toast}
-      <div class="lyr-toast mono" transition:fade={{ duration: 120 }}>{toast}</div>
+      <div class="toast mono" transition:fade={{ duration: 120 }}>{toast}</div>
     {/if}
   {:else}
-    <div class="lyr-empty">
-      <div class="lyr-empty-title display">{t("player.nothingPlaying")}</div>
-      <div class="lyr-empty-sub mono">{t("lyrics.playToSee")}</div>
+    <div class="empty">
+      <div class="empty-title display">{t("player.nothingPlaying")}</div>
+      <div class="empty-sub mono">{t("lyrics.playToSee")}</div>
     </div>
   {/if}
 </section>
 
-{#snippet helpBody()}
-  <LyricsHelpOverlay onClose={closeOverlay} />
-{/snippet}
-
-{#snippet searchBody()}
-  <LyricsSearchOverlay onClose={closeOverlay} />
-{/snippet}
-
-{#snippet pasteBody()}
-  <LyricsPasteOverlay onClose={closeOverlay} />
-{/snippet}
+{#snippet helpBody()}<LyricsHelpOverlay onClose={() => (overlay = null)} />{/snippet}
+{#snippet searchBody()}<LyricsSearchOverlay onClose={() => (overlay = null)} />{/snippet}
+{#snippet pasteBody()}<LyricsPasteOverlay onClose={() => (overlay = null)} />{/snippet}
 
 <style>
   :root {
@@ -635,137 +431,65 @@ import { toggleLyrics } from "@state/player.svelte";
   .lyrics-page {
     position: relative;
     height: 100%;
+    min-height: 0;
     display: flex;
-    flex-direction: column;
     gap: 20px;
     padding: 20px 0;
   }
 
   .lyrics-page.fullscreen {
-    flex-direction: row;
-    align-items: stretch;
-    gap: 24px;
     padding: 24px;
+    gap: 24px;
   }
 
-  .lyr-art {
-    flex: 0 0 auto;
+  .art-col {
     width: 360px;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .lyr-art :global(.now) {
-    padding: 0;
-  }
+  .art-col :global(.now) { padding: 0; }
+  .art-col :global(.now-art) { width: 300px; margin: 0; }
 
-  .lyr-art :global(.now-art) {
-    width: 300px;
-    margin: 0;
-  }
-
-  .lyr-art :global(.now-title) {
-    max-width: 100%;
-    font-size: 22px;
-  }
-
-  .lyr-art :global(.now-artist) {
-    max-width: 100%;
-  }
-
-  .lyrics-page.fullscreen .lyrics-scroll {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .lyr-head {
+  .main-col {
     position: relative;
-    flex-shrink: 0;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .head {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     padding-bottom: 14px;
   }
-  .lyr-head::after {
+
+  .head::after {
     content: "";
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 0; right: 0; bottom: 0;
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      var(--line-strong) 0%,
-      var(--line) 40%,
-      transparent 100%
-    );
+    background: linear-gradient(90deg, var(--line-strong), var(--line) 40%, transparent);
   }
-  .lyr-track {
-    display: flex;
-    gap: 12px;
-    min-width: 0;
-    align-items: center;
-  }
-  .lyr-cover {
-    width: 46px;
-    height: 46px;
-    border-radius: var(--radius-sm);
-    object-fit: cover;
-    flex-shrink: 0;
-    box-shadow: 0 0 0 1px var(--line), 0 4px 16px rgba(0, 0, 0, 0.35);
-  }
-  .lyr-cover.placeholder {
-    background: var(--placeholder-gradient);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    color: var(--faint);
-  }
-  .lyr-track-text {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 4px;
-  }
-  .lyr-title {
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--text);
-  }
-  .lyr-meta {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    min-width: 0;
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .lyr-artist {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-shrink: 1;
-  }
-  .lyr-sep {
-    color: var(--faint);
-    flex-shrink: 0;
-  }
-  .lyr-album {
-    color: var(--faint);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
+
+  .track { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .cover { width: 46px; height: 46px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
+  .cover.placeholder { display:flex; align-items:center; justify-content:center; background: var(--placeholder-gradient); color: var(--faint); font-size: 18px; }
+  .track-text { min-width: 0; display:flex; flex-direction:column; gap:4px; }
+  .title { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { display:flex; gap:6px; min-width:0; font-size:11px; color: var(--dim); }
+  .meta > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sep, .album { color: var(--faint); flex-shrink: 0; }
+  .album { min-width: 0; flex-shrink: 1; }
+
   .lyr-controls {
     display: flex;
     align-items: center;
@@ -897,281 +621,93 @@ import { toggleLyrics } from "@state/player.svelte";
     color: var(--accent);
   }
 
-  .lyrics-scroll {
-    --lyr-fade-top: 56px;
-    --lyr-fade-bottom: 64px;
+  .scroll {
+    --fade-top: 56px;
+    --fade-bottom: 64px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    overflow-anchor: none;
     scrollbar-width: none;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    flex-direction: column;
-    padding: calc(var(--lyr-fade-top) + 28px) 20px 8vh;
-    mask-image: linear-gradient(
-      to bottom,
-      transparent 0,
-      black var(--lyr-fade-top),
-      black calc(100% - var(--lyr-fade-bottom)),
-      transparent 100%
-    );
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      transparent 0,
-      black var(--lyr-fade-top),
-      black calc(100% - var(--lyr-fade-bottom)),
-      transparent 100%
-    );
+    padding: calc(var(--fade-top) + 36px) 20px 12vh;
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 12px, black var(--fade-top), black calc(100% - var(--fade-bottom)), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 12px, black var(--fade-top), black calc(100% - var(--fade-bottom)), transparent 100%);
   }
+  .scroll::-webkit-scrollbar { display: none; }
+  .scroll.synced { padding-bottom: 18vh; }
 
-  .lyrics-scroll::-webkit-scrollbar {
-    display: none;
-  }
+  .empty { margin: auto; text-align:center; color: var(--faint); font-size: 11.5px; }
+  .empty-title { font-size: 20px; color: var(--dim); margin-bottom: 6px; }
+  .empty-sub { font-size: 11px; }
 
-  .lyrics-scroll.synced {
-    padding-bottom: 10vh;
-  }
-
-  .lyr-empty {
-    margin: auto;
-    text-align: center;
-    color: var(--faint);
-    font-size: 11.5px;
-  }
-  .lyr-empty-title {
-    font-size: 20px;
-    color: var(--dim);
-    margin-bottom: 6px;
-  }
-  .lyr-empty-sub {
-    font-size: 11px;
-  }
-
-  .lyr-line {
-    font-family: var(--font-lyrics);
-    font-size: 26px;
-    line-height: 2;
-    font-weight: 500;
-    color: var(--faint);
-    padding: 0 16px;
-    flex-shrink: 0;
-    position: relative;
-    display: grid;
-    grid-template-rows: 1fr;
+  .line {
     width: 100%;
     max-width: 760px;
-    margin: 0 auto 20px;
-    text-align: center;
-    background: none;
+    margin: 0 auto 18px;
+    padding: 0 16px;
     border: none;
-    cursor: pointer;
-    overflow-wrap: break-word;
-    transform-origin: center center;
-    transition:
-      grid-template-rows 0.35s var(--ease-out),
-      margin-bottom 0.35s var(--ease-out),
-      transform 0.6s var(--ease-out),
-      color 0.5s var(--ease-out),
-      opacity 0.35s var(--ease-out);
-  }
-  .lyr-inner {
-    display: block;
-    min-height: 0;
-    overflow: hidden;
-    padding: 12px 0;
-    margin: -16px 0;
-  }
-  .lyr-line:last-child {
-    margin-bottom: 0;
-  }
-  .lyr-line.seekable {
-    cursor: pointer;
-  }
-  .lyr-line.active {
-    color: var(--text);
-    font-weight: 600;
-    transform: scale(1.2);
-  }
-  .lyr-line.before {
-    color: color-mix(in srgb, var(--dim) 62%, var(--bg));
-    transform: scale(0.98);
-  }
-  .lyr-line.selected {
-    color: var(--accent);
-  }
-  .lyr-line.hidden-line {
-    grid-template-rows: 0fr;
-    margin-bottom: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .lyr-line.bg {
-    font-size: 20px;
-  }
-  .lyr-line.bg.active {
-    color: var(--dim);
-  }
-  .lyr-roman {
-    display: grid;
-    grid-template-rows: 0fr;
-    margin-top: 0;
-    opacity: 0;
-    transition:
-      grid-template-rows 0.35s var(--ease-out),
-      margin-top 0.35s var(--ease-out),
-      opacity 0.35s var(--ease-out);
-  }
-  .lyr-roman.open {
-    grid-template-rows: 1fr;
-    margin-top: 6px;
-    opacity: 1;
-  }
-  .lyr-roman-text {
-    display: block;
-    min-height: 0;
-    overflow: hidden;
-    padding: 3px 0;
-    margin: -3px 0;
-    font-size: 14px;
-    font-weight: 400;
-    line-height: 1.4;
-    letter-spacing: 0;
-    color: color-mix(in srgb, var(--dim) 70%, var(--bg));
-  }
-
-  .lyr-dots {
-    display: inline-flex;
-    gap: 10px;
-    align-items: center;
-  }
-  .lyr-dots span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: currentColor;
-    will-change: transform;
-    animation: lyr-dot-wave 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-  }
-  .lyr-dots span:nth-child(2) {
-    animation-delay: 0.22s;
-  }
-  .lyr-dots span:nth-child(3) {
-    animation-delay: 0.44s;
-  }
-  .lyrics-scroll.paused .lyr-dots span {
-    animation-play-state: paused;
-  }
-  .lyr-line.hidden-line .lyr-dots span {
-    animation-play-state: paused;
-    will-change: auto;
-  }
-  @keyframes lyr-dot-wave {
-    0%,
-    100% {
-      transform: translateY(4px) scale(0.85);
-      opacity: 0.35;
-    }
-    50% {
-      transform: translateY(-4px) scale(1.1);
-      opacity: 1;
-    }
-  }
-
-  .selection-bar {
-    position: absolute;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--surface);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: 5px 6px 5px 16px;
-  }
-  .selection-count {
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.05em;
-    padding-right: 6px;
-  }
-  .sel-btn {
     background: none;
-    border: none;
     color: var(--faint);
-    padding: 5px;
-    border-radius: var(--radius-sm);
+    text-align: center;
+    font-family: var(--font-lyrics);
+    font-size: 26px;
+    line-height: 1.9;
+    font-weight: 500;
     cursor: pointer;
-    transition: color 0.15s;
+    display: grid;
+    grid-template-rows: 1fr;
+    transform-origin: center;
+    transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1), margin .32s cubic-bezier(.22,1,.36,1), transform .45s cubic-bezier(.22,1,.36,1), color .35s, opacity .3s;
   }
-  .sel-btn:hover {
-    color: var(--text);
+  .line:last-child { margin-bottom: 0; }
+  .line-inner { display:block; min-height:0; overflow:hidden; padding: 10px 0; }
+  .line.active { color: var(--text); font-weight: 600; transform: scale(1.12); }
+  .line.before { color: color-mix(in srgb, var(--dim) 62%, var(--bg)); transform: scale(0.985); }
+  .line.selected { color: var(--accent); }
+  .line.bg { font-size: 20px; }
+  .line.hidden-line { grid-template-rows: 0fr; margin-bottom: 0; opacity: 0; pointer-events: none; }
+
+  .roman { display:grid; grid-template-rows: 0fr; opacity: 0; margin-top: 0; transition: grid-template-rows .3s, opacity .3s, margin .3s; }
+  .roman.open { grid-template-rows: 1fr; opacity: 1; margin-top: 6px; }
+  .roman-text { display:block; min-height:0; overflow:hidden; font-size:14px; line-height:1.4; color: color-mix(in srgb, var(--dim) 70%, var(--bg)); }
+
+  .dots { display:inline-flex; gap:10px; align-items:center; }
+  .dots span { width:10px; height:10px; border-radius:50%; background: currentColor; opacity:.45; animation: dot 1.4s cubic-bezier(.45,0,.55,1) infinite; }
+  .dots span:nth-child(2) { animation-delay: .2s; }
+  .dots span:nth-child(3) { animation-delay: .4s; }
+  .scroll.paused .dots span, .line.hidden-line .dots span { animation-play-state: paused; }
+  @keyframes dot { 0%,100%{ transform: translateY(4px) scale(.85); opacity:.35 } 50%{ transform: translateY(-4px) scale(1.05); opacity:1 } }
+
+  .selection {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30;
+    display:flex; align-items:center; gap:4px; padding:5px 6px 5px 14px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
-  .modal {
-    position: absolute;
-    inset: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .selection-count { font-size:10px; color: var(--dim); letter-spacing: .05em; padding-right: 6px; }
+  .sel-btn { border:none; background:none; color: var(--faint); padding:5px; cursor:pointer; }
+  .sel-btn:hover { color: var(--text); }
+
+  .modal { position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; }
+  .backdrop { position:fixed; inset:0; border:none; background: rgba(0,0,0,.3); backdrop-filter: blur(12px); cursor:pointer; }
+  .modal-card {
+    position:relative; min-width:360px; max-width:460px; max-height:80%; overflow:hidden;
+    display:flex; flex-direction:column; gap:14px; padding:24px 28px;
+    background: var(--surface); border:1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    border: none;
-    cursor: pointer;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(12px);
-  }
-  .modal-content {
-    position: relative;
-    background: var(--surface);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: 24px 28px;
-    min-width: 360px;
-    max-width: 460px;
-    max-height: 80%;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    overflow: hidden;
-  }
-  .modal-title {
-    font-size: 17px;
+  .modal-title { font-size: 17px; }
+
+  .toast {
+    position:absolute; left:50%; bottom:56px; transform:translateX(-50%); z-index:50;
+    padding:8px 18px; font-size:10.5px; letter-spacing:.05em; color:var(--text);
+    background: var(--bg-raise); border:1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
 
-  .lyr-toast {
-    position: absolute;
-    bottom: 56px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 50;
-    background: var(--bg-raise);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: 8px 18px;
-    font-size: 10.5px;
-    letter-spacing: 0.05em;
-    color: var(--text);
+  @media (max-width: 900px) {
+    .lyrics-page.fullscreen { flex-direction: column; }
+    .art-col { width: 100%; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .lyr-line,
-    .lyr-icon,
-    .lyr-dots,
-    .mini-switch span {
-      transition-duration: 0.01ms !important;
-    }
-    .lyr-dots span {
-      animation: none;
-      opacity: 1;
-    }
+    .line, .lyr-icon, .dots span, .mini-switch span { transition: none !important; animation: none !important; }
   }
 </style>
