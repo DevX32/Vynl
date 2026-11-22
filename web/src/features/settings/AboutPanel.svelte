@@ -81,7 +81,6 @@ const upToDate = $derived(
           title={t("update.downloadingTitle")}
         >
           <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
-          {t("update.downloadingTitle")}
         </Button>
       {:else if available}
         <Button
