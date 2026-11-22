@@ -39,6 +39,7 @@ import {
   getReplayGain,
   setPlayError,
   setVolume,
+  toggleMute,
   onMuteChange,
   onSpeedChange,
   onReplayGainChange,
@@ -983,7 +984,14 @@ function handleMediaStop(): void {
   seekToTime(0);
 }
 
+let lastMediaActionAt = 0;
 function handleMediaControl(event: MediaControlEvent): void {
+  // Dedupe duplicate events from OS media sessions + global shortcuts.
+  const now = Date.now();
+  if (now - lastMediaActionAt < 250 && event.action !== "seek" && event.action !== "seekBy" && event.action !== "setVolume") {
+    return;
+  }
+  lastMediaActionAt = now;
   switch (event.action) {
     case "play":
       handleMediaPlay();
@@ -1012,6 +1020,15 @@ function handleMediaControl(event: MediaControlEvent): void {
     case "setVolume":
       setVolumeAt(clamp01(event.volume));
       break;
+    case "volumeUp":
+      setVolumeAt(getCurrentVolume() + 0.05);
+      break;
+    case "volumeDown":
+      setVolumeAt(getCurrentVolume() - 0.05);
+      break;
+    case "mute":
+      toggleMute();
+      break;
   }
 }
 
@@ -1021,7 +1038,7 @@ if (typeof window !== "undefined" && !IS_MINI) {
       const np = getCurrentTrack();
       const playing = getIsTrackPlaying();
       const position = getCurrentTime();
-      const due = np !== null && Date.now() - lastMediaSentAt >= 2_000;
+      const due = np !== null && Date.now() - lastMediaSentAt >= 1_000;
       syncMedia(np, playing, position, due);
     });
   });

@@ -436,12 +436,25 @@
             label={t("settings.discordToggle")}
             onclick={() =>
               void patchSettings({ discordRpc: !settings.discordRpc })}
-          />
-        {/snippet}
-      </SettingRow>
-    </div>
-  </div>
+           />
+         {/snippet}
+       </SettingRow>
 
+       <SettingRow
+         label={t("settings.globalMediaKeys")}
+         hint={t("settings.globalMediaKeysHint")}
+       >
+         {#snippet control()}
+           <Switch
+             on={settings.globalMediaKeys}
+             label={t("settings.globalMediaKeysToggle")}
+             onclick={() =>
+               void patchSettings({ globalMediaKeys: !settings.globalMediaKeys })}
+           />
+         {/snippet}
+       </SettingRow>
+     </div>
+   </div>
   <div class="group">
     <div class="group-head">
       <span class="label mono">{t("settings.groupStorage")}</span>

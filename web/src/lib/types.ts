@@ -50,6 +50,7 @@ export interface Settings {
   displayName: string;
   eqEnabled: boolean;
   eqBands: number[];
+  globalMediaKeys: boolean;
 }
 
 export interface EqDesign {
@@ -486,4 +487,7 @@ export type MediaControlEvent =
     }
   | { action: "seek"; position: number }
   | { action: "seekBy"; offset: number }
-  | { action: "setVolume"; volume: number };
+  | { action: "setVolume"; volume: number }
+  | { action: "volumeUp" }
+  | { action: "volumeDown" }
+  | { action: "mute" };

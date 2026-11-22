@@ -35,6 +35,7 @@ urlencoding = "2"
 discord-rich-presence = "1.1"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
 ctrlc = "3"
 rodio = "0.19"
 uuid = { version = "1", features = ["v4"] }
@@ -58,6 +59,9 @@ window-vibrancy = "0.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 souvlaki = { version = "0.8.3", default-features = false, features = ["use_zbus"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+souvlaki = { version = "0.8.3", default-features = false }
 
 [profile.release]
 lto = true

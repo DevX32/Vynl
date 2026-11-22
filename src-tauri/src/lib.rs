@@ -171,6 +171,46 @@ fn apply_window_effects(window: &tauri::WebviewWindow) {
 #[cfg(not(target_os = "windows"))]
 fn apply_window_effects(_window: &tauri::WebviewWindow) {}
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn register_global_media_keys(app: tauri::AppHandle) {
+    use crate::commands::types::MediaControlAction;
+    use tauri::Emitter;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    let shortcuts: &[(&str, MediaControlAction)] = &[
+        ("MediaPlayPause", MediaControlAction::Toggle),
+        ("MediaPlay", MediaControlAction::Play),
+        ("MediaPause", MediaControlAction::Pause),
+        ("MediaStop", MediaControlAction::Stop),
+        ("MediaTrackNext", MediaControlAction::Next),
+        ("MediaTrackPrevious", MediaControlAction::Previous),
+        ("AudioVolumeUp", MediaControlAction::VolumeUp),
+        ("AudioVolumeDown", MediaControlAction::VolumeDown),
+        ("AudioVolumeMute", MediaControlAction::Mute),
+    ];
+
+    let gs = app.global_shortcut();
+    for (accel, action) in shortcuts {
+        let app_handle = app.clone();
+        let action = action.clone();
+        let accel_str = *accel;
+        if let Err(error) = gs.on_shortcut(accel_str, move |_app, _shortcut, event| {
+            if event.state != ShortcutState::Pressed {
+                return;
+            }
+            let _ = app_handle.emit("vynl:media-control", action.clone());
+        }) {
+            eprintln!("[vynl] global shortcut {accel_str} unavailable: {error}");
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn unregister_global_media_keys(app: tauri::AppHandle) {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let _ = app.global_shortcut().unregister_all();
+}
+
 pub fn run() {
     #[cfg(target_os = "windows")]
     register_aumid();
@@ -199,6 +239,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             app.manage(commands::AppState::default());
@@ -274,6 +315,11 @@ pub fn run() {
             }
 
             sync_launch_at_startup(settings.launch_at_startup);
+
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            if settings.global_media_keys {
+                register_global_media_keys(app.handle().clone());
+            }
             crate::services::player::set_app_handle(app.handle());
             crate::services::player::set_eq(settings.eq_enabled, &settings.eq_bands);
 

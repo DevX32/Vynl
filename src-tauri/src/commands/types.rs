@@ -137,6 +137,8 @@ pub struct Settings {
     pub eq_enabled: bool,
     #[serde(default = "default_eq_bands")]
     pub eq_bands: Vec<f32>,
+    #[serde(default = "default_true")]
+    pub global_media_keys: bool,
 }
 
 fn default_true() -> bool {
@@ -344,6 +346,9 @@ pub enum MediaControlAction {
     Seek { position: f64 },
     SeekBy { offset: f64 },
     SetVolume { volume: f64 },
+    VolumeUp,
+    VolumeDown,
+    Mute,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

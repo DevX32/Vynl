@@ -39,7 +39,7 @@ impl Drop for MediaController {
 }
 
 pub fn start(app: AppHandle) -> MediaController {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     {
         #[cfg(target_os = "windows")]
         let hwnd = app
@@ -97,7 +97,7 @@ pub fn start(app: AppHandle) -> MediaController {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn create_controls(hwnd: Option<usize>) -> Result<souvlaki::MediaControls, String> {
     let config = souvlaki::PlatformConfig {
         display_name: "Vynl",
@@ -130,7 +130,7 @@ fn init_com() {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn build_metadata<'a>(
     update: &'a MediaUpdate,
     album: Option<&'a str>,
@@ -147,7 +147,7 @@ fn build_metadata<'a>(
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpdate>) {
     let Some(update) = update else {
         let _ = controls.set_metadata(cleared_metadata());
@@ -195,7 +195,7 @@ fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpda
     let _ = controls.set_playback(playback);
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn cleared_metadata() -> souvlaki::MediaMetadata<'static> {
     #[cfg(target_os = "windows")]
     {
@@ -213,7 +213,7 @@ fn cleared_metadata() -> souvlaki::MediaMetadata<'static> {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn non_empty(value: &str) -> Option<&str> {
     if value.trim().is_empty() {
         None
@@ -222,7 +222,7 @@ fn non_empty(value: &str) -> Option<&str> {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn cover_url(path: &str) -> String {
     if path.starts_with("http://") || path.starts_with("https://") {
         return path.to_string();
@@ -246,7 +246,7 @@ fn cover_url(path: &str) -> String {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn signed_offset(direction: souvlaki::SeekDirection, seconds: f64) -> f64 {
     match direction {
         souvlaki::SeekDirection::Forward => seconds,
@@ -254,7 +254,7 @@ fn signed_offset(direction: souvlaki::SeekDirection, seconds: f64) -> f64 {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn handle_event(app: &AppHandle, event: souvlaki::MediaControlEvent) {
     use souvlaki::MediaControlEvent as Event;
 
@@ -296,7 +296,7 @@ fn handle_event(app: &AppHandle, event: souvlaki::MediaControlEvent) {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn emit(app: &AppHandle, action: MediaControlAction) {
     let _ = app.emit("vynl:media-control", action);
 }

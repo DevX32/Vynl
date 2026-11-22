@@ -363,15 +363,27 @@ pub async fn get_settings(app: AppHandle) -> Result<Settings, String> {
 pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, String> {
     let user_data = user_data_dir(&app)?;
     let next = crate::services::settings::set_settings(&user_data, patch)?;
-    let changed = {
+    let (launch_changed, media_keys_changed) = {
         let state = app.state::<AppState>();
         let mut guard = state.settings.lock().map_err(|e| e.to_string())?;
-        let changed = guard.as_ref().map(|s| s.launch_at_startup) != Some(next.launch_at_startup);
+        let launch_changed =
+            guard.as_ref().map(|s| s.launch_at_startup) != Some(next.launch_at_startup);
+        let prev_media_keys = guard.as_ref().map(|s| s.global_media_keys);
+        let media_keys_changed = prev_media_keys != Some(next.global_media_keys);
         *guard = Some(next.clone());
-        changed
+        (launch_changed, media_keys_changed)
     };
-    if changed {
+    if launch_changed {
         crate::sync_launch_at_startup(next.launch_at_startup);
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if media_keys_changed {
+        if next.global_media_keys {
+            crate::register_global_media_keys(app.clone());
+        } else {
+            crate::unregister_global_media_keys(app.clone());
+        }
     }
 
     crate::services::player::set_eq(next.eq_enabled, &next.eq_bands);

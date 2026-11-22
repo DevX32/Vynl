@@ -27,6 +27,7 @@ function defaultSettings(): Settings {
     displayName: "",
     eqEnabled: false,
     eqBands: eqFlat(),
+    globalMediaKeys: true,
   };
 }
 
@@ -47,7 +48,7 @@ function normalizeSettings(s: Settings): Settings {
     );
     return { ...s, format, theme, bitrate: br[br.length - 1] };
   }
-  return { ...s, format, theme };
+  return { ...s, format, theme, globalMediaKeys: s.globalMediaKeys ?? true };
 }
 
 export function getCurrentSettings(): Settings {

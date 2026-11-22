@@ -50,6 +50,7 @@ fn defaults() -> Settings {
         display_name: String::new(),
         eq_enabled: false,
         eq_bands: crate::services::player::normalize_eq_bands(&[]),
+        global_media_keys: true,
     }
 }
 
@@ -109,6 +110,7 @@ pub fn set_settings(user_data_dir: &Path, patch: Settings) -> Result<Settings, S
         display_name: patch.display_name,
         eq_enabled: patch.eq_enabled,
         eq_bands: crate::services::player::normalize_eq_bands(&patch.eq_bands),
+        global_media_keys: patch.global_media_keys,
     };
 
     util::write_json(&settings_file(user_data_dir), &next)?;
