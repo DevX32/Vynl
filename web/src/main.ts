@@ -3,8 +3,10 @@ import App from "./App.svelte";
 import "./assets/app.css";
 import "blobatar/motion.css";
 import { applyStoredTheme } from "./lib/theme";
+import { installTooltips } from "./lib/tooltip";
 
 applyStoredTheme();
+installTooltips();
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
