@@ -190,7 +190,6 @@
         onclick={retryTaste}
         disabled={tasteLoading}
         aria-label={t("catalogue.refreshMix")}
-        title={t("catalogue.refreshMix")}
       >
         <RefreshCw size={13} stroke-width={1.6} />
       </button>

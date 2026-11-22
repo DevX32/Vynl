@@ -27,6 +27,7 @@
   import { fmtTime,  stripAlbumSuffix } from "@lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
+  import { vynl } from "@lib/vynl";
   import type { Snippet } from "svelte";
   import TrackCover from "@components/TrackCover.svelte";
   import EqualizerBars from "@components/EqualizerBars.svelte";
@@ -78,6 +79,11 @@
       track.artist,
       track.duration ?? 0,
     );
+  }
+
+  function prebufferTrack(track: CatalogueTrack): void {
+    if (isCurrent(track) || !track.id) return;
+    void vynl.cataloguePrebuffer(track.id, track.duration).catch(() => {});
   }
 
   function showCtx(e: MouseEvent, track: CatalogueTrack): void {
@@ -261,6 +267,7 @@
         tabindex="0"
         aria-label={`${stripAlbumSuffix(track.title, track.album?.name)} - ${track.artist}`}
         onclick={() => rowAction(track)}
+        onpointerenter={() => prebufferTrack(track)}
         onkeydown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();

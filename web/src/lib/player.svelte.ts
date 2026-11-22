@@ -601,7 +601,7 @@ export function playTrack(
   consecutivePlayFailures = 0;
   cancelSeek(false);
   const gen = ++playGeneration;
-  setNowPlaying(nowPlayingFromTrack(track, seekTo ?? 0));
+  setNowPlaying({ ...nowPlayingFromTrack(track, seekTo ?? 0), playing: true });
   loadAndPlayNative(track.path, gen, seekTo);
 }
 
@@ -733,7 +733,7 @@ function startTrack(nextTrack: LibraryTrack): void {
   resetCrossfade();
   cancelSeek(false);
   const gen = ++playGeneration;
-  setNowPlaying(nowPlayingFromTrack(nextTrack));
+  setNowPlaying({ ...nowPlayingFromTrack(nextTrack), playing: true });
   loadAndPlayNative(nextTrack.path, gen);
 }
 
