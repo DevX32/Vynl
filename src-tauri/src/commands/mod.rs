@@ -929,6 +929,13 @@ pub(crate) fn sync_playlist_delete(
 }
 
 #[tauri::command]
+pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncResult, String> {
+    let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+    crate::services::sync::sync(&user_data, &output).await
+}
+
+#[tauri::command]
 pub async fn sync_status(app: AppHandle) -> Result<crate::services::sync::SyncStatus, String> {
     let user_data = user_data_dir(&app)?;
     Ok(crate::services::sync::status(&user_data))
@@ -941,11 +948,17 @@ async fn sync_auth(
     create: bool,
 ) -> Result<crate::services::sync::SyncAuthResult, String> {
     let user_data = user_data_dir(app)?;
+    let output = output_dir_from_settings(app)?;
     let result = if create {
         crate::services::sync::sign_up(&user_data, &email, &password).await?
     } else {
         crate::services::sync::sign_in(&user_data, &email, &password).await?
     };
+    if result.status.signed_in
+        && let Err(error) = crate::services::sync::sync(&user_data, &output).await
+    {
+        eprintln!("[Vynl sync] auto sync after sign-in failed: {error}");
+    }
     Ok(result)
 }
 

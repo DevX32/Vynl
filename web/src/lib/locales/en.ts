@@ -478,6 +478,7 @@ export const en = {
     restoring: "Importing",
     restoredTitle: "Imported backup",
     restored: "Importing {tracks} tracks from your backup — downloading in the background ({known} already have a saved source).",
+    restoreConfirm: "Restore {tracks} tracks from this backup and start downloading now?",
     restoreFailed: "Couldn't import that backup: {error}",
     cloudTitle: "Cloud backup",
     cloudHint: "Back up your library and playlists to your Vynl sync account, or restore them on another device.",

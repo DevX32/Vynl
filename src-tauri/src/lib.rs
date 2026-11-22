@@ -467,6 +467,7 @@ pub fn run() {
             commands::set_playlist_cover,
             commands::save_playlist_cover,
             commands::sync_status,
+            commands::sync_now,
             commands::sync_sign_in,
             commands::sync_sign_up,
             commands::sync_sign_out,

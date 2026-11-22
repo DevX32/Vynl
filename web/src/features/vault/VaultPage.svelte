@@ -29,7 +29,7 @@
   import DownloadFooter from "./DownloadFooter.svelte";
   import InlineSearchResults from "./InlineSearchResults.svelte";
   import PlaylistPicker from "./PlaylistPicker.svelte";
-  import { takeRestore } from "@state/vault-restore.svelte";
+  import { takeRestore, consumeAutoStart } from "@state/vault-restore.svelte";
   import { Disc3 } from "lucide-svelte";
   import Button from "../../components/Button.svelte";
 
@@ -656,6 +656,9 @@
     doneIds = [];
     page = 0;
     trackFilter = "all";
+    if (consumeAutoStart()) {
+      void confirmDownload();
+    }
   }
 
   $effect(() => {

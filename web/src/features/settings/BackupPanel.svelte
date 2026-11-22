@@ -97,13 +97,20 @@
     try {
       const restored = await vynl.importBackup();
       if (!restored) return;
-      queueRestore({
-        ...restored,
-        collection: {
-          ...restored.collection,
-          title: t("backup.restoredTitle"),
+      const confirmed = window.confirm(
+        t("backup.restoreConfirm", { tracks: restored.total }),
+      );
+      if (!confirmed) return;
+      queueRestore(
+        {
+          ...restored,
+          collection: {
+            ...restored.collection,
+            title: t("backup.restoredTitle"),
+          },
         },
-      });
+        true,
+      );
       toasts.success(
         t("backup.restored", {
           tracks: restored.total,
@@ -178,13 +185,20 @@
     try {
       const restored = await vynl.restoreFromCloud();
       if (!restored) return;
-      queueRestore({
-        ...restored,
-        collection: {
-          ...restored.collection,
-          title: t("backup.restoredTitle"),
+      const confirmed = window.confirm(
+        t("backup.restoreConfirm", { tracks: restored.total }),
+      );
+      if (!confirmed) return;
+      queueRestore(
+        {
+          ...restored,
+          collection: {
+            ...restored.collection,
+            title: t("backup.restoredTitle"),
+          },
         },
-      });
+        true,
+      );
       toasts.success(
         t("backup.restored", {
           tracks: restored.total,

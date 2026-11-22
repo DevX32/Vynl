@@ -54,6 +54,8 @@ pub struct LibraryBackup {
     pub settings: Settings,
     pub tracks: Vec<ExportedTrack>,
     pub playlists: Vec<ExportedPlaylist>,
+    #[serde(default)]
+    pub missing: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -134,6 +136,16 @@ pub fn build_backup(settings: &Settings, user_data_dir: &Path) -> LibraryBackup 
         })
         .collect::<Vec<_>>();
 
+    let mut missing = std::collections::BTreeSet::new();
+    for playlist in &playlists {
+        for path in &playlist.paths {
+            if !by_path.contains_key(path) {
+                missing.insert(path.clone());
+            }
+        }
+    }
+    let missing: Vec<String> = missing.into_iter().collect();
+
     LibraryBackup {
         app: "vynl".to_string(),
         app_version: APP_VERSION.to_string(),
@@ -145,6 +157,7 @@ pub fn build_backup(settings: &Settings, user_data_dir: &Path) -> LibraryBackup 
         settings: settings.clone(),
         tracks,
         playlists,
+        missing,
     }
 }
 
