@@ -18,8 +18,6 @@
   } from "@state/app-update.svelte";
 
   const status = $derived(getUpdateStatus());
-  const progress = $derived(status?.progress ?? null);
-  const indeterminate = $derived(!!status?.downloading && progress == null);
   const version = $derived(getCurrentVersion());
   const available = $derived(getUpdateAvailable());
   const checking = $derived(getUpdateChecking());
@@ -77,20 +75,14 @@ const upToDate = $derived(
   >
     {#snippet control()}
       {#if downloading}
-        <div
-          class="bar"
-          class:indeterminate
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={indeterminate ? undefined : Math.round(progress ?? 0)}
-          aria-label={t("update.downloadingTitle")}
+        <Button
+          size="sm"
+          disabled
+          title={t("update.downloadingTitle")}
         >
-          <div
-            class="fill"
-            style:width={indeterminate ? "40%" : `${progress ?? 0}%`}
-          ></div>
-        </div>
+          <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
+          {t("update.downloadingTitle")}
+        </Button>
       {:else if available}
         <Button
           variant="primary"
@@ -182,14 +174,6 @@ const upToDate = $derived(
     color: var(--faint);
   }
 
-  .bar {
-    width: 100px;
-    height: 3px;
-    background: var(--line-strong);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-
   .spin {
     display: inline-flex;
     animation: spin 0.85s linear infinite;
@@ -198,27 +182,6 @@ const upToDate = $derived(
   @keyframes spin {
     to {
       transform: rotate(360deg);
-    }
-  }
-
-  .fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: var(--radius-sm);
-    transition: width 0.18s linear;
-  }
-
-  .bar.indeterminate .fill {
-    transition: none;
-    animation: sweep 1.25s ease-in-out infinite;
-  }
-
-  @keyframes sweep {
-    0% {
-      transform: translateX(-110%);
-    }
-    100% {
-      transform: translateX(330%);
     }
   }
 </style>
