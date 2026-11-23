@@ -442,7 +442,7 @@ function parsePlainText(text: string): LyricLine[] {
   return out;
 }
 
-export function isTtmlText(text: string): boolean {
+function isTtmlText(text: string): boolean {
   return /<(?:ttml|tt)(?=[\s>/])/i.test(text);
 }
 
@@ -450,14 +450,6 @@ export function lyricsKindOf(text: string): LyricsResult["kind"] {
   if (isTtmlText(text)) return "ttml";
   if (HAS_STAMP_RE.test(text)) return "lrc";
   return "txt";
-}
-
-export function parseLrcText(text: string): LyricLine[] {
-  return parseLrc(text);
-}
-
-export function parseTtmlText(text: string): LyricLine[] {
-  return parseTtml(text);
 }
 
 export function toLyricLines(res: LyricsResult): LyricLine[] {
@@ -659,7 +651,7 @@ function findActiveWordIndex(words: Word[], t: number): number {
   return idx;
 }
 
-export function wordEndAt(words: Word[], i: number, lineEnd?: number): number {
+function wordEndAt(words: Word[], i: number, lineEnd?: number): number {
   const w = words[i];
   if (!w) return 0;
   if (w.end !== undefined && w.end > w.time) return w.end;

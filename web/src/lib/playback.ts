@@ -1,5 +1,5 @@
-export const SPEED_MIN = 0.5;
-export const SPEED_MAX = 2;
+const SPEED_MIN = 0.5;
+const SPEED_MAX = 2;
 
 export const SPEED_STEPS: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
 

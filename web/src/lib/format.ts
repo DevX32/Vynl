@@ -14,7 +14,7 @@ function evictIfNeeded(map: Map<string, unknown>): void {
   }
 }
 
-export function upsizeCover(url: string): string {
+function upsizeCover(url: string): string {
   const trimmed = url.trim();
   const start = trimmed.indexOf("=w");
   if (start < 0) return trimmed;

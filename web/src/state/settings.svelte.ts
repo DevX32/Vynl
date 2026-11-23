@@ -193,10 +193,3 @@ function markToolError(name: ToolName, err: unknown): void {
   );
 }
 
-export async function installTool(name: ToolName): Promise<void> {
-  try {
-    await vynl.installTool(name);
-  } catch (e) {
-    markToolError(name, e);
-  }
-}

@@ -88,12 +88,12 @@ export interface SearchResult {
   url: string;
 }
 
-export interface CatalogueArtistRef {
+interface CatalogueArtistRef {
   name: string;
   id: string | null;
 }
 
-export interface CatalogueAlbumRef {
+interface CatalogueAlbumRef {
   name: string;
   id: string | null;
 }
@@ -139,7 +139,7 @@ export interface CatalogueArtist {
   singles: CatalogueAlbum[];
 }
 
-export interface CataloguePlaylist {
+interface CataloguePlaylist {
   id: string;
   title: string;
   author: string | null;
@@ -310,13 +310,6 @@ export interface SyncStatus {
 export interface SyncAuthResult {
   needsConfirmation: boolean;
   status: SyncStatus;
-}
-
-export interface SyncResult {
-  pushed: number;
-  pulled: number;
-  deleted: number;
-  failed: number;
 }
 
 export interface TrackProgress {

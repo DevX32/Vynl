@@ -192,10 +192,6 @@ export function bindingParts(binding: KeyBinding): string[] {
   return parts;
 }
 
-export function formatBinding(binding: KeyBinding): string {
-  return bindingParts(binding).join(" + ");
-}
-
 let _showOverlay = $state(false);
 
 export function getShowShortcutsOverlay(): boolean {
@@ -222,7 +218,7 @@ export function isInputField(element: EventTarget | null): boolean {
   );
 }
 
-export function isInteractiveTarget(element: EventTarget | null): boolean {
+function isInteractiveTarget(element: EventTarget | null): boolean {
   const el = element as HTMLElement | null;
   if (!el || typeof el.closest !== "function") return false;
   return (

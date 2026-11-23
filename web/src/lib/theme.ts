@@ -1,6 +1,6 @@
 export type ThemeId = "vynl" | "espresso";
 
-export interface ThemeColors {
+interface ThemeColors {
   bg: string;
   bgRaise: string;
   surface: string;
@@ -26,7 +26,7 @@ export interface Theme {
 }
 
 export const THEME_STORAGE_KEY = "vynl.theme";
-export const THEME_SOLID_STORAGE_KEY = "vynl.themeBgSolid";
+const THEME_SOLID_STORAGE_KEY = "vynl.themeBgSolid";
 export const DEFAULT_THEME: ThemeId = "vynl";
 
 export const THEMES: readonly Theme[] = [

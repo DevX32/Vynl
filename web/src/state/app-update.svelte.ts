@@ -32,10 +32,6 @@ export function getUpdateInstalling(): boolean {
   return _installing;
 }
 
-export function getUpdateRestarting(): boolean {
-  return _restarting;
-}
-
 export function getCurrentVersion(): string | null {
   return _currentVersion;
 }
@@ -137,10 +133,3 @@ export async function installAppUpdate(): Promise<void> {
   armRestart(RESTART_DELAY_MS);
 }
 
-export async function restartAndInstall(): Promise<void> {
-  try {
-    await vynl.restartApp();
-  } catch (e) {
-    toasts.error(t("update.checkFailed", { error: errText(e) }));
-  }
-}

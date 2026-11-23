@@ -8,10 +8,6 @@ export function queueRestore(payload: RestoredBackup, autoStart = false): void {
   _autoStart = autoStart;
 }
 
-export function peekRestore(): RestoredBackup | null {
-  return _pending;
-}
-
 export function takeRestore(): RestoredBackup | null {
   const current = _pending;
   _pending = null;

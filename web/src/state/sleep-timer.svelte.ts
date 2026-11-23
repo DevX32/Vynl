@@ -76,10 +76,6 @@ export function getSleepMinutes(): number {
   return _minutes;
 }
 
-export function getSleepRemaining(): number {
-  return _remaining;
-}
-
 export function getSleepRemainingLabel(): string {
   return formatSleepRemaining(_remaining);
 }

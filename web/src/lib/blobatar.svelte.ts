@@ -1,6 +1,6 @@
 import type { BlobatarOptions } from "blobatar/blob";
 
-export const AVATAR_STORAGE_KEY = "vynl.avatar.v1";
+const AVATAR_STORAGE_KEY = "vynl.avatar.v1";
 
 let revision = $state(0);
 
@@ -8,7 +8,7 @@ export function avatarRevision(): number {
   return revision;
 }
 
-export type AvatarBackground = "default" | "none" | "square" | "circle" | "squircle";
+type AvatarBackground = "default" | "none" | "square" | "circle" | "squircle";
 
 export interface AvatarCustomization {
   seed: string;
@@ -18,7 +18,7 @@ export interface AvatarCustomization {
   background: AvatarBackground;
 }
 
-export const SHAPE_BANDS: Record<string, number> = {
+const SHAPE_BANDS: Record<string, number> = {
   round: 0.11,
   organic: 0.35,
   boxy: 0.54,
@@ -30,8 +30,6 @@ export const SHAPE_BANDS: Record<string, number> = {
   sun: 0.965,
   triangle: 0.99,
 };
-
-export const SHAPE_OPTIONS = Object.keys(SHAPE_BANDS);
 
 const DEFAULT_CUSTOM: AvatarCustomization = {
   seed: "",
@@ -73,12 +71,6 @@ export function saveAvatarCustom(patch: Partial<AvatarCustomization>): void {
   if (typeof localStorage === "undefined") return;
   const next = { ...read(), ...patch };
   localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(next));
-  revision += 1;
-}
-
-export function resetAvatarCustom(): void {
-  if (typeof localStorage === "undefined") return;
-  localStorage.removeItem(AVATAR_STORAGE_KEY);
   revision += 1;
 }
 
