@@ -7,18 +7,37 @@
   import { stripAlbumSuffix } from "@lib/format";
   import SearchInput from "@components/SearchInput.svelte";
   import TrackCover from "@components/TrackCover.svelte";
-  import type { CatalogueTrack } from "@lib/types";
+
+  type Track = {
+    id: string;
+    title: string;
+    artist: string;
+    album?: string | { name?: string | null } | null;
+    cover?: string | null;
+  };
 
   let {
-    tracks,
+    addTracks = [],
+    downloadTracks = [],
     busy = false,
     onClose,
     onSubmit,
+    title = t("catalogue.bulkActions"),
+    addLabel = t("catalogue.addToPlaylist"),
+    downloadLabel = t("catalogue.downloadToPlaylist"),
+    searchPlaceholder = t("playlist.searchPlaceholder"),
+    emptyText = t("catalogue.noResults"),
   }: {
-    tracks: readonly CatalogueTrack[];
+    addTracks?: readonly Track[];
+    downloadTracks?: readonly Track[];
     busy?: boolean;
     onClose: () => void;
-    onSubmit: (picked: CatalogueTrack[], mode: "add" | "download") => void;
+    onSubmit: (picked: any[], mode: "add" | "download") => void;
+    title?: string;
+    addLabel?: string;
+    downloadLabel?: string;
+    searchPlaceholder?: string;
+    emptyText?: string;
   } = $props();
 
   let mode = $state<"add" | "download">("add");
@@ -44,28 +63,40 @@
     requestAnimationFrame(() => searchInput?.focus());
   });
 
-  const hits = $derived(
-    debouncedQuery.trim()
+  $effect(() => {
+    mode;
+    selected = new Set();
+  });
+
+  const titleCollator = new Intl.Collator();
+
+  const tracks = $derived(mode === "add" ? addTracks : downloadTracks);
+
+  const hits = $derived.by(() => {
+    const needle = debouncedQuery.trim().toLowerCase();
+    const list = needle
       ? tracks.filter((track) =>
-          `${track.title} ${track.artist} ${track.album?.name ?? ""}`
+          `${track.title} ${track.artist} ${
+            typeof track.album === "string"
+              ? track.album
+              : (track.album?.name ?? "")
+          }`
             .toLowerCase()
-            .includes(debouncedQuery.trim().toLowerCase()),
+            .includes(needle),
         )
-      : tracks,
-  );
+      : tracks;
+    return [...list].sort((a, b) => titleCollator.compare(a.title, b.title));
+  });
 
   const selectedCount = $derived(selected.size);
   const allShownSelected = $derived(
     hits.length > 0 && hits.every((track) => selected.has(track.id)),
   );
 
-  function toggle(track: CatalogueTrack): void {
+  function toggle(id: string): void {
     const next = new Set(selected);
-    if (next.has(track.id)) {
-      next.delete(track.id);
-    } else {
-      next.add(track.id);
-    }
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     selected = next;
   }
 
@@ -77,6 +108,10 @@
       for (const track of hits) next.add(track.id);
     }
     selected = next;
+  }
+
+  function albumName(track: Track): string | null {
+    return typeof track.album === "string" ? track.album : (track.album?.name ?? null);
   }
 
   function submit(): void {
@@ -91,7 +126,7 @@
   class="dl-overlay"
   role="dialog"
   tabindex="-1"
-  aria-label={t("catalogue.bulkActions")}
+  aria-label={title}
   transition:fade={{ duration: 150 }}
   onkeydown={(e) => {
     if (e.key === "Escape") onClose();
@@ -106,7 +141,7 @@
     out:fly={{ x: 28, duration: 160, easing: cubicIn }}
   >
     <div class="dl-head">
-      <span class="display dl-title">{t("catalogue.bulkActions")}</span>
+      <span class="display dl-title">{title}</span>
       <button
         class="icon-btn close-btn"
         onclick={onClose}
@@ -125,7 +160,7 @@
         onclick={() => (mode = "add")}
       >
         <Plus size={12} stroke-width={1.5} />
-        <span>{t("catalogue.addToPlaylist")}</span>
+        <span>{addLabel}</span>
       </button>
       <button
         class="dl-tab"
@@ -135,7 +170,7 @@
         onclick={() => (mode = "download")}
       >
         <Download size={12} stroke-width={1.5} />
-        <span>{t("catalogue.downloadToPlaylist")}</span>
+        <span>{downloadLabel}</span>
       </button>
     </div>
 
@@ -143,7 +178,7 @@
       <SearchInput
         bind:this={searchInput}
         value={query}
-        placeholder={t("playlist.searchPlaceholder")}
+        placeholder={searchPlaceholder}
         oninput={(v) => (query = v)}
       />
     </div>
@@ -161,21 +196,23 @@
       {#if hits.length === 0}
         <div class="dl-empty mono">
           <FolderOpen size={16} stroke-width={1.5} style="flex-shrink:0" />
-          <span>{t("catalogue.noResults")}</span>
+          <span>{emptyText}</span>
         </div>
       {:else}
         {#each hits as track (track.id)}
           {@const isSelected = selected.has(track.id)}
           <div class="dl-row" class:on={isSelected}>
-            <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
-            <button class="dl-row-main" onclick={() => toggle(track)}>
-              <span class="dl-row-title display">{stripAlbumSuffix(track.title, track.album?.name)}</span>
+            <TrackCover src={track.cover ?? null} shadow="var(--shadow-sm)" />
+            <button class="dl-row-main" onclick={() => toggle(track.id)}>
+              <span class="dl-row-title display">
+                {stripAlbumSuffix(track.title, albumName(track))}
+              </span>
               <span class="dl-row-artist mono">{track.artist}</span>
             </button>
             <button
               class="icon-btn mini"
               class:added={isSelected}
-              onclick={() => toggle(track)}
+              onclick={() => toggle(track.id)}
               aria-label={isSelected ? t("common.close") : t("playlist.add")}
             >
               {#if isSelected}
@@ -221,7 +258,6 @@
     justify-content: flex-end;
     z-index: 40;
   }
-
   .dl-panel {
     width: 380px;
     max-width: 90%;
@@ -232,40 +268,31 @@
     flex-direction: column;
     padding: 20px 20px 16px;
   }
-
   .dl-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 14px;
   }
-
   .dl-title {
     font-size: 22px;
     letter-spacing: -0.01em;
   }
-
   .close-btn {
     width: 24px;
     height: 24px;
     background: var(--surface);
     border: 1px solid var(--line);
     transform: rotate(45deg);
-    transition:
-    color 0.15s,
-    border-color 0.15s,
-    background 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
-
   .close-btn:hover {
     background: var(--surface);
     border-color: var(--line-strong);
   }
-
   .close-btn :global(svg) {
     transform: rotate(-45deg);
   }
-
   .dl-tabs {
     flex-shrink: 0;
     display: flex;
@@ -276,7 +303,6 @@
     border: 1px solid var(--line);
     background: var(--bg-raise);
   }
-
   .dl-tab {
     flex: 1;
     display: flex;
@@ -291,26 +317,15 @@
     font-size: 11px;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition:
-      background 0.12s,
-      color 0.12s;
+    transition: background 0.12s, color 0.12s;
   }
-
-  .dl-tab:hover {
-    color: var(--dim);
-  }
-
+  .dl-tab:hover { color: var(--dim); }
   .dl-tab.active {
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--shadow-sm);
   }
-
-  .dl-search {
-    flex-shrink: 0;
-    margin-bottom: 10px;
-  }
-
+  .dl-search { flex-shrink: 0; margin-bottom: 10px; }
   .dl-tools {
     flex-shrink: 0;
     display: flex;
@@ -320,7 +335,6 @@
     margin-bottom: 8px;
     padding: 0 2px;
   }
-
   .tool-btn {
     font-size: 10px;
     letter-spacing: 0.08em;
@@ -332,26 +346,22 @@
     background: none;
     transition: color 0.12s;
   }
-
   .tool-btn:hover {
     color: var(--text);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
-
   .tool-count {
     font-size: 10px;
     color: var(--faint);
     letter-spacing: 0.05em;
   }
-
   .dl-body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     padding-bottom: 8px;
   }
-
   .dl-empty {
     display: flex;
     align-items: center;
@@ -361,7 +371,6 @@
     color: var(--faint);
     font-size: 11.5px;
   }
-
   .dl-row {
     --cover-size: 36px;
     display: flex;
@@ -371,15 +380,8 @@
     border-radius: var(--radius-sm);
     transition: background 0.12s;
   }
-
-  .dl-row:hover {
-    background: var(--bg-raise);
-  }
-
-  .dl-row.on {
-    background: var(--accent-soft);
-  }
-
+  .dl-row:hover { background: var(--bg-raise); }
+  .dl-row.on { background: var(--accent-soft); }
   .dl-row-main {
     flex: 1;
     min-width: 0;
@@ -393,7 +395,6 @@
     text-align: left;
     cursor: pointer;
   }
-
   .dl-row-title {
     width: 100%;
     font-size: 11.5px;
@@ -402,7 +403,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
   .dl-row-artist {
     width: 100%;
     font-size: 10px;
@@ -411,7 +411,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
   .icon-btn.mini {
     width: 22px;
     height: 22px;
@@ -424,20 +423,10 @@
     justify-content: center;
     padding: 0;
     cursor: pointer;
-    transition:
-    color 0.15s,
-    background 0.15s;
+    transition: color 0.15s, background 0.15s;
   }
-
-  .icon-btn.mini:hover {
-    color: var(--text);
-    background: var(--bg-raise);
-  }
-
-  .icon-btn.mini.added {
-    color: var(--green);
-  }
-
+  .icon-btn.mini:hover { color: var(--text); background: var(--bg-raise); }
+  .icon-btn.mini.added { color: var(--green); }
   .dl-foot {
     flex-shrink: 0;
     display: flex;
@@ -445,7 +434,6 @@
     padding-top: 12px;
     border-top: 1px solid var(--line);
   }
-
   .dl-btn {
     display: inline-flex;
     align-items: center;
@@ -459,37 +447,22 @@
     font-weight: 500;
     letter-spacing: 0.03em;
     cursor: pointer;
-    transition:
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
     white-space: nowrap;
   }
-
-  .dl-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-
+  .dl-btn:disabled { opacity: 0.35; cursor: default; }
   .dl-btn.primary {
     color: var(--accent);
     background: var(--accent-soft);
     border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   }
-
   .dl-btn.primary:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent) 18%, transparent);
     border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   }
-
   .spin {
     display: inline-flex;
     animation: spin 0.85s linear infinite;
   }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

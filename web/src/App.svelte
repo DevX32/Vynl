@@ -42,7 +42,7 @@
   import PlayerPage from "./features/player/PlayerPage.svelte";
   import PlayerBar from "./features/player/PlayerBar.svelte";
   import FullscreenPlayer from "./features/player/FullscreenPlayer.svelte";
-  import TagEditorModal from "./features/library/TagEditorModal.svelte";
+  import TagEditorModal from "./components/TagEditorModal.svelte";
   import { getQueueOpen } from "@state/queue.svelte";
   import QueueList from "./features/queue/QueueList.svelte";
   import { getTagEditorOpen } from "@state/tag-editor.svelte";

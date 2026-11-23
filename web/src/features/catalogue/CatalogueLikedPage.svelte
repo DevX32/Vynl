@@ -41,7 +41,7 @@
   import EqualizerBars from "@components/EqualizerBars.svelte";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
   import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
-  import DownloadLikedOverlay from "./DownloadLikedOverlay.svelte";
+  import BulkTracksOverlay from "@components/BulkTracksOverlay.svelte";
 
   let {
     onNavigate,
@@ -173,11 +173,11 @@
     return items;
   }
 
-  function submitBulk(picked: readonly CatalogueTrack[], mode: "add" | "download"): void {
+  function submitBulk(picked: any[], mode: "add" | "download"): void {
     if (picked.length === 0 || bulkBusy) return;
     downloadOpen = false;
     bulkMode = mode;
-    bulkTracks = picked;
+    bulkTracks = picked as CatalogueTrack[];
     bulkOpen = true;
   }
 
@@ -500,8 +500,9 @@
 {/if}
 
 {#if downloadOpen}
-  <DownloadLikedOverlay
-    {tracks}
+  <BulkTracksOverlay
+    addTracks={tracks}
+    downloadTracks={tracks}
     busy={bulkBusy}
     onClose={() => (downloadOpen = false)}
     onSubmit={submitBulk}

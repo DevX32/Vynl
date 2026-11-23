@@ -20,7 +20,11 @@
   } from "@state/now-playing.svelte";
   import { getLibrary } from "@state/library.svelte";
   import { setShuffle } from "@state/player.svelte";
-  import { registerCatalogueTracks } from "@state/catalogue.svelte";
+  import {
+    registerCatalogueTracks,
+    saveCatalogueTrack,
+    refreshAfterCatalogueSave,
+  } from "@state/catalogue.svelte";
   import {
     fmtTotalDuration,
     fmtTime,
@@ -53,7 +57,7 @@
     tracksOf,
   } from "@state/playlists.svelte";
   import { t } from "@lib/i18n";
-  import AddTracksOverlay from "./AddTracksOverlay.svelte";
+  import BulkTracksOverlay from "@components/BulkTracksOverlay.svelte";
 
   let q = $state("");
   let ctxMenu = $state<{ x: number; y: number; idx: number } | null>(null);
@@ -63,6 +67,7 @@
 
   const pl = $derived(getCurrentPlaylist());
   const library = $derived(getLibrary());
+  const playlistStreams = $derived(pl?.streams ?? []);
   const loading = $derived(isPlaylistLoading());
 
   $effect(() => {
@@ -112,8 +117,7 @@
   });
 
   let adding = $state(false);
-  let addQuery = $state("");
-  const addedPaths = $derived(new Set(pl?.paths ?? []));
+  let downloadBusy = $state(false);
   let coverInput: HTMLInputElement | undefined = $state();
   let coverBusy = $state(false);
   let tracksEl: HTMLDivElement | undefined = $state();
@@ -139,6 +143,23 @@
     } catch (e) {
       console.warn("addToPlaylist error:", e);
       toasts.error(t("playlist.addFailed"));
+    }
+  }
+
+  async function downloadTracks(tracks: { id: string; title: string; artist: string; artists: { name: string; id: string | null }[]; album: { name: string; id: string | null } | null; duration: number | null; cover: string | null; explicit: boolean }[]): Promise<void> {
+    if (!pl || downloadBusy) return;
+    downloadBusy = true;
+    try {
+      for (const track of tracks) {
+        await saveCatalogueTrack(track as any, pl.id);
+      }
+      await refreshAfterCatalogueSave();
+      adding = false;
+    } catch (e) {
+      console.warn("download failed:", e);
+      toasts.error(t("playlist.addFailed"));
+    } finally {
+      downloadBusy = false;
     }
   }
 
@@ -428,13 +449,21 @@
     </div>
 
     {#if adding}
-      <AddTracksOverlay
-        {library}
-        {addQuery}
-        onQuery={(v) => (addQuery = v)}
+      <BulkTracksOverlay
+        addTracks={library}
+        downloadTracks={playlistStreams}
+        busy={downloadBusy}
         onClose={() => (adding = false)}
-        onAddPaths={(paths) => void addPaths(paths)}
-        added={addedPaths}
+        onSubmit={(picked, mode) => {
+          if (mode === "add") {
+            const paths = picked
+              .map((t) => (t as { path?: string }).path ?? library.find((l) => l.id === t.id)?.path)
+              .filter((p): p is string => !!p);
+            void addPaths(paths);
+          } else {
+            void downloadTracks(picked as any);
+          }
+        }}
       />
     {/if}
   {:else}
