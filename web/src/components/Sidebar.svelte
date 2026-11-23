@@ -251,7 +251,6 @@
           class="icon-btn small"
           onclick={onMoveToVynl}
           aria-label={t("playlists.moveToVynl")}
-          title={t("playlists.moveToVynl")}
         >
           <Import size={14} stroke-width={1.5} />
         </button>

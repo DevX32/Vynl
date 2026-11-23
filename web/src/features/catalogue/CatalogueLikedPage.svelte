@@ -397,7 +397,6 @@
         onclick={() => (downloadOpen = true)}
         disabled={tracks.length === 0 || bulkBusy}
         aria-label={t("catalogue.bulkActions")}
-        title={t("catalogue.bulkActions")}
       >
         {#if bulkBusy}
           <span class="spin"><LoaderCircle size={14} stroke-width={1.5} /></span>

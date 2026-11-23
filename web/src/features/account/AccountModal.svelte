@@ -201,7 +201,6 @@
           class="reroll-btn"
           onclick={rerollAvatar}
           aria-label={t("account.avatarReroll")}
-          title={t("account.avatarReroll")}
         >
           <Dices size={15} stroke-width={1.6} />
         </button>

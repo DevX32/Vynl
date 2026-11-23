@@ -24,7 +24,6 @@
       class:selected
       onclick={() => onchange(theme.id)}
       aria-pressed={selected}
-      title={theme.name}
     >
       <span
         class="preview"
