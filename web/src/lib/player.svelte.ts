@@ -29,6 +29,7 @@ import {
   setSeekDragging,
   setDragTime,
 } from "@state/now-playing.svelte";
+import { prefetchLyrics } from "@state/lyrics.svelte";
 import {
   getCrossfade,
   getCurrentVolume,
@@ -156,6 +157,8 @@ function schedulePrebuffers(force = false): void {
       getCurrentLoop(),
     ),
   );
+
+  if (nextTrack) prefetchLyrics(nextTrack);
 
   const targets: PrebufferTarget[] = [];
   for (const track of [nextTrack, prevTrack]) {

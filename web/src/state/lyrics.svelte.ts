@@ -48,6 +48,7 @@ let loadError = $state<string | null>(null);
 
 const cache = new Map<string, CacheEntry>();
 const embedded = new Set<string>();
+const prefetching = new Set<string>();
 let activeId: string | null = null;
 let loadingId: string | null = null;
 let loadVersion = 0;
@@ -505,6 +506,54 @@ async function persistManualLyrics(path: string, res: LyricsResult): Promise<voi
   } catch (error) {
     console.warn("Failed to embed lyrics", error);
   }
+}
+
+export function prefetchLyrics(
+  track:
+    | {
+        path: string;
+        title: string;
+        artist: string;
+        album: string;
+        duration: number;
+        lyrics?: string | null;
+      }
+    | null
+    | undefined,
+): void {
+  const path = track?.path;
+  if (!path || cache.has(path) || prefetching.has(path)) return;
+  const current = getCurrentTrack();
+  const currentId = getCurrentId();
+  if (current?.path === path && (activeId === currentId || loadingId === currentId)) return;
+  prefetching.add(path);
+  void (async () => {
+    try {
+      const embeddedText = track.lyrics?.trim() ?? "";
+      const embeddedKind = embeddedText ? lyricsKindOf(embeddedText) : null;
+      let res = await vynl.lyricsLocal(path);
+      if (!res && embeddedText && embeddedKind && embeddedKind !== "txt") {
+        res = { kind: embeddedKind, text: embeddedText, source: "local" };
+      }
+      if (!res) {
+        res = await vynl.lyricsFetch({
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          duration: track.duration,
+        });
+        if (res) tryEmbed(res, path);
+      }
+      if (!res && embeddedText) {
+        res = { kind: "txt", text: embeddedText, source: "local" };
+      }
+      if (res && !cache.has(path)) storeCache(path, res, toLyricLines(res));
+    } catch {
+      // ignore
+    } finally {
+      prefetching.delete(path);
+    }
+  })();
 }
 
 export function loadLyrics(id: string | null): void {

@@ -40,12 +40,15 @@
   let overlay = $state<Overlay>(null);
   let selected = $state<number[]>([]);
   let autoScroll = $state(readAutoScroll());
+  let showRomanization = $state(readRomanization());
   let userScrolling = $state(false);
   let toast = $state("");
 
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
   let resumeTimer: ReturnType<typeof setTimeout> | null = null;
   let scrollRaf: number | null = null;
+  let passiveRaf: number | null = null;
+  let passiveLast: number | null = null;
   let lastTrackId: string | null = null;
   let didInitialScroll = false;
 
@@ -68,6 +71,16 @@
     localStorage.setItem("vynl.autoscroll", String(value));
   }
 
+  function readRomanization(): boolean {
+    if (typeof localStorage === "undefined") return true;
+    return localStorage.getItem("vynl.lyrics.romanization") !== "false";
+  }
+
+  function setRomanization(value: boolean): void {
+    showRomanization = value;
+    localStorage.setItem("vynl.lyrics.romanization", String(value));
+  }
+
   function showToast(message: string): void {
     toast = message;
     if (toastTimer) clearTimeout(toastTimer);
@@ -84,6 +97,12 @@
   function cancelScroll(): void {
     if (scrollRaf !== null) cancelAnimationFrame(scrollRaf);
     scrollRaf = null;
+  }
+
+  function cancelPassive(): void {
+    if (passiveRaf !== null) cancelAnimationFrame(passiveRaf);
+    passiveRaf = null;
+    passiveLast = null;
   }
 
   function prefersReducedMotion(): boolean {
@@ -134,8 +153,16 @@
   function noteUserScroll(): void {
     userScrolling = true;
     cancelScroll();
+    cancelPassive();
     if (resumeTimer) clearTimeout(resumeTimer);
-    resumeTimer = setTimeout(() => (userScrolling = false), 2400);
+    resumeTimer = setTimeout(() => (userScrolling = false), 4000);
+  }
+
+  function jumpToCurrent(): void {
+    userScrolling = false;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = null;
+    if (activeIndex >= 0) scrollToActive(false);
   }
 
   $effect(() => {
@@ -177,7 +204,37 @@
       if (toastTimer) clearTimeout(toastTimer);
       if (resumeTimer) clearTimeout(resumeTimer);
       cancelScroll();
+      cancelPassive();
     };
+  });
+
+  $effect(() => {
+    const c = container;
+    const canScroll =
+      !synced && autoScroll && !userScrolling && !overlay && !settingsOpen &&
+      selected.length === 0 && !!result && lines.length > 0 && !!c;
+    if (!canScroll) {
+      cancelPassive();
+      return;
+    }
+    if (prefersReducedMotion()) return;
+    const speed = 18;
+    const step = (now: number) => {
+      const el = container;
+      if (!el) { cancelPassive(); return; }
+      if (passiveLast === null) passiveLast = now;
+      const dt = Math.min(0.05, (now - passiveLast) / 1000);
+      passiveLast = now;
+      const max = el.scrollHeight - el.clientHeight;
+      if (max > 0 && el.scrollTop < max - 1) {
+        el.scrollTop = Math.min(max, el.scrollTop + speed * dt);
+        passiveRaf = requestAnimationFrame(step);
+      } else {
+        cancelPassive();
+      }
+    };
+    passiveRaf = requestAnimationFrame(step);
+    return () => cancelPassive();
   });
 
   $effect(() => {
@@ -313,6 +370,10 @@
                 <button class="mini-switch" class:on={autoScroll} onclick={() => setAutoScroll(!autoScroll)} aria-label={t("lyrics.toggleAutoScroll")}><span></span></button>
               </div>
               <div class="settings-row">
+                <span class="settings-label mono">{t("lyrics.romanization")}</span>
+                <button class="mini-switch" class:on={showRomanization} onclick={() => setRomanization(!showRomanization)} aria-label={t("lyrics.toggleRomanization")}><span></span></button>
+              </div>
+              <div class="settings-row">
                 <button class="btn-ghost settings-action mono" onclick={() => open("search")}>
                   <Search size={13} stroke-width={1.5} />
                   {t("lyrics.search")}
@@ -384,7 +445,7 @@
                 {:else}
                   <span class="text">{line.text || "\u00A0"}</span>
                 {/if}
-                {#if line.roman}
+                {#if showRomanization && line.roman}
                   <span class="roman" class:open={active}><span class="roman-text">{line.roman}</span></span>
                 {/if}
               </span>
@@ -399,6 +460,12 @@
           <button class="sel-btn" onclick={copySelected} aria-label={t("lyrics.copySelected")}><Copy size={13} stroke-width={1.5} /></button>
           <button class="sel-btn" onclick={() => (selected = [])} aria-label={t("lyrics.clearSelection")}><X size={13} stroke-width={1.5} /></button>
         </div>
+      {/if}
+
+      {#if userScrolling && synced && activeIndex >= 0 && autoScroll && selected.length === 0}
+        <button class="jump-btn mono" onclick={jumpToCurrent} transition:fly={{ y: 8, duration: 140, easing: cubicOut }}>
+          {t("lyrics.jumpToCurrent")}
+        </button>
       {/if}
     </div>
 
@@ -681,6 +748,13 @@
     display:flex; align-items:center; gap:4px; padding:5px 6px 5px 14px;
     background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
+  .jump-btn {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30;
+    padding: 8px 14px; font-size: 10.5px; letter-spacing: .05em;
+    color: var(--dim); background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .jump-btn:hover { color: var(--text); background: var(--hover-surface); }
   .selection-count { font-size:10px; color: var(--dim); letter-spacing: .05em; padding-right: 6px; }
   .sel-btn { border:none; background:none; color: var(--faint); padding:5px; cursor:pointer; }
   .sel-btn:hover { color: var(--text); }
