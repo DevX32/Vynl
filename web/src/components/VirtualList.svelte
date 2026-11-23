@@ -1,6 +1,6 @@
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
-  import { untrack } from "svelte";
+  import { onDestroy, untrack } from "svelte";
 
   let {
     items,
@@ -89,15 +89,28 @@
     return () => ro.disconnect();
   });
 
+  let observedFirst: Element | null = null;
+  let firstRowRo: ResizeObserver | null = null;
+
   $effect(() => {
-    const first = visible[0] ? rootEl?.firstElementChild : undefined;
-    if (!first) return;
-    const ro = new ResizeObserver(() => {
-      const h = first.getBoundingClientRect().height;
-      if (h > 0 && Math.abs(h - rowHeight) > 0.5) rowHeight = h;
-    });
-    ro.observe(first);
-    return () => ro.disconnect();
+    const first = visible[0] ? (rootEl?.firstElementChild ?? null) : null;
+    if (first === observedFirst) return;
+    if (!firstRowRo) {
+      firstRowRo = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const h = (entry.target as HTMLElement).getBoundingClientRect().height;
+          if (h > 0 && Math.abs(h - rowHeight) > 0.5) rowHeight = h;
+        }
+      });
+    }
+    if (observedFirst) firstRowRo.unobserve(observedFirst);
+    observedFirst = first;
+    if (first) firstRowRo.observe(first);
+  });
+
+  onDestroy(() => {
+    firstRowRo?.disconnect();
+    firstRowRo = null;
   });
 </script>
 

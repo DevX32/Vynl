@@ -7,6 +7,7 @@ import type {
 } from "@lib/types";
 import { getLibrary, getLibraryRevision, onLibraryChanged, refreshLibrary } from "./library.svelte";
 import { moveItem } from "@lib/reorder";
+import { getCatalogueTrack, enrichLibraryTrack, getCatalogueRevision } from "./catalogue.svelte";
 import { songKey } from "@lib/format";
 import { vynl } from "@lib/vynl";
 import { scheduleCloudSyncPush } from "./sync.svelte";
@@ -292,13 +293,22 @@ export function isCataloguePath(path: string): boolean {
   return path.startsWith("ytm:");
 }
 
-export function catalogueIdOf(path: string): string | null {
+function catalogueIdOf(path: string): string | null {
   if (!path.startsWith("ytm:")) return null;
   const id = path.slice(4);
   return id.length > 0 ? id : null;
 }
 
 function streamTrackOf(track: CatalogueTrack): LibraryTrack {
+  const known = getCatalogueTrack(track.id);
+  const duration =
+    Number.isFinite(track.duration) && (track.duration ?? 0) > 0
+      ? (track.duration as number)
+      : known && known.duration > 0
+        ? known.duration
+        : Number.isFinite(track.duration)
+          ? (track.duration ?? 0)
+          : 0;
   return {
     id: track.id,
     path: `ytm:${track.id}`,
@@ -306,11 +316,8 @@ function streamTrackOf(track: CatalogueTrack): LibraryTrack {
     artist: track.artist,
     album: track.album?.name ?? "",
     year: null,
-    duration:
-      Number.isFinite(track.duration) && (track.duration ?? 0) >= 0
-        ? (track.duration ?? 0)
-        : 0,
-    cover: track.cover,
+    duration,
+    cover: track.cover ?? known?.cover ?? null,
     trackNumber: null,
     lyrics: null,
     ext: "webm",
@@ -329,7 +336,7 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
       const at = markAt.get(`ytm:${track.id}`) ?? fallback;
       const known = seen.get(track.id);
       if (known && (known.addedAt ?? 0) >= at) continue;
-      seen.set(track.id, { ...streamTrackOf(track), addedAt: at });
+      seen.set(track.id, { ...enrichLibraryTrack(streamTrackOf(track)), addedAt: at });
     }
   }
   return [...seen.values()];
@@ -337,13 +344,15 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
 
 const _tracksCache = new Map<
   Playlist,
-  { library: LibraryTrack[] | null; result: LibraryTrack[] }
+  { library: LibraryTrack[] | null; catalogueRevision: number; result: LibraryTrack[] }
 >();
 
 export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
+  const catalogueRevision = getCatalogueRevision();
   const cached = _tracksCache.get(pl);
-  if (cached && cached.library === library) return cached.result;
+  if (cached && cached.library === library && cached.catalogueRevision === catalogueRevision)
+    return cached.result;
 
   if (_pathSource !== library) {
     const next = new Map<string, LibraryTrack>();
@@ -385,6 +394,11 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
       const id = catalogueIdOf(path);
       const track = id ? streams.get(id) : undefined;
       if (!track) {
+        const known = id ? getCatalogueTrack(id) : null;
+        if (known) {
+          result.push(enrichLibraryTrack({ ...known, path, id: known.id ?? id ?? path }));
+          continue;
+        }
         result.push({
           id: id ?? path,
           path,
@@ -400,7 +414,7 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
         });
         continue;
       }
-      const stream = streamTrackOf(track);
+      const stream = enrichLibraryTrack(streamTrackOf(track));
       if (hasLocalMatch(stream)) continue;
       result.push(stream);
       continue;
@@ -409,7 +423,7 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
     if (track) result.push(track);
   }
 
-  _tracksCache.set(pl, { library, result });
+  _tracksCache.set(pl, { library, catalogueRevision, result });
   if (_tracksCache.size > 64) {
     const oldest = _tracksCache.keys().next().value;
     if (oldest !== undefined) _tracksCache.delete(oldest);

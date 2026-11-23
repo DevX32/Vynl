@@ -51,6 +51,7 @@ import {
   setSleepPauseHandler,
 } from "@state/sleep-timer.svelte";
 import { vynl } from "@lib/vynl";
+import { untrack } from "svelte";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { clamp01 } from "@lib/pointer";
 import { friendlyError } from "@lib/errors";
@@ -605,7 +606,7 @@ export function playTrack(
   loadAndPlayNative(track.path, gen, seekTo);
 }
 
-export async function resumeOrPlay(
+async function resumeOrPlay(
   path: string,
   seekTo?: number,
   generation = playGeneration,
@@ -638,7 +639,7 @@ export async function resumeOrPlay(
   }
 }
 
-export function pausePlayback(): void {
+function pausePlayback(): void {
   const generation = playGeneration;
   resumeToken += 1;
   const token = resumeToken;
@@ -1095,10 +1096,14 @@ if (typeof window !== "undefined" && !IS_MINI) {
     $effect(() => {
       const np = getCurrentTrack();
       const playing = getIsTrackPlaying();
-      const position = getCurrentTime();
-      const due = np !== null && Date.now() - lastMediaSentAt >= 1_000;
-      syncMedia(np, playing, position, due);
+      syncMedia(np, playing, untrack(() => getCurrentTime()), true);
     });
   });
+  window.setInterval(() => {
+    const np = getCurrentTrack();
+    if (!np) return;
+    if (Date.now() - lastMediaSentAt < 1_000) return;
+    syncMedia(np, getIsTrackPlaying(), getCurrentTime(), true);
+  }, 1_000);
   vynl.onMediaControl(handleMediaControl);
 }

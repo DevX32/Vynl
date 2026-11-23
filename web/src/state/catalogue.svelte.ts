@@ -71,6 +71,7 @@ let _tracks = $state<LibraryTrack[]>(loadRegistry());
 let _revision = $state(0);
 let _index: Map<string, LibraryTrack> = new Map();
 let _indexRevision = -1;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 function registryIndex(): Map<string, LibraryTrack> {
   if (_indexRevision !== _revision) {
@@ -80,7 +81,7 @@ function registryIndex(): Map<string, LibraryTrack> {
   return _index;
 }
 
-function persistRegistry(): void {
+function writeRegistry(): void {
   if (typeof localStorage === "undefined") return;
   try {
     const stored: StoredTrack[] = _tracks.slice(-REGISTRY_LIMIT).map((track) => ({
@@ -95,6 +96,30 @@ function persistRegistry(): void {
   } catch (error) {
     console.warn("catalogue registry save failed:", error);
   }
+}
+
+function flushRegistry(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  writeRegistry();
+}
+
+function persistRegistry(): void {
+  if (typeof localStorage === "undefined") return;
+  if (persistTimer !== null) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    writeRegistry();
+  }, 750);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushRegistry);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushRegistry();
+  });
 }
 
 function libraryTrackOf(track: CatalogueTrack): LibraryTrack {
@@ -136,10 +161,14 @@ export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void
     if (!track.id) continue;
     const entry = libraryTrackOf(track);
     const current = next.get(entry.id);
-    if (!current || !sameMetadata(current, entry)) changed = true;
+    const mergedEntry =
+      current && entry.duration <= 0 && current.duration > 0
+        ? { ...entry, duration: current.duration, cover: entry.cover ?? current.cover }
+        : entry;
+    if (!current || !sameMetadata(current, mergedEntry)) changed = true;
     // Move the seen entry to the most-recent slot (LRU touch).
     next.delete(entry.id);
-    next.set(entry.id, entry);
+    next.set(entry.id, mergedEntry);
   }
   if (!changed) {
     // The LRU touch only counts when the resulting order differs from the
@@ -182,12 +211,37 @@ export function getCatalogueTrack(id: string): LibraryTrack | null {
   return registryIndex().get(id) ?? null;
 }
 
-export function cataloguePath(id: string): string {
-  return `${CATALOGUE_PREFIX}${id}`;
+export function enrichCatalogueTrack(track: CatalogueTrack): CatalogueTrack {
+  const hasDuration =
+    Number.isFinite(track.duration) && (track.duration ?? 0) > 0;
+  if (hasDuration) return track;
+  const known = getCatalogueTrack(track.id);
+  if (known && known.duration > 0) {
+    return {
+      ...track,
+      duration: known.duration,
+      cover: track.cover ?? known.cover,
+    };
+  }
+  return track;
 }
 
-export function isCataloguePath(path: string | null | undefined): boolean {
-  return !!path && path.startsWith(CATALOGUE_PREFIX);
+export function enrichLibraryTrack(track: LibraryTrack): LibraryTrack {
+  if (track.duration > 0) return track;
+  if (!track.path.startsWith(CATALOGUE_PREFIX)) return track;
+  const known = getCatalogueTrack(track.path.slice(CATALOGUE_PREFIX.length));
+  if (known && known.duration > 0) {
+    return {
+      ...track,
+      duration: known.duration,
+      cover: track.cover ?? known.cover,
+    };
+  }
+  return track;
+}
+
+export function cataloguePath(id: string): string {
+  return `${CATALOGUE_PREFIX}${id}`;
 }
 
 export function catalogueIdFromPath(path: string | null | undefined): string | null {
@@ -247,13 +301,6 @@ export async function searchCatalogue(query: string): Promise<void> {
   }
 }
 
-export function clearCatalogueSearch(): void {
-  _searchGeneration += 1;
-  _searchQuery = "";
-  _results = null;
-  _searching = false;
-  _searchError = null;
-}
 
 const TASTE_CACHE = "vynl.taste.mix.v1";
 
@@ -423,17 +470,6 @@ const albumCache = new Map<string, CatalogueAlbumDetail>();
 const artistCache = new Map<string, CatalogueArtist>();
 const playlistCache = new Map<string, CataloguePlaylistDetail>();
 
-export function getCachedAlbum(id: string): CatalogueAlbumDetail | undefined {
-  return albumCache.get(id);
-}
-
-export function getCachedArtist(id: string): CatalogueArtist | undefined {
-  return artistCache.get(id);
-}
-
-export function getCachedPlaylist(id: string): CataloguePlaylistDetail | undefined {
-  return playlistCache.get(id);
-}
 
 export async function loadCatalogueAlbum(
   id: string,
@@ -498,12 +534,6 @@ export function appendCataloguePlaylistPage(
   };
   mergePlaylistDetail(merged);
   return merged;
-}
-
-export function clearCatalogueCache(): void {
-  albumCache.clear();
-  artistCache.clear();
-  playlistCache.clear();
 }
 
 export function saveCatalogueTrack(

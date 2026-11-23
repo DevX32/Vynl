@@ -25,6 +25,7 @@ const READAHEAD: u64 = 1024 * 1024;
 const FETCH_STALL: Duration = Duration::from_secs(15);
 const MAX_FETCH_ATTEMPTS: u32 = 4;
 const MAX_REFRESH_ATTEMPTS: u32 = 3;
+const MAX_REDIRECT_HOPS: usize = 6;
 const CACHE_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_BUFFER_SECS: f64 = 6.0;
 const DEFAULT_RATE: u32 = 48_000;
@@ -1236,6 +1237,45 @@ impl std::fmt::Display for FetchError {
     }
 }
 
+/// Sends a range request, following CDN redirects manually while re-validating
+/// that every hop stays on https and resolves only to public addresses.
+async fn range_request(
+    url: &str,
+    start: u64,
+    end: u64,
+    user_agent: &str,
+) -> Result<reqwest::Response, FetchError> {
+    let mut current =
+        reqwest::Url::parse(url).map_err(|_| FetchError::Other("invalid stream URL".into()))?;
+    for _ in 0..=MAX_REDIRECT_HOPS {
+        let http = crate::services::util::bound_public_client(current.as_str())
+            .map_err(FetchError::Other)?;
+        let response = http
+            .get(current.clone())
+            .header(RANGE, format!("bytes={start}-{}", end - 1))
+            .header(USER_AGENT, user_agent)
+            .header(ACCEPT, "*/*")
+            .send()
+            .await
+            .map_err(|e| FetchError::Other(format!("range request: {e}")))?;
+        if !response.status().is_redirection() {
+            return Ok(response);
+        }
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| FetchError::Other("stream redirect had no target".into()))?;
+        current = current
+            .join(location)
+            .map_err(|_| FetchError::Other("bad stream redirect target".into()))?;
+        if current.scheme() != "https" {
+            return Err(FetchError::Other("stream redirect left https".into()));
+        }
+    }
+    Err(FetchError::Other("too many stream redirects".into()))
+}
+
 fn run_fetch(
     store: &Arc<RangeStore>,
     resolver: &Arc<UrlResolver>,
@@ -1246,22 +1286,13 @@ fn run_fetch(
 ) -> Result<(), FetchError> {
     let url = format.url.clone();
     let agent = format.user_agent;
-    let http = crate::services::util::bound_public_client(&url).map_err(FetchError::Other)?;
     let runtime = resolver.runtime.clone();
     let control = store.control.clone();
     let store_task = store.clone();
     let request = async move {
-        let response = tokio::time::timeout(
-            FETCH_STALL,
-            http.get(&url)
-                .header(RANGE, format!("bytes={start}-{}", end - 1))
-                .header(USER_AGENT, agent)
-                .header(ACCEPT, "*/*")
-                .send(),
-        )
-        .await
-        .map_err(|_| FetchError::Other("the stream did not answer".into()))?
-        .map_err(|e| FetchError::Other(format!("range request: {e}")))?;
+        let response = tokio::time::timeout(FETCH_STALL, range_request(&url, start, end, agent))
+            .await
+            .map_err(|_| FetchError::Other("the stream did not answer".into()))??;
         let status = response.status();
         if status == reqwest::StatusCode::FORBIDDEN
             || status == reqwest::StatusCode::UNAUTHORIZED

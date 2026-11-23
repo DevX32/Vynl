@@ -481,7 +481,9 @@ fn scan_library_incremental_unlocked(
     out.sort_by_cached_key(|t| format!("{}{}", t.artist, t.title));
 
     let changed = existing.is_none_or(|e| e != out.as_slice());
-    save_cache(user_data_dir, &out);
+    if changed {
+        save_cache(user_data_dir, &out);
+    }
 
     (out, changed)
 }

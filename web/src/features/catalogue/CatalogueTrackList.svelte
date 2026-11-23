@@ -33,6 +33,7 @@
   import EqualizerBars from "@components/EqualizerBars.svelte";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
   import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
+  import VirtualList from "@components/VirtualList.svelte";
 
   let {
     tracks,
@@ -63,6 +64,7 @@
   let pickerBusy = $state(false);
   let streamTarget = $state<CatalogueTrack | null>(null);
   let streamBusy = $state(false);
+  let tracksEl = $state<HTMLDivElement>();
 
   function rowAction(track: CatalogueTrack): void {
     if (nowPlaying?.id === track.id) {
@@ -81,9 +83,15 @@
     );
   }
 
+  const prebufferSeen = new Set<string>();
+
   function prebufferTrack(track: CatalogueTrack): void {
-    if (isCurrent(track) || !track.id) return;
-    void vynl.cataloguePrebuffer(track.id, track.duration).catch(() => {});
+    const id = track.id;
+    if (!id || prebufferSeen.has(id) || isCurrent(track)) return;
+    prebufferSeen.add(id);
+    void vynl.cataloguePrebuffer(id, track.duration).catch(() => {
+      prebufferSeen.delete(id);
+    });
   }
 
   function showCtx(e: MouseEvent, track: CatalogueTrack): void {
@@ -249,7 +257,7 @@
     <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
   </div>
 
-  <div class="tracks">
+  <div class="tracks" bind:this={tracksEl}>
   {#if tracks.length === 0}
     <div class="tbl-empty">
       <ListMusic size={28} stroke-width={1.1} />
@@ -259,10 +267,11 @@
       {/if}
     </div>
   {:else}
-    {#each tracks as track, i (`${track.id}#${i}`)}
+    {#snippet row(track: CatalogueTrack, i: number)}
+      {@const current = isCurrent(track)}
       <div
         class="row"
-        class:playing={isCurrent(track)}
+        class:playing={current}
         role="button"
         tabindex="0"
         aria-label={`${stripAlbumSuffix(track.title, track.album?.name)} - ${track.artist}`}
@@ -277,7 +286,7 @@
         oncontextmenu={(e) => showCtx(e, track)}
       >
         <span class="c-num mono">
-          {#if isCurrent(track)}
+          {#if current}
             <EqualizerBars />
           {:else}
             {String(i + 1).padStart(2, "0")}
@@ -287,7 +296,7 @@
           <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
         </div>
         <div class="c-meta">
-          <span class="c-title" class:accent={isCurrent(track)}>
+          <span class="c-title" class:accent={current}>
             {stripAlbumSuffix(track.title, track.album?.name)}
           </span>
           {#if showAlbum && track.album}
@@ -317,7 +326,15 @@
           <span class="c-dur mono">{fmtTime(track.duration, "--:--")}</span>
         </div>
       </div>
-    {/each}
+    {/snippet}
+
+    <VirtualList
+      items={tracks}
+      {row}
+      scrollEl={tracksEl ?? null}
+      rowKey={(t, idx) => `${t.id}#${idx}`}
+      estimateRowHeight={56}
+    />
   {/if}
   {#if children}
     {@render children()}

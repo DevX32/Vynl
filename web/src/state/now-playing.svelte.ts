@@ -87,23 +87,39 @@ export function getCurrentTime(): number {
   return currentTime;
 }
 
-let _pathSource: LibraryTrack[] | null = null;
+let _librarySource: LibraryTrack[] | null = null;
+let _libraryPathMap = new Map<string, LibraryTrack>();
+let _catalogueRevision = -1;
+let _cataloguePathMap = new Map<string, LibraryTrack>();
 let _pathMap = new Map<string, LibraryTrack>();
 let _idMap = new Map<string, LibraryTrack>();
-let _registryRevision = -1;
+let _pathMapDirty = true;
 
 function libraryByPath(): Map<string, LibraryTrack> {
   const library = getLibrary();
   const catalogueRevision = getCatalogueRevision();
-  if (_pathSource !== library || _registryRevision !== catalogueRevision) {
-    const next = new Map<string, LibraryTrack>();
-    for (const track of library) next.set(track.path, track);
-    for (const track of getCatalogueTracks()) next.set(track.path, track);
-    _pathSource = library;
-    _registryRevision = catalogueRevision;
+  let dirty = _pathMapDirty;
+
+  if (_librarySource !== library) {
+    _libraryPathMap = new Map(library.map((track) => [track.path, track]));
+    _librarySource = library;
+    dirty = true;
+  }
+
+  if (_catalogueRevision !== catalogueRevision) {
+    _cataloguePathMap = new Map(getCatalogueTracks().map((track) => [track.path, track]));
+    _catalogueRevision = catalogueRevision;
+    dirty = true;
+  }
+
+  if (dirty) {
+    const next = new Map(_libraryPathMap);
+    for (const [path, track] of _cataloguePathMap) next.set(path, track);
     _pathMap = next;
     _idMap = new Map([...next.values()].map((track) => [track.id, track]));
+    _pathMapDirty = false;
   }
+
   return _pathMap;
 }
 
@@ -113,7 +129,7 @@ export function findTrackById(id: string | null | undefined): LibraryTrack | nul
   return _idMap.get(id) ?? null;
 }
 
-export function findTrackByPath(path: string | null | undefined): LibraryTrack | null {
+function findTrackByPath(path: string | null | undefined): LibraryTrack | null {
   if (!path) return null;
   const track = libraryByPath().get(path);
   if (track) return track;
@@ -431,7 +447,7 @@ export function requestPlay(id: string, queue?: string[]): void {
   playHandler?.(id, queue);
 }
 
-export function refreshQueues(): void {
+function refreshQueues(): void {
   const byPath = libraryByPath();
   if (byPath.size === 0) return;
 

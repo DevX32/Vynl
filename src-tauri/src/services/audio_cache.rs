@@ -46,8 +46,13 @@ pub async fn cache_remote_audio(url: &str, key: &str) -> Result<String, String> 
         return Err("audio URL points at a private host".into());
     }
     let dir = cache_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cache dir: {e}"))?;
-    prune_cache();
+    let dir = tokio::task::spawn_blocking(move || {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("cache dir: {e}"))?;
+        prune_cache_dir(&dir);
+        Ok::<PathBuf, String>(dir)
+    })
+    .await
+    .map_err(|e| format!("cache setup: {e}"))??;
 
     let dest = dir.join(safe_name(key));
     if dest.exists()
@@ -137,9 +142,8 @@ async fn stream_body(
     file.flush().await.map_err(|e| format!("write cache: {e}"))
 }
 
-fn prune_cache() {
-    let dir = cache_dir();
-    let Ok(entries) = std::fs::read_dir(&dir) else {
+fn prune_cache_dir(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
 

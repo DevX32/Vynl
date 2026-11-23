@@ -1,5 +1,6 @@
 import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
 import { vynl } from "@lib/vynl";
+import { getCatalogueTrack, enrichCatalogueTrack } from "./catalogue.svelte";
 import { scheduleCloudSyncPush } from "./sync.svelte";
 
 const TASTE_KEY = "vynl.taste.v1";
@@ -147,6 +148,10 @@ function mergeTrack(current: CatalogueTrack, patch: CatalogueTrack): CatalogueTr
     ...patch,
     artists,
     album,
+    duration:
+      Number.isFinite(patch.duration) && (patch.duration ?? 0) > 0
+        ? (patch.duration as number)
+        : current.duration,
     cover: patch.cover ?? current.cover,
   };
 }
@@ -164,6 +169,7 @@ function trim(entries: TasteEntry[]): TasteEntry[] {
 }
 
 export function recordTastePlay(track: CatalogueTrack): void {
+  track = enrichCatalogueTrack(track);
   if (!track.id) return;
   const now = Date.now();
   const existing = _entries.find((entry) => entry.track.id === track.id);
@@ -204,6 +210,7 @@ export function getTasteLikedIds(): ReadonlySet<string> {
 }
 
 export function toggleTasteLike(track: CatalogueTrack): boolean {
+  track = enrichCatalogueTrack(track);
   const now = Date.now();
   const existing = _entries.find((entry) => entry.track.id === track.id);
   if (!existing) {
@@ -244,7 +251,7 @@ export function getLikedTracks(): CatalogueTrack[] {
   return _entries
     .filter((entry) => entry.liked)
     .sort((a, b) => (b.likedAt ?? 0) - (a.likedAt ?? 0))
-    .map((entry) => entry.track);
+    .map((entry) => enrichCatalogueTrack(entry.track));
 }
 
 export function getLikedStreamTracks(): LibraryTrack[] {
@@ -252,7 +259,16 @@ export function getLikedStreamTracks(): LibraryTrack[] {
     .filter((entry) => entry.liked)
     .sort((a, b) => (b.likedAt ?? 0) - (a.likedAt ?? 0))
     .map((entry) => {
-      const track = entry.track;
+      const track = enrichCatalogueTrack(entry.track);
+      const known = getCatalogueTrack(track.id);
+      const duration =
+        Number.isFinite(track.duration) && (track.duration ?? 0) > 0
+          ? (track.duration as number)
+          : known && known.duration > 0
+            ? known.duration
+            : Number.isFinite(track.duration)
+              ? (track.duration ?? 0)
+              : 0;
       return {
         id: track.id,
         path: `ytm:${track.id}`,
@@ -260,11 +276,8 @@ export function getLikedStreamTracks(): LibraryTrack[] {
         artist: track.artist,
         album: track.album?.name ?? "",
         year: null,
-        duration:
-          Number.isFinite(track.duration) && (track.duration ?? 0) >= 0
-            ? (track.duration ?? 0)
-            : 0,
-        cover: track.cover,
+        duration,
+        cover: track.cover ?? known?.cover ?? null,
         trackNumber: null,
         lyrics: null,
         ext: "webm",

@@ -43,7 +43,6 @@ export function stopClock(): void {
 }
 
 export function getSmoothTime(): number {
-  // Read reactive tick so consumers re-render while the clock runs.
   void tick;
   return running ? predictedNow() : getCurrentTime();
 }
