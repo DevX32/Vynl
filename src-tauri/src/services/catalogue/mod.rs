@@ -462,9 +462,6 @@ pub async fn prepare_for_playback(
         if let Some(prepared) = service.take_prepared(video_id, start) {
             return Ok(prepared);
         }
-        // A prebuffer for this track may still be resolving. Join it instead
-        // of issuing a duplicate network resolve, then take the single owner
-        // from the stash so the session is never shared with a cached entry.
         let inflight = service.inflight_for(video_id);
         if let Some(shared) = inflight {
             let _ = shared.await;

@@ -23,6 +23,7 @@
     searchCatalogue,
   } from "@state/catalogue.svelte";
   import {
+    dismissTasteTrack,
     getTasteProfileKey,
     getTasteSeeds,
     getTasteSummary,
@@ -31,6 +32,7 @@
   import { setShuffle } from "@state/player.svelte";
   import { t } from "@lib/i18n";
   import { friendlyError } from "@lib/errors";
+  import { toasts } from "@lib/toast";
   import SearchInput from "@components/SearchInput.svelte";
   import CatalogueTrackList from "./CatalogueTrackList.svelte";
   import CatalogueSongCard from "./CatalogueSongCard.svelte";
@@ -281,6 +283,10 @@
   bind:this={songMenu}
   onNavigateAlbum={(id) => onNavigate(`catalogue:album:${id}`)}
   onNavigateArtist={(id) => onNavigate(`catalogue:artist:${id}`)}
+  onDismiss={(track) => {
+    dismissTasteTrack(track.id);
+    toasts.success(t("catalogue.notInterested"));
+  }}
 />
 
 <style>

@@ -157,7 +157,6 @@
   });
 
   $effect(() => {
-    // Track result/track changes to reset scroll.
     result;
     getCurrentId();
     didInitialScroll = false;
@@ -167,7 +166,6 @@
     if (activeIndex < 0) return;
     if (!didInitialScroll) {
       didInitialScroll = true;
-      // Wait a tick for layout.
       requestAnimationFrame(() => scrollToActive(true));
       return;
     }

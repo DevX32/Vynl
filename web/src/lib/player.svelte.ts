@@ -549,8 +549,6 @@ function loadAndPlayNative(
   seekTo?: number,
 ): void {
   beginPlayReconcile(gen);
-  // Start prebuffering the next/prev tracks immediately so a quick skip is
-  // already warm, rather than waiting for the first 5s tick.
   schedulePrebuffers();
   void playNative(path, seekTo, gen).then((info) => {
     finishPlayReconcile(gen);
@@ -1045,7 +1043,6 @@ function handleMediaStop(): void {
 
 let lastMediaActionAt = 0;
 function handleMediaControl(event: MediaControlEvent): void {
-  // Dedupe duplicate events from OS media sessions + global shortcuts.
   const now = Date.now();
   if (now - lastMediaActionAt < 250 && event.action !== "seek" && event.action !== "seekBy" && event.action !== "setVolume") {
     return;

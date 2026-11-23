@@ -40,6 +40,7 @@ export const en = {
     mixFailed: "Could not build your mix",
     likeTrack: "Like song",
     unlikeTrack: "Unlike song",
+    notInterested: "Not interested",
     songs: "Songs",
     albums: "Albums",
     playlists: "Playlists",

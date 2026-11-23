@@ -1,11 +1,13 @@
 import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
 import { vynl } from "@lib/vynl";
-import { getCatalogueTrack, enrichCatalogueTrack } from "./catalogue.svelte";
+import { getCatalogueTrack, enrichCatalogueTrack, removeFromCatalogueTaste } from "./catalogue.svelte";
 import { scheduleCloudSyncPush } from "./sync.svelte";
 
 const TASTE_KEY = "vynl.taste.v1";
 const TASTE_SYNCED_KEY = "vynl.taste.synced";
+const DISMISSED_KEY = "vynl.taste.dismissed.v1";
 const MAX_ENTRIES = 160;
+const MAX_DISMISSED = 500;
 
 function isArtistRef(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
@@ -66,7 +68,21 @@ function loadTaste(): TasteEntry[] {
   }
 }
 
+function loadDismissed(): Set<string> {
+  if (typeof localStorage === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string" && v.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
 let _entries = $state<TasteEntry[]>(loadTaste());
+let _dismissed = $state<Set<string>>(loadDismissed());
 
 function persistLocal(): void {
   if (typeof localStorage === "undefined") return;
@@ -87,6 +103,13 @@ function markSynced(): void {
 function hasSynced(): boolean {
   if (typeof localStorage === "undefined") return false;
   return localStorage.getItem(TASTE_SYNCED_KEY) === "1";
+}
+
+function persistDismissed(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([..._dismissed]));
+  } catch {}
 }
 
 function persist(): void {
@@ -310,22 +333,57 @@ export function getTasteProfileKey(): string {
     .filter((entry) => entry.liked)
     .map((entry) => entry.track.id)
     .sort();
-  const played = _entries.some((entry) => entry.plays > 0) ? "p" : "-";
-  return `${liked.join(",")}|${played}`;
+  const topPlayed = _entries
+    .filter((entry) => entry.plays > 0)
+    .slice()
+    .sort((a, b) => b.plays - a.plays || b.lastPlayed - a.lastPlayed)
+    .slice(0, 3)
+    .map((entry) => entry.track.id);
+  return `${liked.join(",")}|${topPlayed.join(",")}`;
 }
 
 export function getTasteSummary(): {
   liked: number;
   played: number;
   entries: number;
+  dismissed: number;
 } {
   return {
     liked: _entries.filter((entry) => entry.liked).length,
     played: _entries.filter((entry) => entry.plays > 0).length,
     entries: _entries.length,
+    dismissed: _dismissed.size,
   };
 }
 
+export function getDismissedTasteIds(): ReadonlySet<string> {
+  return _dismissed;
+}
+
+export function dismissTasteTrack(id: string): void {
+  if (!id || _dismissed.has(id)) return;
+  const next = new Set(_dismissed);
+  next.add(id);
+  if (next.size > MAX_DISMISSED) {
+    const arr = [...next];
+    _dismissed = new Set(arr.slice(arr.length - MAX_DISMISSED));
+  } else {
+    _dismissed = next;
+  }
+  persistDismissed();
+  removeFromCatalogueTaste(id);
+}
+
+export function undismissTasteTrack(id: string): void {
+  if (!id || !_dismissed.has(id)) return;
+  const next = new Set(_dismissed);
+  next.delete(id);
+  _dismissed = next;
+  persistDismissed();
+}
+
 export function resetTaste(): void {
+  _dismissed = new Set();
+  persistDismissed();
   commit([]);
 }

@@ -166,13 +166,10 @@ export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void
         ? { ...entry, duration: current.duration, cover: entry.cover ?? current.cover }
         : entry;
     if (!current || !sameMetadata(current, mergedEntry)) changed = true;
-    // Move the seen entry to the most-recent slot (LRU touch).
     next.delete(entry.id);
     next.set(entry.id, mergedEntry);
   }
   if (!changed) {
-    // The LRU touch only counts when the resulting order differs from the
-    // current one; otherwise skip the write and the revision bump.
     const prevIds = _tracks.map((track) => track.id);
     const nextIds = [...next.keys()];
     if (nextIds.length !== prevIds.length) {
@@ -303,6 +300,20 @@ export async function searchCatalogue(query: string): Promise<void> {
 
 
 const TASTE_CACHE = "vynl.taste.mix.v1";
+const DISMISSED_KEY = "vynl.taste.dismissed.v1";
+
+function readDismissedIds(): Set<string> {
+  if (typeof localStorage === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string" && v.length > 0));
+  } catch {
+    return new Set();
+  }
+}
 
 interface TasteCache {
   profileKey: string;
@@ -345,11 +356,13 @@ function writeTasteCache(cache: TasteCache): void {
 }
 
 const cachedTaste = readTasteCache();
-if (cachedTaste && cachedTaste.tracks.length > 0) {
-  registerCatalogueTracks(cachedTaste.tracks);
+const cachedDismissed = readDismissedIds();
+const cachedTracks = (cachedTaste?.tracks ?? []).filter((t) => !cachedDismissed.has(t.id));
+if (cachedTracks.length > 0) {
+  registerCatalogueTracks(cachedTracks);
 }
 
-let _taste = $state<CatalogueTrack[]>(cachedTaste?.tracks ?? []);
+let _taste = $state<CatalogueTrack[]>(cachedTracks);
 let _tasteKey = $state(cachedTaste?.seedsKey ?? "");
 let _tasteProfileKey: string | null = cachedTaste?.profileKey ?? null;
 let _tasteLoading = $state(false);
@@ -358,6 +371,16 @@ let _tasteGeneration = 0;
 
 export function getCatalogueTaste(): readonly CatalogueTrack[] {
   return _taste;
+}
+
+export function removeFromCatalogueTaste(id: string): void {
+  if (!id) return;
+  const next = _taste.filter((t) => t.id !== id);
+  if (next.length === _taste.length) return;
+  _taste = next;
+  if (_tasteProfileKey) {
+    writeTasteCache({ profileKey: _tasteProfileKey, seedsKey: _tasteKey, tracks: _taste });
+  }
 }
 
 export function getCatalogueTasteProfileKey(): string | null {
@@ -414,9 +437,6 @@ export async function loadCatalogueTaste(
   }
   if (!force && key === _tasteKey && (_taste.length > 0 || _tasteLoading)) {
     if (profileKey && _tasteProfileKey !== profileKey) {
-      // The mix is already current for these seeds, but it belongs to a
-      // different profile — reconcile the bookkeeping so callers that check
-      // `getCatalogueTasteProfileKey()` stop re-fetching for this profile.
       _tasteProfileKey = profileKey;
       writeTasteCache({ profileKey, seedsKey: key, tracks: _taste });
     }
@@ -431,15 +451,17 @@ export async function loadCatalogueTaste(
   try {
     const tracks = await vynl.catalogueTaste([...seeds]);
     if (generation !== _tasteGeneration) return;
+    const dismissed = readDismissedIds();
+    const filtered = tracks.filter((t) => !dismissed.has(t.id));
     if (previous.length > 0) {
-      const kept = shuffle(previous).slice(0, TASTE_KEEP);
+      const kept = shuffle(previous.filter((t) => !dismissed.has(t.id))).slice(0, TASTE_KEEP);
       const keptIds = new Set(kept.map((track) => track.id));
-      const fresh = tracks
+      const fresh = filtered
         .filter((track) => !keptIds.has(track.id))
         .slice(0, TASTE_TOTAL - kept.length);
       _taste = shuffle([...kept, ...fresh]);
     } else {
-      _taste = tracks;
+      _taste = filtered;
     }
     if (profileKey) {
       _tasteProfileKey = profileKey;

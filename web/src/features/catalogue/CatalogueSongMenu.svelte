@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ListMusic } from "lucide-svelte";
+  import { ListMusic, ThumbsDown } from "lucide-svelte";
   import type { CatalogueTrack } from "@lib/types";
   import {
     getCurrentPlaylists,
@@ -13,9 +13,11 @@
   let {
     onNavigateAlbum,
     onNavigateArtist,
+    onDismiss,
   }: {
     onNavigateAlbum?: (id: string) => void;
     onNavigateArtist?: (id: string) => void;
+    onDismiss?: (track: CatalogueTrack) => void;
   } = $props();
 
   let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(null);
@@ -42,6 +44,13 @@
         },
       },
     ];
+    if (onDismiss) {
+      items.push({
+        label: t("catalogue.notInterested"),
+        icon: ThumbsDown,
+        action: () => onDismiss(track),
+      });
+    }
 
     const albumId = track.album?.id ?? null;
     const artistId = track.artists.find((artist) => artist.id)?.id ?? null;

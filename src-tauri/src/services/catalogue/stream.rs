@@ -1237,8 +1237,6 @@ impl std::fmt::Display for FetchError {
     }
 }
 
-/// Sends a range request, following CDN redirects manually while re-validating
-/// that every hop stays on https and resolves only to public addresses.
 async fn range_request(
     url: &str,
     start: u64,
