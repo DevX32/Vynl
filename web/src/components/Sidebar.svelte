@@ -96,10 +96,11 @@
   );
   const avatar = $derived.by(() => {
     void avatarRevision();
-    return avatarProps(
-      (session.signedIn && session.email ? session.email : displayName) || "vynl",
-      32,
-    );
+    const avatarSeed =
+      session.signedIn && session.email
+        ? session.email
+        : resolveDisplayName(getCurrentSettings().displayName);
+    return avatarProps(avatarSeed || "vynl", 32);
   });
 
   let accountMenuOpen = $state(false);
