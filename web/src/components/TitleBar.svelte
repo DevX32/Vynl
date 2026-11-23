@@ -322,7 +322,6 @@
     transition:
       color 0.1s,
       background 0.1s;
-    animation: update-pulse 1.6s ease-in-out infinite;
   }
 
   .update-btn:hover:not(:disabled) {
@@ -337,7 +336,6 @@
   .update-btn:disabled {
     opacity: 0.6;
     cursor: default;
-    animation: none;
   }
 
   .spin {
@@ -348,16 +346,6 @@
   @keyframes spin {
     to {
       transform: rotate(360deg);
-    }
-  }
-
-  @keyframes update-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent);
     }
   }
 
