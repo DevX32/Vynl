@@ -333,10 +333,13 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
     const markAt = new Map((pl.adds ?? []).map((mark) => [mark.trackId, mark.at]));
     const fallback = pl.updatedAt || pl.createdAt;
     for (const track of pl.streams) {
-      const at = markAt.get(`ytm:${track.id}`) ?? fallback;
+      const at = markAt.get(`ytm:${track.id}`) ?? 0;
       const known = seen.get(track.id);
       if (known && (known.addedAt ?? 0) >= at) continue;
-      seen.set(track.id, { ...enrichLibraryTrack(streamTrackOf(track)), addedAt: at });
+      seen.set(track.id, {
+        ...enrichLibraryTrack(streamTrackOf(track)),
+        addedAt: at || null,
+      });
     }
   }
   return [...seen.values()];
@@ -423,6 +426,7 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
     if (track) result.push(track);
   }
 
+  _tracksCache.delete(pl);
   _tracksCache.set(pl, { library, catalogueRevision, result });
   if (_tracksCache.size > 64) {
     const oldest = _tracksCache.keys().next().value;

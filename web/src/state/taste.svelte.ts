@@ -97,7 +97,9 @@ function markSynced(): void {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(TASTE_SYNCED_KEY, "1");
-  } catch {}
+  } catch (error) {
+    console.warn("taste synced flag save failed:", error);
+  }
 }
 
 function hasSynced(): boolean {
@@ -109,7 +111,9 @@ function persistDismissed(): void {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(DISMISSED_KEY, JSON.stringify([..._dismissed]));
-  } catch {}
+  } catch (error) {
+    console.warn("taste dismissed list save failed:", error);
+  }
 }
 
 function persist(): void {

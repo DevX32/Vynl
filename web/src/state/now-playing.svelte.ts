@@ -28,7 +28,9 @@ const SAVE_DEBOUNCE = 3000;
 
 function writeNowPlaying(): void {
   if (!_state) {
-    void vynl.clearNowPlaying().catch(() => {});
+    void vynl.clearNowPlaying().catch((error) => {
+      console.warn("clearNowPlaying failed:", error);
+    });
     return;
   }
   void vynl.saveNowPlaying({
@@ -41,7 +43,9 @@ function writeNowPlaying(): void {
     contextIndex: _contextIndex,
     timestamp: Date.now(),
   })
-    .catch(() => {});
+    .catch((error) => {
+      console.warn("saveNowPlaying failed:", error);
+    });
 }
 
 function persistNowPlaying(): void {
@@ -311,7 +315,9 @@ function syncRpc(force = false): void {
   if (!force && now - lastRpc < RPC_THROTTLE) return;
   lastRpc = now;
   if (!_state || !_state.playing) {
-    void vynl.rpcUpdate(null).catch(() => {});
+    void vynl.rpcUpdate(null).catch((error) => {
+      console.warn("rpcUpdate clear failed:", error);
+    });
     return;
   }
   void vynl.rpcUpdate({
@@ -323,7 +329,9 @@ function syncRpc(force = false): void {
     playing: _state.playing,
     cover: _state.cover,
   })
-    .catch(() => {});
+    .catch((error) => {
+      console.warn("rpcUpdate failed:", error);
+    });
 }
 
 export function nowPlayingFromTrack(track: LibraryTrack, time = 0): NowPlaying {
@@ -829,13 +837,17 @@ export async function restoreNowPlaying(): Promise<{
     }),
     whenLibraryLoaded(),
   ]);
-  void hydrateTaste().catch(() => {});
+  void hydrateTaste().catch((error) => {
+    console.warn("hydrateTaste restore failed:", error);
+  });
   if (!saved) return null;
   const track =
     findTrackById(saved.id) ?? findTrackByPath(saved.path);
   if (!track) {
     if (getLibrary().length > 0 || getCatalogueTracks().length > 0) {
-      void vynl.clearNowPlaying().catch(() => {});
+      void vynl.clearNowPlaying().catch((error) => {
+        console.warn("clearNowPlaying stale restore failed:", error);
+      });
     }
     return null;
   }
