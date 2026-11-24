@@ -10,6 +10,7 @@
     Heart,
     Music2,
     ListMusic,
+    Plus,
   } from "lucide-svelte";
   import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
   import { listen } from "@tauri-apps/api/event";
@@ -29,6 +30,12 @@
   import TransportControls from "./TransportControls.svelte";
   import VolumeSlider from "./VolumeSlider.svelte";
   import { getQueueOpen, toggleQueue } from "@state/queue.svelte";
+  import {
+    getCurrentPlaylists,
+    saveStreamToPlaylist,
+  } from "@state/playlists.svelte";
+  import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
+  import { toasts } from "@lib/toast";
 
   let {
     onOpenPlayer,
@@ -45,6 +52,8 @@
   const current = $derived(getCurrentTrack());
   let seekDur = $derived(current?.duration ?? 0);
   let miniOpen = $state(false);
+  let pickerTarget = $state<CatalogueTrack | null>(null);
+  let pickerBusy = $state(false);
 
   async function toggleMini(): Promise<void> {
     try {
@@ -97,6 +106,58 @@
       cover: track.cover,
       explicit: false,
     } satisfies CatalogueTrack);
+  }
+
+  const playlists = $derived(getCurrentPlaylists());
+
+  function openAddToPlaylist(): void {
+    const track = current;
+    const id = currentCatalogueId;
+    if (!track || !id) return;
+    pickerTarget = {
+      id,
+      title: track.title,
+      artist: track.artist,
+      artists: [{ name: track.artist, id: null }],
+      album: track.album ? { name: track.album, id: null } : null,
+      duration: track.duration > 0 ? track.duration : null,
+      cover: track.cover,
+      explicit: false,
+    } satisfies CatalogueTrack;
+  }
+
+  async function addToExisting(playlistId: string): Promise<void> {
+    const target = pickerTarget;
+    if (!target || pickerBusy) return;
+    pickerBusy = true;
+    try {
+      await saveStreamToPlaylist(target, playlistId);
+      const name =
+        playlists.find((playlist) => playlist.id === playlistId)?.name ?? "";
+      toasts.success(t("catalogue.addedToPlaylist", { name }));
+    } catch (error) {
+      console.warn("catalogue save to playlist failed:", error);
+      toasts.error(t("catalogue.saveFailed"));
+    } finally {
+      pickerBusy = false;
+      pickerTarget = null;
+    }
+  }
+
+  async function createAndAdd(name: string): Promise<void> {
+    const target = pickerTarget;
+    if (!target || pickerBusy) return;
+    pickerBusy = true;
+    try {
+      const playlist = await saveStreamToPlaylist(target, null, name);
+      toasts.success(t("catalogue.addedToPlaylist", { name: playlist.name }));
+    } catch (error) {
+      console.warn("catalogue save to playlist failed:", error);
+      toasts.error(t("catalogue.saveFailed"));
+    } finally {
+      pickerBusy = false;
+      pickerTarget = null;
+    }
   }
 
   function toggleFullscreen(): void {
@@ -182,6 +243,13 @@
           fill={currentLiked ? "currentColor" : "none"}
         />
       </button>
+      <button
+        class="now-like"
+        onclick={openAddToPlaylist}
+        aria-label={t("common.addToPlaylist")}
+      >
+        <Plus size={14} stroke-width={1.5} />
+      </button>
     {/if}
   </div>
 
@@ -257,6 +325,21 @@
     </button>
   </div>
 </div>
+
+{#if pickerTarget}
+  <PlaylistPicker
+    suggestedName={pickerTarget.album?.name ?? pickerTarget.title}
+    trackCount={1}
+    {playlists}
+    busy={pickerBusy}
+    onAddExisting={(id) => void addToExisting(id)}
+    onCreate={(name) => void createAndAdd(name)}
+    onSkip={() => {
+      if (pickerBusy) return;
+      pickerTarget = null;
+    }}
+  />
+{/if}
 
 <style>
   .player-bar {
