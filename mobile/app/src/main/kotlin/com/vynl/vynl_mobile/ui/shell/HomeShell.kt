@@ -43,6 +43,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -89,7 +90,10 @@ private val tabTitles = listOf("Home", "Library", "Playlists", "Browse")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeShell(viewModel: AppViewModel = viewModel()) {
+fun HomeShell(
+    viewModel: AppViewModel = viewModel(),
+    goBackState: MutableState<(() -> Boolean)?>,
+) {
     if (!viewModel.onboarded) {
         OnboardingScreen(viewModel)
         return
@@ -98,6 +102,27 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
     var settingsOpen by remember { mutableStateOf(false) }
     var accountMenuOpen by remember { mutableStateOf(false) }
     var accountOpen by remember { mutableStateOf(false) }
+
+    goBackState.value = {
+        if (playerOpen) {
+            playerOpen = false
+            true
+        } else if (viewModel.openPlaylistId != null) {
+            viewModel.clearLocalPlaylist()
+            true
+        } else if (settingsOpen) {
+            settingsOpen = false
+            true
+        } else if (accountOpen) {
+            accountOpen = false
+            true
+        } else if (accountMenuOpen) {
+            accountMenuOpen = false
+            true
+        } else {
+            false
+        }
+    }
     val snackbar = remember { SnackbarHostState() }
     val playback by viewModel.player.state.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
