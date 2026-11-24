@@ -59,3 +59,16 @@ export function scheduleCloudSyncPush(delay = 4000): void {
     void runCloudSyncPush();
   }, delay);
 }
+
+export function flushCloudSyncPush(): void {
+  if (_pushTimer !== null) {
+    clearTimeout(_pushTimer);
+    _pushTimer = null;
+  }
+  if (!_status.signedIn) return;
+  if (_pushing) {
+    _pushQueued = true;
+    return;
+  }
+  void runCloudSyncPush();
+}

@@ -216,8 +216,6 @@ export const vynl = {
 
   syncPush: (): Promise<void> => cmd("sync_push", {}),
 
-  syncNow: (): Promise<unknown> => cmd("sync_now", {}),
-
   syncResolveMissingSource: (path: string): Promise<string | null> =>
     cmd("sync_resolve_missing_source", { path }),
 

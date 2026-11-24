@@ -4,7 +4,6 @@ pub mod audio_cache;
 pub mod catalog;
 pub mod catalogue;
 pub mod cover_cache;
-pub mod deeplink;
 pub mod downloader;
 pub mod export;
 pub mod history;

@@ -374,7 +374,7 @@ pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, S
         (launch_changed, media_keys_changed)
     };
     if launch_changed {
-        crate::sync_launch_at_startup(next.launch_at_startup);
+        crate::sync_launch_at_startup(&app, next.launch_at_startup);
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -938,22 +938,6 @@ pub async fn sync_push(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncState, String> {
-    let user_data = user_data_dir(&app)?;
-    let output = output_dir_from_settings(&app)?;
-    let settings = load_settings(&app)?;
-    let state = match crate::services::sync::pull_sync_state(&user_data, &output).await {
-        Ok(state) => state,
-        Err(e) if e.contains("No cloud sync state found") => {
-            crate::services::sync::build_sync_state(&user_data, &output, &settings)
-        }
-        Err(e) => return Err(e),
-    };
-    crate::services::sync::push_sync_state(&user_data, &output, &settings).await?;
-    Ok(state)
-}
-
-#[tauri::command]
 pub async fn sync_resolve_missing_source(
     app: AppHandle,
     path: String,
@@ -999,12 +983,18 @@ async fn sync_auth(
     };
     if result.status.signed_in {
         let settings = load_settings(app)?;
+        let mut can_push = true;
         match crate::services::sync::pull_sync_state(&user_data, &output).await {
             Ok(_) => {}
             Err(e) if e.contains("No cloud sync state found") => {}
-            Err(e) => eprintln!("[Vynl sync] auto pull after sign-in failed: {e}"),
+            Err(e) => {
+                eprintln!("[Vynl sync] auto pull after sign-in failed: {e}");
+                can_push = false;
+            }
         }
-        if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
+        if can_push
+            && let Err(e) =
+                crate::services::sync::push_sync_state(&user_data, &output, &settings).await
         {
             eprintln!("[Vynl sync] auto push after sign-in failed: {e}");
         }

@@ -106,103 +106,19 @@ fn register_aumid() {
     }
 }
 
-#[cfg(target_os = "windows")]
-pub fn register_url_scheme() {
-    use winreg::RegKey;
-    use winreg::enums::*;
+pub fn sync_launch_at_startup(app: &tauri::AppHandle, enabled: bool) {
+    use tauri_plugin_autostart::ManagerExt;
 
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let exe = std::env::current_exe().unwrap_or_default();
-    let exe_path = exe.to_string_lossy().to_string();
-
-    if let Ok((classes_key, _)) = hkcu.create_subkey_with_flags(
-        "Software\\Classes\\vynl",
-        KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY,
-    ) {
-        let _ = classes_key.set_value("", &"URL:vynl Protocol".to_string());
-        let _ = classes_key.set_value("URL Protocol", &"".to_string());
-        let _ = classes_key.set_value("DefaultIcon", &exe_path);
-
-        if let Ok((shell_key, _)) = hkcu.create_subkey_with_flags(
-            "Software\\Classes\\vynl\\shell\\open\\command",
-            KEY_ALL_ACCESS | KEY_CREATE_SUB_KEY,
-        ) {
-            let _ = shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path));
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub fn sync_launch_at_startup(enabled: bool) {
-    use winreg::RegKey;
-    use winreg::enums::*;
-
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let run_key = hkcu.open_subkey_with_flags(
-        "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-        KEY_ALL_ACCESS,
-    );
-    if let Ok(key) = run_key {
-        if enabled {
-            if let Ok(exe) = std::env::current_exe() {
-                let _ = key.set_value("Vynl", &format!("\"{}\"", exe.to_string_lossy()));
-            }
-        } else {
-            let _ = key.delete_value("Vynl");
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-pub fn sync_launch_at_startup(enabled: bool) {
-    let Some(config_dir) = dirs::config_dir() else {
-        return;
+    let autolaunch = app.autolaunch();
+    let result = if enabled {
+        autolaunch.enable()
+    } else {
+        autolaunch.disable()
     };
-    let entry = config_dir.join("autostart").join("vynl.desktop");
-
-    if !enabled {
-        let _ = std::fs::remove_file(&entry);
-        return;
-    }
-
-    let exe = std::env::var_os("APPIMAGE")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::current_exe().ok())
-        .unwrap_or_default();
-    let exec = escape_desktop_exec(&exe.to_string_lossy());
-    let contents = format!(
-        "[Desktop Entry]\nType=Application\nName=Vynl\nComment=A minimal music player\nExec=\"{exec}\"\nIcon=vynl\nTerminal=false\nCategories=AudioVideo;Player;\n"
-    );
-
-    if let Some(parent) = entry.parent()
-        && let Err(error) = std::fs::create_dir_all(parent)
-    {
-        eprintln!("could not create autostart dir: {error}");
-        return;
-    }
-    if let Err(error) = std::fs::write(&entry, contents) {
-        eprintln!("could not write autostart entry: {error}");
+    if let Err(error) = result {
+        eprintln!("could not update autostart: {error}");
     }
 }
-
-#[cfg(target_os = "linux")]
-fn escape_desktop_exec(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len());
-    for ch in value.chars() {
-        match ch {
-            '\\' => escaped.push_str("\\\\"),
-            '"' => escaped.push_str("\\\""),
-            '$' => escaped.push_str("\\$"),
-            '`' => escaped.push_str("\\`"),
-            '%' => escaped.push_str("%%"),
-            _ => escaped.push(ch),
-        }
-    }
-    escaped
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux")))]
-pub fn sync_launch_at_startup(_enabled: bool) {}
 
 #[cfg(target_os = "windows")]
 fn apply_window_effects(window: &tauri::WebviewWindow) {
@@ -266,9 +182,6 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     register_aumid();
 
-    #[cfg(target_os = "windows")]
-    register_url_scheme();
-
     #[cfg(target_os = "linux")]
     gtk_log_filter::install();
 
@@ -288,6 +201,10 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -374,7 +291,7 @@ pub fn run() {
                 eprintln!("catalogue unavailable: {error}");
             }
 
-            sync_launch_at_startup(settings.launch_at_startup);
+            sync_launch_at_startup(app.handle(), settings.launch_at_startup);
 
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             if settings.global_media_keys {
@@ -525,7 +442,6 @@ pub fn run() {
             commands::set_playlist_cover,
             commands::save_playlist_cover,
             commands::sync_status,
-            commands::sync_now,
             commands::sync_pull,
             commands::sync_push,
             commands::sync_resolve_missing_source,

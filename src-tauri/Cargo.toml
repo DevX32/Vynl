@@ -36,6 +36,7 @@ discord-rich-presence = "1.1"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-deep-link = "2"
+tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 ctrlc = "3"
 rodio = "0.19"

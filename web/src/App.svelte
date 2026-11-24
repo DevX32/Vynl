@@ -14,7 +14,7 @@
   import { sendMiniState } from "@lib/mini-sync";
   import MiniPlayer from "./features/player/MiniPlayer.svelte";
   import { initSettings, getCurrentSettings } from "@state/settings.svelte";
-  import { refreshSyncStatus } from "@state/sync.svelte";
+  import { flushCloudSyncPush, refreshSyncStatus } from "@state/sync.svelte";
   import { hydrateTaste } from "@state/taste.svelte";
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
@@ -272,6 +272,7 @@
       }
     });
     window.addEventListener("keydown", handleGlobalKey);
+    window.addEventListener("pagehide", flushCloudSyncPush);
     const onFullscreenToggle = (): void => { showFullscreen = !showFullscreen; };
     document.addEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
     let cleanup: (() => void) | undefined;
@@ -302,6 +303,7 @@
       offToast();
       setPlayHandler(null);
       window.removeEventListener("keydown", handleGlobalKey);
+      window.removeEventListener("pagehide", flushCloudSyncPush);
       document.removeEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
     };
   });

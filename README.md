@@ -43,6 +43,12 @@ A Minimal Music Player built with Tauri, Svelte, and Rust.
 | Linux    | Supported |
 | Android  | Supported |
 
+### Linux notes
+
+- Global media keys rely on X11 and are unavailable on Wayland sessions; MPRIS controls in the desktop environment still work.
+- Window transparency is disabled on Linux, so the "Espresso Blur" theme uses solid backgrounds there.
+- The in-app updater supports AppImage and `.deb` installs only. `.rpm` packages must be updated manually.
+
 ## Development
 
 ```bash
