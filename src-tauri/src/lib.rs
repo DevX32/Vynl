@@ -37,6 +37,9 @@ mod gtk_log_filter {
         message: *const c_char,
         user_data: *mut c_void,
     ) {
+        if message.is_null() {
+            return;
+        }
         let text = unsafe { CStr::from_ptr(message) }.to_string_lossy();
         if text.contains("gtk_widget_get_scale_factor") && text.contains("GTK_IS_WIDGET") {
             return;
@@ -150,7 +153,55 @@ pub fn sync_launch_at_startup(enabled: bool) {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
+pub fn sync_launch_at_startup(enabled: bool) {
+    let Some(config_dir) = dirs::config_dir() else {
+        return;
+    };
+    let entry = config_dir.join("autostart").join("vynl.desktop");
+
+    if !enabled {
+        let _ = std::fs::remove_file(&entry);
+        return;
+    }
+
+    let exe = std::env::var_os("APPIMAGE")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+        .unwrap_or_default();
+    let exec = escape_desktop_exec(&exe.to_string_lossy());
+    let contents = format!(
+        "[Desktop Entry]\nType=Application\nName=Vynl\nComment=A minimal music player\nExec=\"{exec}\"\nIcon=vynl\nTerminal=false\nCategories=AudioVideo;Player;\n"
+    );
+
+    if let Some(parent) = entry.parent()
+        && let Err(error) = std::fs::create_dir_all(parent)
+    {
+        eprintln!("could not create autostart dir: {error}");
+        return;
+    }
+    if let Err(error) = std::fs::write(&entry, contents) {
+        eprintln!("could not write autostart entry: {error}");
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn escape_desktop_exec(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '$' => escaped.push_str("\\$"),
+            '`' => escaped.push_str("\\`"),
+            '%' => escaped.push_str("%%"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub fn sync_launch_at_startup(_enabled: bool) {}
 
 #[cfg(target_os = "windows")]
@@ -236,6 +287,7 @@ pub fn run() {
                 *pending = Some(url.clone());
             }
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -253,6 +305,14 @@ pub fn run() {
                     *pending = Some(url);
                 }
             }
+            #[cfg(any(target_os = "linux", all(debug_assertions, target_os = "windows")))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(error) = app.deep_link().register_all() {
+                    eprintln!("could not register deep link schemes: {error}");
+                }
+            }
+
             app.manage(crate::services::update::UpdateState::default());
 
             app.manage(crate::services::media_controls::start(app.handle().clone()));

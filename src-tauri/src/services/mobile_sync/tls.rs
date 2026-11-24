@@ -27,6 +27,7 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<(), String> {
     ));
     std::fs::write(&tmp, contents)
         .map_err(|e| format!("could not write {}: {e}", tmp.display()))?;
+    restrict_permissions(&tmp);
     std::fs::rename(&tmp, path).map_err(|e| format!("could not rename {}: {e}", path.display()))
 }
 

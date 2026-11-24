@@ -27,6 +27,8 @@
     "dialog:allow-message",
     "shell:allow-open",
     "clipboard-manager:allow-write-text",
-    "updater:default"
+    "updater:default",
+    "core:event:default",
+    "deep-link:default"
   ]
 }

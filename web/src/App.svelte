@@ -3,6 +3,7 @@
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
   import { vynl } from "./lib/vynl";
   import {
     restoreNowPlaying,
@@ -170,6 +171,27 @@
     }, wait);
   }
 
+  const handledConfirmTokens = new Set<string>();
+
+  async function handleConfirmUrl(url: string): Promise<void> {
+    if (!url.startsWith("vynl://confirm")) return;
+    const raw = url.replace(/^vynl:\/\/confirm[?&]/, "");
+    const params = new URLSearchParams(raw);
+    const token = params.get("token_hash") ?? params.get("token");
+    if (!token || handledConfirmTokens.has(token)) return;
+    handledConfirmTokens.add(token);
+    const type = params.get("type") ?? "signup";
+    try {
+      const ok = await vynl.syncConfirmEmail(token, type);
+      if (ok) toasts.success(t("account.emailConfirmed"));
+      else toasts.error(t("account.emailConfirmFailed"));
+    } catch (e) {
+      handledConfirmTokens.delete(token);
+      toasts.error(t("account.emailConfirmFailed"));
+      console.warn("email confirmation failed", e);
+    }
+  }
+
   async function bootApp(): Promise<(() => void) | undefined> {
     setPlayHandler((id, queue) => playTrack(id, queue));
     onboarded = wasOnboarded();
@@ -213,22 +235,25 @@
 
     void getCurrentWindow().show().catch(() => {});
 
+    let offDeepLink: (() => void) | undefined;
+    let deepLinkDisposed = false;
     void (async () => {
       try {
         const url = await vynl.takePendingConfirmUrl();
-        if (url) {
-          const raw = url.replace(/^vynl:\/\/confirm[?&]/, "");
-          const params = new URLSearchParams(raw);
-          const token = params.get("token_hash") ?? params.get("token");
-          const type = params.get("type") ?? "signup";
-          if (token) {
-            const ok = await vynl.syncConfirmEmail(token, type);
-            if (ok) toasts.success(t("account.emailConfirmed"));
-            else toasts.error(t("account.emailConfirmFailed"));
-          }
-        }
+        if (url) await handleConfirmUrl(url);
+        const urls = await getCurrent();
+        for (const startUrl of urls ?? []) await handleConfirmUrl(startUrl);
       } catch (e) {
         console.warn("pending confirm failed", e);
+      }
+      try {
+        const unlisten = await onOpenUrl((urls) => {
+          for (const url of urls) void handleConfirmUrl(url);
+        });
+        if (deepLinkDisposed) unlisten();
+        else offDeepLink = unlisten;
+      } catch (e) {
+        console.warn("deep link listener unavailable", e);
       }
     })();
 
@@ -270,6 +295,8 @@
       .catch(console.error);
     return () => {
       disposed = true;
+      deepLinkDisposed = true;
+      offDeepLink?.();
       disposeMini?.();
       cleanup?.();
       offToast();

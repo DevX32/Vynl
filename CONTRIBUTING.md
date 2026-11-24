@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Vynl! This guide will help you ge
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs/) 1.85 or newer — the backend uses edition 2024
+- [Rust](https://rustup.rs/) 1.90 or newer — the backend uses edition 2024
 - [Bun](https://bun.sh/) — JavaScript runtime and package manager
 - [Git](https://git-scm.com/)
 - A C compiler and CMake — see below
