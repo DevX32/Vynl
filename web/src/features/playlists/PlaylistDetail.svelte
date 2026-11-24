@@ -9,8 +9,11 @@
     Disc3,
     ListPlus,
     Image,
+    ImageOff,
     Clock,
     LoaderCircle,
+    Pencil,
+    Trash2,
   } from "lucide-svelte";
   import {
     getCurrentTrack,
@@ -46,13 +49,16 @@
   import VirtualList from "../../components/VirtualList.svelte";
   import {
     addToPlaylist,
+    deletePlaylist,
     getCurrentPlaylist,
     isCataloguePath,
     isPlaylistLoading,
     markCoverFailed,
     moveInPlaylist,
     removeFromPlaylist,
+    renamePlaylist,
     resolvePlaylistCovers,
+    selectPlaylist,
     setPlaylistCover,
     tracksOf,
   } from "@state/playlists.svelte";
@@ -121,6 +127,10 @@
   let coverInput: HTMLInputElement | undefined = $state();
   let coverBusy = $state(false);
   let tracksEl: HTMLDivElement | undefined = $state();
+  let editOpen = $state(false);
+  let editRename = $state("");
+  let editBusy = $state(false);
+  let confirmDeletePlaylistOpen = $state(false);
 
   const totalDur = $derived(totalSeconds(currentTracks));
 
@@ -254,6 +264,62 @@
       coverBusy = false;
     }
   }
+
+  function openEditModal(): void {
+    if (!pl) return;
+    editRename = pl.name;
+    confirmDeletePlaylistOpen = false;
+    editOpen = true;
+  }
+
+  async function savePlaylistRename(): Promise<void> {
+    if (!pl || editBusy) return;
+    const next = editRename.trim();
+    if (!next || next === pl.name) {
+      editOpen = false;
+      return;
+    }
+    editBusy = true;
+    try {
+      await renamePlaylist(pl.id, next);
+      editOpen = false;
+    } catch (err) {
+      console.warn("rename playlist failed:", err);
+      toasts.error(t("playlist.renameFailed"));
+    } finally {
+      editBusy = false;
+    }
+  }
+
+  async function removeCover(): Promise<void> {
+    if (!pl || coverBusy) return;
+    coverBusy = true;
+    try {
+      await setPlaylistCover(pl.id, null);
+      editOpen = false;
+    } catch (err) {
+      console.warn("remove playlist cover failed:", err);
+      toasts.error(t("playlist.coverFailed"));
+    } finally {
+      coverBusy = false;
+    }
+  }
+
+  async function confirmDeletePlaylist(): Promise<void> {
+    if (!pl || editBusy) return;
+    editBusy = true;
+    try {
+      await deletePlaylist(pl.id);
+      confirmDeletePlaylistOpen = false;
+      editOpen = false;
+      await selectPlaylist(null);
+    } catch (err) {
+      console.warn("delete playlist failed:", err);
+      toasts.error(t("playlists.deleteFailed"));
+    } finally {
+      editBusy = false;
+    }
+  }
 </script>
 
 <div class="pl-detail">
@@ -297,12 +363,11 @@
         {/if}
         <button
           class="cover-pick-btn"
-          class:busy={coverBusy}
-          onclick={pickCover}
-          disabled={coverBusy}
-          aria-label={t("playlist.changeCover")}
+          onclick={openEditModal}
+          aria-label={t("playlist.editPlaylist")}
+          title={t("playlist.editPlaylist")}
         >
-          <Image size={14} stroke-width={1.5} />
+          <Pencil size={14} stroke-width={1.5} />
         </button>
         <input
           bind:this={coverInput}
@@ -500,6 +565,83 @@
       oncancel={() => (removeTarget = null)}
     />
   {/if}
+
+  {#if editOpen && pl}
+    <div
+      class="backdrop"
+      role="presentation"
+      onclick={() => (editOpen = false)}
+    >
+      <div
+        class="edit-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("playlist.editPlaylist")}
+        tabindex="-1"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            editOpen = false;
+          }
+        }}
+      >
+        <div class="edit-head">
+          <span class="edit-title">{t("playlist.editPlaylist")}</span>
+          <button class="icon-btn" onclick={() => (editOpen = false)} aria-label={t("dialog.cancel")}>
+            <X size={14} stroke-width={1.5} />
+          </button>
+        </div>
+
+        <label class="edit-label" for="pl-rename">{t("playlists.renameTitle")}</label>
+        <div class="edit-row">
+          <input
+            id="pl-rename"
+            class="dlg-input"
+            type="text"
+            bind:value={editRename}
+            spellcheck={false}
+            onkeydown={(e) => {
+              if (e.key === "Enter") void savePlaylistRename();
+            }}
+          />
+          <button class="action-btn-sm" onclick={() => void savePlaylistRename()} disabled={editBusy || !editRename.trim()}>
+            {t("dialog.save")}
+          </button>
+        </div>
+
+        <div class="edit-actions">
+          <button class="edit-action" onclick={pickCover} disabled={coverBusy}>
+            <Image size={14} stroke-width={1.5} />
+            <span>{t("playlist.changeCover")}</span>
+          </button>
+          {#if pl.cover}
+            <button class="edit-action" onclick={() => void removeCover()} disabled={coverBusy}>
+              <ImageOff size={14} stroke-width={1.5} />
+              <span>{t("playlist.removeCover")}</span>
+            </button>
+          {/if}
+          <button class="edit-action danger" onclick={() => (confirmDeletePlaylistOpen = true)} disabled={editBusy}>
+            <Trash2 size={14} stroke-width={1.5} />
+            <span>{t("playlists.deleteConfirm")}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if confirmDeletePlaylistOpen && pl}
+    <Dialog
+      open
+      title={t("playlists.deleteTitle")}
+      description={t("playlists.deleteBody", { name: pl.name })}
+      confirmLabel={t("playlists.deleteConfirm")}
+      danger
+      confirmDisabled={editBusy}
+      onconfirm={() => void confirmDeletePlaylist()}
+      oncancel={() => (confirmDeletePlaylistOpen = false)}
+    />
+  {/if}
 </div>
 
 <style>
@@ -611,15 +753,7 @@
     transition: opacity 0.15s;
   }
 
-  .cover-pick-btn:disabled {
-    cursor: default;
-  }
-
-  .cover-pick-btn.busy {
-    opacity: 1;
-  }
-
-  .hero-cover-wrap:hover .cover-pick-btn:not(:disabled),
+  .hero-cover-wrap:hover .cover-pick-btn,
   .cover-pick-btn:focus-visible {
     opacity: 1;
   }
@@ -872,6 +1006,128 @@
     .hero-cover-wrap {
       --hero-cover: 108px;
     }
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+  }
+
+  .edit-panel {
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    width: min(420px, calc(100vw - 32px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .edit-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .edit-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .edit-head .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+  }
+
+  .edit-head .icon-btn:hover {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+
+  .edit-label {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .edit-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .edit-row .dlg-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .action-btn-sm {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-strong);
+    background: var(--bg-raise);
+    color: var(--text);
+    font: 500 12px inherit;
+    cursor: pointer;
+  }
+
+  .action-btn-sm:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .edit-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .edit-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    font: 500 12px inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .edit-action:hover:not(:disabled) {
+    background: var(--bg-raise);
+  }
+
+  .edit-action.danger {
+    color: var(--red, #e06a6a);
+  }
+
+  .edit-action:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   @container player (max-width: 540px) {

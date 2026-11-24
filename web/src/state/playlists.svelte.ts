@@ -331,7 +331,6 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
   for (const pl of Object.values(_all)) {
     if (pl.id === "liked") continue;
     const markAt = new Map((pl.adds ?? []).map((mark) => [mark.trackId, mark.at]));
-    const fallback = pl.updatedAt || pl.createdAt;
     for (const track of pl.streams) {
       const at = markAt.get(`ytm:${track.id}`) ?? 0;
       const known = seen.get(track.id);

@@ -579,6 +579,7 @@ export const en = {
     removedTrack: 'Removed "{title}" from {name}',
     changeCover: "Change cover",
     removeCover: "Remove cover",
+    editPlaylist: "Edit playlist",
     coverFailed: "Couldn't use that image",
     playlistName: "Playlist name",
     remove: "Remove",
@@ -621,6 +622,7 @@ export const en = {
   dialog: {
     confirm: "Confirm",
     cancel: "Cancel",
+    save: "Save",
   },
   titleBar: {
     back: "Back",
@@ -702,7 +704,7 @@ export const en = {
     dismiss: "Dismiss",
     loading: "Loading",
     open: "Open",
-    saving: "Saving...",
+    saving: "Saving",
     save: "Save",
   },
 

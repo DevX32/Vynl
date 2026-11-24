@@ -59,7 +59,8 @@
   import TitleBar from "./components/TitleBar.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
   import { catalogueRoute, type Page } from "@lib/types";
-  import { ImageOff, Pencil, Trash2 } from "lucide-svelte";
+  import { normalizeCoverImage } from "@lib/cover-image";
+  import { Image, ImageOff, Pencil, Trash2, X } from "lucide-svelte";
 
   const isMini =
     typeof window !== "undefined" && window.location.hash.startsWith("#mini");
@@ -106,16 +107,13 @@
     type: "playlist" | "rail";
   } | null>(null);
   let moveToVynlOpen = $state(false);
-  let renameTarget = $state<{ id: string; name: string } | null>(null);
-  let deleteTarget = $state<{ id: string; name: string } | null>(null);
-  let deleting = $state(false);
   let createTarget = $state(false);
-  let renameVal = $state("");
   let createVal = $state("");
-
-  $effect(() => {
-    if (renameTarget) renameVal = renameTarget.name;
-  });
+  let editTarget = $state<{ id: string; name: string; cover: string | null } | null>(null);
+  let editRename = $state("");
+  let editBusy = $state(false);
+  let editDeleteConfirm = $state(false);
+  let editCoverInput: HTMLInputElement | undefined = $state();
 
   $effect(() => {
     if (createTarget) createVal = "";
@@ -360,44 +358,6 @@
     ctxMenu = { x: e.clientX, y: e.clientY, type: "rail" };
   }
 
-  async function confirmDeletePlaylist(target: { id: string; name: string }): Promise<void> {
-    if (deleting) return;
-    deleting = true;
-    const wasViewing = page === "playlist" && getSelectedId() === target.id;
-    try {
-      const result = await deletePlaylist(target.id);
-      await refreshLibrary();
-      if (result.failed > 0) {
-        toasts.error(t("playlists.deletePartial", { failed: result.failed }));
-      } else {
-        toasts.success(
-          t("playlists.deleteDone", { name: target.name, deleted: result.deleted }),
-        );
-      }
-      if (wasViewing) navigate("library");
-    } catch {
-      toasts.error(t("playlists.deleteFailed"));
-    } finally {
-      deleting = false;
-      deleteTarget = null;
-    }
-  }
-
-  async function confirmRenamePlaylist(): Promise<void> {
-    const tgt = renameTarget;
-    if (!tgt || !renameVal.trim()) {
-      renameTarget = null;
-      return;
-    }
-    renameTarget = null;
-    try {
-      await renamePlaylist(tgt.id, renameVal.trim());
-    } catch (err) {
-      console.warn("rename playlist failed:", err);
-      toasts.error(t("playlist.renameFailed"));
-    }
-  }
-
   async function confirmCreatePlaylist(): Promise<void> {
     if (!createVal.trim()) return;
     createTarget = false;
@@ -410,12 +370,74 @@
     }
   }
 
-  async function removePlaylistCover(id: string): Promise<void> {
+  function pickEditCover(): void {
+    editCoverInput?.click();
+  }
+
+  async function onEditCoverFile(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file || !editTarget || editBusy) return;
+    editBusy = true;
     try {
-      await setPlaylistCover(id, null);
+      const { ext, data } = await normalizeCoverImage(file);
+      const savedPath = await vynl.savePlaylistCover(editTarget.id, ext, data);
+      await setPlaylistCover(editTarget.id, savedPath);
+      editTarget = { ...editTarget, cover: savedPath };
+    } catch (err) {
+      console.warn("set playlist cover failed:", err);
+      toasts.error(t("playlist.coverFailed"));
+    } finally {
+      editBusy = false;
+    }
+  }
+
+  async function saveEditRename(): Promise<void> {
+    if (!editTarget || editBusy) return;
+    const next = editRename.trim();
+    if (!next || next === editTarget.name) {
+      editTarget = null;
+      return;
+    }
+    editBusy = true;
+    try {
+      await renamePlaylist(editTarget.id, next);
+      editTarget = null;
+    } catch (err) {
+      console.warn("rename playlist failed:", err);
+      toasts.error(t("playlist.renameFailed"));
+    } finally {
+      editBusy = false;
+    }
+  }
+
+  async function removeEditCover(): Promise<void> {
+    if (!editTarget || editBusy) return;
+    editBusy = true;
+    try {
+      await setPlaylistCover(editTarget.id, null);
+      editTarget = { ...editTarget, cover: null };
     } catch (err) {
       console.warn("remove playlist cover failed:", err);
       toasts.error(t("playlist.coverFailed"));
+    } finally {
+      editBusy = false;
+    }
+  }
+
+  async function confirmEditDeletePlaylist(): Promise<void> {
+    if (!editTarget || editBusy) return;
+    editBusy = true;
+    try {
+      await deletePlaylist(editTarget.id);
+      editDeleteConfirm = false;
+      editTarget = null;
+    } catch (err) {
+      console.warn("delete playlist failed:", err);
+      toasts.error(t("playlists.deleteFailed"));
+    } finally {
+      editBusy = false;
     }
   }
 
@@ -426,36 +448,15 @@
     const name = m.playlistName;
     const items: CtxEntry[] = [
       {
-        label: t("contextMenu.rename"),
+        label: t("playlist.editPlaylist"),
         icon: Pencil,
         action: () => {
-          renameTarget = { id, name };
+          editTarget = { id, name, cover: getPlaylistCustomCover(id) ?? null };
+          editRename = name;
+          editDeleteConfirm = false;
         },
       },
     ];
-
-    if (getPlaylistCustomCover(id)) {
-      items.push(
-        { type: "separator" },
-        {
-          label: t("playlist.removeCover"),
-          icon: ImageOff,
-          action: () => void removePlaylistCover(id),
-        },
-      );
-    }
-
-    items.push(
-      { type: "separator" },
-      {
-        label: t("contextMenu.delete"),
-        icon: Trash2,
-        danger: true,
-        action: () => {
-          deleteTarget = { id, name };
-        },
-      },
-    );
 
     return items;
   }
@@ -570,43 +571,6 @@
   />
 {/if}
 
-{#if deleteTarget}
-  <Dialog
-    open
-    title={t("playlists.deleteTitle")}
-    description={t("playlists.deleteBody", { name: deleteTarget.name })}
-    confirmLabel={t("playlists.deleteConfirm")}
-    danger
-    onconfirm={() => {
-      const target = deleteTarget;
-      if (target) void confirmDeletePlaylist(target);
-    }}
-    confirmDisabled={deleting}
-    oncancel={() => (deleteTarget = null)}
-  />
-{/if}
-
-{#if renameTarget}
-  <Dialog
-    open
-    title={t("playlists.renameTitle")}
-    description={t("playlists.renameDesc")}
-    confirmLabel={t("playlists.renameConfirm")}
-    onconfirm={confirmRenamePlaylist}
-    oncancel={() => (renameTarget = null)}
-  >
-    <input
-      class="dlg-input"
-      type="text"
-      bind:value={renameVal}
-      spellcheck={false}
-      onkeydown={(e) => {
-        if (e.key === "Enter") confirmRenamePlaylist();
-      }}
-    />
-  </Dialog>
-{/if}
-
 {#if createTarget}
   <Dialog
     open
@@ -626,6 +590,90 @@
       }}
     />
   </Dialog>
+{/if}
+
+{#if editTarget}
+  <div
+    class="backdrop"
+    role="presentation"
+    onclick={() => (editTarget = null)}
+  >
+    <div
+      class="edit-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("playlist.editPlaylist")}
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          editTarget = null;
+        }
+      }}
+    >
+      <div class="edit-head">
+        <span class="edit-title">{t("playlist.editPlaylist")}</span>
+        <button class="edit-close" onclick={() => (editTarget = null)} aria-label={t("dialog.cancel")}>
+          <X size={14} stroke-width={1.5} />
+        </button>
+      </div>
+
+      <label class="edit-label" for="pl-rename-side">{t("playlists.renameTitle")}</label>
+      <div class="edit-row">
+        <input
+          id="pl-rename-side"
+          class="dlg-input"
+          type="text"
+          bind:value={editRename}
+          spellcheck={false}
+          onkeydown={(e) => {
+            if (e.key === "Enter") void saveEditRename();
+          }}
+        />
+        <button class="action-btn-sm" onclick={() => void saveEditRename()} disabled={editBusy || !editRename.trim()}>
+          {t("dialog.save")}
+        </button>
+      </div>
+
+      <div class="edit-actions">
+        <button class="edit-action" onclick={pickEditCover} disabled={editBusy}>
+          <Image size={14} stroke-width={1.5} />
+          <span>{t("playlist.changeCover")}</span>
+        </button>
+        {#if editTarget.cover}
+          <button class="edit-action" onclick={() => void removeEditCover()} disabled={editBusy}>
+            <ImageOff size={14} stroke-width={1.5} />
+            <span>{t("playlist.removeCover")}</span>
+          </button>
+        {/if}
+        <button class="edit-action danger" onclick={() => (editDeleteConfirm = true)} disabled={editBusy}>
+          <Trash2 size={14} stroke-width={1.5} />
+          <span>{t("playlists.deleteConfirm")}</span>
+        </button>
+      </div>
+      <input
+        bind:this={editCoverInput}
+        type="file"
+        accept="image/*"
+        class="cover-file-input"
+        onchange={onEditCoverFile}
+      />
+    </div>
+  </div>
+{/if}
+
+{#if editDeleteConfirm && editTarget}
+  <Dialog
+    open
+    title={t("playlists.deleteTitle")}
+    description={t("playlists.deleteBody", { name: editTarget.name })}
+    confirmLabel={t("playlists.deleteConfirm")}
+    danger
+    confirmDisabled={editBusy}
+    onconfirm={() => void confirmEditDeletePlaylist()}
+    oncancel={() => (editDeleteConfirm = false)}
+  />
 {/if}
 
 {#if moveToVynlOpen}
@@ -686,6 +734,132 @@
     .page-wrap.bleed {
       margin: 0 -16px;
     }
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+  }
+
+  .edit-panel {
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    width: min(420px, calc(100vw - 32px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .edit-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .edit-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .edit-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+  }
+
+  .edit-close:hover {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+
+  .edit-label {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .edit-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .edit-row .dlg-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .action-btn-sm {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-strong);
+    background: var(--bg-raise);
+    color: var(--text);
+    font: 500 12px inherit;
+    cursor: pointer;
+  }
+
+  .action-btn-sm:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .edit-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .edit-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    font: 500 12px inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .edit-action:hover:not(:disabled) {
+    background: var(--bg-raise);
+  }
+
+  .edit-action.danger {
+    color: var(--red, #e06a6a);
+  }
+
+  .edit-action:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .cover-file-input {
+    display: none;
   }
 
   @container player (max-width: 420px) {
