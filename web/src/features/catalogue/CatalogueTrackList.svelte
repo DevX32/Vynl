@@ -216,7 +216,7 @@
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
       toasts.success(
-        t("catalogue.savedToPlaylist", { name: name }),
+        t("catalogue.addedToPlaylist", { name: name }),
       );
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
@@ -234,7 +234,7 @@
     try {
       const playlist = await saveStreamToPlaylist(target, null, name);
       toasts.success(
-        t("catalogue.savedToPlaylist", {
+        t("catalogue.addedToPlaylist", {
           name: playlist.name,
         }),
       );

@@ -69,7 +69,7 @@
         {/if}
       </div>
       <button class="close" onclick={onClose} aria-label={t("common.close")}>
-        <X size={14} stroke-width={1.5} />
+        <X size={12} stroke-width={1.6} />
       </button>
     </header>
     <div class="body">
@@ -155,22 +155,26 @@
 
   .close {
     flex-shrink: 0;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
+    color: var(--faint);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-sm);
-    color: var(--dim);
     cursor: pointer;
-    transition:
-    background 0.12s,
-    color 0.12s;
+    transform: rotate(45deg);
   }
 
   .close:hover {
-    background: var(--bg-raise);
     color: var(--text);
+    border-color: var(--line-strong);
+  }
+
+  .close :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .body {

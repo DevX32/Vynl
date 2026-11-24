@@ -365,7 +365,6 @@
           class="cover-pick-btn"
           onclick={openEditModal}
           aria-label={t("playlist.editPlaylist")}
-          title={t("playlist.editPlaylist")}
         >
           <Pencil size={14} stroke-width={1.5} />
         </button>
@@ -588,43 +587,60 @@
       >
         <div class="edit-head">
           <span class="edit-title">{t("playlist.editPlaylist")}</span>
-          <button class="icon-btn" onclick={() => (editOpen = false)} aria-label={t("dialog.cancel")}>
-            <X size={14} stroke-width={1.5} />
+          <button class="edit-close" onclick={() => (editOpen = false)} aria-label={t("dialog.cancel")}>
+            <X size={12} stroke-width={1.6} />
           </button>
         </div>
 
-        <label class="edit-label" for="pl-rename">{t("playlists.renameTitle")}</label>
-        <div class="edit-row">
-          <input
-            id="pl-rename"
-            class="dlg-input"
-            type="text"
-            bind:value={editRename}
-            spellcheck={false}
-            onkeydown={(e) => {
-              if (e.key === "Enter") void savePlaylistRename();
-            }}
-          />
-          <button class="action-btn-sm" onclick={() => void savePlaylistRename()} disabled={editBusy || !editRename.trim()}>
-            {t("dialog.save")}
-          </button>
-        </div>
-
-        <div class="edit-actions">
-          <button class="edit-action" onclick={pickCover} disabled={coverBusy}>
-            <Image size={14} stroke-width={1.5} />
-            <span>{t("playlist.changeCover")}</span>
-          </button>
-          {#if pl.cover}
-            <button class="edit-action" onclick={() => void removeCover()} disabled={coverBusy}>
-              <ImageOff size={14} stroke-width={1.5} />
-              <span>{t("playlist.removeCover")}</span>
+        <div class="edit-hero">
+          <div class="edit-cover">
+            {#if covers.length >= 2}
+              <div class="edit-cover-grid">
+                {#each covers as c (c)}
+                  <img class="edit-cover-tile" use:blobSrc={c} alt="" loading="lazy" draggable="false" />
+                {/each}
+                {#each Array(4 - covers.length) as _}
+                  <div class="edit-cover-tile edit-cover-empty"></div>
+                {/each}
+              </div>
+            {:else if covers.length === 1}
+              <img class="edit-cover-img" use:blobSrc={covers[0]} alt="" loading="lazy" draggable="false" />
+            {:else}
+              <div class="edit-cover-placeholder"><Disc3 size={24} stroke-width={1} /></div>
+            {/if}
+            <div class="edit-cover-overlay">
+              <button class="cover-action" onclick={pickCover} disabled={coverBusy} aria-label={t("playlist.changeCover")}>
+                <Image size={14} stroke-width={1.5} />
+              </button>
+              {#if pl.cover}
+                <button class="cover-action" onclick={() => void removeCover()} disabled={coverBusy} aria-label={t("playlist.removeCover")}>
+                  <ImageOff size={14} stroke-width={1.5} />
+                </button>
+              {/if}
+            </div>
+          </div>
+          <div class="edit-field">
+            <label class="edit-label" for="pl-rename">{t("playlists.renameTitle")}</label>
+            <div class="edit-row">
+              <input
+                id="pl-rename"
+                class="dlg-input"
+                type="text"
+                bind:value={editRename}
+                spellcheck={false}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") void savePlaylistRename();
+                }}
+              />
+              <button class="action-btn-sm" onclick={() => void savePlaylistRename()} disabled={editBusy || !editRename.trim()}>
+                {t("dialog.save")}
+              </button>
+            </div>
+            <button class="edit-action" onclick={() => (confirmDeletePlaylistOpen = true)} disabled={editBusy}>
+              <Trash2 size={14} stroke-width={1.5} />
+              <span>{t("playlists.deleteTitle")}</span>
             </button>
-          {/if}
-          <button class="edit-action danger" onclick={() => (confirmDeletePlaylistOpen = true)} disabled={editBusy}>
-            <Trash2 size={14} stroke-width={1.5} />
-            <span>{t("playlists.deleteConfirm")}</span>
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1015,20 +1031,21 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(6px);
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.56);
+    backdrop-filter: blur(8px);
   }
 
   .edit-panel {
     background: var(--surface);
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
-    padding: 20px;
-    width: min(420px, calc(100vw - 32px));
+    padding: 16px;
+    width: min(420px, 100%);
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    gap: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .edit-head {
@@ -1039,33 +1056,146 @@
   }
 
   .edit-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text);
+    letter-spacing: -0.01em;
   }
 
-  .edit-head .icon-btn {
+  .edit-close {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
+    color: var(--faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transform: rotate(45deg);
+  }
+
+  .edit-close:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+  }
+
+  .edit-close :global(svg) {
+    transform: rotate(-45deg);
+  }
+
+  .edit-hero {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .edit-cover {
+    position: relative;
+    width: 112px;
+    height: 112px;
+    flex: 0 0 112px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-raise);
+    border: 1px solid var(--line);
+  }
+
+  .edit-cover-img,
+  .edit-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .edit-cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--faint);
+  }
+
+  .edit-cover-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .edit-cover-tile {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .edit-cover-empty {
+    background: var(--bg-raise);
+  }
+
+  .edit-cover-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.42);
+    opacity: 0;
+    transition: opacity 0.14s ease;
+  }
+
+  .edit-cover:hover .edit-cover-overlay,
+  .edit-cover:focus-within .edit-cover-overlay {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .edit-cover-overlay {
+      opacity: 1;
+    }
+  }
+
+  .cover-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: 0;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--dim);
+    background: rgba(18, 18, 18, 0.5);
+    color: #fff;
     cursor: pointer;
+    backdrop-filter: blur(6px);
   }
 
-  .edit-head .icon-btn:hover {
-    color: var(--text);
-    background: var(--bg-raise);
+  .cover-action:hover:not(:disabled) {
+    background: rgba(18, 18, 18, 0.72);
+  }
+
+  .cover-action:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .edit-hero .edit-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .edit-label {
     font-size: 11px;
     color: var(--dim);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
   }
 
@@ -1081,6 +1211,10 @@
   }
 
   .action-btn-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     padding: 8px 12px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--line-strong);
@@ -1088,6 +1222,7 @@
     color: var(--text);
     font: 500 12px inherit;
     cursor: pointer;
+    white-space: nowrap;
   }
 
   .action-btn-sm:disabled {
@@ -1095,35 +1230,25 @@
     cursor: default;
   }
 
-  .edit-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 4px;
-  }
-
   .edit-action {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: transparent;
     color: var(--text);
     font: 500 12px inherit;
     cursor: pointer;
-    text-align: left;
   }
 
   .edit-action:hover:not(:disabled) {
     background: var(--bg-raise);
   }
 
-  .edit-action.danger {
-    color: var(--red, #e06a6a);
-  }
+
 
   .edit-action:disabled {
     opacity: 0.45;
