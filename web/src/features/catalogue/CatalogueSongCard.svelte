@@ -69,8 +69,6 @@
     text-align: left;
     cursor: pointer;
     transition: background 0.15s;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 180px;
   }
 
   .card:hover {
