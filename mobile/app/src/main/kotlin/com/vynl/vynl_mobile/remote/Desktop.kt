@@ -372,6 +372,7 @@ class Desktop(context: Context) {
             }
         } catch (e: Exception) {
             tmp.delete()
+            android.util.Log.w("Vynl", "desktop download failed", e)
             null
         }
     }

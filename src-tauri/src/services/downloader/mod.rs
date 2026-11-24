@@ -650,9 +650,10 @@ async fn download_track(
                         Ok(0) | Err(_) => break,
                         Ok(_) => {}
                     }
-                    if let Ok(mut activity) = last_activity.lock() {
-                        *activity = std::time::Instant::now();
-                    }
+                    let mut activity = last_activity
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    *activity = std::time::Instant::now();
                     if let Some(pct) = progress_from_line(&line) {
                         let now = std::time::Instant::now();
                         if now.duration_since(last_emit).as_millis() > 150 && pct != last_pct {

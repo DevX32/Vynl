@@ -5,15 +5,19 @@ export type LoopMode = "off" | "all" | "one";
 
 const LOOP_CYCLE: readonly LoopMode[] = ["off", "all", "one"];
 
+function lsGet(key: string): string | null {
+  return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
+}
+
 function loadLoop(): LoopMode {
-  const raw = localStorage.getItem("vynl.loop");
+  const raw = lsGet("vynl.loop");
   if (raw === "off" || raw === "all" || raw === "one") return raw;
   if (raw === "1") return "one";
   return "off";
 }
 
 function loadVolume(): number {
-  const raw = localStorage.getItem("vynl.volume");
+  const raw = lsGet("vynl.volume");
   if (raw === null) return 0.3;
   const v = Number(raw);
   return v >= 0 && v <= 1 ? v : 0.3;
@@ -24,28 +28,28 @@ export const CROSSFADE_STEPS: readonly number[] = [0, 3, 5, 8, 12];
 const MAX_CROSSFADE_SECS = 12;
 
 function loadCrossfade(): number {
-  const raw = localStorage.getItem("vynl.crossfade");
+  const raw = lsGet("vynl.crossfade");
   if (raw === null) return 0;
   const v = Number(raw);
   return Number.isFinite(v) && v >= 0 && v <= MAX_CROSSFADE_SECS ? v : 0;
 }
 
 function loadSpeed(): number {
-  const raw = localStorage.getItem("vynl.speed");
+  const raw = lsGet("vynl.speed");
   if (raw === null) return 1;
   return normalizeSpeed(Number(raw));
 }
 
 function loadReplayGain(): boolean {
-  return localStorage.getItem("vynl.replayGain") === "1";
+  return lsGet("vynl.replayGain") === "1";
 }
 
 let _crossfade = $state(loadCrossfade());
 let _speed = $state(loadSpeed());
 let _replayGain = $state(loadReplayGain());
 let _volume = $state(loadVolume());
-let _muted = $state(localStorage.getItem("vynl.muted") === "1");
-let _shuffle = $state(localStorage.getItem("vynl.shuffle") === "1");
+let _muted = $state(lsGet("vynl.muted") === "1");
+let _shuffle = $state(lsGet("vynl.shuffle") === "1");
 let _loop = $state<LoopMode>(loadLoop());
 let _showLyrics = $state(false);
 let _playError = $state<string | null>(null);

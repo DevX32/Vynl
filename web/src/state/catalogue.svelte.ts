@@ -166,7 +166,6 @@ export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void
         ? { ...entry, duration: current.duration, cover: entry.cover ?? current.cover }
         : entry;
     if (!current || !sameMetadata(current, mergedEntry)) changed = true;
-    next.delete(entry.id);
     next.set(entry.id, mergedEntry);
   }
   if (!changed) {

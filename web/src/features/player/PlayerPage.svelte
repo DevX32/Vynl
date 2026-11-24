@@ -28,6 +28,8 @@
 
   const playError = $derived(getCurrentPlayError());
 
+  const track = $derived(getCurrentTrack());
+
   async function refresh(): Promise<void> {
     scanning = true;
     clearPlayError();
@@ -65,13 +67,13 @@
 </script>
 
 <section class="player-page">
-  {#if getCurrentTrack()?.cover}
-    <ArtBackdrop path={getCurrentTrack()!.cover} />
+  {#if track?.cover}
+    <ArtBackdrop path={track.cover} />
   {/if}
   <div class="stage">
     <div class="main-col">
       <NowPlayingArt
-        current={getCurrentTrack()}
+        current={track}
         playing={getIsTrackPlaying()}
         {playError}
         {scanning}

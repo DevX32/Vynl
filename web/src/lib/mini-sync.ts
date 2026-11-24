@@ -7,7 +7,9 @@ export const MINI_REQUEST_STATE_EVENT = "vynl:mini:request-state";
 export const MINI_CLOSED_EVENT = "vynl:mini:closed";
 
 function safeEmit(event: string, payload: unknown): void {
-  void emit(event, payload).catch(() => {});
+  void emit(event, payload).catch((error) => {
+    console.warn(`[vynl] mini ${event} emit failed`, error);
+  });
 }
 
 export function sendMiniState(state: MiniSyncState): void {

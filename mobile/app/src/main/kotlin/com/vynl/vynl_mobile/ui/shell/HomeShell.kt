@@ -146,8 +146,11 @@ fun HomeShell(viewModel: AppViewModel = viewModel()) {
                     val session = viewModel.syncStatus
                     val displayName = viewModel.greetingName
                     val accountContext = androidx.compose.ui.platform.LocalContext.current
-                    val accountSeed = if (session.signedIn && !session.email.isNullOrBlank()) {
-                        avatarSeed(accountContext, session.email!!)
+                    val accountSeed = if (session.signedIn) {
+                        session.email
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { avatarSeed(accountContext, it) }
+                            ?: "vynl"
                     } else {
                         "vynl"
                     }

@@ -42,7 +42,8 @@
     active?: boolean;
   } = $props();
 
-  let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
+  const current = $derived(getCurrentTrack());
+  let seekDur = $derived(current?.duration ?? 0);
   let miniOpen = $state(false);
 
   async function toggleMini(): Promise<void> {
@@ -77,7 +78,6 @@
   }
 
   const likedTracks = $derived(getTasteLikedIds());
-  const current = $derived(getCurrentTrack());
   const currentCatalogueId = $derived(catalogueIdFromPath(current?.path));
   const currentLiked = $derived(
     currentCatalogueId ? likedTracks.has(currentCatalogueId) : false,
@@ -124,7 +124,7 @@
   });
 </script>
 
-<div class="player-bar" class:empty={!getCurrentTrack()}>
+<div class="player-bar" class:empty={!current}>
   <div class="now-group">
     <button
       class="now-mini"
@@ -132,31 +132,29 @@
       aria-label={t("player.openPlayer")}
     >
       <div class="mini-cover-wrap">
-        {#if getCurrentTrack()?.cover}
-          {#key getCurrentTrack()!.id}
+        {#if current?.cover}
+          {#key current.id}
             <img
               class="mini-cover"
-              use:blobSrc={getCurrentTrack()!.cover}
+              use:blobSrc={current.cover}
               alt=""
               draggable="false"
               transition:fade={{ duration: 300 }}
             />
           {/key}
         {:else}
-          <div class="mini-cover placeholder" class:empty={!getCurrentTrack()}>
-            {getCurrentTrack()
-              ? getCurrentTrack()!.title.charAt(0).toUpperCase()
-              : "·"}
+          <div class="mini-cover placeholder" class:empty={!current}>
+            {current ? current.title.charAt(0).toUpperCase() : "·"}
           </div>
         {/if}
       </div>
       <div class="mini-meta">
         <span class="mini-title display">
-          {getCurrentTrack()?.title ?? t("player.nothingPlaying")}</span
+          {current?.title ?? t("player.nothingPlaying")}</span
         >
         <span class="mini-artist mono">
-          {#if getCurrentTrack()?.artist}
-            {#each getCurrentTrack()!.artist.split(", ") as artistName, i}
+          {#if current?.artist}
+            {#each current.artist.split(", ") as artistName, i}
               {#if i > 0}
                 <span class="artist-sep">, </span>
               {/if}

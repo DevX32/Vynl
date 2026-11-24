@@ -151,7 +151,7 @@
     downloadBusy = true;
     try {
       for (const track of tracks) {
-        await saveCatalogueTrack(track as any, pl.id);
+        await saveCatalogueTrack(track, pl.id);
       }
       await refreshAfterCatalogueSave();
       adding = false;

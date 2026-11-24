@@ -6,6 +6,8 @@
   import { cubicOut, cubicIn } from "svelte/easing";
 
   let { onclose, fullscreen = false }: { onclose: () => void; fullscreen?: boolean } = $props();
+
+  const track = $derived(getCurrentTrack());
 </script>
 
 <div
@@ -13,8 +15,8 @@
   in:fly={{ y: 14, duration: 250, easing: cubicOut }}
   out:fly={{ y: 14, duration: 200, easing: cubicIn }}
 >
-  {#if getCurrentTrack()?.cover}
-    <ArtBackdrop path={getCurrentTrack()!.cover} showGlow={true} />
+  {#if track?.cover}
+    <ArtBackdrop path={track.cover} showGlow={true} />
   {/if}
   <LyricsPage {onclose} {fullscreen} />
 </div>

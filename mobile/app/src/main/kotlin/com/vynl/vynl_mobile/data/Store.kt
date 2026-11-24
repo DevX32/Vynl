@@ -348,7 +348,7 @@ class Store(context: Context) {
                     audioPath = cursor.getString(6),
                     coverPath = cursor.getString(7),
                     ext = cursor.getString(8),
-                    mtime = cursor.getLong(9).takeIf { !cursor.isNull(9) },
+                    mtime = cursor.takeIf { !cursor.isNull(9) }?.let { cursor.getLong(9) },
                     lyrics = cursor.getString(10),
                 )
             }
@@ -1215,7 +1215,7 @@ class Store(context: Context) {
                     audioPath = cursor.getString(6),
                     coverPath = cursor.getString(7),
                     ext = cursor.getString(8),
-                    mtime = cursor.getLong(9).takeIf { !cursor.isNull(9) },
+                    mtime = cursor.takeIf { !cursor.isNull(9) }?.let { cursor.getLong(9) },
                     lyrics = cursor.getString(10),
                 )
             }
@@ -1239,7 +1239,7 @@ class Store(context: Context) {
                     audioPath = cursor.getString(6),
                     coverPath = cursor.getString(7),
                     ext = cursor.getString(8),
-                    mtime = cursor.getLong(9).takeIf { !cursor.isNull(9) },
+                    mtime = cursor.takeIf { !cursor.isNull(9) }?.let { cursor.getLong(9) },
                     lyrics = cursor.getString(10),
                 )
             }

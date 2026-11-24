@@ -4,7 +4,7 @@
   import { pointerRatio } from "@lib/pointer";
   import { t } from "@lib/i18n";
 
-  let el: HTMLDivElement = $state()!;
+  let el = $state<HTMLDivElement | undefined>();
   let dragging = $state(false);
 
   function onVol(e: PointerEvent): void {
@@ -44,6 +44,7 @@
   aria-valuenow={getCurrentVolume()}
   tabindex="0"
   onpointerdown={(e) => {
+    if (!el) return;
     dragging = true;
     el.setPointerCapture(e.pointerId);
     onVol(e);

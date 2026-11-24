@@ -9,7 +9,11 @@ import org.json.JSONObject
 class CatalogueRepository {
 
     private fun nativeCall(block: () -> String): String =
-        runCatching(block).getOrElse { """{"error":"catalogue unavailable"}""" }
+        runCatching(block)
+            .onFailure { error ->
+                android.util.Log.w("Vynl", "catalogue native call failed", error)
+            }
+            .getOrElse { """{"error":"catalogue unavailable"}""" }
 
     suspend fun search(query: String): CatalogueResults = withContext(Dispatchers.IO) {
         val body = JSONObject(nativeCall { CatalogueBridge.nativeSearch(query) })

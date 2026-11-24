@@ -2009,7 +2009,7 @@ pub async fn prepare(
         duration_hint,
     )?;
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
     loop {
         if let Some(error) = session.error() {
             return Err(error);

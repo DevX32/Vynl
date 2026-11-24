@@ -225,7 +225,7 @@ fun BrowseScreen(viewModel: AppViewModel) {
             }
 
             else -> {
-                val found = results!!
+                val found = results ?: return
                 if (found.songs.isEmpty() && found.albums.isEmpty() && found.playlists.isEmpty()) {
                     EmptyState(
                         icon = Icons.Rounded.Search,

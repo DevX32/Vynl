@@ -9,6 +9,7 @@ let _refreshPromise: Promise<void> | null = null;
 let _libraryLoaded = false;
 let _libraryLoadedPromise: Promise<void> | null = null;
 let _resolveLibraryLoaded: (() => void) | null = null;
+let _libraryLoadedTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function markLibraryLoaded(): void {
   if (_libraryLoaded) return;
@@ -17,11 +18,24 @@ function markLibraryLoaded(): void {
   _resolveLibraryLoaded = null;
 }
 
+const LIBRARY_LOAD_TIMEOUT_MS = 15_000;
+
 export function whenLibraryLoaded(): Promise<void> {
   if (_libraryLoaded) return Promise.resolve();
   if (!_libraryLoadedPromise) {
     _libraryLoadedPromise = new Promise<void>((resolve) => {
-      _resolveLibraryLoaded = resolve;
+      let settled = false;
+      const done = (): void => {
+        if (settled) return;
+        settled = true;
+        if (_libraryLoadedTimeout !== null) {
+          clearTimeout(_libraryLoadedTimeout);
+          _libraryLoadedTimeout = null;
+        }
+        resolve();
+      };
+      _resolveLibraryLoaded = done;
+      _libraryLoadedTimeout = setTimeout(done, LIBRARY_LOAD_TIMEOUT_MS);
     });
     void refreshLibrary();
   }

@@ -5,7 +5,9 @@ type Locale = "en";
 const locales: Record<Locale, Record<string, unknown>> = { en };
 
 let _locale = $state<Locale>(
-  (localStorage.getItem("vynl.locale") as Locale) || "en",
+  typeof localStorage === "undefined"
+    ? "en"
+    : ((localStorage.getItem("vynl.locale") as Locale | null) ?? "en"),
 );
 
 function get(obj: unknown, path: string): unknown {

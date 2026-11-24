@@ -12,7 +12,7 @@
   let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
   let canSeek = $derived(seekDur > 0);
 
-  let el: HTMLDivElement = $state()!;
+  let el = $state<HTMLDivElement | undefined>();
   let dragging = $state(false);
 
   let pct = $derived(
@@ -56,7 +56,7 @@
   class:active={dragging}
   bind:this={el}
   onpointerdown={(e) => {
-    if (!canSeek) return;
+    if (!el || !canSeek) return;
     dragging = true;
     setSeekDragging(true);
     el.setPointerCapture(e.pointerId);

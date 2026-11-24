@@ -148,7 +148,7 @@
       {#if featuredTrack}
         <button
           class="featured"
-          onclick={() => playTrack(featuredTrack!.id)}
+          onclick={() => playTrack(featuredTrack.id)}
           aria-label={t("home.jumpBackIn")}
         >
           <div class="featured-art">

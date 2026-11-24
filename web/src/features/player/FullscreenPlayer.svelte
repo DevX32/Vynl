@@ -22,7 +22,8 @@
 
   let { onclose }: { onclose: () => void } = $props();
 
-  let seekDur = $derived(getCurrentTrack()?.duration ?? 0);
+  const track = $derived(getCurrentTrack());
+  let seekDur = $derived(track?.duration ?? 0);
 
   function close(): void {
     if (getLyricsOpen()) {
@@ -45,8 +46,8 @@
 </script>
 
 <div class="fs-overlay" transition:fade={{ duration: 200 }}>
-  {#if getCurrentTrack()?.cover}
-    <ArtBackdrop path={getCurrentTrack()!.cover} showGlow={true} />
+  {#if track?.cover}
+    <ArtBackdrop path={track.cover} showGlow={true} />
   {/if}
 
   <button
@@ -61,7 +62,7 @@
     {#if !getLyricsOpen()}
       <div class="fs-art">
         <NowPlayingArt
-          current={getCurrentTrack()}
+          current={track}
           playing={getIsTrackPlaying()}
           playError={null}
           scanning={false}
