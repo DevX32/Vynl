@@ -5,8 +5,12 @@ let _status = $state<SyncStatus>({
   signedIn: false,
   email: null,
   userId: null,
+  lastSyncedAt: null,
+  lastError: null,
+  pending: false,
 });
 let _loaded = $state(false);
+let _syncing = $state(false);
 
 export function getSyncStatus(): SyncStatus {
   return _status;
@@ -14,6 +18,10 @@ export function getSyncStatus(): SyncStatus {
 
 export function isSyncStatusLoaded(): boolean {
   return _loaded;
+}
+
+export function isCloudSyncing(): boolean {
+  return _syncing;
 }
 
 export function setSyncStatus(next: SyncStatus): void {
@@ -38,12 +46,15 @@ async function runCloudSyncPush(): Promise<void> {
     return;
   }
   _pushing = true;
+  _syncing = true;
   try {
     await vynl.syncPush();
   } catch (e) {
     console.warn("[sync] cloud push failed", e);
   } finally {
+    await refreshSyncStatus().catch(() => {});
     _pushing = false;
+    _syncing = false;
     if (_pushQueued) {
       _pushQueued = false;
       void runCloudSyncPush();
@@ -53,6 +64,7 @@ async function runCloudSyncPush(): Promise<void> {
 
 export function scheduleCloudSyncPush(delay = 4000): void {
   if (!_status.signedIn) return;
+  void vynl.markSyncDirty().catch(() => {});
   if (_pushTimer) clearTimeout(_pushTimer);
   _pushTimer = setTimeout(() => {
     _pushTimer = null;
@@ -71,4 +83,20 @@ export function flushCloudSyncPush(): void {
     return;
   }
   void runCloudSyncPush();
+}
+
+export function retryPendingSync(): void {
+  if (!_status.signedIn || !_status.pending || !navigator.onLine) return;
+  flushCloudSyncPush();
+}
+
+export async function runCloudSyncNow(): Promise<void> {
+  if (_syncing) return;
+  _syncing = true;
+  try {
+    await vynl.syncNow();
+    await refreshSyncStatus();
+  } finally {
+    _syncing = false;
+  }
 }

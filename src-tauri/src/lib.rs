@@ -293,6 +293,27 @@ pub fn run() {
 
             sync_launch_at_startup(app.handle(), settings.launch_at_startup);
 
+            {
+                let ud = user_data.clone();
+                let out = std::path::PathBuf::from(&settings.output_dir);
+                let st = settings.clone();
+                tauri::async_runtime::spawn(async move {
+                    if crate::services::sync::status(&ud).signed_in {
+                        match crate::services::sync::pull_sync_state(&ud, &out).await {
+                            Ok(_) => {}
+                            Err(e) if e.contains("No cloud sync state found") => {}
+                            Err(e) => eprintln!("[Vynl sync] startup pull failed: {e}"),
+                        }
+                    }
+                    if crate::services::sync::is_sync_dirty(&ud)
+                        && let Err(error) =
+                            crate::services::sync::push_sync_state(&ud, &out, &st).await
+                    {
+                        eprintln!("[Vynl sync] retry of pending push failed: {error}");
+                    }
+                });
+            }
+
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             if settings.global_media_keys {
                 register_global_media_keys(app.handle().clone());
@@ -444,6 +465,8 @@ pub fn run() {
             commands::sync_status,
             commands::sync_pull,
             commands::sync_push,
+            commands::sync_now,
+            commands::sync_mark_dirty,
             commands::sync_resolve_missing_source,
             commands::sync_sign_in,
             commands::sync_sign_up,

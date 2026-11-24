@@ -305,6 +305,9 @@ export interface SyncStatus {
   signedIn: boolean;
   email: string | null;
   userId: string | null;
+  lastSyncedAt: number | null;
+  lastError: string | null;
+  pending: boolean;
 }
 
 export interface SyncAuthResult {

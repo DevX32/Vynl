@@ -195,7 +195,14 @@
     accountMenuOpen = false;
     try {
       await vynl.syncSignOut();
-      setSyncStatus({ signedIn: false, email: null, userId: null });
+      setSyncStatus({
+        signedIn: false,
+        email: null,
+        userId: null,
+        lastSyncedAt: null,
+        lastError: null,
+        pending: false,
+      });
       toasts.success(t("account.signedOut"), 4000);
     } catch (e) {
       toasts.error(

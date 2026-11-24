@@ -14,8 +14,10 @@
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import {
     getSyncStatus,
+    isCloudSyncing,
     isSyncStatusLoaded,
     refreshSyncStatus,
+    runCloudSyncNow,
     setSyncStatus,
   } from "@state/sync.svelte";
   import Button from "@components/Button.svelte";
@@ -26,6 +28,19 @@
 
   const status = $derived(getSyncStatus());
   const loaded = $derived(isSyncStatusLoaded());
+  const syncing = $derived(isCloudSyncing());
+
+  const syncHint = $derived.by(() => {
+    if (!navigator.onLine) return t("account.syncOffline");
+    if (status.lastError) return t("account.syncError", { error: status.lastError });
+    if (status.pending) return t("account.syncPending");
+    if (status.lastSyncedAt) {
+      return t("account.lastSynced", {
+        time: new Date(status.lastSyncedAt).toLocaleTimeString(),
+      });
+    }
+    return t("account.syncUpToDate");
+  });
   let custom = $state(getAvatarCustom());
 
   const avatarSeed = $derived(
@@ -126,12 +141,36 @@
     }
   }
 
+  async function syncNow(): Promise<void> {
+    if (syncing) return;
+    try {
+      await runCloudSyncNow();
+      await refreshPlaylists();
+      await hydrateTaste();
+      toasts.success(t("account.syncDone"), 4000);
+    } catch (e) {
+      toasts.error(
+        t("account.syncFailed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+        6000,
+      );
+    }
+  }
+
   async function signOut(): Promise<void> {
     if (signingOut) return;
     signingOut = true;
     try {
       await vynl.syncSignOut();
-      setSyncStatus({ signedIn: false, email: null, userId: null });
+      setSyncStatus({
+        signedIn: false,
+        email: null,
+        userId: null,
+        lastSyncedAt: null,
+        lastError: null,
+        pending: false,
+      });
       notice = null;
       error = null;
       toasts.success(t("account.signedOut"), 4000);
@@ -213,6 +252,26 @@
         <div class="loading mono"><LoaderCircle size={16} stroke-width={1.6} />{t("common.loading")}</div>
       {:else if status.signedIn}
         <div class="row-group">
+          <SettingRow
+            label={t("account.syncStatus")}
+            hint={syncHint}
+          >
+            {#snippet control()}
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={syncing || !navigator.onLine}
+                onclick={() => void syncNow()}
+              >
+                {#if syncing}
+                  <span class="spin"><LoaderCircle size={13} stroke-width={1.6} /></span>
+                  {t("account.syncing")}
+                {:else}
+                  {t("account.syncNow")}
+                {/if}
+              </Button>
+            {/snippet}
+          </SettingRow>
           <SettingRow
             label={t("account.signOut")}
             hint={t("account.signOutHint")}

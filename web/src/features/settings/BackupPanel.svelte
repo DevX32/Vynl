@@ -5,7 +5,6 @@
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
   import { getCurrentPlaylists, refreshPlaylists } from "@state/playlists.svelte";
-  import { hydrateTaste } from "@state/taste.svelte";
   import { queueRestore } from "@state/vault-restore.svelte";
   import Button from "@components/Button.svelte";
   import SettingRow from "./SettingRow.svelte";
@@ -19,8 +18,6 @@
 
   let exporting = $state(false);
   let importing = $state(false);
-  let cloudRestoring = $state(false);
-  let signedIn = $state(false);
   let lastExport = $state<ExportSummary | null>(null);
   let trackCount = $state<number | null>(null);
   let libraryError = $state<string | null>(null);
@@ -69,20 +66,7 @@
   }
 
   onMount(() => {
-    let cancelled = false;
-    void (async () => {
-      await loadLibrary();
-      try {
-        const status = await vynl.SyncStatus();
-        signedIn = status.signedIn;
-      } catch {
-        signedIn = false;
-      }
-      if (cancelled) return;
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void loadLibrary();
   });
 
   function fmtBytes(bytes: number): string {
@@ -161,25 +145,6 @@
     }
   }
 
-  async function runCloudRestore(): Promise<void> {
-    if (cloudRestoring) return;
-    cloudRestoring = true;
-    try {
-      await vynl.syncPull();
-      await refreshPlaylists();
-      await hydrateTaste();
-      toasts.success(t("backup.cloudRestored", {}), 6000);
-    } catch (e) {
-      toasts.error(
-        t("backup.restoreFailed", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-        6000,
-      );
-    } finally {
-      cloudRestoring = false;
-    }
-  }
 </script>
 
 <div class="panel">
@@ -221,25 +186,6 @@
       {/snippet}
     </SettingRow>
 
-    {#if signedIn}
-      <SettingRow
-        label={t("backup.cloudTitle")}
-        hint={t("backup.cloudHint")}
-      >
-        {#snippet control()}
-          <div class="export-controls">
-            <Button
-              size="sm"
-              disabled={cloudRestoring}
-              onclick={runCloudRestore}
-            >
-              <Download size={13} stroke-width={1.5} />
-              {cloudRestoring ? t("backup.cloudRestoring") : t("backup.cloudRestore")}
-            </Button>
-          </div>
-        {/snippet}
-      </SettingRow>
-    {/if}
   </div>
 
 </div>

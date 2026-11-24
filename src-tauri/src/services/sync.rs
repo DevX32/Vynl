@@ -21,6 +21,8 @@ const SUPABASE_ANON_KEY: &str = match option_env!("SUPABASE_ANON_KEY") {
 };
 const SESSION_DIR: &str = "cloud";
 const SESSION_FILE: &str = "session.json";
+const SYNC_META_FILE: &str = "sync-meta.json";
+const SUPPORTED_SYNC_VERSION: u32 = 1;
 
 fn sync_enabled() -> bool {
     !base_url().is_empty() && !anon_key().is_empty()
@@ -50,6 +52,9 @@ pub struct SyncStatus {
     pub signed_in: bool,
     pub email: Option<String>,
     pub user_id: Option<String>,
+    pub last_synced_at: Option<i64>,
+    pub last_error: Option<String>,
+    pub pending: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -80,6 +85,68 @@ fn write_session(data_dir: &Path, session: &Session) -> Result<(), String> {
 
 fn clear_session(data_dir: &Path) {
     let _ = std::fs::remove_file(session_path(data_dir));
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SyncMeta {
+    #[serde(default)]
+    dirty: bool,
+    #[serde(default)]
+    last_synced_at: Option<i64>,
+    #[serde(default)]
+    last_error: Option<String>,
+}
+
+fn sync_meta_path(data_dir: &Path) -> PathBuf {
+    data_dir.join(SESSION_DIR).join(SYNC_META_FILE)
+}
+
+fn read_sync_meta(data_dir: &Path) -> SyncMeta {
+    util::read_json::<SyncMeta>(&sync_meta_path(data_dir)).unwrap_or_default()
+}
+
+fn write_sync_meta(data_dir: &Path, meta: &SyncMeta) {
+    let dir = data_dir.join(SESSION_DIR);
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let _ = util::write_json(&sync_meta_path(data_dir), meta);
+}
+
+pub fn mark_sync_dirty(data_dir: &Path) {
+    let mut meta = read_sync_meta(data_dir);
+    if meta.dirty {
+        return;
+    }
+    meta.dirty = true;
+    write_sync_meta(data_dir, &meta);
+}
+
+pub fn is_sync_dirty(data_dir: &Path) -> bool {
+    read_sync_meta(data_dir).dirty
+}
+
+pub fn record_sync_error(data_dir: &Path, error: &str) {
+    let mut meta = read_sync_meta(data_dir);
+    meta.last_error = Some(error.to_string());
+    write_sync_meta(data_dir, &meta);
+}
+
+pub fn clear_sync_error(data_dir: &Path) {
+    let mut meta = read_sync_meta(data_dir);
+    meta.last_error = None;
+    write_sync_meta(data_dir, &meta);
+}
+
+pub fn set_sync_result(data_dir: &Path, error: Option<&str>) {
+    let mut meta = read_sync_meta(data_dir);
+    meta.dirty = error.is_some();
+    meta.last_error = error.map(str::to_string);
+    if error.is_none() {
+        meta.last_synced_at = Some(util::now_ms());
+    }
+    write_sync_meta(data_dir, &meta);
 }
 
 fn http() -> Result<reqwest::Client, String> {
@@ -261,16 +328,23 @@ async fn valid_session(data_dir: &Path) -> Result<Session, String> {
 }
 
 pub fn status(data_dir: &Path) -> SyncStatus {
+    let meta = read_sync_meta(data_dir);
     match read_session(data_dir) {
         Some(session) => SyncStatus {
             signed_in: true,
             email: Some(session.email),
             user_id: Some(session.user_id),
+            last_synced_at: meta.last_synced_at,
+            last_error: meta.last_error,
+            pending: meta.dirty,
         },
         None => SyncStatus {
             signed_in: false,
             email: None,
             user_id: None,
+            last_synced_at: None,
+            last_error: None,
+            pending: false,
         },
     }
 }
@@ -430,6 +504,48 @@ pub struct SyncState {
     pub taste: Vec<crate::services::taste::TasteEntry>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncedSettings {
+    #[serde(default)]
+    pub theme: String,
+    #[serde(default)]
+    pub accent_color: String,
+    #[serde(default)]
+    pub dynamic_accent: bool,
+    #[serde(default)]
+    pub eq_enabled: bool,
+    #[serde(default)]
+    pub eq_bands: Vec<f32>,
+    #[serde(default)]
+    pub display_name: String,
+}
+
+impl From<&crate::commands::types::Settings> for SyncedSettings {
+    fn from(value: &crate::commands::types::Settings) -> Self {
+        Self {
+            theme: value.theme.clone(),
+            accent_color: value.accent_color.clone(),
+            dynamic_accent: value.dynamic_accent,
+            eq_enabled: value.eq_enabled,
+            eq_bands: value.eq_bands.clone(),
+            display_name: value.display_name.clone(),
+        }
+    }
+}
+
+fn apply_synced_settings(data_dir: &Path, synced: &SyncedSettings) -> Result<(), String> {
+    let mut current = crate::services::settings::get_settings(data_dir);
+    current.theme = synced.theme.clone();
+    current.accent_color = synced.accent_color.clone();
+    current.dynamic_accent = synced.dynamic_accent;
+    current.eq_enabled = synced.eq_enabled;
+    current.eq_bands = synced.eq_bands.clone();
+    current.display_name = synced.display_name.clone();
+    crate::services::settings::set_settings(data_dir, current)?;
+    Ok(())
+}
+
 fn sync_track_meta(
     track: &crate::commands::types::LibraryTrack,
     source_url: Option<String>,
@@ -517,6 +633,13 @@ pub fn record_deleted_playlist(data_dir: &Path, id: &str) {
     let mut map = read_deleted_playlists(data_dir);
     map.insert(id.to_string(), util::now_ms());
     write_deleted_playlists(data_dir, &map);
+}
+
+fn forget_deleted_playlist(data_dir: &Path, id: &str) {
+    let mut map = read_deleted_playlists(data_dir);
+    if map.remove(id).is_some() {
+        write_deleted_playlists(data_dir, &map);
+    }
 }
 
 pub fn build_sync_state(
@@ -630,6 +753,19 @@ pub async fn push_sync_state(
     output_dir: &Path,
     settings: &crate::commands::types::Settings,
 ) -> Result<(), String> {
+    let result = push_sync_state_inner(data_dir, output_dir, settings).await;
+    match &result {
+        Ok(()) => set_sync_result(data_dir, None),
+        Err(error) => set_sync_result(data_dir, Some(error)),
+    }
+    result
+}
+
+async fn push_sync_state_inner(
+    data_dir: &Path,
+    output_dir: &Path,
+    settings: &crate::commands::types::Settings,
+) -> Result<(), String> {
     let session = valid_session(data_dir).await?;
     let state = build_sync_state(data_dir, output_dir, settings);
     write_sync_state_cache_rs(data_dir, &state);
@@ -658,6 +794,231 @@ pub async fn push_sync_state(
         return Err(format!("Sync push failed (HTTP {status}): {body}"));
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlaylistAction {
+    Create,
+    Update,
+    Keep,
+    Delete,
+}
+
+fn playlist_action(local: Option<&Playlist>, remote: &SyncPlaylist) -> PlaylistAction {
+    match local {
+        None => {
+            if remote.deleted_at.is_some() {
+                PlaylistAction::Keep
+            } else {
+                PlaylistAction::Create
+            }
+        }
+        Some(local) => match remote.deleted_at {
+            Some(deleted_at) if local.updated_at <= deleted_at => PlaylistAction::Delete,
+            Some(_) => PlaylistAction::Keep,
+            None if remote.updated_at > local.updated_at => PlaylistAction::Update,
+            None => PlaylistAction::Keep,
+        },
+    }
+}
+
+fn validate_sync_state(state: &SyncState) -> Result<(), String> {
+    if state.version == 0 || state.version > SUPPORTED_SYNC_VERSION {
+        return Err(format!(
+            "Unsupported cloud sync state version ({}).",
+            state.version
+        ));
+    }
+    let mut ids = std::collections::HashSet::new();
+    for playlist in &state.playlists {
+        if playlist.id.trim().is_empty() {
+            return Err("Cloud sync state contains a playlist without an id.".into());
+        }
+        if !ids.insert(playlist.id.clone()) {
+            return Err("Cloud sync state contains duplicate playlist ids.".into());
+        }
+    }
+    Ok(())
+}
+
+fn remote_streams(
+    remote: &SyncPlaylist,
+    meta_by_path: &std::collections::HashMap<&str, &SyncTrackMeta>,
+) -> Vec<CatalogueTrack> {
+    let mut metas: std::collections::HashMap<String, &SyncTrackMeta> =
+        std::collections::HashMap::new();
+    for meta in &remote.tracks {
+        if meta.path.starts_with("ytm:") && !meta.id.is_empty() {
+            metas.entry(meta.id.clone()).or_insert(meta);
+        }
+    }
+    for path in &remote.paths {
+        if let Some(meta) = meta_by_path.get(path.as_str())
+            && meta.path.starts_with("ytm:")
+            && !meta.id.is_empty()
+        {
+            metas.entry(meta.id.clone()).or_insert(meta);
+        }
+    }
+    metas.into_values().map(stream_from_meta).collect()
+}
+
+#[derive(Debug, Default)]
+struct ApplyReport {
+    created: usize,
+    updated: usize,
+    deleted: usize,
+    errors: Vec<String>,
+}
+
+fn apply_sync_state(data_dir: &Path, output_dir: &Path, state: &SyncState) -> ApplyReport {
+    let mut report = ApplyReport::default();
+    let local_metas = playlists::list_playlists(output_dir);
+    let mut local_ids: std::collections::HashSet<String> =
+        local_metas.iter().map(|meta| meta.id.clone()).collect();
+    let mut local_names: std::collections::HashSet<String> = local_metas
+        .iter()
+        .map(|meta| meta.name.trim().to_lowercase())
+        .collect();
+    let meta_by_path: std::collections::HashMap<&str, &SyncTrackMeta> = state
+        .tracks
+        .iter()
+        .map(|track| (track.path.as_str(), track))
+        .collect();
+
+    for remote in &state.playlists {
+        let local = if local_ids.contains(&remote.id) {
+            playlists::get_playlist(output_dir, &remote.id)
+        } else {
+            let name_key = remote.name.trim().to_lowercase();
+            local_metas
+                .iter()
+                .find(|meta| meta.name.trim().to_lowercase() == name_key)
+                .and_then(|meta| playlists::get_playlist(output_dir, &meta.id))
+        };
+        match playlist_action(local.as_ref(), remote) {
+            PlaylistAction::Delete => {
+                match playlists::delete_playlist(output_dir, data_dir, &remote.id) {
+                    Ok(_) => {
+                        report.deleted += 1;
+                        local_ids.remove(&remote.id);
+                        if let Some(local) = &local {
+                            local_names.remove(&local.name.trim().to_lowercase());
+                        }
+                    }
+                    Err(error) => report.errors.push(format!("delete {}: {error}", remote.id)),
+                }
+            }
+            PlaylistAction::Keep => {
+                if let Some(local) = &local {
+                    if remote.deleted_at.is_some()
+                        && local.updated_at > remote.deleted_at.unwrap_or(0)
+                    {
+                        forget_deleted_playlist(data_dir, &local.id);
+                    }
+                    let streams = remote_streams(remote, &meta_by_path);
+                    if !streams.is_empty()
+                        && let Err(error) =
+                            playlists::add_streams_to_playlist(output_dir, &local.id, &streams)
+                    {
+                        report
+                            .errors
+                            .push(format!("restore details for {}: {error}", local.id));
+                    }
+                }
+            }
+            PlaylistAction::Update => {
+                let Some(local) = local else { continue };
+                let mut merged = local.clone();
+                let streams = remote_streams(remote, &meta_by_path);
+                if !streams.is_empty() {
+                    merged.streams = streams;
+                }
+                merged.name = remote.name.clone();
+                merged.paths = remote.paths.clone();
+                merged.cover = remote.cover.clone();
+                merged.created_at = remote.created_at;
+                merged.updated_at = remote.updated_at;
+                match playlists::upsert_playlist(output_dir, &merged) {
+                    Ok(_) => {
+                        report.updated += 1;
+                        local_names.remove(&local.name.trim().to_lowercase());
+                        local_names.insert(remote.name.trim().to_lowercase());
+                    }
+                    Err(error) => report.errors.push(format!("update {}: {error}", remote.id)),
+                }
+            }
+            PlaylistAction::Create => {
+                let synced = Playlist {
+                    id: remote.id.clone(),
+                    name: remote.name.clone(),
+                    paths: remote.paths.clone(),
+                    streams: remote_streams(remote, &meta_by_path),
+                    adds: Vec::new(),
+                    removals: Vec::new(),
+                    cover: remote.cover.clone(),
+                    created_at: remote.created_at,
+                    updated_at: remote.updated_at,
+                };
+                match playlists::upsert_playlist(output_dir, &synced) {
+                    Ok(_) => {
+                        report.created += 1;
+                        local_ids.insert(remote.id.clone());
+                        local_names.insert(remote.name.trim().to_lowercase());
+                    }
+                    Err(error) => report.errors.push(format!("create {}: {error}", remote.id)),
+                }
+            }
+        }
+    }
+
+    if !state.order.is_empty()
+        && let Err(error) = playlists::write_order(output_dir, &state.order)
+    {
+        report.errors.push(format!("order: {error}"));
+    }
+    if let Some(settings) = &state.settings
+        && let Err(error) = apply_synced_settings(data_dir, &SyncedSettings::from(settings))
+    {
+        report.errors.push(format!("settings: {error}"));
+    }
+    if !state.taste.is_empty() {
+        let mut merged: std::collections::HashMap<String, crate::services::taste::TasteEntry> =
+            std::collections::HashMap::new();
+        for entry in crate::services::taste::load(data_dir)
+            .into_iter()
+            .chain(state.taste.clone())
+        {
+            let id = entry.track.id.clone();
+            match merged.get_mut(&id) {
+                Some(existing) => {
+                    existing.plays = existing.plays.max(entry.plays);
+                    if entry.last_played > existing.last_played {
+                        existing.last_played = entry.last_played;
+                        existing.track = entry.track.clone();
+                    }
+                    if entry.liked {
+                        existing.liked = true;
+                        existing.liked_at = match (existing.liked_at, entry.liked_at) {
+                            (Some(a), Some(b)) => Some(a.max(b)),
+                            (Some(a), None) => Some(a),
+                            (None, Some(b)) => Some(b),
+                            (None, None) => None,
+                        };
+                    }
+                }
+                None => {
+                    merged.insert(id, entry);
+                }
+            }
+        }
+        if let Err(error) =
+            crate::services::taste::save(data_dir, &merged.into_values().collect::<Vec<_>>())
+        {
+            report.errors.push(format!("taste: {error}"));
+        }
+    }
+    report
 }
 
 pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncState, String> {
@@ -693,126 +1054,16 @@ pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncS
     let state: SyncState = serde_json::from_value(data)
         .map_err(|e| format!("That cloud sync state isn't readable: {e}"))?;
 
+    validate_sync_state(&state)?;
+    let report = apply_sync_state(data_dir, output_dir, &state);
     write_sync_state_cache_rs(data_dir, &state);
-
-    let local_metas = playlists::list_playlists(output_dir);
-    let mut local_ids: std::collections::HashSet<String> =
-        local_metas.iter().map(|meta| meta.id.clone()).collect();
-    let mut local_names: std::collections::HashSet<String> = local_metas
-        .iter()
-        .map(|meta| meta.name.trim().to_lowercase())
-        .collect();
-    let meta_by_path: std::collections::HashMap<&str, &SyncTrackMeta> = state
-        .tracks
-        .iter()
-        .map(|track| (track.path.as_str(), track))
-        .collect();
-
-    for remote in &state.playlists {
-        if let Some(deleted_at) = remote.deleted_at {
-            if local_ids.contains(&remote.id)
-                && let Some(local) = playlists::get_playlist(output_dir, &remote.id)
-                && local.updated_at <= deleted_at
-            {
-                let _ =
-                    crate::services::playlists::delete_playlist(output_dir, data_dir, &remote.id);
-                local_ids.remove(&remote.id);
-                let key = local.name.trim().to_lowercase();
-                local_names.remove(&key);
-            }
-            continue;
+    if report.errors.is_empty() {
+        clear_sync_error(data_dir);
+    } else {
+        for error in &report.errors {
+            eprintln!("[Vynl sync] {error}");
         }
-        let name_key = remote.name.trim().to_lowercase();
-        let mut stream_metas: std::collections::HashMap<String, &SyncTrackMeta> =
-            std::collections::HashMap::new();
-        for meta in &remote.tracks {
-            if meta.path.starts_with("ytm:") && !meta.id.is_empty() {
-                stream_metas.entry(meta.id.clone()).or_insert(meta);
-            }
-        }
-        for path in &remote.paths {
-            if let Some(meta) = meta_by_path.get(path.as_str())
-                && meta.path.starts_with("ytm:")
-                && !meta.id.is_empty()
-            {
-                stream_metas.entry(meta.id.clone()).or_insert(meta);
-            }
-        }
-        let streams = stream_metas
-            .into_values()
-            .map(stream_from_meta)
-            .collect::<Vec<_>>();
-        let existing_id = if local_ids.contains(&remote.id) {
-            Some(remote.id.clone())
-        } else if local_names.contains(&name_key) {
-            local_metas
-                .iter()
-                .find(|meta| meta.name.trim().to_lowercase() == name_key)
-                .map(|meta| meta.id.clone())
-        } else {
-            None
-        };
-        if let Some(id) = existing_id {
-            if !streams.is_empty()
-                && let Err(error) = playlists::add_streams_to_playlist(output_dir, &id, &streams)
-            {
-                eprintln!("sync: could not restore track details for {id}: {error}");
-            }
-            continue;
-        }
-        let synced = Playlist {
-            id: remote.id.clone(),
-            name: remote.name.clone(),
-            paths: remote.paths.clone(),
-            streams,
-            adds: Vec::new(),
-            removals: Vec::new(),
-            cover: remote.cover.clone(),
-            created_at: remote.created_at,
-            updated_at: remote.updated_at,
-        };
-        if playlists::upsert_playlist(output_dir, &synced).is_ok() {
-            local_ids.insert(remote.id.clone());
-            local_names.insert(name_key);
-        } else {
-            eprintln!("sync: could not create playlist {}", remote.id);
-        }
-    }
-
-    if !state.order.is_empty() {
-        let _ = playlists::write_order(output_dir, &state.order);
-    }
-
-    if !state.taste.is_empty() {
-        let local_taste = crate::services::taste::load(data_dir);
-        let mut merged: std::collections::HashMap<String, crate::services::taste::TasteEntry> =
-            std::collections::HashMap::new();
-        for entry in local_taste.into_iter().chain(state.taste.clone()) {
-            let id = entry.track.id.clone();
-            match merged.get_mut(&id) {
-                Some(existing) => {
-                    existing.plays = existing.plays.max(entry.plays);
-                    if entry.last_played > existing.last_played {
-                        existing.last_played = entry.last_played;
-                        existing.track = entry.track.clone();
-                    }
-                    if entry.liked {
-                        existing.liked = true;
-                        existing.liked_at = match (existing.liked_at, entry.liked_at) {
-                            (Some(a), Some(b)) => Some(a.max(b)),
-                            (Some(a), None) => Some(a),
-                            (None, Some(b)) => Some(b),
-                            (None, None) => None,
-                        };
-                    }
-                }
-                None => {
-                    merged.insert(id, entry);
-                }
-            }
-        }
-        let merged: Vec<crate::services::taste::TasteEntry> = merged.into_values().collect();
-        let _ = crate::services::taste::save(data_dir, &merged);
+        record_sync_error(data_dir, &report.errors.join("; "));
     }
 
     Ok(state)

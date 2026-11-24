@@ -926,7 +926,11 @@ pub(crate) fn sync_playlist_delete(
 pub async fn sync_pull(app: AppHandle) -> Result<crate::services::sync::SyncState, String> {
     let user_data = user_data_dir(&app)?;
     let output = output_dir_from_settings(&app)?;
-    crate::services::sync::pull_sync_state(&user_data, &output).await
+    let result = crate::services::sync::pull_sync_state(&user_data, &output).await;
+    if let Err(error) = &result {
+        crate::services::sync::record_sync_error(&user_data, error);
+    }
+    result
 }
 
 #[tauri::command]
@@ -935,6 +939,32 @@ pub async fn sync_push(app: AppHandle) -> Result<(), String> {
     let output = output_dir_from_settings(&app)?;
     let settings = load_settings(&app)?;
     crate::services::sync::push_sync_state(&user_data, &output, &settings).await
+}
+
+#[tauri::command]
+pub fn sync_mark_dirty(app: AppHandle) -> Result<(), String> {
+    let user_data = user_data_dir(&app)?;
+    crate::services::sync::mark_sync_dirty(&user_data);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncState, String> {
+    let user_data = user_data_dir(&app)?;
+    let output = output_dir_from_settings(&app)?;
+    let settings = load_settings(&app)?;
+    let state = match crate::services::sync::pull_sync_state(&user_data, &output).await {
+        Ok(state) => state,
+        Err(e) if e.contains("No cloud sync state found") => {
+            crate::services::sync::build_sync_state(&user_data, &output, &settings)
+        }
+        Err(e) => {
+            crate::services::sync::record_sync_error(&user_data, &e);
+            return Err(e);
+        }
+    };
+    crate::services::sync::push_sync_state(&user_data, &output, &settings).await?;
+    Ok(state)
 }
 
 #[tauri::command]
@@ -989,6 +1019,7 @@ async fn sync_auth(
             Err(e) if e.contains("No cloud sync state found") => {}
             Err(e) => {
                 eprintln!("[Vynl sync] auto pull after sign-in failed: {e}");
+                crate::services::sync::record_sync_error(&user_data, &e);
                 can_push = false;
             }
         }
