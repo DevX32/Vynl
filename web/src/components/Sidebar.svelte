@@ -376,39 +376,34 @@
                 {session.signedIn ? session.email : t("account.notSignedIn")}
               </span>
             </div>
+            <span class="menu-status" class:connected={session.signedIn} aria-hidden="true"></span>
           </div>
+
+          <div class="account-menu-body">
+            {#if session.signedIn}
+              <button class="menu-item" role="menuitem" onclick={openAccountModal}>
+                <UserRound size={13} stroke-width={1.5} />
+                <span>{t("common.account")}</span>
+              </button>
+            {:else}
+              <button class="menu-item" role="menuitem" onclick={openAccountModal}>
+                <LogIn size={13} stroke-width={1.5} />
+                <span>{t("account.signIn")}</span>
+              </button>
+            {/if}
+            <button class="menu-item" role="menuitem" onclick={openAccountSettings}>
+              <SettingsIcon size={13} stroke-width={1.5} />
+              <span>{t("common.settings")}</span>
+            </button>
+          </div>
+
           {#if session.signedIn}
-            <button
-              class="menu-item"
-              role="menuitem"
-              onclick={openAccountModal}
-            >
-              <UserRound size={14} stroke-width={1.5} />
-              <span>{t("common.account")}</span>
-            </button>
-          {:else}
-            <button
-              class="menu-item accent"
-              role="menuitem"
-              onclick={openAccountModal}
-            >
-              <LogIn size={14} stroke-width={1.5} />
-              <span>{t("account.signIn")}</span>
-            </button>
-          {/if}
-          <button class="menu-item" role="menuitem" onclick={openAccountSettings}>
-            <SettingsIcon size={14} stroke-width={1.5} />
-            <span>{t("common.settings")}</span>
-          </button>
-          {#if session.signedIn}
-            <button
-              class="menu-item danger"
-              role="menuitem"
-              onclick={() => void signOutSync()}
-            >
-              <LogOut size={14} stroke-width={1.5} />
-              <span>{t("account.signOut")}</span>
-            </button>
+            <div class="account-menu-foot">
+              <button class="menu-item danger" role="menuitem" onclick={() => void signOutSync()}>
+                <LogOut size={13} stroke-width={1.5} />
+                <span>{t("account.signOut")}</span>
+              </button>
+            </div>
           {/if}
         </div>
       {/if}
@@ -791,7 +786,6 @@
     gap: 10px;
     width: 100%;
     padding: 6px var(--nav-pad-x);
-    border-radius: var(--radius-sm);
     color: var(--dim);
     text-align: left;
   }
@@ -860,28 +854,53 @@
     width: 220px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 6px;
-    border: 1px solid var(--line-strong);
+    padding: 0;
+    border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     background: var(--surface);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    animation: account-menu-in 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+    backdrop-filter: none;
+  }
+
+  .account-menu-foot {
+    padding: 6px;
+    border-top: 1px solid var(--line);
+    background: var(--bg-raise);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .account-menu {
+      animation: none;
+    }
+  }
+
+  @keyframes account-menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .account-menu-head {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 10px 9px;
-    margin-bottom: 2px;
+    padding: 12px;
+    background: var(--bg-raise);
     border-bottom: 1px solid var(--line);
   }
 
   .menu-avatar {
     position: relative;
     display: block;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     flex-shrink: 0;
     border-radius: 50%;
   }
@@ -898,25 +917,47 @@
   .menu-head-text {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
+    flex: 1;
   }
 
   .menu-name {
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: var(--text);
   }
 
   .menu-sub {
     font-size: 10px;
     color: var(--faint);
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .menu-status {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--faint);
+    flex-shrink: 0;
+  }
+
+  .menu-status.connected {
+    background: var(--green, #6fcf6f);
+  }
+
+  .account-menu-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
   }
 
   .menu-item {
@@ -925,7 +966,6 @@
     gap: 9px;
     width: 100%;
     padding: 8px 10px;
-    border-radius: var(--radius-sm);
     color: var(--dim);
     font-size: 12.5px;
     text-align: left;
@@ -939,16 +979,12 @@
     color: var(--text);
   }
 
-  .menu-item.accent {
-    color: var(--accent);
-  }
-
   .menu-item.danger {
     color: var(--red);
   }
 
   .menu-item.danger:hover {
-    background: color-mix(in srgb, var(--red) 12%, transparent);
+    background: color-mix(in srgb, var(--red) 10%, transparent);
     color: var(--red);
   }
 
