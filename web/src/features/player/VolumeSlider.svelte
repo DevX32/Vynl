@@ -38,7 +38,7 @@
   class:active={dragging}
   bind:this={el}
   role="slider"
-  aria-label={t("player.volume")}
+  aria-label={t("common.volume")}
   aria-valuemin="0"
   aria-valuemax="1"
   aria-valuenow={getCurrentVolume()}

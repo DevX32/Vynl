@@ -199,7 +199,7 @@
       await refreshDone({ force: true });
     } catch (e) {
       if (gen !== searchGen) return;
-      error = friendlyVaultError(e, t("vault.resolveFailed"));
+      error = friendlyVaultError(e, t("common.couldNotOpenLink"));
     } finally {
       if (gen === searchGen) resolving = false;
     }
@@ -790,7 +790,7 @@
           disabled={running}
           onclick={clearAll}
         >
-          {t("vault.clear")}
+          {t("common.clear")}
         </button>
       </div>
 
@@ -808,7 +808,7 @@
       <div class="tbl-head">
         <span class="h-num mono">#</span>
         <span class="h-cover"></span>
-        <span class="h-title mono">{t("library.titleHeader")}</span>
+        <span class="h-title mono">{t("common.titleLabel")}</span>
         <span class="h-source mono">{t("library.sourceHeader")}</span>
         <span class="h-status mono">{t("library.statusHeader")}</span>
       </div>

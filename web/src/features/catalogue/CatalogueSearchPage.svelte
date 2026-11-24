@@ -156,7 +156,7 @@
   <header class="page-hdr">
     <div class="hdr-copy">
       <div class="kicker mono">{t("catalogue.kicker")}</div>
-      <div class="title display">{t("catalogue.searchTitle")}</div>
+      <div class="title display">{t("common.browse")}</div>
     </div>
     <div class="hdr-row">
       <SearchInput
@@ -168,14 +168,14 @@
         <button
           class="play-btn"
           onclick={() => playList(playableSongs, false)}
-          aria-label={t("catalogue.playAll")}
+          aria-label={t("common.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
         <button
           class="shuffle-btn"
           onclick={() => playList(playableSongs, true)}
-          aria-label={t("catalogue.shuffle")}
+          aria-label={t("common.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>

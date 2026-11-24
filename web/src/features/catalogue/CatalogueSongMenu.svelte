@@ -37,7 +37,7 @@
     const track = ctx.track;
     const items: CtxEntry[] = [
       {
-        label: t("catalogue.addToPlaylist"),
+        label: t("common.addToPlaylist"),
         icon: ListMusic,
         action: () => {
           pickerTarget = track;

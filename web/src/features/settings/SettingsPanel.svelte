@@ -95,7 +95,7 @@
       await Promise.all([refreshLibrary(), refreshPlaylists(), refreshDownloads()]);
       if (result.failed > 0) {
         toasts.error(
-          t("downloads.removeDownloadedPartial", { failed: result.failed }),
+          t("common.deletePartial", { failed: result.failed }),
         );
       } else {
         toasts.success(
@@ -256,7 +256,7 @@
 
   <div class="group">
     <div class="group-head">
-      <span class="label mono">{t("settings.groupEqualizer")}</span>
+      <span class="label mono">{t("common.equalizer")}</span>
     </div>
     <div class="section flush">
       <Equalizer />
@@ -313,7 +313,7 @@
           selected={sleepMode === "off"}
           onclick={cancelSleepTimer}
         >
-          {t("player.sleepOff")}
+          {t("common.off")}
         </Button>
         {#each SLEEP_STEPS as minutes (minutes)}
           <Button
@@ -337,7 +337,7 @@
 
   <div class="group">
     <div class="group-head">
-      <span class="label mono">{t("settings.groupDownloads")}</span>
+      <span class="label mono">{t("common.downloads")}</span>
     </div>
     <div class="rows">
       <SettingRow
@@ -472,7 +472,7 @@
           >
             {_removingDownloads
               ? t("downloads.removing")
-              : t("downloads.removeAllButton")}
+              : t("common.delete")}
           </Button>
         {/snippet}
       </SettingRow>
@@ -485,7 +485,7 @@
           <Button size="sm" disabled={_clearingCache} onclick={() => (_confirmingClear = true)}>
             {_clearingCache
               ? t("settings.cacheClearing")
-              : t("settings.clearCacheButton")}
+              : t("common.clear")}
           </Button>
         {/snippet}
       </SettingRow>
@@ -498,7 +498,7 @@
     open
     title={t("settings.clearCacheTitle")}
     description={t("settings.clearCacheBody")}
-    confirmLabel={t("settings.clearCacheButton")}
+    confirmLabel={t("common.clear")}
     danger
     onconfirm={() => void clearCache()}
     oncancel={() => (_confirmingClear = false)}

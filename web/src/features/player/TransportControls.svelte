@@ -23,7 +23,7 @@
   class="icon-btn small"
   class:on={getCurrentShuffle()}
   onclick={toggleShuffle}
-  aria-label={t("player.shuffle")}
+  aria-label={t("common.shuffle")}
   aria-pressed={getCurrentShuffle()}
 >
   <Shuffle size={15} stroke-width={1.5} />
@@ -39,7 +39,7 @@
 <button
   class="play-btn"
   onclick={toggle}
-  aria-label={getIsTrackPlaying() ? t("player.pause") : t("player.play")}
+  aria-label={getIsTrackPlaying() ? t("common.pause") : t("common.play")}
   disabled={!getCurrentTrack()}
 >
   <span class="p-icon" class:show={getIsTrackPlaying()}>

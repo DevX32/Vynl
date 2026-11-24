@@ -125,12 +125,12 @@
         action: () => addToQueueFront(cataloguePath(track.id)),
       },
       {
-        label: t("player.addToQueue"),
+        label: t("common.addToQueue"),
         icon: ListPlus,
         action: () => addToQueue(cataloguePath(track.id)),
       },
       {
-        label: t("catalogue.addToPlaylist"),
+        label: t("common.addToPlaylist"),
         icon: ListPlus,
         action: () => {
           streamTarget = track;
@@ -359,8 +359,8 @@
       <div class="hero-sub mono">
         {#if tracks.length > 0}
           {tracks.length}
-          {tracks.length === 1 ? t("library.song") : t("library.songsPlural")} ·
-          {t("playlist.about")}
+          {tracks.length === 1 ? t("library.song") : t("common.songs")} ·
+          {t("common.about")}
           {fmtTotalDuration(totalDur)}{:else}
           {t("playlist.zeroSongs")}
         {/if}
@@ -380,7 +380,7 @@
         class="play-big"
         onclick={() => playAll(false)}
         disabled={tracks.length === 0}
-        aria-label={t("player.play")}
+        aria-label={t("common.play")}
       >
         <Play size={16} fill="currentColor" stroke-width={0} />
       </button>
@@ -388,7 +388,7 @@
         class="icon-btn round"
         onclick={() => playAll(true)}
         disabled={tracks.length === 0}
-        aria-label={t("player.shuffle")}
+        aria-label={t("common.shuffle")}
       >
         <Shuffle size={14} stroke-width={1.5} />
       </button>
@@ -410,8 +410,8 @@
   <div class="tbl-head">
     <span class="h-num mono">#</span>
     <span class="h-cover"></span>
-    <span class="h-title mono">{t("library.titleHeader")}</span>
-    <span class="h-artist mono">{t("library.artistHeader")}</span>
+    <span class="h-title mono">{t("common.titleLabel")}</span>
+    <span class="h-artist mono">{t("common.artistLabel")}</span>
     <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
   </div>
 
@@ -427,7 +427,7 @@
         <span class="mono sub">
           {tracks.length === 0
             ? t("catalogue.likedEmptyHint")
-            : t("library.noMatchesQuery", { query: q })}
+            : t("common.nothingMatchesQuery", { query: q })}
         </span>
       </div>
     {:else}

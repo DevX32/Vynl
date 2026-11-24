@@ -575,9 +575,9 @@
 {#if createTarget}
   <Dialog
     open
-    title={t("playlists.newTitle")}
+    title={t("common.newPlaylistTitle")}
     description={t("playlists.newDesc")}
-    confirmLabel={t("playlists.newConfirm")}
+    confirmLabel={t("common.create")}
     onconfirm={confirmCreatePlaylist}
     oncancel={() => (createTarget = false)}
   >
@@ -615,7 +615,7 @@
     >
       <div class="edit-head">
         <span class="edit-title">{t("playlist.editPlaylist")}</span>
-        <button class="edit-close" onclick={() => (editTarget = null)} aria-label={t("dialog.cancel")}>
+        <button class="edit-close" onclick={() => (editTarget = null)} aria-label={t("common.cancel")}>
           <X size={12} stroke-width={1.6} />
         </button>
       </div>
@@ -652,7 +652,7 @@
               }}
             />
             <button class="action-btn-sm" onclick={() => void saveEditRename()} disabled={editBusy || !editRename.trim()}>
-              {t("dialog.save")}
+              {t("common.save")}
             </button>
           </div>
           <button class="edit-action" onclick={() => (editDeleteConfirm = true)} disabled={editBusy}>
@@ -677,7 +677,7 @@
     open
     title={t("playlists.deleteTitle")}
     description={t("playlists.deleteBody", { name: editTarget.name })}
-    confirmLabel={t("playlists.deleteConfirm")}
+    confirmLabel={t("common.delete")}
     danger
     confirmDisabled={editBusy}
     onconfirm={() => void confirmEditDeletePlaylist()}

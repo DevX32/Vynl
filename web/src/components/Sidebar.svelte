@@ -222,7 +222,7 @@
   <div class="nav-group">
     <button class="nav-link" class:active={page === "library"} onclick={onLibrary}>
       <span class="nav-icon"><Library size={15} stroke-width={1.5} /></span>
-      <span class="nav-label">{t("nav.library")}</span>
+      <span class="nav-label">{t("common.library")}</span>
     </button>
     <button
       class="nav-link"
@@ -230,7 +230,7 @@
       onclick={onCatalogue}
     >
       <span class="nav-icon"><Compass size={15} stroke-width={1.5} /></span>
-      <span class="nav-label">{t("nav.catalogue")}</span>
+      <span class="nav-label">{t("common.browse")}</span>
     </button>
     <button class="nav-link" class:active={page === "player"} onclick={onPlayer}>
       <span class="nav-icon"><Music2 size={15} stroke-width={1.5} /></span>
@@ -245,20 +245,20 @@
   <div class="rail-section">
     <div class="rail-head">
       {#if sidebarOpen}
-        <span class="rail-title mono">{t("playlists.title")}</span>
+        <span class="rail-title mono">{t("common.playlists")}</span>
       {/if}
       <div class="rail-actions">
         <button
           class="icon-btn small"
           onclick={onMoveToVynl}
-          aria-label={t("playlists.moveToVynl")}
+          aria-label={t("common.moveToVynl")}
         >
           <Import size={14} stroke-width={1.5} />
         </button>
         <button
           class="icon-btn small"
           onclick={onNewPlaylist}
-          aria-label={t("playlists.newPlaylist")}
+          aria-label={t("common.newPlaylistTitle")}
         >
           <Plus size={14} stroke-width={1.5} />
         </button>
@@ -286,10 +286,10 @@
             <span class="rail-meta">
               <span class="rail-name display">{t("catalogue.likedSongs")}</span>
               <span class="rail-desc mono">
-                {`${t("catalogue.playlist")} · ${likedTracks.length} ${
+                {`${t("common.playlist")} · ${likedTracks.length} ${
                   likedTracks.length === 1
                     ? t("library.song")
-                    : t("library.songsPlural")
+                    : t("common.songs")
                 }`}
               </span>
             </span>
@@ -348,7 +348,7 @@
             <span class="rail-meta">
               <span class="rail-name display">{p.name}</span>
               <span class="rail-desc mono">
-                {`${t("playlists.playlist")} · ${resolveDisplayName(getCurrentSettings().displayName)}`}
+                {`${t("common.playlist")} · ${resolveDisplayName(getCurrentSettings().displayName)}`}
               </span>
             </span>
           {/if}
@@ -356,7 +356,7 @@
       {/each}
       {#if playlists.length === 0 && sidebarOpen}
         <div class="rail-empty">
-          <span class="mono">{t("playlists.noPlaylists")}</span>
+          <span class="mono">{t("common.noPlaylistsYet")}</span>
         </div>
       {/if}
     </div>
@@ -384,7 +384,7 @@
               onclick={openAccountModal}
             >
               <UserRound size={14} stroke-width={1.5} />
-              <span>{t("account.menuLabel")}</span>
+              <span>{t("common.account")}</span>
             </button>
           {:else}
             <button
@@ -398,7 +398,7 @@
           {/if}
           <button class="menu-item" role="menuitem" onclick={openAccountSettings}>
             <SettingsIcon size={14} stroke-width={1.5} />
-            <span>{t("nav.settings")}</span>
+            <span>{t("common.settings")}</span>
           </button>
           {#if session.signedIn}
             <button

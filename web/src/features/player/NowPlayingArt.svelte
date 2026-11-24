@@ -101,7 +101,7 @@
         {current.title}
       </div>
       <div class="now-artist mono" in:fade={{ duration: 220, delay: 40 }}>
-        {current.artist || t("player.unknownArtist")}
+        {current.artist || t("common.unknownArtist")}
       </div>
     {/key}
     {#if showLyricsButton}

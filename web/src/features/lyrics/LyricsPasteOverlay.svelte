@@ -23,7 +23,7 @@
   rows={12}
 ></textarea>
 <div class="actions">
-  <button class="btn" onclick={onClose}>{t("lyrics.cancel")}</button>
+  <button class="btn" onclick={onClose}>{t("common.cancel")}</button>
   <button class="btn primary" onclick={apply} disabled={!text.trim()}>{t("lyrics.apply")}</button>
 </div>
 

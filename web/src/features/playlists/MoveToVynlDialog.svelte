@@ -113,7 +113,7 @@
       briefCoverFailed = false;
       phase = "destination";
     } catch (e) {
-      error = friendlyVaultError(e, t("moveToVynl.resolveFailed"));
+      error = friendlyVaultError(e, t("common.couldNotOpenLink"));
     } finally {
       resolving = false;
     }
@@ -178,7 +178,7 @@
   });
   const canCreate = $derived(newName.trim().length > 0);
   const trackLabel = (n: number): string =>
-    n === 1 ? t("playlistPicker.track") : t("playlistPicker.tracks");
+    n === 1 ? t("common.trackLc") : t("common.tracks");
   const tracksLabel = $derived(
     collection ? trackLabel(collection.tracks.length) : "",
   );
@@ -224,7 +224,7 @@
       : resolveState
         ? resolveState.total > 0
           ? `${resolveState.done} / ${resolveState.total}`
-          : `${resolveState.done} ${t("playlistPicker.tracks")}`
+          : `${resolveState.done} ${t("common.tracks")}`
         : resolving
           ? "…"
           : "";
@@ -322,16 +322,16 @@
     class="dialog"
     role="dialog"
     aria-modal="true"
-    aria-label={t("moveToVynl.title")}
+    aria-label={t("common.moveToVynl")}
     tabindex="-1"
   >
     <header class="head">
-      <span class="title">{t("moveToVynl.title")}</span>
+      <span class="title">{t("common.moveToVynl")}</span>
       <button
         class="close-btn"
         onclick={onClose}
         disabled={phase === "importing"}
-        aria-label={t("moveToVynl.close")}
+        aria-label={t("common.close")}
       >
         <X size={12} stroke-width={1.6} />
       </button>
@@ -347,7 +347,7 @@
           onclick={() => void cancelImport()}
           disabled={cancelRequested}
         >
-          {t("dialog.cancel")}
+          {t("common.cancel")}
         </button>
       </div>
     {:else if phase === "destination" && collection}
@@ -387,7 +387,7 @@
             aria-selected={tab === "new"}
             onclick={() => (tab = "new")}
           >
-            {t("moveToVynl.newPlaylist")}
+            {t("common.newPlaylist")}
           </button>
           <button
             class="seg-btn"
@@ -403,14 +403,14 @@
         {#if tab === "new"}
           <div class="pane new-pane">
             <label class="field-label mono" for="moveToVynl-name">
-              {t("moveToVynl.newNameLabel")}
+              {t("common.playlistName")}
             </label>
             <input
               id="moveToVynl-name"
               class="name-input"
               type="text"
               bind:value={newName}
-              placeholder={t("moveToVynl.newNamePlaceholder")}
+              placeholder={t("common.playlistName")}
               spellcheck={false}
               autocomplete="off"
               autocapitalize="off"
@@ -460,15 +460,15 @@
                   </span>
                   <span class="item-name">{pl.name}</span>
                   {#if existingMatch?.id === pl.id}
-                    <span class="tag mono">{t("moveToVynl.sameName")}</span>
+                    <span class="tag mono">{t("common.sameName")}</span>
                   {/if}
                   <span class="count mono">{pl.trackCount}</span>
                 </button>
               {:else}
                 <div class="empty mono">
                   {query.trim()
-                    ? t("moveToVynl.noMatch")
-                    : t("moveToVynl.noneYet")}
+                    ? t("common.noPlaylistMatches")
+                    : t("common.noPlaylistsYet")}
                 </div>
               {/each}
             </div>
@@ -478,10 +478,10 @@
         <footer class="foot dest-foot">
           <button class="btn ghost" onclick={backToLink}>
             <ChevronLeft size={13} stroke-width={2} />
-            <span>{t("moveToVynl.back")}</span>
+            <span>{t("common.back")}</span>
           </button>
           <button class="btn ghost" onclick={onClose}>
-            {t("dialog.cancel")}
+            {t("common.cancel")}
           </button>
         </footer>
       </div>
@@ -514,7 +514,7 @@
       </div>
       <footer class="foot">
         <button class="btn ghost" onclick={onClose} disabled={resolving}>
-          {t("dialog.cancel")}
+          {t("common.cancel")}
         </button>
         <button
           class="btn primary"

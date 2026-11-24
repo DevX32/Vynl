@@ -161,7 +161,7 @@
         <span class="key">{t("vault.keyEnter")}</span>
         <span>{t("vault.hintSearch")}</span>
         <span class="hint-sep"></span>
-        <span class="key">{t("vault.keyEscape")}</span>
+        <span class="key">{t("common.esc")}</span>
         <span>{t("vault.hintClear")}</span>
       </div>
     {/if}

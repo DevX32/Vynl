@@ -103,20 +103,20 @@
         <div class="loading mono">{t("common.loading")}</div>
       {:else}
         <div class="field">
-          <label class="label mono" for="tag-title">{t("library.tagTitle")}</label>
+          <label class="label mono" for="tag-title">{t("common.titleLabel")}</label>
           <input id="tag-title" class="text" bind:value={title} />
         </div>
         <div class="field">
-          <label class="label mono" for="tag-artist">{t("library.tagArtist")}</label>
+          <label class="label mono" for="tag-artist">{t("common.artistLabel")}</label>
           <input id="tag-artist" class="text" bind:value={artist} />
         </div>
         <div class="field">
-          <label class="label mono" for="tag-album">{t("library.tagAlbum")}</label>
+          <label class="label mono" for="tag-album">{t("common.album")}</label>
           <input id="tag-album" class="text" bind:value={album} />
         </div>
         <div class="row">
           <div class="field">
-            <label class="label mono" for="tag-year">{t("library.tagYear")}</label>
+            <label class="label mono" for="tag-year">{t("common.year")}</label>
             <input id="tag-year" class="text" bind:value={year} />
           </div>
           <div class="field">

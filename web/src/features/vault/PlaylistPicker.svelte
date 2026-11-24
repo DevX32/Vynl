@@ -79,18 +79,18 @@
     onkeydown={handleKey}
     role="dialog"
     aria-modal="true"
-    aria-label={t("playlistPicker.title")}
+    aria-label={t("common.addToPlaylist")}
     tabindex="-1"
     use:focusTrap
   >
     <header class="head">
       <div class="head-text">
-        <span class="title">{t("playlistPicker.title")}</span>
+        <span class="title">{t("common.addToPlaylist")}</span>
         <span class="sub mono">
           {trackCount}
           {trackCount === 1
-            ? t("playlistPicker.track")
-            : t("playlistPicker.tracks")}
+            ? t("common.trackLc")
+            : t("common.tracks")}
           {#if suggestedName}
             · {suggestedName}{/if}
         </span>
@@ -126,13 +126,13 @@
           </span>
           <span class="name">{pl.name}</span>
           {#if existingMatch?.id === pl.id}
-            <span class="tag mono">{t("playlistPicker.sameName")}</span>
+            <span class="tag mono">{t("common.sameName")}</span>
           {/if}
           <span class="count mono">{pl.trackCount}</span>
         </button>
       {:else}
         <div class="empty mono">
-          {query ? t("playlistPicker.noMatch") : t("playlistPicker.noneYet")}
+          {query ? t("common.noPlaylistMatches") : t("common.noPlaylistsYet")}
         </div>
       {/each}
     </div>
@@ -143,22 +143,22 @@
           class="name-input"
           bind:this={nameEl}
           bind:value={newName}
-          placeholder={t("playlistPicker.namePlaceholder")}
+          placeholder={t("common.playlistName")}
           spellcheck={false}
           onkeydown={(e) => {
             if (e.key === "Enter") submitCreate();
           }}
         />
         <button class="btn primary" disabled={!canCreate || busy} onclick={submitCreate}>
-          {t("playlistPicker.create")}
+          {t("common.create")}
         </button>
       {:else}
         <button class="btn primary" disabled={busy} onclick={() => (creating = true)}>
           <Plus size={13} stroke-width={2} />
-          <span>{t("playlistPicker.newPlaylist")}</span>
+          <span>{t("common.newPlaylist")}</span>
         </button>
         <button class="btn ghost" disabled={busy} onclick={onSkip}
-          >{t("playlistPicker.cancel")}</button
+          >{t("common.cancel")}</button
         >
       {/if}
     </footer>

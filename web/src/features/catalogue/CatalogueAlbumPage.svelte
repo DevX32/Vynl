@@ -128,7 +128,7 @@
         <div class="hero-sub mono">
           {#if album.year}{album.year} · {/if}
           {tracks.length}
-          {tracks.length === 1 ? t("catalogue.track") : t("catalogue.tracks")}
+          {tracks.length === 1 ? t("common.trackLc") : t("common.tracks")}
           {#if totalDur > 0} · {fmtTotalDuration(totalDur)}{:else if detail.durationText}{detail.durationText}{/if}
         </div>
       </div>
@@ -138,7 +138,7 @@
           class="play-big"
           onclick={() => play(false)}
           disabled={tracks.length === 0}
-          aria-label={t("catalogue.playAll")}
+          aria-label={t("common.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -146,7 +146,7 @@
           class="icon-btn round"
           onclick={() => play(true)}
           disabled={tracks.length === 0}
-          aria-label={t("catalogue.shuffle")}
+          aria-label={t("common.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>
@@ -173,7 +173,7 @@
       {#if detail.description}
         <div class="bio">
           <div class="bio-head">
-            <span class="bio-label mono">{t("catalogue.description")}</span>
+            <span class="bio-label mono">{t("common.about")}</span>
             {#if bioClamped}
               <button
                 class="bio-toggle mono"
@@ -202,7 +202,7 @@
 
 {#if bioOpen && detail?.description}
   <BioModal
-    heading={t("catalogue.description")}
+    heading={t("common.about")}
     text={detail.description}
     image={album?.cover ?? null}
     subtitle={album?.title ?? null}

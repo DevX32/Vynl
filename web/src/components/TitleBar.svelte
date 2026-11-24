@@ -112,7 +112,7 @@
     <button
       class="nav-btn"
       disabled={!canBack || !onBack}
-      aria-label={t("titleBar.back")}
+      aria-label={t("common.back")}
       onclick={onBack}
     >
       <ArrowLeft size={14} stroke-width={1.5} />
@@ -186,7 +186,7 @@
     </button>
     <button
       class="ctrl-btn close-btn"
-      aria-label={t("titleBar.close")}
+      aria-label={t("common.close")}
       onclick={close}
     >
       <X size={15} stroke-width={1.5} />

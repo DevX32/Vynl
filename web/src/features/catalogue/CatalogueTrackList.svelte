@@ -106,7 +106,7 @@
     const isCurrent = nowPlaying?.id === track.id && isPlaying;
     const items: CtxEntry[] = [
       {
-        label: isCurrent ? t("contextMenu.pause") : t("contextMenu.play"),
+        label: isCurrent ? t("common.pause") : t("common.play"),
         icon: isCurrent ? Pause : Play,
         action: () => rowAction(track),
       },
@@ -116,12 +116,12 @@
         action: () => addToQueueFront(cataloguePath(track.id)),
       },
       {
-        label: t("player.addToQueue"),
+        label: t("common.addToQueue"),
         icon: ListPlus,
         action: () => addToQueue(cataloguePath(track.id)),
       },
       {
-        label: t("catalogue.addToPlaylist"),
+        label: t("common.addToPlaylist"),
         icon: ListPlus,
         action: () => {
           streamTarget = track;
@@ -252,8 +252,8 @@
   <div class="tbl-head">
     <span class="h-num mono">#</span>
     <span class="h-cover"></span>
-    <span class="h-title mono">{t("library.titleHeader")}</span>
-    <span class="h-artist mono">{t("library.artistHeader")}</span>
+    <span class="h-title mono">{t("common.titleLabel")}</span>
+    <span class="h-artist mono">{t("common.artistLabel")}</span>
     <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
   </div>
 

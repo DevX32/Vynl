@@ -105,7 +105,7 @@
       </div>
 
       <div class="hero-meta">
-        <div class="kicker mono">{t("catalogue.playlists")}</div>
+        <div class="kicker mono">{t("common.playlists")}</div>
         <div class="hero-title display">{playlist.title}</div>
         {#if playlist.author}
           <div class="hero-sub mono">{playlist.author}</div>
@@ -113,8 +113,8 @@
         <div class="hero-sub mono">
           {playlist.trackCount ?? tracks.length}
           {(playlist.trackCount ?? tracks.length) === 1
-            ? t("catalogue.track")
-            : t("catalogue.tracks")}
+            ? t("common.trackLc")
+            : t("common.tracks")}
           {#if totalDur > 0} · {fmtTotalDuration(totalDur)}{/if}
         </div>
       </div>
@@ -124,7 +124,7 @@
           class="play-big"
           onclick={() => play(false)}
           disabled={tracks.length === 0}
-          aria-label={t("catalogue.playAll")}
+          aria-label={t("common.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -132,7 +132,7 @@
           class="icon-btn round"
           onclick={() => play(true)}
           disabled={tracks.length === 0}
-          aria-label={t("catalogue.shuffle")}
+          aria-label={t("common.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>
@@ -173,7 +173,7 @@
           >
             {#if loadingMore}
               <span class="spin"><LoaderCircle size={13} stroke-width={1.5} /></span>
-              {t("catalogue.loadingMore")}
+              {t("common.loading")}
             {:else}
               {t("catalogue.loadMore")}
             {/if}

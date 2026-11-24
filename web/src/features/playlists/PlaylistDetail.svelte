@@ -219,7 +219,7 @@
     if (!trk) return [];
     return [
       {
-        label: t("playlist.addToQueue"),
+        label: t("common.addToQueue"),
         icon: ListPlus,
         action: () => addToQueue(trk.path),
       },
@@ -378,7 +378,7 @@
       </div>
 
       <div class="hero-meta">
-        <div class="hero-name display" aria-label={t("playlist.playlistName")}>
+        <div class="hero-name display" aria-label={t("common.playlistName")}>
           {pl.name}
         </div>
         <div class="hero-sub mono">
@@ -386,7 +386,7 @@
             {currentTracks.length}
             {currentTracks.length === 1
               ? t("library.song")
-              : t("library.songsPlural")} · {t("playlist.about")}
+              : t("common.songs")} · {t("common.about")}
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
@@ -404,7 +404,7 @@
           class="play-big"
           onclick={() => playAll(false)}
           disabled={currentTracks.length === 0}
-          aria-label={t("player.play")}
+          aria-label={t("common.play")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -412,7 +412,7 @@
           class="icon-btn round"
           onclick={() => playAll(true)}
           disabled={currentTracks.length === 0}
-          aria-label={t("player.shuffle")}
+          aria-label={t("common.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>
@@ -429,8 +429,8 @@
     <div class="tbl-head">
       <span class="h-num mono">#</span>
       <span class="h-cover"></span>
-      <span class="h-title mono">{t("library.titleHeader")}</span>
-      <span class="h-artist mono">{t("library.artistHeader")}</span>
+      <span class="h-title mono">{t("common.titleLabel")}</span>
+      <span class="h-artist mono">{t("common.artistLabel")}</span>
       <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
     </div>
 
@@ -446,7 +446,7 @@
           <span class="mono sub"
             >{pl.paths.length === 0
               ? t("playlist.addSomeTracks")
-              : t("playlist.noMatchesQuery", { query: q })}</span
+              : t("common.nothingMatchesQuery", { query: q })}</span
           >
         </div>
       {:else}
@@ -558,7 +558,7 @@
           title: removeTarget.title,
         },
       )}
-      confirmLabel={t("playlist.removeTrackConfirm")}
+      confirmLabel={t("common.delete")}
       danger
       onconfirm={() => void confirmRemoveTrack()}
       oncancel={() => (removeTarget = null)}
@@ -587,7 +587,7 @@
       >
         <div class="edit-head">
           <span class="edit-title">{t("playlist.editPlaylist")}</span>
-          <button class="edit-close" onclick={() => (editOpen = false)} aria-label={t("dialog.cancel")}>
+          <button class="edit-close" onclick={() => (editOpen = false)} aria-label={t("common.cancel")}>
             <X size={12} stroke-width={1.6} />
           </button>
         </div>
@@ -633,7 +633,7 @@
                 }}
               />
               <button class="action-btn-sm" onclick={() => void savePlaylistRename()} disabled={editBusy || !editRename.trim()}>
-                {t("dialog.save")}
+                {t("common.save")}
               </button>
             </div>
             <button class="edit-action" onclick={() => (confirmDeletePlaylistOpen = true)} disabled={editBusy}>
@@ -651,7 +651,7 @@
       open
       title={t("playlists.deleteTitle")}
       description={t("playlists.deleteBody", { name: pl.name })}
-      confirmLabel={t("playlists.deleteConfirm")}
+      confirmLabel={t("common.delete")}
       danger
       confirmDisabled={editBusy}
       onconfirm={() => void confirmDeletePlaylist()}

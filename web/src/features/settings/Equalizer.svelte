@@ -185,7 +185,7 @@
         class:ready={isModified}
         onclick={resetAll}
         disabled={!settings.eqEnabled || !isModified}
-        aria-label={t("eq.reset")}
+        aria-label={t("common.reset")}
       >
         <RotateCcw size={13} stroke-width={1.6} />
       </button>

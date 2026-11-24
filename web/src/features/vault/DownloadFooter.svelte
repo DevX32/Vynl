@@ -110,9 +110,9 @@
           {:else if counts.failed > 0}
             <span>{t("vault.retryFailed", { n: counts.failed })}</span>
           {:else if finishedOk}
-            <span>{t("vault.doneButton")}</span>
+            <span>{t("common.done")}</span>
           {:else}
-            <span>{t("vault.download")}</span>
+            <span>{t("common.search")}</span>
           {/if}
         </button>
       {/if}

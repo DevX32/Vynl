@@ -132,7 +132,7 @@
         >
           <ChevronRight size={13} stroke-width={1.5} />
         </button>
-        <span class="mono">{t("player.queue")}</span>
+        <span class="mono">{t("common.queue")}</span>
       </div>
       {#if np}
         <span
@@ -168,7 +168,7 @@
       <div class="queue-body" bind:this={drag.rowsEl} bind:this={queueBodyEl}>
         {#if !repeating && userQueue.length > 0}
           <div class="queue-section" in:fade={{ duration: calm ? 0 : 180 }}>
-            <span class="section-label mono">{t("player.queue")}</span>
+            <span class="section-label mono">{t("common.queue")}</span>
             {#snippet userRow(q: LibraryTrack, i: number)}
               {@render qrow(q, "user", i)}
             {/snippet}

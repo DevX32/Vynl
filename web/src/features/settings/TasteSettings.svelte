@@ -29,7 +29,7 @@
         onclick={() => (confirming = true)}
         disabled={summary.entries === 0}
       >
-        {t("settings.tasteReset")}
+        {t("common.reset")}
       </Button>
     {/snippet}
   </SettingRow>
@@ -39,7 +39,7 @@
       open
       title={t("settings.tasteResetTitle")}
       description={t("settings.tasteResetBody")}
-      confirmLabel={t("settings.tasteResetConfirm")}
+      confirmLabel={t("common.reset")}
       danger
       onconfirm={confirmReset}
       oncancel={() => (confirming = false)}

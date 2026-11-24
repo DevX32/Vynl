@@ -161,7 +161,7 @@
               <span class="artist-link">{artistName}</span>
             {/each}
           {:else}
-            <span>{t("player.unknownArtist")}</span>
+            <span>{t("common.unknownArtist")}</span>
           {/if}
         </span>
       </div>
@@ -227,7 +227,7 @@
       class="icon-btn small"
       class:on={getQueueOpen()}
       onclick={toggleQueue}
-      aria-label={t("player.queue")}
+      aria-label={t("common.queue")}
       aria-pressed={getQueueOpen()}
     >
       <ListMusic size={12} stroke-width={1.5} />

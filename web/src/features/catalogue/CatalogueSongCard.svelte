@@ -30,7 +30,7 @@
   class:playing={isCurrent}
   onclick={onplay}
   oncontextmenu={(e) => onmenu?.(e, track)}
-  aria-label={`${t("player.play")}: ${track.title} ${track.artist}`}
+  aria-label={`${t("common.play")}: ${track.title} ${track.artist}`}
 >
   <span class="art">
     {#if track.cover}

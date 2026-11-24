@@ -39,7 +39,7 @@
       class="filter-tab done"
       class:active={trackFilter === "done"}
       onclick={() => onFilterChange("done")}
-    >{counts.done} {t("vault.done")}</button>
+    >{counts.done} {t("common.done")}</button>
   {/if}
   {#if counts.skipped > 0}
     <button
@@ -53,7 +53,7 @@
       class="filter-tab failed"
       class:active={trackFilter === "failed"}
       onclick={() => onFilterChange("failed")}
-    >{counts.failed} {t("vault.failed")}</button>
+    >{counts.failed} {t("common.failed")}</button>
   {/if}
 </div>
 

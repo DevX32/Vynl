@@ -25,8 +25,8 @@
     bind:this={inputEl}
     class="search-field"
     type="text"
-    aria-label={placeholder || t("search.placeholder")}
-    placeholder={placeholder || t("search.placeholder")}
+    aria-label={placeholder || t("common.search")}
+    placeholder={placeholder || t("common.search")}
     {value}
     oninput={(e) => oninput(e.currentTarget.value)}
     spellcheck={false}

@@ -106,7 +106,7 @@
       }}
     >
       <Plus size={12} stroke-width={1.5} />
-      <span>{t("contextMenu.newPlaylist")}</span>
+      <span>{t("common.newPlaylistTitle")}</span>
     </button>
   {/if}
   {#if onnewplaylist && onmovetovynl}
@@ -122,7 +122,7 @@
       }}
     >
       <Import size={12} stroke-width={1.5} />
-      <span>{t("playlists.moveToVynl")}</span>
+      <span>{t("common.moveToVynl")}</span>
     </button>
   {/if}
   {#if onrename}
@@ -135,7 +135,7 @@
       }}
     >
       <Pencil size={12} stroke-width={1.5} />
-      <span>{t("contextMenu.rename")}</span>
+      <span>{t("common.rename")}</span>
     </button>
   {/if}
   {#if (onrename || onnewplaylist) && ondelete}
@@ -151,7 +151,7 @@
       }}
     >
       <Trash2 size={12} stroke-width={1.5} />
-      <span>{t("contextMenu.delete")}</span>
+      <span>{t("common.delete")}</span>
     </button>
   {/if}
   {#if items}

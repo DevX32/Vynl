@@ -23,7 +23,7 @@
     onClose,
     onSubmit,
     title = t("catalogue.bulkActions"),
-    addLabel = t("catalogue.addToPlaylist"),
+    addLabel = t("common.addToPlaylist"),
     downloadLabel = t("catalogue.downloadToPlaylist"),
     searchPlaceholder = t("playlist.searchPlaceholder"),
     emptyText = t("catalogue.noResults"),
@@ -145,7 +145,7 @@
       <button
         class="icon-btn close-btn"
         onclick={onClose}
-        aria-label={t("titleBar.close")}
+        aria-label={t("common.close")}
       >
         <X size={12} stroke-width={1.6} />
       </button>
@@ -185,7 +185,7 @@
 
     <div class="dl-tools">
       <button class="tool-btn" onclick={toggleAllShown}>
-        {allShownSelected ? t("catalogue.clearSelection") : t("catalogue.selectAll")}
+        {allShownSelected ? t("common.clear") : t("catalogue.selectAll")}
       </button>
       <span class="tool-count mono">
         {t("catalogue.selected", { n: selectedCount })}

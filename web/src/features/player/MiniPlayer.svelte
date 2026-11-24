@@ -442,7 +442,7 @@
       <button
         class="play-btn"
         onclick={() => sendMiniCommand({ type: "toggle" })}
-        aria-label={playing ? t("player.pause") : t("player.play")}
+        aria-label={playing ? t("common.pause") : t("common.play")}
         disabled={!track}
       >
         <span class="p-icon" class:show={playing}>
@@ -479,7 +479,7 @@
         class="slider vol"
         class:dragging={volDragging}
         role="slider"
-        aria-label={t("player.volume")}
+        aria-label={t("common.volume")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(volRatio * 100)}

@@ -22,8 +22,8 @@
     {t("lyrics.helpRightClick")}
   </div>
   <div class="help-item">
-    <span class="help-key mono">{t("lyrics.helpKeyEsc")}</span>
-    {t("lyrics.helpEsc")}
+    <span class="help-key mono">{t("common.esc")}</span>
+    {t("common.esc")}
   </div>
 </div>
 <button class="btn-ghost help-close" onclick={onClose}>{t("lyrics.gotIt")}</button>

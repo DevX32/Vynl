@@ -130,7 +130,7 @@
     const isPlaying = trk.id === nowPlaying?.id && playing;
     return [
       {
-        label: isPlaying ? t("contextMenu.pause") : t("contextMenu.play"),
+        label: isPlaying ? t("common.pause") : t("common.play"),
         icon: isPlaying ? Pause : Play,
         action: () => rowAction(trk),
       },
@@ -140,13 +140,13 @@
         action: () => addToQueueFront(trk.path),
       },
       {
-        label: t("player.addToQueue"),
+        label: t("common.addToQueue"),
         icon: ListPlus,
         action: () => addToQueue(trk.path),
       },
       { type: "separator" },
       {
-        label: t("library.addToPlaylist"),
+        label: t("common.addToPlaylist"),
         icon: ListPlus,
         action: () => openPicker(trk),
       },
@@ -158,7 +158,7 @@
       },
       { type: "separator" },
       {
-        label: t("contextMenu.delete"),
+        label: t("common.delete"),
         icon: Trash2,
         danger: true,
         action: () => {
@@ -290,12 +290,12 @@
   <div class="view" in:fade={{ duration: 150 }}>
     <div class="hdr">
       <div class="hdr-copy">
-        <div class="kicker mono">{t("library.title")}</div>
-        <div class="title display">{t("library.songs")}</div>
+        <div class="kicker mono">{t("common.library")}</div>
+        <div class="title display">{t("common.songs")}</div>
         <div class="sub mono">
           {#if hits.length > 0}
             {hits.length}
-            {hits.length === 1 ? t("library.song") : t("library.songsPlural")} ·
+            {hits.length === 1 ? t("library.song") : t("common.songs")} ·
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
@@ -321,14 +321,14 @@
         <SearchInput
           bind:this={searchInput}
           bind:value={query}
-          placeholder={t("search.placeholder")}
+          placeholder={t("common.search")}
           oninput={(q) => (query = q)}
         />
         <button
           class="play-btn"
           onclick={() => playAll(false)}
           disabled={hits.length === 0}
-          aria-label={t("library.playAll")}
+          aria-label={t("common.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -336,7 +336,7 @@
           class="shuffle-btn"
           onclick={() => playAll(true)}
           disabled={hits.length === 0}
-          aria-label={t("player.shuffle")}
+          aria-label={t("common.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>
@@ -346,8 +346,8 @@
     <div class="tbl-head">
       <span class="h-num mono">#</span>
       <span class="h-cover"></span>
-      <span class="h-title mono">{t("library.titleHeader")}</span>
-      <span class="h-artist mono">{t("library.artistHeader")}</span>
+      <span class="h-title mono">{t("common.titleLabel")}</span>
+      <span class="h-artist mono">{t("common.artistLabel")}</span>
       <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
       <span class="h-actions"></span>
     </div>
@@ -363,7 +363,7 @@
           >
           <span class="empty-sub mono"
             >{debouncedQuery
-              ? t("library.noMatchesQuery", { query: debouncedQuery })
+              ? t("common.nothingMatchesQuery", { query: debouncedQuery })
               : t("library.pasteToStart")}</span
           >
         </div>
@@ -438,7 +438,7 @@
     open
     title={t("library.deleteTitle")}
     description={t("library.deleteBody", { title: deleteTarget.title })}
-    confirmLabel={t("library.deleteConfirm")}
+    confirmLabel={t("common.delete")}
     danger
     onconfirm={() => void handleDelete()}
     oncancel={() => {

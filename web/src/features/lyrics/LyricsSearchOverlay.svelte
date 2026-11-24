@@ -68,7 +68,7 @@
     placeholder={t("lyrics.searchPlaceholder")}
     onkeydown={(e) => e.key === "Enter" && run()}
   />
-  <button class="btn" onclick={() => run()} disabled={loading}>{t("lyrics.search")}</button>
+  <button class="btn" onclick={() => run()} disabled={loading}>{t("common.search")}</button>
 </div>
 
 {#if results.length > 0}

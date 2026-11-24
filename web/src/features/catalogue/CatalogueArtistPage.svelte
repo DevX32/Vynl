@@ -183,7 +183,7 @@
           {@const wiki = splitWikiAttribution(artist.description)}
           <div class="bio">
             <div class="bio-head">
-              <span class="bio-label mono">{t("catalogue.description")}</span>
+              <span class="bio-label mono">{t("common.about")}</span>
               {#if bioClamped}
                 <button
                   class="bio-toggle mono"
@@ -209,7 +209,7 @@
           class="play-big"
           onclick={() => play(false)}
           disabled={topTracks.length === 0}
-          aria-label={t("catalogue.playAll")}
+          aria-label={t("common.playAll")}
         >
           <Play size={16} fill="currentColor" stroke-width={0} />
         </button>
@@ -217,7 +217,7 @@
           class="icon-btn round"
           onclick={() => play(true)}
           disabled={topTracks.length === 0}
-          aria-label={t("catalogue.shuffle")}
+          aria-label={t("common.shuffle")}
         >
           <Shuffle size={14} stroke-width={1.5} />
         </button>
@@ -321,7 +321,7 @@
 
 {#if bioOpen && artist?.description}
   <BioModal
-    heading={t("catalogue.description")}
+    heading={t("common.about")}
     text={artist.description}
     image={artist.cover}
     subtitle={artist.name}

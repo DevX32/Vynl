@@ -44,7 +44,7 @@
       <button
         type="button"
         onclick={() => toasts.dismiss(toast.id)}
-        aria-label={t("toast.dismiss")}
+        aria-label={t("common.dismiss")}
       >
         <X size={12} strokeWidth={1.5} />
       </button>

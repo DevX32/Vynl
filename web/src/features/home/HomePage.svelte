@@ -188,7 +188,7 @@
         </button>
           <button class="action-btn" onclick={() => onNavigate("library")}>
             <Library size={14} stroke-width={1.5} />
-            <span>{t("nav.library")}</span>
+            <span>{t("common.library")}</span>
           </button>
       </div>
 

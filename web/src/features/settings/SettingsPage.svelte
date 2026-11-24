@@ -10,7 +10,7 @@
 <section class="settings-page">
   <div class="head">
     <div class="kicker mono">VYNL</div>
-    <div class="title display">{t("settings.title")}</div>
+    <div class="title display">{t("common.settings")}</div>
   </div>
 
   <div class="body">

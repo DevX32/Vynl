@@ -13,7 +13,7 @@
   const options = $derived(
     CROSSFADE_STEPS.map((secs) => ({
       secs,
-      label: secs === 0 ? t("player.crossfadeOff") : fmtDuration(secs),
+      label: secs === 0 ? t("common.off") : fmtDuration(secs),
     })),
   );
 

@@ -308,7 +308,7 @@
 
 {#snippet modal(title: string, close: () => void, body: import("svelte").Snippet)}
   <div class="modal" transition:fade={{ duration: 120 }}>
-    <button class="backdrop" onclick={close} aria-label={t("lyrics.helpEsc")}></button>
+    <button class="backdrop" onclick={close} aria-label={t("common.esc")}></button>
     <div class="modal-card" in:fly={{ y: 8, duration: 180, easing: cubicOut }} out:fly={{ y: 8, duration: 120, easing: cubicIn }}>
       <div class="modal-title display">{title}</div>
       {@render body()}
@@ -344,7 +344,7 @@
             <div class="track-text">
               <div class="title display" title={np.title}>{np.title}</div>
               <div class="meta mono">
-                <span>{np.artist || t("lyrics.unknownArtist")}</span>
+                <span>{np.artist || t("common.unknownArtist")}</span>
                 {#if np.album}<span class="sep">·</span><span class="album" title={np.album}>{np.album}</span>{/if}
               </div>
             </div>
@@ -354,7 +354,7 @@
             <button class="lyr-icon" onclick={copyAll} aria-label={t("lyrics.copyAllLyrics")}>
               <Copy size={14} stroke-width={1.5} />
             </button>
-            <button class="lyr-icon" class:active={settingsOpen} onclick={() => (settingsOpen = !settingsOpen)} aria-label={t("lyrics.settings")}>
+            <button class="lyr-icon" class:active={settingsOpen} onclick={() => (settingsOpen = !settingsOpen)} aria-label={t("common.settings")}>
               <Settings2 size={14} stroke-width={1.5} />
             </button>
             <span class="lyr-divider" aria-hidden="true"></span>
@@ -376,7 +376,7 @@
               <div class="settings-row">
                 <button class="btn-ghost settings-action mono" onclick={() => open("search")}>
                   <Search size={13} stroke-width={1.5} />
-                  {t("lyrics.search")}
+                  {t("common.search")}
                 </button>
               </div>
               <div class="settings-row">

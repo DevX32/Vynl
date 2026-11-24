@@ -178,7 +178,7 @@
       <div class="banner" class:connected={status.signedIn}>
         <Blobatar {...avatar} class="avatar" />
         <div class="banner-copy">
-          <span class="caption mono">{t("account.caption")}</span>
+          <span class="caption mono">{t("common.account")}</span>
           <span class="banner-title">
             {#if status.signedIn}
               {status.email}

@@ -74,9 +74,9 @@
         </div>
       {/if}
       <div class="footer">
-        <Button onclick={oncancel}>{t("dialog.cancel")}</Button>
+        <Button onclick={oncancel}>{t("common.cancel")}</Button>
         <Button variant={danger ? "danger" : "primary"} onclick={onconfirm} disabled={confirmDisabled}
-          >{confirmLabel || t("dialog.confirm")}</Button
+          >{confirmLabel || t("common.confirm")}</Button
         >
       </div>
     </div>

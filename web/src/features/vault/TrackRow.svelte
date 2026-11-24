@@ -34,16 +34,16 @@
 
   function statusLabel(s: TrackProgress["status"], message?: string): string {
     switch (s) {
-      case "done": return t("trackRow.done");
-      case "error": return t("trackRow.failed");
+      case "done": return t("common.done");
+      case "error": return t("common.failed");
       case "skipped":
         if (message?.includes("length")) return t("trackRow.badLen");
         return t("trackRow.exists");
       case "cancelled": return t("trackRow.cancelled");
-      case "searching": return t("trackRow.search");
+      case "searching": return t("common.search");
       case "processing": return t("trackRow.tag");
       case "downloading": return "";
-      default: return t("trackRow.queue");
+      default: return t("common.queue");
     }
   }
 
