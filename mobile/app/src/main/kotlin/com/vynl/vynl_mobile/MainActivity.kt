@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -44,10 +45,13 @@ class MainActivity : ComponentActivity() {
             VynlTheme {
                 var ready by remember { mutableStateOf(false) }
                 DisposableEffect(Unit) {
-                    val callback = onBackPressedDispatcher.addCallback(this@MainActivity) {
-                        val handled = goBackState.value?.invoke() == true
-                        callback.isEnabled = !handled
+                    val callback = object : OnBackPressedCallback(true) {
+                        override fun handleOnBackPressed() {
+                            val handled = goBackState.value?.invoke() == true
+                            isEnabled = !handled
+                        }
                     }
+                    onBackPressedDispatcher.addCallback(this@MainActivity, callback)
                     onDispose { callback.remove() }
                 }
                 Box(
