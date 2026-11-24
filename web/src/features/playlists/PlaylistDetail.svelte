@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import {
     Play,
     Shuffle,
@@ -569,6 +571,7 @@
     <div
       class="backdrop"
       role="presentation"
+      transition:fade={{ duration: 150 }}
       onclick={() => (editOpen = false)}
     >
       <div
@@ -577,6 +580,8 @@
         aria-modal="true"
         aria-label={t("playlist.editPlaylist")}
         tabindex="-1"
+        in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+        out:fly={{ y: 8, duration: 140, easing: cubicIn }}
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => {
           if (e.key === "Escape") {

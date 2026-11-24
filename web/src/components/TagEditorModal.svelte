@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { fade } from "svelte/transition";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import { X } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
@@ -89,6 +90,8 @@
     aria-modal="true"
     aria-label={t("library.editTags")}
     tabindex="-1"
+    in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+    out:fly={{ y: 8, duration: 140, easing: cubicIn }}
     onclick={(e) => e.stopPropagation()}
     use:focusTrap
   >

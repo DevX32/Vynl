@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import Button from "./Button.svelte";
   import { t } from "@lib/i18n";
 
@@ -49,6 +51,7 @@
   <div
     class="backdrop"
     role="presentation"
+    transition:fade={{ duration: 150 }}
     onclick={backdrop}
   >
     <div
@@ -59,6 +62,8 @@
       aria-describedby={description ? "dlg-desc" : undefined}
       tabindex="-1"
       bind:this={panelEl}
+      in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+      out:fly={{ y: 8, duration: 140, easing: cubicIn }}
       onclick={(e) => e.stopPropagation()}
       onkeydown={onKey}
     >
@@ -93,16 +98,6 @@
     z-index: 1000;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(6px);
-    animation: fade-in 0.12s cubic-bezier(0.25, 0.08, 0.25, 1);
-  }
-
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
   }
 
   .panel {
@@ -113,21 +108,9 @@
     min-width: 280px;
     max-width: 380px;
     position: relative;
-    animation: slide-in 0.12s cubic-bezier(0.25, 0.08, 0.25, 1);
     box-shadow:
       0 22px 60px rgba(0, 0, 0, 0.55),
       inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  }
-
-  @keyframes slide-in {
-    from {
-      opacity: 0;
-      transform: scale(0.96) translateY(6px);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-    }
   }
 
   .header {

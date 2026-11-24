@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { fade } from "svelte/transition";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import { LoaderCircle, X, Dices } from "lucide-svelte";
   import { avatarProps, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar.svelte";
   import { Blobatar } from "@blobatar/svelte";
@@ -158,6 +159,8 @@
     aria-modal="true"
     aria-label={t("account.title")}
     tabindex="-1"
+    in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+    out:fly={{ y: 8, duration: 140, easing: cubicIn }}
     onclick={(event) => event.stopPropagation()}
     use:focusTrap
   >
@@ -325,18 +328,6 @@
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     background: var(--bg-raise);
-    animation: modal-in 0.18s cubic-bezier(0.2, 0.85, 0.2, 1);
-  }
-
-  @keyframes modal-in {
-    from {
-      opacity: 0;
-      transform: translateY(-8px) scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
   }
 
   .head {

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { vynl } from "./lib/vynl";
   import {
@@ -597,6 +599,7 @@
   <div
     class="backdrop"
     role="presentation"
+    transition:fade={{ duration: 150 }}
     onclick={() => (editTarget = null)}
   >
     <div
@@ -605,6 +608,8 @@
       aria-modal="true"
       aria-label={t("playlist.editPlaylist")}
       tabindex="-1"
+      in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+      out:fly={{ y: 8, duration: 140, easing: cubicIn }}
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => {
         if (e.key === "Escape") {

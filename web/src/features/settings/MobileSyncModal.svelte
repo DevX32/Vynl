@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { fade } from "svelte/transition";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import { X, RefreshCw, ShieldAlert, WifiOff } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import Button from "@components/Button.svelte";
@@ -39,6 +40,8 @@
     aria-modal="true"
     aria-label={t("settings.mobileSync")}
     tabindex="-1"
+    in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+    out:fly={{ y: 8, duration: 140, easing: cubicIn }}
     onclick={(e) => e.stopPropagation()}
   >
     <div class="head">
@@ -136,18 +139,6 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    animation: msync-in 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-  }
-
-  @keyframes msync-in {
-    from {
-      opacity: 0;
-      transform: translateY(-6px) scale(0.97);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
   }
 
   .head {

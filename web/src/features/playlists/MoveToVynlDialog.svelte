@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import {
     Link2,
     LoaderCircle,
@@ -317,13 +319,15 @@
   </ul>
 {/snippet}
 
-<div class="overlay" role="presentation">
+<div class="overlay" role="presentation" transition:fade={{ duration: 150 }}>
   <div
     class="dialog"
     role="dialog"
     aria-modal="true"
     aria-label={t("common.moveToVynl")}
     tabindex="-1"
+    in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+    out:fly={{ y: 8, duration: 140, easing: cubicIn }}
   >
     <header class="head">
       <span class="title">{t("common.moveToVynl")}</span>
@@ -538,7 +542,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
     z-index: 100;
   }
 
