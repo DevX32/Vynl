@@ -405,7 +405,6 @@ export const en = {
     upToDate: "You're on the latest version",
     updateTo: "Update to {version}",
     updateAvailableHint: "A newer version is ready to install",
-    updateAvailableTo: "Update available: {version}",
     availableTitle: "Update available",
     downloadingTitle: "Downloading update",
     failedTitle: "Update failed",

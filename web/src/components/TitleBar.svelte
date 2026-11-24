@@ -141,7 +141,7 @@
       <button
         class="update-btn"
         aria-label={t("update.availableTitle")}
-        title={t("update.updateAvailableTo", { version: updateStatus?.version ?? "" })}
+        title={t("update.availableTitle")}
         onclick={() => void installAppUpdate()}
         oncontextmenu={(e) => {
           e.preventDefault();
