@@ -272,7 +272,12 @@
           }),
         );
       } else {
-        toasts.success(t("vault.downloadComplete", { n: summary.done }));
+        toasts.success(
+          t("vault.downloadComplete", {
+            n: summary.done,
+            unit: summary.done === 1 ? t("common.trackLc") : t("common.tracks"),
+          }),
+        );
       }
     });
     window.addEventListener("keydown", handleGlobalKey);

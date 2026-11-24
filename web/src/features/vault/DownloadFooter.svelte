@@ -73,7 +73,7 @@
           <div class="track-pill mono">
             <span class="pill-num">{total}</span>
             <span class="pill-label"
-              >{total === 1 ? t("vault.track") : t("vault.tracks")}</span
+              >{t("vault.tracks")}</span
             >
             <span class="pill-sep"></span>
             <span class="pill-dur">{fmtDuration(totalDuration)}</span>

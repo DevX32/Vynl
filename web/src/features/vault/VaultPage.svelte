@@ -774,7 +774,7 @@
           <div class="coll-title display">{collection.title}</div>
           <div class="coll-sub mono">
             {collection.tracks.length}
-            {collection.tracks.length === 1 ? t("vault.track") : t("vault.tracks")}
+            {t("vault.tracks")}
             {#if totalDur() > 0} · {fmtDuration(totalDur())}{/if}
           </div>
         </div>

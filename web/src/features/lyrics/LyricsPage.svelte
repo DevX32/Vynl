@@ -297,7 +297,11 @@
 
   function copySelected(): void {
     const text = selected.map((i) => lines[i]?.text?.trim()).filter((v): v is string => !!v).join("\n\n");
-    if (text) copy(text, "lyrics.copiedN", { n: selected.length });
+    if (text)
+      copy(text, "lyrics.copiedN", {
+        n: selected.length,
+        unit: selected.length === 1 ? t("lyrics.line") : t("lyrics.lines"),
+      });
   }
 
   function open(next: Exclude<Overlay, null>): void {
@@ -456,7 +460,7 @@
 
       {#if selected.length > 0}
         <div class="selection" transition:fly={{ y: 8, duration: 140, easing: cubicOut }}>
-          <span class="selection-count mono">{t("lyrics.nLines", { n: selected.length, s: selected.length > 1 ? "s" : "", c: selected.reduce((n, i) => n + (lines[i]?.text?.length ?? 0), 0) })}</span>
+          <span class="selection-count mono">{t("lyrics.nLines", { n: selected.length, unit: selected.length === 1 ? t("lyrics.line") : t("lyrics.lines"), c: selected.reduce((n, i) => n + (lines[i]?.text?.length ?? 0), 0) })}</span>
           <button class="sel-btn" onclick={copySelected} aria-label={t("lyrics.copySelected")}><Copy size={13} stroke-width={1.5} /></button>
           <button class="sel-btn" onclick={() => (selected = [])} aria-label={t("lyrics.clearSelection")}><X size={13} stroke-width={1.5} /></button>
         </div>
