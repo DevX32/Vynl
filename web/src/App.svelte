@@ -941,6 +941,7 @@
   .edit-action {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     width: 100%;
     padding: 8px 12px;
