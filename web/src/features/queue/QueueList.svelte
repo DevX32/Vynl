@@ -301,7 +301,7 @@
     justify-content: center;
     width: 22px;
     height: 22px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     color: var(--faint);
     transition:
       color 0.1s,

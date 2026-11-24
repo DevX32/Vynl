@@ -477,7 +477,7 @@
   .sidebar .icon-btn.small {
     width: 26px;
     height: 26px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
   }
 
   .nav-group {
@@ -973,6 +973,7 @@
     gap: 9px;
     width: 100%;
     padding: 8px 10px;
+    border-radius: var(--radius-sm);
     color: var(--dim);
     font-size: 12.5px;
     text-align: left;
@@ -1038,7 +1039,7 @@
 
     .rail-cover,
     .rail-cover-grid {
-      border-radius: 3px;
+    border-radius: var(--radius-sm);
     }
 
     .rail-name {

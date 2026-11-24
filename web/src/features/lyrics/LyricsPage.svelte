@@ -632,7 +632,7 @@
   .mini-switch {
     width: 28px;
     height: 15px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     background: var(--line-strong);
     border: none;
     padding: 0;

@@ -85,7 +85,7 @@
     color: var(--text);
     background: rgba(10, 10, 12, 0.78);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     padding: 2px 6px;
     backdrop-filter: blur(6px);
     pointer-events: none;

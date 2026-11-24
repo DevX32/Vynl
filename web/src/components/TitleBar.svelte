@@ -225,7 +225,7 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--faint);
     transition:
       color 0.1s,
@@ -316,7 +316,7 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 14%, transparent);
     transition:
@@ -355,7 +355,7 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--faint);
     transition:
       color 0.1s,
@@ -384,7 +384,7 @@
     justify-content: center;
     width: 32px;
     height: 26px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--faint);
     transition:
       color 0.1s,

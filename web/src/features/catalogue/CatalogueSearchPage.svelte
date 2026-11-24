@@ -523,7 +523,7 @@
 
   .sk-line {
     height: 9px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     background: var(--bg-raise);
     animation: sk-pulse 1.4s ease-in-out infinite;
   }

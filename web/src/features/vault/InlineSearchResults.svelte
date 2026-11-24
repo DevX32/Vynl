@@ -292,7 +292,7 @@
 
   .skel-line {
     height: 9px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: linear-gradient(
       90deg,
       var(--bg) 25%,

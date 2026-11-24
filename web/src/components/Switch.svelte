@@ -31,7 +31,7 @@
     height: 20px;
     background: var(--line-strong);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.2s;
     flex-shrink: 0;
@@ -54,7 +54,7 @@
     width: 14px;
     height: 14px;
     background: var(--faint);
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     transition:
       transform 0.2s,
       background 0.2s;

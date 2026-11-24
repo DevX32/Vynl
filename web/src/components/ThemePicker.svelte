@@ -150,7 +150,7 @@
   .pv-cover {
     flex: 1;
     min-height: 14px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
