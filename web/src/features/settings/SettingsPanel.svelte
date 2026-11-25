@@ -225,8 +225,19 @@
       <div class="hint mono">{t("settings.themeHint")}</div>
     </div>
 
-    <div class="section flush divider">
-      <div class="label mono">{t("settings.accentColor")}</div>
+    <div class="section flush divider accent-section">
+      <div class="label-row">
+        <div class="label mono">{t("settings.accentColor")}</div>
+      </div>
+      <div class="label-toggle">
+        <span class="label mono">{t("settings.dynamicAccent")}</span>
+        <Switch
+          on={settings.dynamicAccent}
+          label={t("settings.dynamicAccentToggle")}
+          onclick={() =>
+            void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
+        />
+      </div>
       <ColorPicker
         value={settings.accentColor}
         presets={ACCENT_PRESETS}
@@ -234,23 +245,11 @@
         disabled={settings.dynamicAccent}
         onchange={(hex) => void patchSettings({ accentColor: hex })}
       />
-      <div class="hint mono">{t("settings.accentColorHint")}</div>
-    </div>
-
-    <div class="divider">
-      <SettingRow
-        label={t("settings.dynamicAccent")}
-        hint={t("settings.dynamicAccentHint")}
-      >
-        {#snippet control()}
-          <Switch
-            on={settings.dynamicAccent}
-            label={t("settings.dynamicAccentToggle")}
-            onclick={() =>
-              void patchSettings({ dynamicAccent: !settings.dynamicAccent })}
-          />
-        {/snippet}
-      </SettingRow>
+      <div class="hint mono">
+        {settings.dynamicAccent
+          ? t("settings.dynamicAccentHint")
+          : t("settings.accentColorHint")}
+      </div>
     </div>
   </div>
 
@@ -565,6 +564,29 @@
     font-size: 11px;
     color: var(--dim);
     letter-spacing: 0.1em;
+  }
+
+  .accent-section {
+    position: relative;
+  }
+
+  .label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-right: 96px;
+  }
+
+  .label-toggle {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 15px;
   }
 
   .hint {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { Palette, Check } from "lucide-svelte";
+  import { Pipette, Check } from "lucide-svelte";
   import {
     isValidHexColor,
     normalizeHex,
@@ -185,20 +185,13 @@
       type="button"
       class="swatch custom"
       class:selected={!presets.some((c) => sameColor(value, c))}
-      style:background={value}
       disabled={disabled}
       aria-label={label}
       aria-haspopup="dialog"
       aria-expanded={open}
       onclick={togglePopover}
     >
-      {#if !presets.some((c) => sameColor(value, c))}
-        <span class="swatch-check">
-          <Check size={11} stroke-width={2.5} />
-        </span>
-      {:else}
-        <Palette size={12} stroke-width={1.5} />
-      {/if}
+      <Pipette size={14} stroke-width={1.5} />
     </button>
   </div>
 
@@ -278,7 +271,8 @@
     position: relative;
     width: 26px;
     height: 26px;
-    border-radius: var(--radius-pill);
+    padding: 0;
+    border-radius: var(--radius-sm);
     border: 2px solid transparent;
     cursor: pointer;
     display: flex;
@@ -308,7 +302,15 @@
   }
 
   .swatch.custom {
-    color: var(--accent-text);
+    background: transparent;
+    color: var(--dim);
+    border-style: dashed;
+    border-color: var(--line-strong);
+    box-shadow: none;
+  }
+
+  .swatch.custom.selected {
+    color: var(--accent);
   }
 
   .swatch-check {
@@ -317,7 +319,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
+    border-radius: var(--radius-sm);
     background: rgba(14, 14, 16, 0.78);
     color: #fff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
