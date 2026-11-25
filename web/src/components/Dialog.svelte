@@ -4,6 +4,7 @@
   import { cubicIn, cubicOut } from "svelte/easing";
   import Button from "./Button.svelte";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
 
   let {
     open = false,
@@ -31,12 +32,7 @@
     oncancel();
   }
 
-  let panelEl = $state<HTMLDivElement>();
 
-  $effect(() => {
-    if (!panelEl) return;
-    if (!panelEl.contains(document.activeElement)) panelEl.focus();
-  });
 
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape" && !e.defaultPrevented) {
@@ -61,11 +57,11 @@
       aria-labelledby="dlg-title"
       aria-describedby={description ? "dlg-desc" : undefined}
       tabindex="-1"
-      bind:this={panelEl}
       in:fly={{ y: 8, duration: 180, easing: cubicOut }}
       out:fly={{ y: 8, duration: 140, easing: cubicIn }}
       onclick={(e) => e.stopPropagation()}
       onkeydown={onKey}
+      use:focusTrap
     >
       <div class="header">
         <span id="dlg-title">{title}</span>

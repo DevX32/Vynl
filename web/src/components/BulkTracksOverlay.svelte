@@ -4,6 +4,7 @@
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import { stripAlbumSuffix } from "@lib/format";
   import SearchInput from "@components/SearchInput.svelte";
   import TrackCover from "@components/TrackCover.svelte";
@@ -125,6 +126,7 @@
 <div
   class="dl-overlay"
   role="dialog"
+  aria-modal="true"
   tabindex="-1"
   aria-label={title}
   transition:fade={{ duration: 150 }}
@@ -139,6 +141,7 @@
     class="dl-panel"
     in:fly={{ x: 28, duration: 220, easing: cubicOut }}
     out:fly={{ x: 28, duration: 160, easing: cubicIn }}
+    use:focusTrap
   >
     <div class="dl-head">
       <span class="display dl-title">{title}</span>

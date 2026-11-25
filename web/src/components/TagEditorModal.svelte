@@ -97,7 +97,7 @@
   >
     <div class="head">
       <span class="title display">{t("library.editTags")}</span>
-      <button class="close" onclick={closeTagEditor} aria-label={t("common.close")}>
+      <button class="icon-btn close-btn" onclick={closeTagEditor} aria-label={t("common.close")}>
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -176,14 +176,21 @@
     border-bottom: 1px solid var(--line);
   }
   .title { font-size: 16px; font-weight: 600; }
-  .close {
-    width: 24px; height: 24px; border-radius: var(--radius-sm);
-    background: var(--bg-raise); border: 1px solid var(--line);
-    color: var(--faint); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transform: rotate(45deg);
+  .close-btn {
+    width: 24px;
+    height: 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    transform: rotate(45deg);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
-  .close:hover { color: var(--text); border-color: var(--line-strong); }
-  .close :global(svg) { transform: rotate(-45deg); }
+  .close-btn:hover {
+    background: var(--surface);
+    border-color: var(--line-strong);
+  }
+  .close-btn :global(svg) {
+    transform: rotate(-45deg);
+  }
   .body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .row { display: flex; gap: 12px; }

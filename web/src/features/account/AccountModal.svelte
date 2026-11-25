@@ -205,7 +205,7 @@
   >
     <div class="head">
       <span class="brand mono">VYNL</span>
-      <button class="close" onclick={onclose} aria-label={t("common.close")}>
+      <button class="icon-btn close-btn" onclick={onclose} aria-label={t("common.close")}>
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -406,31 +406,22 @@
     line-height: 1;
   }
 
-  .close {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
+  .close-btn {
     width: 24px;
     height: 24px;
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: var(--bg-raise);
-    color: var(--faint);
     transform: rotate(45deg);
-    transition:
-      color 0.15s,
-      background 0.15s,
-      border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
 
-  .close :global(svg) {
-    transform: rotate(-45deg);
-  }
-
-  .close:hover {
-    color: var(--text);
+  .close-btn:hover {
+    background: var(--surface);
     border-color: var(--line-strong);
+  }
+
+  .close-btn :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .body {

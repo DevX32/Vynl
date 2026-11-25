@@ -3,6 +3,7 @@
   import { cubicIn, cubicOut } from "svelte/easing";
   import { X, RefreshCw, ShieldAlert, WifiOff } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import Button from "@components/Button.svelte";
   import Switch from "@components/Switch.svelte";
   import {
@@ -43,10 +44,11 @@
     in:fly={{ y: 8, duration: 180, easing: cubicOut }}
     out:fly={{ y: 8, duration: 140, easing: cubicIn }}
     onclick={(e) => e.stopPropagation()}
+    use:focusTrap
   >
     <div class="head">
       <span class="title display">{t("settings.mobileSync")}</span>
-      <button class="icon-btn" onclick={closeMobileSyncUi} aria-label={t("common.close")}>
+      <button class="icon-btn close-btn" onclick={closeMobileSyncUi} aria-label={t("common.close")}>
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -157,31 +159,21 @@
     white-space: nowrap;
   }
 
-  .icon-btn {
+  .close-btn {
     width: 24px;
     height: 24px;
-    flex-shrink: 0;
-    border-radius: var(--radius-sm);
-    background: var(--bg-raise);
+    background: var(--surface);
     border: 1px solid var(--line);
-    color: var(--faint);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
     transform: rotate(45deg);
-    transition:
-      color 0.15s,
-      border-color 0.15s,
-      background 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
 
-  .icon-btn:hover {
-    color: var(--text);
+  .close-btn:hover {
+    background: var(--surface);
     border-color: var(--line-strong);
   }
 
-  .icon-btn :global(svg) {
+  .close-btn :global(svg) {
     transform: rotate(-45deg);
   }
 

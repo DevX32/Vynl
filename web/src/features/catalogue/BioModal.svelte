@@ -3,6 +3,7 @@
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import { splitWikiAttribution, blobSrc } from "@lib/format";
 
   let {
@@ -52,6 +53,7 @@
     aria-modal="true"
     aria-label={heading}
     tabindex="-1"
+    use:focusTrap
   >
     <header class="head">
       {#if image}
@@ -68,7 +70,7 @@
           <span class="head-title">{subtitle}</span>
         {/if}
       </div>
-      <button class="close" onclick={onClose} aria-label={t("common.close")}>
+      <button class="icon-btn close-btn" onclick={onClose} aria-label={t("common.close")}>
         <X size={12} stroke-width={1.6} />
       </button>
     </header>
@@ -153,27 +155,21 @@
     text-overflow: ellipsis;
   }
 
-  .close {
-    flex-shrink: 0;
+  .close-btn {
     width: 24px;
     height: 24px;
-    border-radius: var(--radius-sm);
-    background: var(--bg-raise);
+    background: var(--surface);
     border: 1px solid var(--line);
-    color: var(--faint);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
     transform: rotate(45deg);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
 
-  .close:hover {
-    color: var(--text);
+  .close-btn:hover {
+    background: var(--surface);
     border-color: var(--line-strong);
   }
 
-  .close :global(svg) {
+  .close-btn :global(svg) {
     transform: rotate(-45deg);
   }
 

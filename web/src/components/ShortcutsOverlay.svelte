@@ -3,6 +3,7 @@
   import { cubicIn, cubicOut } from "svelte/easing";
   import { X } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import {
     SHORTCUT_CATEGORIES,
     bindingParts,
@@ -17,7 +18,16 @@
     key,
     items: actions.filter((a: KeybindAction) => a.categoryKey === key),
   })).filter((c) => c.items.length > 0);
+
+  function onKeydown(e: KeyboardEvent): void {
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      e.preventDefault();
+      closeShortcutsOverlay();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="overlay" transition:fade={{ duration: 150 }} onclick={closeShortcutsOverlay}>
@@ -32,10 +42,11 @@
     in:fly={{ y: 8, duration: 180, easing: cubicOut }}
     out:fly={{ y: 8, duration: 140, easing: cubicIn }}
     onclick={(e) => e.stopPropagation()}
+    use:focusTrap
   >
     <div class="head">
       <span class="title display">{t("shortcuts.title")}</span>
-      <button class="close" onclick={closeShortcutsOverlay} aria-label={t("common.close")}>
+      <button class="icon-btn close-btn" onclick={closeShortcutsOverlay} aria-label={t("common.close")}>
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -98,30 +109,21 @@
     font-weight: 600;
   }
 
-  .close {
+  .close-btn {
     width: 24px;
     height: 24px;
-    border-radius: var(--radius-sm);
-    background: var(--bg-raise);
+    background: var(--surface);
     border: 1px solid var(--line);
-    color: var(--faint);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
     transform: rotate(45deg);
-    transition:
-      color 0.15s,
-      border-color 0.15s,
-      background 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
 
-  .close:hover {
-    color: var(--text);
+  .close-btn:hover {
+    background: var(--surface);
     border-color: var(--line-strong);
   }
 
-  .close :global(svg) {
+  .close-btn :global(svg) {
     transform: rotate(-45deg);
   }
 

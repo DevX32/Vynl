@@ -23,6 +23,7 @@
   import { friendlyVaultError } from "@lib/errors";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import {
     getCurrentPlaylists,
     refreshPlaylistMeta,
@@ -328,11 +329,12 @@
     tabindex="-1"
     in:fly={{ y: 8, duration: 180, easing: cubicOut }}
     out:fly={{ y: 8, duration: 140, easing: cubicIn }}
+    use:focusTrap
   >
     <header class="head">
       <span class="title">{t("common.moveToVynl")}</span>
       <button
-        class="close-btn"
+        class="icon-btn close-btn"
         onclick={onClose}
         disabled={phase === "importing"}
         aria-label={t("common.close")}
@@ -576,30 +578,21 @@
   }
 
   .close-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: 24px;
     height: 24px;
-    border-radius: var(--radius-sm);
-    background: var(--bg-raise);
+    background: var(--surface);
     border: 1px solid var(--line);
-    color: var(--faint);
-    cursor: pointer;
     transform: rotate(45deg);
-    transition:
-      color 0.15s,
-      background 0.15s,
-      border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+
+  .close-btn:hover:not(:disabled) {
+    background: var(--surface);
+    border-color: var(--line-strong);
   }
 
   .close-btn :global(svg) {
     transform: rotate(-45deg);
-  }
-
-  .close-btn:hover:not(:disabled) {
-    color: var(--text);
-    border-color: var(--line-strong);
   }
 
   .close-btn:disabled {
