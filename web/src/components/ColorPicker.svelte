@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { Pipette, Check } from "lucide-svelte";
+  import { Pipette, Check, X } from "lucide-svelte";
   import {
     isValidHexColor,
     normalizeHex,
@@ -8,6 +8,7 @@
     hsvToHex,
   } from "@lib/color";
   import { clamp01, pointerRatio } from "@lib/pointer";
+  import { t } from "@lib/i18n";
 
   let {
     value,
@@ -23,7 +24,7 @@
     disabled?: boolean;
   } = $props();
 
-  let rootEl: HTMLDivElement | undefined = $state();
+  let modalEl: HTMLDivElement | undefined = $state();
   let svEl: HTMLDivElement | undefined = $state();
   let hueEl: HTMLDivElement | undefined = $state();
 
@@ -50,6 +51,12 @@
   $effect(() => {
     if (open) {
       untrack(() => syncFromValue());
+    }
+  });
+
+  $effect(() => {
+    if (open && modalEl) {
+      modalEl.focus();
     }
   });
 
@@ -149,18 +156,19 @@
     open = !open;
   }
 
-  function handleClickOutside(e: MouseEvent): void {
-    if (open && rootEl && !rootEl.contains(e.target as Node)) open = false;
+  function closePopover(): void {
+    open = false;
   }
 
-  function handleWindowKey(e: KeyboardEvent): void {
-    if (open && e.key === "Escape") open = false;
+  function handleModalKey(e: KeyboardEvent): void {
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      e.preventDefault();
+      closePopover();
+    }
   }
 </script>
 
-<svelte:window onclick={handleClickOutside} onkeydown={handleWindowKey} />
-
-<div class="color-picker" class:disabled bind:this={rootEl}>
+<div class="color-picker" class:disabled>
   <div class="swatches">
     {#each presets as color}
       {@const selected = sameColor(value, color)}
@@ -196,52 +204,70 @@
   </div>
 
   {#if open}
-    <div class="popover" role="dialog" aria-label={label}>
-
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div class="modal-backdrop" role="presentation" onclick={closePopover}>
       <div
-        class="sv"
-        bind:this={svEl}
-        onpointerdown={handleSvDown}
-        onpointermove={handleSvMove}
+        class="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        tabindex="-1"
+        bind:this={modalEl}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={handleModalKey}
       >
-        <div class="sv-surface" style:background={`hsl(${hue}, 100%, 50%)`}>
-          <div class="sv-white"></div>
-          <div class="sv-black"></div>
+        <div class="modal-header">
+          <span class="modal-title mono">{label}</span>
+          <button type="button" class="icon-btn close-btn" onclick={closePopover} aria-label={t("common.close")}>
+            <X size={12} stroke-width={1.6} />
+          </button>
         </div>
-        <div
-          class="sv-thumb"
-          style:left={`calc((100% - ${SV_THUMB_SIZE}px) * ${sat / 100})`}
-          style:top={`calc((100% - ${SV_THUMB_SIZE}px) * ${(100 - val) / 100})`}
-          style:background={hsvToHex(hue, sat, val)}
-        ></div>
-      </div>
 
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="hue"
-        bind:this={hueEl}
-        onpointerdown={handleHueDown}
-        onpointermove={handleHueMove}
-      >
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class="hue-indicator"
-          style:left={hueThumbLeft()}
-          style:background={`hsl(${hue}, 100%, 50%)`}
-        ></div>
-      </div>
+          class="sv"
+          bind:this={svEl}
+          onpointerdown={handleSvDown}
+          onpointermove={handleSvMove}
+        >
+          <div class="sv-surface" style:background={`hsl(${hue}, 100%, 50%)`}>
+            <div class="sv-white"></div>
+            <div class="sv-black"></div>
+          </div>
+          <div
+            class="sv-thumb"
+            style:left={`calc((100% - ${SV_THUMB_SIZE}px) * ${sat / 100})`}
+            style:top={`calc((100% - ${SV_THUMB_SIZE}px) * ${(100 - val) / 100})`}
+            style:background={hsvToHex(hue, sat, val)}
+          ></div>
+        </div>
 
-      <div class="hex-row">
-        <span class="hex-prefix mono">#</span>
-        <input
-          class="hex-input mono"
-          value={hexText}
-          maxlength="6"
-          spellcheck={false}
-          oninput={(e) => (hexText = e.currentTarget.value)}
-          onkeydown={handleHexKey}
-          onblur={commitHexText}
-        />
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="hue"
+          bind:this={hueEl}
+          onpointerdown={handleHueDown}
+          onpointermove={handleHueMove}
+        >
+          <div
+            class="hue-indicator"
+            style:left={hueThumbLeft()}
+            style:background={`hsl(${hue}, 100%, 50%)`}
+          ></div>
+        </div>
+
+        <div class="hex-row">
+          <span class="hex-prefix mono">#</span>
+          <input
+            class="hex-input mono"
+            value={hexText}
+            maxlength="6"
+            spellcheck={false}
+            oninput={(e) => (hexText = e.currentTarget.value)}
+            onkeydown={handleHexKey}
+            onblur={commitHexText}
+          />
+        </div>
       </div>
     </div>
   {/if}
@@ -339,33 +365,58 @@
     }
   }
 
-  .popover {
-    position: absolute;
-    z-index: 100;
-    top: calc(100% + 10px);
-    left: -4px;
-    width: 192px;
-    padding: 12px;
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-lg);
-    animation: picker-in 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-    will-change: transform, opacity;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
   }
 
-  @keyframes picker-in {
-    from {
-      opacity: 0;
-      transform: translateY(-6px) scale(0.97);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
+  .modal-panel {
+    width: min(320px, 100%);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-title {
+    font-size: 12px;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+  }
+
+  .close-btn {
+    width: 24px;
+    height: 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    transform: rotate(45deg);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+
+  .close-btn:hover {
+    background: var(--surface);
+    border-color: var(--line-strong);
+  }
+
+  .close-btn :global(svg) {
+    transform: rotate(-45deg);
   }
 
   .sv {
