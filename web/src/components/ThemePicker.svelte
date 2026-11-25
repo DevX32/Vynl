@@ -100,7 +100,7 @@
     width: 100%;
     height: 60px;
     border: 1px solid;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
 
@@ -123,7 +123,7 @@
   .pv-line {
     width: 100%;
     height: 3px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     opacity: 0.75;
   }
 
@@ -143,7 +143,7 @@
   .pv-title {
     width: 66%;
     height: 5px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     opacity: 0.85;
   }
 

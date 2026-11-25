@@ -546,8 +546,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(6px);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(var(--overlay-blur));
     z-index: var(--z-float);
   }
 
@@ -659,7 +659,7 @@
   .stage-bar {
     grid-column: 2 / 4;
     height: 3px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     background: var(--bg-raise);
     overflow: hidden;
     margin-top: 2px;

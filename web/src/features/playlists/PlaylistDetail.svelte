@@ -761,7 +761,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-bg);
     border: none;
     border-radius: 0;
     color: #fff;
@@ -1033,7 +1033,7 @@
     justify-content: center;
     z-index: 1000;
     padding: 16px;
-    background: rgba(0, 0, 0, 0.56);
+    background: var(--overlay-bg);
     backdrop-filter: blur(8px);
   }
 

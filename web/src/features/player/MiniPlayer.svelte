@@ -891,7 +891,7 @@
     height: 16px;
     display: flex;
     align-items: center;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     cursor: pointer;
     touch-action: none;
   }
@@ -922,7 +922,7 @@
     top: 50%;
     width: 9px;
     height: 9px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     background: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
     transform: translate(-50%, -50%) rotate(45deg);

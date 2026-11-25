@@ -92,8 +92,8 @@
     align-items: center;
     justify-content: center;
     z-index: var(--z-modal-high);
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(6px);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(var(--overlay-blur));
   }
 
   .panel {
@@ -105,7 +105,7 @@
     max-width: 380px;
     position: relative;
     box-shadow:
-      0 22px 60px rgba(0, 0, 0, 0.55),
+      var(--shadow-lg),
       inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 

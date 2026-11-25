@@ -374,8 +374,8 @@
     display: grid;
     place-items: center;
     padding: 24px;
-    background: rgba(0, 0, 0, 0.56);
-    backdrop-filter: blur(5px);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(var(--overlay-blur));
   }
 
   .panel {

@@ -100,7 +100,7 @@
     top: 50%;
     width: 9px;
     height: 9px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     background: var(--accent);
     transform: translate(-50%, -50%) rotate(45deg);
     pointer-events: none;

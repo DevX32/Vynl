@@ -29,7 +29,7 @@
   import Onboarding from "./features/onboarding/Onboarding.svelte";
   import { initAppUpdate } from "@state/app-update.svelte";
   import { toasts } from "./lib/toast";
-import { focusTrap } from "@lib/actions/focus-trap";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import {
     getCurrentPlaylists,
     getPlaylistCustomCover,
@@ -900,8 +900,8 @@ import { focusTrap } from "@lib/actions/focus-trap";
     justify-content: center;
     z-index: var(--z-modal);
     padding: 16px;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(var(--overlay-blur));
   }
 
   .edit-panel {

@@ -650,7 +650,7 @@
     left: 2px;
     width: 11px;
     height: 11px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     background: var(--faint);
     transition: transform 0.15s var(--ease-out), background 0.15s;
   }

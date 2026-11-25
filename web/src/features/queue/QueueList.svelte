@@ -331,7 +331,7 @@
     transform: rotate(45deg);
     background: var(--bg-raise);
     border: 1px solid var(--line-strong);
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
   }
 
   .np-slot {

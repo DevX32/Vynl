@@ -379,8 +379,8 @@ import { focusTrap } from "@lib/actions/focus-trap";
     align-items: center;
     justify-content: center;
     padding: 16px;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(6px);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(var(--overlay-blur));
   }
 
   .modal-panel {
@@ -444,7 +444,7 @@ import { focusTrap } from "@lib/actions/focus-trap";
     box-sizing: border-box;
     width: 12px;
     height: 12px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     border: 2px solid #fff;
     box-shadow:
       0 0 0 1px rgba(0, 0, 0, 0.4),
@@ -456,7 +456,7 @@ import { focusTrap } from "@lib/actions/focus-trap";
     position: relative;
     width: 100%;
     height: 18px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     cursor: pointer;
     touch-action: none;
     background: linear-gradient(
@@ -483,7 +483,7 @@ import { focusTrap } from "@lib/actions/focus-trap";
     top: 50%;
     width: 14px;
     height: 14px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     border: 2px solid #fff;
     box-shadow:
       0 0 0 1px rgba(0, 0, 0, 0.4),
