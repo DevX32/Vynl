@@ -1,6 +1,7 @@
 import { vynl } from "@lib/vynl";
 import { t } from "@lib/i18n";
 import { toasts } from "@lib/toast";
+import { getErrorMessage } from "@lib/errors";
 import type { MobileSyncStatus } from "@lib/types";
 
 let _status = $state<MobileSyncStatus | null>(null);
@@ -37,7 +38,7 @@ export function getMobileSyncUiOpen(): boolean {
 }
 
 function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  return getErrorMessage(e, "");
 }
 
 export async function refreshMobileSync(force = false): Promise<void> {

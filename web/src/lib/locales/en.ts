@@ -286,6 +286,7 @@ export const en = {
     equalizerHint: "Shape the sound of everything you play. Changes apply live.",
     equalizerHintOff: "Turn on to shape the sound of everything you play.",
     equalizerToggle: "Equalizer toggle",
+    eqResponseCurve: "Response curve",
     audioFormatHint:"MP3 re-encodes the stream and plays everywhere. Opus keeps the audio exactly as YouTube sends it, at roughly a third of the file size.",
     equalizerBand: "band",
     support: "Support Vynl",
@@ -434,7 +435,7 @@ export const en = {
     deleteBody:'"{name}" and every song in it will be permanently deleted. This action cannot be undone.',
     deleteFailed: "Failed to delete playlist",
     renameTitle: "Rename playlist",
-    newDesc: "Name your new playlist to get started.",
+    newDesc: "Name it, add a cover if you want.",
     expandSidebar: "Expand Sidebar",
     collapseSidebar: "Collapse Sidebar",
   },
@@ -469,6 +470,9 @@ export const en = {
       fullscreenPlayer: "Fullscreen player",
     },
   },
+  onboarding: {
+    setName: "Set your name",
+  },
   eq: {
     presets: {
       flat: "Flat",
@@ -498,6 +502,7 @@ export const en = {
     unavailable: "Equalizer unavailable — could not read the audio settings.",
   },
   common: {
+    appName: "Vynl",
     confirm: "Confirm",
     year: "Year",
     volume: "Volume",

@@ -6,7 +6,7 @@ import {
   prev,
   setVolumeAt,
   seekToTime,
-} from "@lib/player.svelte";
+} from "@lib/playback.svelte";
 import { toggleMute } from "@state/player.svelte";
 import {
   MINI_COMMAND_EVENT,

@@ -1,6 +1,7 @@
 import { vynl } from "@lib/vynl";
 import { t } from "@lib/i18n";
 import { toasts } from "@lib/toast";
+import { getErrorMessage } from "@lib/errors";
 import type { UpdateStatus } from "@lib/types";
 
 let _status = $state<UpdateStatus | null>(null);
@@ -46,7 +47,7 @@ function applyStatus(next: UpdateStatus): void {
 }
 
 function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  return getErrorMessage(e, "");
 }
 
 function disarmRestart(): void {

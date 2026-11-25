@@ -43,6 +43,17 @@ function stripUrls(message: string): string {
 const RAW_BODY_PATTERN = /\{[\s\S]*?\}/g;
 const LONG_TOKEN_PATTERN = /\b[A-Za-z0-9_-]{48,}\b/g;
 
+export function getErrorMessage(error: unknown, fallback = ""): string {
+  if (error == null) return fallback;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return String(error);
+  } catch {
+    return fallback;
+  }
+}
+
 export function friendlyVaultError(error: unknown, fallback = ""): string {
   if (error == null) return fallback;
   const raw = typeof error === "string" ? error : String(error);

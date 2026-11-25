@@ -1,5 +1,6 @@
 import type { LibraryTrack } from "@lib/types";
 import { vynl } from "@lib/vynl";
+import { getErrorMessage } from "@lib/errors";
 
 let _library = $state<LibraryTrack[]>([]);
 let _libraryError = $state<string | null>(null);
@@ -124,7 +125,7 @@ export function refreshLibrary(): Promise<void> {
     } catch (e) {
       console.warn("refreshLibrary failed:", e);
       if (_libraryRevision === requestRevision) {
-        _libraryError = e instanceof Error ? e.message : String(e);
+        _libraryError = getErrorMessage(e, "");
       }
     } finally {
       _refreshPromise = null;

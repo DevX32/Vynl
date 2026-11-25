@@ -196,7 +196,7 @@ export const vynl = {
     data: number[],
   ): Promise<string> => cmd("save_playlist_cover", { id, ext, data }),
 
-  SyncStatus: (): Promise<SyncStatus> => cmd("sync_status"),
+  syncStatus: (): Promise<SyncStatus> => cmd("sync_status"),
 
   syncSignIn: (email: string, password: string): Promise<SyncAuthResult> =>
     cmd("sync_sign_in", { email, password }),
@@ -352,7 +352,7 @@ export const vynl = {
   cacheRemoteAudio: (url: string, key: string): Promise<string> =>
     cmd("cache_remote_audio", { url, key }),
 
-  clearCache: (): Promise<number> => cmd("clear_cache"),
+  clearStorageCache: (): Promise<number> => cmd("clear_storage_cache"),
 
   downloadsStats: (): Promise<{ files: number; bytes: number }> =>
     cmd("downloads_stats"),

@@ -30,7 +30,7 @@ export function setSyncStatus(next: SyncStatus): void {
 }
 
 export async function refreshSyncStatus(): Promise<SyncStatus> {
-  const next = await vynl.SyncStatus();
+  const next = await vynl.syncStatus();
   setSyncStatus(next);
   return next;
 }

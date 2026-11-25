@@ -1,6 +1,6 @@
 import type { Settings, ToolName, ToolStatus, AudioFormat } from "@lib/types";
 import { BITRATES } from "@lib/constants";
-import { eqFlat, loadEqDesign } from "@lib/eq.svelte";
+import { eqFlat, loadEqDesign } from "@lib/eq-engine.svelte";
 import { vynl } from "@lib/vynl";
 import { toasts } from "@lib/toast";
 import { t } from "@lib/i18n";
