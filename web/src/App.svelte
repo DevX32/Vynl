@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
@@ -22,13 +22,14 @@
   import { hydrateTaste } from "@state/taste.svelte";
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
-  import { playTrack } from "@lib/player.svelte";
+  import { playTrack } from "@lib/playback.svelte";
   import { handleGlobalKey, getShowShortcutsOverlay, toggleShortcutsOverlay } from "@state/shortcuts.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
   import { wasOnboarded } from "@lib/onboarding.svelte";
   import Onboarding from "./features/onboarding/Onboarding.svelte";
   import { initAppUpdate } from "@state/app-update.svelte";
   import { toasts } from "./lib/toast";
+import { focusTrap } from "@lib/actions/focus-trap";
   import {
     getCurrentPlaylists,
     getPlaylistCustomCover,
@@ -117,6 +118,9 @@
   let moveToVynlOpen = $state(false);
   let createTarget = $state(false);
   let createVal = $state("");
+  let createCoverFile = $state<File | null>(null);
+  let createCoverPreview = $state<string | null>(null);
+  let createCoverInput: HTMLInputElement | undefined = $state();
   let editTarget = $state<{ id: string; name: string; cover: string | null } | null>(null);
   let editRename = $state("");
   let editBusy = $state(false);
@@ -124,7 +128,12 @@
   let editCoverInput: HTMLInputElement | undefined = $state();
 
   $effect(() => {
-    if (createTarget) createVal = "";
+    if (createTarget) {
+      createVal = "";
+      if (createCoverPreview) URL.revokeObjectURL(createCoverPreview);
+      createCoverFile = null;
+      createCoverPreview = null;
+    }
   });
 
   $effect(() => {
@@ -345,8 +354,6 @@
   }
 
   function newPlaylist(): void {
-    navigate("library");
-    void selectPlaylist(null);
     createTarget = true;
   }
 
@@ -401,15 +408,53 @@
     ctxMenu = { x: e.clientX, y: e.clientY, type: "rail" };
   }
 
+  function pickCreateCover(): void {
+    createCoverInput?.click();
+  }
+
+  async function onCreateCoverFile(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (createCoverPreview) URL.revokeObjectURL(createCoverPreview);
+    createCoverFile = file;
+    createCoverPreview = URL.createObjectURL(file);
+  }
+
+  function removeCreateCover(): void {
+    if (createCoverPreview) URL.revokeObjectURL(createCoverPreview);
+    createCoverFile = null;
+    createCoverPreview = null;
+  }
+
   async function confirmCreatePlaylist(): Promise<void> {
     if (!createVal.trim()) return;
+    const name = createVal.trim();
+    const coverFile = createCoverFile;
+    const coverPreview = createCoverPreview;
     createTarget = false;
     try {
-      const pl = await createPlaylist(createVal.trim());
+      const pl = await createPlaylist(name);
+      if (coverFile) {
+        try {
+          const { ext, data } = await normalizeCoverImage(coverFile);
+          const savedPath = await vynl.savePlaylistCover(pl.id, ext, data);
+          await setPlaylistCover(pl.id, savedPath);
+        } catch (err) {
+          console.warn("set playlist cover failed:", err);
+          toasts.error(t("playlist.coverFailed"));
+        } finally {
+          if (coverPreview) URL.revokeObjectURL(coverPreview);
+        }
+      }
       await selectPlaylist(pl.id);
       navigate("playlist");
     } catch (err) {
       console.warn("create playlist failed:", err);
+    } finally {
+      createCoverFile = null;
+      createCoverPreview = null;
     }
   }
 
@@ -607,32 +652,91 @@
   <ContextMenu
     x={ctxMenu.x}
     y={ctxMenu.y}
-    onclose={() => (ctxMenu = null)}
-    onnewplaylist={ctxMenu.type === "rail" ? newPlaylist : undefined}
-    onmovetovynl={ctxMenu.type === "rail" ? () => (moveToVynlOpen = true) : undefined}
+    onClose={() => (ctxMenu = null)}
+    onNewPlaylist={ctxMenu.type === "rail" ? newPlaylist : undefined}
+    onMoveToVynl={ctxMenu.type === "rail" ? () => (moveToVynlOpen = true) : undefined}
     items={ctxItems()}
   />
 {/if}
 
 {#if createTarget}
-  <Dialog
-    open
-    title={t("common.newPlaylistTitle")}
-    description={t("playlists.newDesc")}
-    confirmLabel={t("common.create")}
-    onconfirm={confirmCreatePlaylist}
-    oncancel={() => (createTarget = false)}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div
+    class="backdrop"
+    role="presentation"
+    transition:fade={{ duration: 150 }}
+    onclick={() => (createTarget = false)}
   >
-    <input
-      class="dlg-input"
-      type="text"
-      bind:value={createVal}
-      spellcheck={false}
+    <div
+      class="edit-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("common.newPlaylistTitle")}
+      tabindex="-1"
+      in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+      out:fly={{ y: 8, duration: 140, easing: cubicIn }}
+      onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => {
-        if (e.key === "Enter") void confirmCreatePlaylist();
+        if (e.key === "Escape" && !e.defaultPrevented) {
+          e.preventDefault();
+          createTarget = false;
+        }
       }}
-    />
-  </Dialog>
+      use:focusTrap
+    >
+      <div class="edit-head">
+        <span class="edit-title">{t("common.newPlaylistTitle")}</span>
+        <button class="edit-close" onclick={() => (createTarget = false)} aria-label={t("common.close")}>
+          <X size={12} stroke-width={1.6} />
+        </button>
+      </div>
+
+      <div class="edit-hero">
+        <div class="edit-cover">
+          {#if createCoverPreview}
+            <img class="edit-cover-img" src={createCoverPreview} alt="" draggable="false" />
+          {:else}
+            <div class="edit-cover-placeholder"><Disc3 size={24} stroke-width={1} /></div>
+          {/if}
+          <div class="edit-cover-overlay">
+            <button class="cover-action" onclick={pickCreateCover} aria-label={t("playlist.changeCover")}>
+              <Image size={14} stroke-width={1.5} />
+            </button>
+            {#if createCoverPreview}
+              <button class="cover-action" onclick={removeCreateCover} aria-label={t("playlist.removeCover")}>
+                <ImageOff size={14} stroke-width={1.5} />
+              </button>
+            {/if}
+          </div>
+        </div>
+        <div class="edit-field">
+          <label class="edit-label" for="pl-create-name">{t("playlists.newDesc")}</label>
+          <div class="edit-row">
+            <input
+              id="pl-create-name"
+              class="dlg-input"
+              type="text"
+              bind:value={createVal}
+              spellcheck={false}
+              onkeydown={(e) => {
+                if (e.key === "Enter") void confirmCreatePlaylist();
+              }}
+            />
+            <button class="action-btn-sm" onclick={() => void confirmCreatePlaylist()} disabled={!createVal.trim()}>
+              {t("common.create")}
+            </button>
+          </div>
+        </div>
+      </div>
+      <input
+        bind:this={createCoverInput}
+        type="file"
+        accept="image/*"
+        class="cover-file-input"
+        onchange={onCreateCoverFile}
+      />
+    </div>
+  </div>
 {/if}
 
 {#if editTarget}
@@ -717,18 +821,16 @@
   </div>
 {/if}
 
-{#if editDeleteConfirm && editTarget}
-  <Dialog
-    open
-    title={t("playlists.deleteTitle")}
-    description={t("playlists.deleteBody", { name: editTarget.name })}
-    confirmLabel={t("common.delete")}
-    danger
-    confirmDisabled={editBusy}
-    onconfirm={() => void confirmEditDeletePlaylist()}
-    oncancel={() => (editDeleteConfirm = false)}
-  />
-{/if}
+<Dialog
+  open={editDeleteConfirm && !!editTarget}
+  title={t("playlists.deleteTitle")}
+  description={editTarget ? t("playlists.deleteBody", { name: editTarget.name }) : ""}
+  confirmLabel={t("common.delete")}
+  danger
+  confirmDisabled={editBusy}
+  onConfirm={() => void confirmEditDeletePlaylist()}
+  onClose={() => (editDeleteConfirm = false)}
+/>
 
 {#if moveToVynlOpen}
   <MoveToVynlDialog
@@ -796,10 +898,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 16px;
-    background: rgba(0, 0, 0, 0.56);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
   }
 
   .edit-panel {
