@@ -492,12 +492,10 @@ pub fn discard_prebuffered(video_id: &str) {
     }
 }
 
-#[tauri::command]
 pub async fn catalogue_search(query: String) -> Result<CatalogueSearchResults, String> {
     service()?.search(&query).await
 }
 
-#[tauri::command]
 pub async fn catalogue_cover(app: AppHandle, url: String) -> Result<String, String> {
     let user_data = app
         .path()
@@ -506,12 +504,10 @@ pub async fn catalogue_cover(app: AppHandle, url: String) -> Result<String, Stri
     crate::services::cover_cache::cache_cover(&user_data, &url).await
 }
 
-#[tauri::command]
 pub async fn catalogue_album(id: String) -> Result<CatalogueAlbumDetail, String> {
     service()?.album(&id).await
 }
 
-#[tauri::command]
 pub async fn catalogue_artist(id: String) -> Result<CatalogueArtist, String> {
     service()?.artist(&id).await
 }
@@ -593,17 +589,14 @@ pub(crate) async fn try_resolve_yt_playlist(url: &str) -> Option<Result<Collecti
     Some(fetch_yt_playlist_collection(&list_id).await)
 }
 
-#[tauri::command]
 pub async fn catalogue_playlist(id: String) -> Result<CataloguePlaylistDetail, String> {
     service()?.playlist(&id).await
 }
 
-#[tauri::command]
 pub async fn catalogue_playlist_page(token: String) -> Result<CataloguePlaylistPage, String> {
     service()?.playlist_page(&token).await
 }
 
-#[tauri::command]
 pub async fn catalogue_prebuffer(
     video_id: String,
     duration: Option<f64>,
@@ -614,7 +607,6 @@ pub async fn catalogue_prebuffer(
     service()?.prebuffer(&video_id, duration).await
 }
 
-#[tauri::command]
 pub async fn catalogue_discard_prebuffer(video_id: String) -> Result<(), String> {
     if !valid_video_id(&video_id) {
         return Err("invalid video id".into());
@@ -623,7 +615,6 @@ pub async fn catalogue_discard_prebuffer(video_id: String) -> Result<(), String>
     Ok(())
 }
 
-#[tauri::command]
 pub async fn catalogue_stream(
     video_id: String,
     start: Option<f64>,
@@ -662,7 +653,6 @@ pub async fn catalogue_stream(
     })
 }
 
-#[tauri::command]
 pub async fn catalogue_crossfade_stream(
     video_id: String,
     _duration: Option<f64>,
@@ -696,7 +686,6 @@ pub async fn catalogue_crossfade_stream(
     }
 }
 
-#[tauri::command]
 pub async fn catalogue_seek_stream(
     video_id: String,
     time: f64,
@@ -739,12 +728,10 @@ pub async fn catalogue_seek_stream(
     }
 }
 
-#[tauri::command]
 pub async fn catalogue_taste(seeds: Vec<String>) -> Result<Vec<CatalogueTrack>, String> {
     service()?.taste(&seeds).await
 }
 
-#[tauri::command]
 pub async fn catalogue_save_to_playlist(
     track: CatalogueTrack,
     playlist_id: Option<String>,
@@ -774,7 +761,6 @@ pub async fn catalogue_save_to_playlist(
     Ok(playlist)
 }
 
-#[tauri::command]
 pub async fn catalogue_add_to_playlist(
     track: CatalogueTrack,
     playlist_id: Option<String>,

@@ -1528,7 +1528,7 @@ pub async fn clear_audio_cache() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn clear_cache(app: AppHandle) -> Result<u64, String> {
+pub async fn clear_storage_cache(app: AppHandle) -> Result<u64, String> {
     let user_data = user_data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         Ok(crate::services::storage::clear_caches(&user_data))
@@ -1547,4 +1547,131 @@ pub async fn downloads_stats(
     })
     .await
     .map_err(|e| format!("Could not read the downloads folder: {e}"))?
+}
+
+#[tauri::command]
+pub async fn catalogue_search(
+    query: String,
+) -> Result<crate::catalogue::CatalogueSearchResults, String> {
+    crate::services::catalogue::catalogue_search(query).await
+}
+
+#[tauri::command]
+pub async fn catalogue_cover(app: AppHandle, url: String) -> Result<String, String> {
+    crate::services::catalogue::catalogue_cover(app, url).await
+}
+
+#[tauri::command]
+pub async fn catalogue_album(id: String) -> Result<crate::catalogue::CatalogueAlbumDetail, String> {
+    crate::services::catalogue::catalogue_album(id).await
+}
+
+#[tauri::command]
+pub async fn catalogue_artist(id: String) -> Result<crate::catalogue::CatalogueArtist, String> {
+    crate::services::catalogue::catalogue_artist(id).await
+}
+
+#[tauri::command]
+pub async fn catalogue_playlist(
+    id: String,
+) -> Result<crate::catalogue::CataloguePlaylistDetail, String> {
+    crate::services::catalogue::catalogue_playlist(id).await
+}
+
+#[tauri::command]
+pub async fn catalogue_playlist_page(
+    token: String,
+) -> Result<crate::catalogue::CataloguePlaylistPage, String> {
+    crate::services::catalogue::catalogue_playlist_page(token).await
+}
+
+#[tauri::command]
+pub async fn catalogue_prebuffer(
+    video_id: String,
+    duration: Option<f64>,
+) -> Result<CatalogueStreamInfo, String> {
+    crate::services::catalogue::catalogue_prebuffer(video_id, duration).await
+}
+
+#[tauri::command]
+pub async fn catalogue_discard_prebuffer(video_id: String) -> Result<(), String> {
+    crate::services::catalogue::catalogue_discard_prebuffer(video_id).await
+}
+
+#[tauri::command]
+pub async fn catalogue_stream(
+    video_id: String,
+    start: Option<f64>,
+    duration: Option<f64>,
+    generation: u64,
+) -> Result<CatalogueStreamInfo, String> {
+    crate::services::catalogue::catalogue_stream(video_id, start, duration, generation).await
+}
+
+#[tauri::command]
+pub async fn catalogue_crossfade_stream(
+    video_id: String,
+    _duration: Option<f64>,
+    generation: u64,
+    fade_secs: f64,
+) -> Result<(), String> {
+    crate::services::catalogue::catalogue_crossfade_stream(
+        video_id, _duration, generation, fade_secs,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn catalogue_seek_stream(
+    video_id: String,
+    time: f64,
+    duration: Option<f64>,
+    generation: u64,
+    playing: bool,
+    request_id: u64,
+) -> Result<(), String> {
+    crate::services::catalogue::catalogue_seek_stream(
+        video_id, time, duration, generation, playing, request_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn catalogue_taste(
+    seeds: Vec<String>,
+) -> Result<Vec<crate::catalogue::CatalogueTrack>, String> {
+    crate::services::catalogue::catalogue_taste(seeds).await
+}
+
+#[tauri::command]
+pub async fn catalogue_save_to_playlist(
+    track: crate::catalogue::CatalogueTrack,
+    playlist_id: Option<String>,
+    playlist_name: Option<String>,
+    app: AppHandle,
+) -> Result<Playlist, String> {
+    crate::services::catalogue::catalogue_save_to_playlist(track, playlist_id, playlist_name, app)
+        .await
+}
+
+#[tauri::command]
+pub async fn catalogue_add_to_playlist(
+    track: crate::catalogue::CatalogueTrack,
+    playlist_id: Option<String>,
+    playlist_name: Option<String>,
+    app: AppHandle,
+) -> Result<CatalogueAddResult, String> {
+    crate::services::catalogue::catalogue_add_to_playlist(track, playlist_id, playlist_name, app)
+        .await
+}
+
+#[tauri::command]
+pub async fn import_stream_playlist(
+    collection: Collection,
+    playlist_id: Option<String>,
+    playlist_name: Option<String>,
+    app: AppHandle,
+) -> Result<crate::services::importer::StreamImportResult, String> {
+    crate::services::importer::import_stream_playlist(collection, playlist_id, playlist_name, app)
+        .await
 }

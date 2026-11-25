@@ -94,7 +94,6 @@ fn stream_track_for(track: &TrackMeta, video_id: String) -> CatalogueTrack {
     }
 }
 
-#[tauri::command]
 pub async fn import_stream_playlist(
     collection: Collection,
     playlist_id: Option<String>,
