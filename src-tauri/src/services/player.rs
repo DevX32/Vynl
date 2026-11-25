@@ -1512,12 +1512,16 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                             let ended =
                                 active && sink.as_ref().is_some_and(|track| track.sink.empty());
                             if active && !ended {
-                                match seek_sink(&sink.as_ref().expect("active sink").sink, time) {
-                                    Ok(()) => {
-                                        seek_floor = seek_floor_for(time);
-                                        PlayerResp::Ok
+                                if let Some(track) = sink.as_ref() {
+                                    match seek_sink(&track.sink, time) {
+                                        Ok(()) => {
+                                            seek_floor = seek_floor_for(time);
+                                            PlayerResp::Ok
+                                        }
+                                        Err(e) => PlayerResp::Err(e),
                                     }
-                                    Err(e) => PlayerResp::Err(e),
+                                } else {
+                                    PlayerResp::Err("no active sink".into())
                                 }
                             } else if ended {
                                 match current_path.clone() {

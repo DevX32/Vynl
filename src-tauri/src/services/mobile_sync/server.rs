@@ -26,6 +26,7 @@ use axum::extract::ConnectInfo;
 
 pub struct AppStateInner {
     pub user_data: PathBuf,
+    pub output_root: RwLock<PathBuf>,
     pub pin: Mutex<String>,
     pub token: Mutex<String>,
     pub attempts: Mutex<HashMap<String, Attempt>>,
@@ -312,11 +313,11 @@ pub async fn serve(
         .map_err(|e| e.to_string())
 }
 
-fn path_in_output(state: &SharedState, path: &Path) -> bool {
-    let settings = crate::services::settings::get_settings(&state.user_data);
-    let Ok(output) = PathBuf::from(&settings.output_dir).canonicalize() else {
+async fn path_in_output(state: &SharedState, path: &Path) -> bool {
+    let output = state.output_root.read().await.clone();
+    if output.as_os_str().is_empty() {
         return false;
-    };
+    }
     match path.canonicalize() {
         Ok(canon) => canon.starts_with(&output),
         Err(_) => false,
@@ -581,7 +582,7 @@ async fn track_audio(
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     };
     let path = PathBuf::from(&track.path);
-    if !path_in_output(&state, &path) {
+    if !path_in_output(&state, &path).await {
         return (StatusCode::NOT_FOUND, "track not found").into_response();
     }
     let ext = track.ext.clone();

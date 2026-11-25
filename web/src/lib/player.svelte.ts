@@ -320,9 +320,16 @@ function handleTick(tick: PlaybackTick): void {
   }
 }
 
+let _playerUnlisten: (() => void) | null = null;
+
 if (typeof window !== "undefined" && !IS_MINI) {
-  vynl.onPlaybackTick(handleTick);
-  vynl.onStreamError(handleStreamError);
+  (_playerUnlisten as (() => void) | null)?.();
+  const offTick = vynl.onPlaybackTick(handleTick);
+  const offStreamError = vynl.onStreamError(handleStreamError);
+  _playerUnlisten = () => {
+    offTick();
+    offStreamError();
+  };
 }
 
 async function reconcilePlaybackState(): Promise<void> {
@@ -358,10 +365,17 @@ function onWindowActive(): void {
 }
 
 if (typeof document !== "undefined") {
-  document.addEventListener("visibilitychange", () => {
+  const onVisibilityChange = () => {
     if (document.visibilityState === "visible") onWindowActive();
-  });
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("focus", onWindowActive);
+  import.meta.hot?.dispose(() => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("focus", onWindowActive);
+    _playerUnlisten?.();
+    _playerUnlisten = null;
+  });
 }
 
 export function applyVolume(): void {

@@ -69,7 +69,8 @@ fn canonicalize_in_output(file: &str, canonical_output: &Path) -> Result<PathBuf
 
 fn canonical_output_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let output = output_dir_from_settings(app)?;
-    Ok(fs::canonicalize(&output).unwrap_or(output))
+    fs::create_dir_all(&output).map_err(|e| format!("invalid output directory: {e}"))?;
+    fs::canonicalize(&output).map_err(|e| format!("invalid output directory: {e}"))
 }
 
 fn validate_path_in_output(file: &str, app: &AppHandle) -> Result<PathBuf, String> {
@@ -90,12 +91,9 @@ const DELETABLE_EXTS: &[&str] = &[
 ];
 
 fn require_deletable_path(file: &str, app: &AppHandle) -> Result<PathBuf, String> {
-    let path = require_path_in_output(file, app)?;
-    let canonical = fs::canonicalize(&path).unwrap_or(path);
-    if let Ok(output) = output_dir_from_settings(app)
-        && let Ok(canonical_output) = fs::canonicalize(&output)
-        && canonical.starts_with(canonical_output.join("playlists"))
-    {
+    let canonical = require_path_in_output(file, app)?;
+    let canonical_output = canonical_output_dir(app)?;
+    if canonical.starts_with(canonical_output.join("playlists")) {
         return Err("Path is inside the playlists directory".into());
     }
     let ext = canonical
@@ -387,6 +385,7 @@ pub async fn set_settings(patch: Settings, app: AppHandle) -> Result<Settings, S
     }
 
     crate::services::player::set_eq(next.eq_enabled, &next.eq_bands);
+    crate::services::mobile_sync::refresh_output_root(&user_data).await;
     Ok(next)
 }
 
@@ -801,10 +800,8 @@ pub async fn remove_from_playlist(
         return Ok(playlist);
     }
 
-    let canonical = require_deletable_path(&track_path, &app).ok();
-    let exists = canonical.as_ref().is_some_and(|path| path.exists());
-    if exists {
-        let canonical = canonical.as_ref().expect("canonical checked");
+    let canonical_path = require_deletable_path(&track_path, &app).ok();
+    if let Some(canonical) = canonical_path.as_ref().filter(|path| path.exists()) {
         if !delete_track_file(&user_data, &track_path, canonical) {
             return Err(
                 "Could not delete the file, it may be in use. Stop playback and try again.".into(),
@@ -816,7 +813,7 @@ pub async fn remove_from_playlist(
         return Ok(playlist);
     }
     let mut stale = vec![track_path.clone()];
-    if let Some(canonical) = canonical {
+    if let Some(canonical) = canonical_path {
         let canonical_str = canonical.to_string_lossy().to_string();
         if canonical_str != track_path {
             stale.push(canonical_str);

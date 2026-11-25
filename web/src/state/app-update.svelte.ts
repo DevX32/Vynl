@@ -82,6 +82,10 @@ function ensureListener(): void {
       armRestart(RESTART_FALLBACK_MS);
     }
   });
+  import.meta.hot?.dispose(() => {
+    _unlisten?.();
+    _unlisten = null;
+  });
 }
 
 export async function initAppUpdate(): Promise<void> {

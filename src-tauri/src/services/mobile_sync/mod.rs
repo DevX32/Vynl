@@ -62,6 +62,7 @@ struct Runtime {
     join: Option<tokio::task::JoinHandle<Result<(), String>>>,
     mdns: Option<mdns_sd::ServiceDaemon>,
     user_data: PathBuf,
+    state: Option<server::SharedState>,
 }
 
 static RUNTIME: Lazy<Mutex<Runtime>> = Lazy::new(|| {
@@ -70,6 +71,7 @@ static RUNTIME: Lazy<Mutex<Runtime>> = Lazy::new(|| {
         join: None,
         mdns: None,
         user_data: PathBuf::new(),
+        state: None,
     })
 });
 
@@ -340,6 +342,27 @@ pub async fn rotate_pin(user_data_dir: &Path) -> Result<MobileSyncStatus, String
     Ok(get_status(user_data_dir).await)
 }
 
+fn resolve_output_root(user_data_dir: &Path) -> PathBuf {
+    let settings = settings::get_settings(user_data_dir);
+    let output = PathBuf::from(&settings.output_dir);
+    if output.as_os_str().is_empty() {
+        return PathBuf::new();
+    }
+    if std::fs::create_dir_all(&output).is_err() {
+        return PathBuf::new();
+    }
+    output.canonicalize().unwrap_or_default()
+}
+
+pub async fn refresh_output_root(user_data_dir: &Path) {
+    let state = { RUNTIME.lock().await.state.clone() };
+    let Some(state) = state else {
+        return;
+    };
+    let output_root = resolve_output_root(user_data_dir);
+    *state.output_root.write().await = output_root;
+}
+
 pub async fn start(user_data_dir: &Path) -> Result<(), String> {
     let cfg = load_config(user_data_dir);
     if !cfg.enabled {
@@ -361,8 +384,11 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
     let pin = cfg.pairing_pin.clone();
     let token = cfg.api_token.clone();
 
+    let output_root = resolve_output_root(user_data_dir);
+
     let state = Arc::new(server::AppStateInner {
         user_data: user_data.clone(),
+        output_root: RwLock::new(output_root),
         pin: Mutex::new(pin),
         token: Mutex::new(token),
         attempts: Mutex::new(HashMap::new()),
@@ -378,29 +404,33 @@ pub async fn start(user_data_dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("Port {port} is not available: {e}"))?;
 
     let serve_user_data = user_data.clone();
+    let serve_state = state.clone();
     let task =
-        tokio::spawn(async move { server::serve(listener, &serve_user_data, state, rx).await });
+        tokio::spawn(
+            async move { server::serve(listener, &serve_user_data, serve_state, rx).await },
+        );
 
     rt.stop = Some(tx);
     rt.join = Some(task);
     rt.mdns = start_mdns(port);
     rt.user_data = user_data;
+    rt.state = Some(state);
     Ok(())
 }
 
 pub async fn stop() {
-    let join = {
+    let (join, mdns) = {
         let mut rt = RUNTIME.lock().await;
         if let Some(tx) = rt.stop.take() {
             let _ = tx.send(());
         }
-        rt.join.take()
+        rt.state = None;
+        (rt.join.take(), rt.mdns.take())
     };
     if let Some(join) = join {
         let _ = tokio::time::timeout(Duration::from_secs(3), join).await;
     }
-    let mut rt = RUNTIME.lock().await;
-    if let Some(daemon) = rt.mdns.take() {
+    if let Some(daemon) = mdns {
         let _ = daemon.shutdown();
     }
 }

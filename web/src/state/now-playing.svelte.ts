@@ -72,6 +72,10 @@ if (typeof window !== "undefined" && !window.location.hash.startsWith("#mini")) 
   const flush = () => flushNowPlaying();
   window.addEventListener("pagehide", flush);
   window.addEventListener("beforeunload", flush);
+  import.meta.hot?.dispose(() => {
+    window.removeEventListener("pagehide", flush);
+    window.removeEventListener("beforeunload", flush);
+  });
 }
 
 const currentId = $derived(_state?.id ?? null);

@@ -116,9 +116,14 @@ function persistRegistry(): void {
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("pagehide", flushRegistry);
-  document.addEventListener("visibilitychange", () => {
+  const onVisibilityChange = () => {
     if (document.visibilityState === "hidden") flushRegistry();
+  };
+  window.addEventListener("pagehide", flushRegistry);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  import.meta.hot?.dispose(() => {
+    window.removeEventListener("pagehide", flushRegistry);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
   });
 }
 
