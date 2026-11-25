@@ -346,10 +346,10 @@
               <div class="cover placeholder">{np.title.charAt(0).toUpperCase()}</div>
             {/if}
             <div class="track-text">
-              <div class="title display" title={np.title}>{np.title}</div>
+              <div class="title display">{np.title}</div>
               <div class="meta mono">
                 <span>{np.artist || t("common.unknownArtist")}</span>
-                {#if np.album}<span class="sep">·</span><span class="album" title={np.album}>{np.album}</span>{/if}
+                {#if np.album}<span class="sep">·</span><span class="album">{np.album}</span>{/if}
               </div>
             </div>
           </div>

@@ -359,7 +359,6 @@ pub fn run() {
             let _tray = tray_builder
                 .menu(&show_item)
                 .show_menu_on_left_click(false)
-                .tooltip("Vynl")
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "show" => {
                         if let Some(win) = app.get_webview_window("main") {

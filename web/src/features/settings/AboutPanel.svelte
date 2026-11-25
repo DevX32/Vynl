@@ -78,7 +78,6 @@ const upToDate = $derived(
         <Button
           size="sm"
           disabled
-          title={t("update.downloadingTitle")}
         >
           <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
         </Button>
@@ -88,7 +87,6 @@ const upToDate = $derived(
           size="sm"
           onclick={() => void installAppUpdate()}
           disabled={busy}
-          title={busy ? t("update.checking") : undefined}
         >
           {#if busy}
             <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
@@ -101,7 +99,6 @@ const upToDate = $derived(
           size="sm"
           onclick={() => void checkForAppUpdate(true, true)}
           disabled={busy}
-          title={busy ? t("update.checking") : undefined}
         >
           {#if busy}
             <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>

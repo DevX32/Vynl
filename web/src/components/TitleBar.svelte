@@ -141,7 +141,6 @@
       <button
         class="update-btn"
         aria-label={t("update.availableTitle")}
-        title={t("update.availableTitle")}
         onclick={() => void installAppUpdate()}
         oncontextmenu={(e) => {
           e.preventDefault();
@@ -160,7 +159,6 @@
     <button
       class="shortcut-btn"
       aria-label={t("shortcuts.actions.showShortcuts")}
-      title={t("shortcuts.actions.showShortcuts")}
       onclick={onShowShortcuts}
     >
       <MessageCircleQuestionMark size={15} stroke-width={1.5} />

@@ -135,11 +135,7 @@
         <span class="mono">{t("common.queue")}</span>
       </div>
       {#if np}
-        <span
-          class="queue-count mono"
-          title={t("player.queuedTracks", { n: upcomingCount })}
-          >{upcomingCount}</span
-        >
+        <span class="queue-count mono">{upcomingCount}</span>
       {/if}
     </div>
 

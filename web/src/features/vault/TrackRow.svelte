@@ -104,10 +104,7 @@
 
   <div class="c-status">
     {#if progress}
-      <span
-        class="status-label mono {status}"
-        title={status === "error" ? progress.message : undefined}
-      >
+      <span class="status-label mono {status}">
         {statusLabel(progress.status, progress.message)}
       </span>
     {/if}

@@ -6,7 +6,6 @@
     size = "md",
     disabled = false,
     selected = false,
-    title,
     onclick,
     children,
   }: {
@@ -14,7 +13,6 @@
     size?: "sm" | "md";
     disabled?: boolean;
     selected?: boolean;
-    title?: string;
     onclick?: () => void;
     children: Snippet;
   } = $props();
@@ -24,7 +22,6 @@
   class="btn {variant} {size}"
   class:selected
   {disabled}
-  {title}
   aria-pressed={selected ? true : undefined}
   onclick={() => onclick?.()}
 >

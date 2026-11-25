@@ -39,7 +39,7 @@
         <Icon size={16} strokeWidth={1.75} />
       </span>
 
-      <p class="msg mono" title={toast.message}>{toast.message}</p>
+      <p class="msg mono">{toast.message}</p>
 
       <button
         type="button"
