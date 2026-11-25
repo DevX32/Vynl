@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import {
     getCurrentTrack,
     getUserQueue,
@@ -9,7 +9,7 @@
     playTrack,
     removeQueueTrack,
     reorderQueueTrack,
-  } from "@lib/player.svelte";
+  } from "@lib/playback.svelte";
   import { getCurrentLoop, getCurrentShuffle } from "@state/player.svelte";
   import { fmtTime } from "../../lib/format";
   import { useDragList } from "@lib/drag-list.svelte";
@@ -92,7 +92,7 @@
         class:dragging={drag.dragging && drag.grabIdx === i}
         role="button"
         tabindex="0"
-        aria-label={`${q.title} — ${"artist" in q && q.artist ? q.artist : ""}`}
+        aria-label={`${q.title} â€” ${"artist" in q && q.artist ? q.artist : ""}`}
         style:cursor={drag.dragging ? "grabbing" : "grab"}
         onpointerdown={(e) => onRowPointerDown(e, section, i)}
         onclick={() => {
@@ -224,7 +224,7 @@
       <ContextMenu
         x={ctx.x}
         y={ctx.y}
-        onclose={() => (ctx = null)}
+        onClose={() => (ctx = null)}
         items={[
           {
             label: t("player.removeFromQueue"),

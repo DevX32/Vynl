@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { untrack } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
@@ -388,7 +388,7 @@
             {currentTracks.length}
             {currentTracks.length === 1
               ? t("library.song")
-              : t("common.songs")} · {t("common.about")}
+              : t("common.songs")} Â· {t("common.about")}
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
@@ -462,7 +462,7 @@
             class:dragging={drag.dragging && drag.grabIdx === i}
             role="button"
             tabindex="0"
-            aria-label={`${trk.title} — ${trk.artist}`}
+            aria-label={`${trk.title} â€” ${trk.artist}`}
             style:cursor={!q
               ? drag.dragging
                 ? "grabbing"
@@ -543,29 +543,27 @@
     <ContextMenu
       x={ctxMenu.x}
       y={ctxMenu.y}
-      onclose={() => (ctxMenu = null)}
+      onClose={() => (ctxMenu = null)}
       items={trackCtxItems()}
     />
   {/if}
 
-  {#if removeTarget}
-    <Dialog
-      open
-      title={t("playlist.removeTrackTitle")}
-      description={t(
-        isCataloguePath(removeTarget.path)
-          ? "playlist.removeStreamBody"
-          : "playlist.removeTrackBody",
-        {
-          title: removeTarget.title,
-        },
-      )}
-      confirmLabel={t("common.delete")}
-      danger
-      onconfirm={() => void confirmRemoveTrack()}
-      oncancel={() => (removeTarget = null)}
-    />
-  {/if}
+  <Dialog
+    open={removeTarget !== null}
+    title={t("playlist.removeTrackTitle")}
+    description={removeTarget ? t(
+      isCataloguePath(removeTarget.path)
+        ? "playlist.removeStreamBody"
+        : "playlist.removeTrackBody",
+      {
+        title: removeTarget.title,
+      },
+    ) : ""}
+    confirmLabel={t("common.delete")}
+    danger
+    onConfirm={() => void confirmRemoveTrack()}
+    onClose={() => (removeTarget = null)}
+  />
 
   {#if editOpen && pl}
     <div
@@ -651,18 +649,16 @@
     </div>
   {/if}
 
-  {#if confirmDeletePlaylistOpen && pl}
-    <Dialog
-      open
-      title={t("playlists.deleteTitle")}
-      description={t("playlists.deleteBody", { name: pl.name })}
-      confirmLabel={t("common.delete")}
-      danger
-      confirmDisabled={editBusy}
-      onconfirm={() => void confirmDeletePlaylist()}
-      oncancel={() => (confirmDeletePlaylistOpen = false)}
-    />
-  {/if}
+  <Dialog
+    open={confirmDeletePlaylistOpen && !!pl}
+    title={t("playlists.deleteTitle")}
+    description={pl ? t("playlists.deleteBody", { name: pl.name }) : ""}
+    confirmLabel={t("common.delete")}
+    danger
+    confirmDisabled={editBusy}
+    onConfirm={() => void confirmDeletePlaylist()}
+    onClose={() => (confirmDeletePlaylistOpen = false)}
+  />
 </div>
 
 <style>

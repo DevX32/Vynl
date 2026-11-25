@@ -3,6 +3,7 @@
   import { getCurrentSettings } from "@state/settings.svelte";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
   import { completeOnboarding } from "@lib/onboarding.svelte";
+  import { t } from "@lib/i18n";
 
   let { onComplete }: { onComplete: () => void } = $props();
 
@@ -27,7 +28,7 @@
   }
 </script>
 
-<div class="onboarding" role="main" aria-label="Set your name">
+<div class="onboarding" role="main" aria-label={t("onboarding.setName")}>
   <div class="card">
     <div class="kicker">GET STARTED</div>
     <h1>What should<br />we call you?</h1>

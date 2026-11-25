@@ -8,6 +8,7 @@
     selected = false,
     onclick,
     children,
+    class: className = "",
   }: {
     variant?: "primary" | "ghost" | "danger";
     size?: "sm" | "md";
@@ -15,11 +16,12 @@
     selected?: boolean;
     onclick?: () => void;
     children: Snippet;
+    class?: string;
   } = $props();
 </script>
 
 <button
-  class="btn {variant} {size}"
+  class="btn {variant} {size} {className}"
   class:selected
   {disabled}
   aria-pressed={selected ? true : undefined}

@@ -261,7 +261,7 @@
 
   .select-list {
     position: absolute;
-    z-index: 100;
+    z-index: var(--z-float);
     top: calc(100% + 8px);
     left: 0;
     right: 0;

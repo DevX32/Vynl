@@ -20,12 +20,7 @@
     onClose: () => void;
   } = $props();
 
-  let dialogEl = $state<HTMLDivElement>();
   const wiki = $derived(splitWikiAttribution(text));
-
-  $effect(() => {
-    dialogEl?.focus();
-  });
 
   function handleKey(e: KeyboardEvent): void {
     if (e.key === "Escape" && !e.defaultPrevented) {
@@ -44,9 +39,8 @@
 >
   <div
     class="dialog"
-    bind:this={dialogEl}
-    in:fly={{ y: 14, duration: 220, easing: cubicOut }}
-    out:fly={{ y: 10, duration: 160, easing: cubicIn }}
+    in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+    out:fly={{ y: 8, duration: 140, easing: cubicIn }}
     onclick={(e) => e.stopPropagation()}
     onkeydown={handleKey}
     role="dialog"
@@ -91,7 +85,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
+    z-index: var(--z-float);
     backdrop-filter: blur(4px);
   }
 
@@ -153,24 +147,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
-
-  .close-btn:hover {
-    background: var(--surface);
-    border-color: var(--line-strong);
-  }
-
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
   }
 
   .body {

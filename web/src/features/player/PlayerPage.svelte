@@ -1,11 +1,11 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from "svelte";
   import { refreshLibrary } from "@state/library.svelte";
   import {
     getCurrentTrack,
     getIsTrackPlaying,
   } from "@state/now-playing.svelte";
-  import { clearPlayError, seekOffset } from "@lib/player.svelte";
+  import { clearPlayError, seekOffset } from "@lib/playback.svelte";
   import { isInputField, shouldYieldToTarget } from "@state/shortcuts.svelte";
   import { getCurrentPlayError } from "@state/player.svelte";
   import {

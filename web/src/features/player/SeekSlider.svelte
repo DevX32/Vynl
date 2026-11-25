@@ -1,11 +1,11 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onDestroy } from "svelte";
   import {
     getCurrentTime,
     getCurrentTrack,
     setSeekDragging,
   } from "@state/now-playing.svelte";
-  import { cancelSeek, seekFlush, seekOffset, seekRatio } from "@lib/player.svelte";
+  import { cancelSeek, seekFlush, seekOffset, seekRatio } from "@lib/playback.svelte";
   import { pointerRatio } from "@lib/pointer";
   import { t } from "@lib/i18n";
 

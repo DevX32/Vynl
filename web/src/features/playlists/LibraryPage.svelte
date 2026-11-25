@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import {
@@ -22,7 +22,7 @@
     addToQueue,
     addToQueueFront,
   } from "@state/now-playing.svelte";
-  import { toggle } from "@lib/player.svelte";
+  import { toggle } from "@lib/playback.svelte";
   import { setShuffle } from "@state/player.svelte";
   import { isInputField } from "@state/shortcuts.svelte";
   import { openTagEditor } from "@state/tag-editor.svelte";
@@ -295,13 +295,13 @@
         <div class="sub mono">
           {#if hits.length > 0}
             {hits.length}
-            {hits.length === 1 ? t("library.song") : t("common.songs")} ·
+            {hits.length === 1 ? t("library.song") : t("common.songs")} Â·
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
           {/if}
           {#if scanning}
-            · {t("player.scanning")}{/if}
+            Â· {t("player.scanning")}{/if}
         </div>
         {#if libraryError}
           <div class="lib-error" role="alert">
@@ -417,7 +417,7 @@
     x={ctx.x}
     y={ctx.y}
     items={ctxMenuItems()}
-    onclose={() => (ctx = null)}
+    onClose={() => (ctx = null)}
   />
 {/if}
 
@@ -433,21 +433,19 @@
   />
 {/if}
 
-{#if deleteTarget}
-  <Dialog
-    open
-    title={t("library.deleteTitle")}
-    description={t("library.deleteBody", { title: deleteTarget.title })}
-    confirmLabel={t("common.delete")}
-    danger
-    onconfirm={() => void handleDelete()}
-    oncancel={() => {
-      if (deleteBusy) return;
-      deleteTarget = null;
-    }}
-    confirmDisabled={deleteBusy}
-  />
-{/if}
+<Dialog
+  open={deleteTarget !== null}
+  title={t("library.deleteTitle")}
+  description={deleteTarget ? t("library.deleteBody", { title: deleteTarget.title }) : ""}
+  confirmLabel={t("common.delete")}
+  danger
+  onConfirm={() => void handleDelete()}
+  onClose={() => {
+    if (deleteBusy) return;
+    deleteTarget = null;
+  }}
+  confirmDisabled={deleteBusy}
+/>
 
 <style>
   .library-page {

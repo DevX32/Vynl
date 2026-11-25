@@ -124,7 +124,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 500;
+    z-index: var(--z-modal);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -157,24 +157,6 @@
     font-size: 16px;
     font-weight: 600;
     white-space: nowrap;
-  }
-
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
-
-  .close-btn:hover {
-    background: var(--surface);
-    border-color: var(--line-strong);
-  }
-
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
   }
 
   .qr-icon {

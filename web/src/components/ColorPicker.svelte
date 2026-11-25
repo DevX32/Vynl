@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicIn, cubicOut } from "svelte/easing";
   import { Pipette, Check, X } from "lucide-svelte";
   import {
     isValidHexColor,
@@ -9,6 +11,7 @@
   } from "@lib/color";
   import { clamp01, pointerRatio } from "@lib/pointer";
   import { t } from "@lib/i18n";
+import { focusTrap } from "@lib/actions/focus-trap";
 
   let {
     value,
@@ -205,7 +208,7 @@
 
   {#if open}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" role="presentation" onclick={closePopover}>
+    <div class="modal-backdrop" role="presentation" transition:fade={{ duration: 150 }} onclick={closePopover}>
       <div
         class="modal-panel"
         role="dialog"
@@ -213,8 +216,11 @@
         aria-label={label}
         tabindex="-1"
         bind:this={modalEl}
+        in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+        out:fly={{ y: 8, duration: 140, easing: cubicIn }}
         onclick={(e) => e.stopPropagation()}
         onkeydown={handleModalKey}
+        use:focusTrap
       >
         <div class="modal-header">
           <span class="modal-title mono">{label}</span>
@@ -368,7 +374,7 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+    z-index: var(--z-modal-high);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -399,24 +405,6 @@
     font-size: 12px;
     color: var(--dim);
     letter-spacing: 0.08em;
-  }
-
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
-
-  .close-btn:hover {
-    background: var(--surface);
-    border-color: var(--line-strong);
-  }
-
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
   }
 
   .sv {

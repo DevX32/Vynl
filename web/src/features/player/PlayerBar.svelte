@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import {
@@ -17,7 +17,7 @@
   import { MINI_CLOSED_EVENT } from "@lib/mini-sync";
   import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
   import { getCurrentMuted, getCurrentVolume, toggleMute, getLyricsOpen, toggleLyrics } from "@state/player.svelte";
-  import { applyReplayGain, applySpeed, applyVolume } from "@lib/player.svelte";
+  import { applyReplayGain, applySpeed, applyVolume } from "@lib/playback.svelte";
   import { catalogueIdFromPath } from "@state/catalogue.svelte";
   import {
     getTasteLikedIds,
@@ -205,7 +205,7 @@
           {/key}
         {:else}
           <div class="mini-cover placeholder" class:empty={!current}>
-            {current ? current.title.charAt(0).toUpperCase() : "·"}
+            {current ? current.title.charAt(0).toUpperCase() : "Â·"}
           </div>
         {/if}
       </div>

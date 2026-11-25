@@ -19,20 +19,20 @@
   let {
     x = 0,
     y = 0,
-    onclose,
-    onrename,
-    ondelete,
-    onnewplaylist,
-    onmovetovynl,
+    onClose,
+    onRename,
+    onDelete,
+    onNewPlaylist,
+    onMoveToVynl,
     items,
   }: {
     x: number;
     y: number;
-    onclose: () => void;
-    onrename?: () => void;
-    ondelete?: () => void;
-    onnewplaylist?: () => void;
-    onmovetovynl?: () => void;
+    onClose: () => void;
+    onRename?: () => void;
+    onDelete?: () => void;
+    onNewPlaylist?: () => void;
+    onMoveToVynl?: () => void;
     items?: CtxEntry[];
   } = $props();
 
@@ -53,13 +53,13 @@
 
   function handleClickOutside(e: MouseEvent) {
     if (menuEl && !menuEl.contains(e.target as Node)) {
-      onclose();
+      onClose();
     }
   }
 
   function handleKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
-      onclose();
+      onClose();
       return;
     }
     if (!menuEl) return;
@@ -76,7 +76,7 @@
       items[(idx - 1 + items.length) % items.length]?.focus();
     } else if (e.key === "Tab") {
       e.preventDefault();
-      onclose();
+      onClose();
     }
   }
 
@@ -96,58 +96,58 @@
   style:top="{y}px"
   role="menu"
 >
-  {#if onnewplaylist}
+  {#if onNewPlaylist}
     <button
       class="ctx-item"
       role="menuitem"
       onclick={() => {
-        onnewplaylist();
-        onclose();
+        onNewPlaylist();
+        onClose();
       }}
     >
       <Plus size={12} stroke-width={1.5} />
       <span>{t("common.newPlaylistTitle")}</span>
     </button>
   {/if}
-  {#if onnewplaylist && onmovetovynl}
+  {#if onNewPlaylist && onMoveToVynl}
     <div class="ctx-sep"></div>
   {/if}
-  {#if onmovetovynl}
+  {#if onMoveToVynl}
     <button
       class="ctx-item"
       role="menuitem"
       onclick={() => {
-        onmovetovynl();
-        onclose();
+        onMoveToVynl();
+        onClose();
       }}
     >
       <Import size={12} stroke-width={1.5} />
       <span>{t("common.moveToVynl")}</span>
     </button>
   {/if}
-  {#if onrename}
+  {#if onRename}
     <button
       class="ctx-item"
       role="menuitem"
       onclick={() => {
-        onrename();
-        onclose();
+        onRename();
+        onClose();
       }}
     >
       <Pencil size={12} stroke-width={1.5} />
       <span>{t("common.rename")}</span>
     </button>
   {/if}
-  {#if (onrename || onnewplaylist) && ondelete}
+  {#if (onRename || onNewPlaylist) && onDelete}
     <div class="ctx-sep"></div>
   {/if}
-  {#if ondelete}
+  {#if onDelete}
     <button
       class="ctx-item ctx-danger"
       role="menuitem"
       onclick={() => {
-        ondelete();
-        onclose();
+        onDelete();
+        onClose();
       }}
     >
       <Trash2 size={12} stroke-width={1.5} />
@@ -155,7 +155,7 @@
     </button>
   {/if}
   {#if items}
-    {#if (onrename || onnewplaylist || ondelete) && items.length > 0}
+    {#if (onRename || onNewPlaylist || onDelete) && items.length > 0}
       <div class="ctx-sep"></div>
     {/if}
     {#each items as entry, i (i)}
@@ -175,7 +175,7 @@
               onclick={() => {
                 if (item.disabled) return;
                 item.action();
-                onclose();
+                onClose();
               }}
             >
               {#if item.icon}
@@ -199,7 +199,7 @@
           onclick={() => {
             if (e.disabled) return;
             e.action();
-            onclose();
+            onClose();
           }}
         >
           {#if e.icon}
@@ -225,7 +225,7 @@
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-sm);
     padding: 5px 4px;
-    z-index: 999;
+    z-index: var(--z-popover);
     box-shadow: var(--shadow-lg);
     animation: ctx-in 0.12s cubic-bezier(0.25, 0.08, 0.25, 1);
   }

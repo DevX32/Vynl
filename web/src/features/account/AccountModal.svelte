@@ -370,7 +370,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 500;
+    z-index: var(--z-modal);
     display: grid;
     place-items: center;
     padding: 24px;
@@ -404,24 +404,6 @@
     font-size: 10px;
     letter-spacing: 0.2em;
     line-height: 1;
-  }
-
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
-
-  .close-btn:hover {
-    background: var(--surface);
-    border-color: var(--line-strong);
-  }
-
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
   }
 
   .body {
@@ -478,7 +460,6 @@
     color: var(--text);
     background: var(--bg-raise);
   }
-
 
   .banner-copy {
     display: flex;

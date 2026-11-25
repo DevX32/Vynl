@@ -4,7 +4,8 @@
     eqMaxDb,
     eqMinDb,
     eqResponseDb,
-  } from "@lib/eq.svelte";
+  } from "@lib/eq-engine.svelte";
+  import { t } from "@lib/i18n";
 
   interface Props {
     bands: number[];
@@ -96,7 +97,7 @@
     viewBox={`0 0 ${W} ${H}`}
     preserveAspectRatio="none"
     role="img"
-    aria-label="Response curve"
+    aria-label={t("settings.eqResponseCurve")}
   >
     <defs>
       <linearGradient id="eq-curve-fill" x1="0" y1="0" x2="0" y2="1">

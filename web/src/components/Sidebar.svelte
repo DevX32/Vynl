@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import {
     SlidersHorizontal as SettingsIcon,
     Disc3,
@@ -18,6 +18,7 @@
   import { blobSrc } from "../lib/format";
   import { avatarProps, avatarRevision } from "@lib/blobatar.svelte";
   import { t } from "@lib/i18n";
+  import { getErrorMessage } from "@lib/errors";
   import { getPlaylistCovers, markCoverFailed } from "@state/playlists.svelte";
   import { getCurrentSettings } from "@state/settings.svelte";
   import {
@@ -207,7 +208,7 @@
     } catch (e) {
       toasts.error(
         t("account.signOutFailed", {
-          error: e instanceof Error ? e.message : String(e),
+          error: getErrorMessage(e, ""),
         }),
         6000,
       );
@@ -293,7 +294,7 @@
             <span class="rail-meta">
               <span class="rail-name display">{t("catalogue.likedSongs")}</span>
               <span class="rail-desc mono">
-                {`${t("common.playlist")} · ${likedTracks.length} ${
+                {`${t("common.playlist")} Â· ${likedTracks.length} ${
                   likedTracks.length === 1
                     ? t("library.song")
                     : t("common.songs")
@@ -355,7 +356,7 @@
             <span class="rail-meta">
               <span class="rail-name display">{p.name}</span>
               <span class="rail-desc mono">
-                {`${t("common.playlist")} · ${resolveDisplayName(getCurrentSettings().displayName)}`}
+                {`${t("common.playlist")} Â· ${resolveDisplayName(getCurrentSettings().displayName)}`}
               </span>
             </span>
           {/if}
@@ -658,7 +659,7 @@
 
   .rail-cover.placeholder :global(svg) {
     position: relative;
-    z-index: 1;
+    z-index: var(--z-raised);
     filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
   }
 
@@ -690,7 +691,7 @@
 
   .rail-cover.liked-cover :global(svg) {
     position: relative;
-    z-index: 1;
+    z-index: var(--z-raised);
     filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
   }
 
@@ -857,7 +858,7 @@
 
   .account-menu {
     position: fixed;
-    z-index: 60;
+    z-index: var(--z-flyout);
     width: 220px;
     display: flex;
     flex-direction: column;

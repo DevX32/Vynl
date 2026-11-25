@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
@@ -129,7 +129,7 @@
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="drag-region" data-tauri-drag-region ondblclick={onDragDblClick}>
-    <span class="title display" aria-label="Vynl">
+    <span class="title display" aria-label={t("common.appName")}>
       <span class="title-mark" aria-hidden="true">
         <img src="/icon.png" alt="" draggable="false" />
       </span>
@@ -213,7 +213,7 @@
     align-items: center;
     gap: 2px;
     padding-left: 6px;
-    z-index: 2;
+    z-index: var(--z-above);
     -webkit-app-region: no-drag;
   }
 
@@ -305,7 +305,7 @@
     align-items: center;
     height: 100%;
     -webkit-app-region: no-drag;
-    z-index: 2;
+    z-index: var(--z-above);
   }
 
   .update-btn {
@@ -336,16 +336,7 @@
     cursor: default;
   }
 
-  .spin {
-    display: inline-flex;
-    animation: spin 0.85s linear infinite;
-  }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 
   .shortcut-btn {
     display: flex;

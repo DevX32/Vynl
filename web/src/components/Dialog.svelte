@@ -13,8 +13,8 @@
     confirmLabel = "Confirm",
     danger = false,
     confirmDisabled = false,
-    onconfirm,
-    oncancel,
+    onConfirm,
+    onClose,
     children,
   }: {
     open?: boolean;
@@ -23,13 +23,13 @@
     confirmLabel?: string;
     danger?: boolean;
     confirmDisabled?: boolean;
-    onconfirm?: () => void;
-    oncancel: () => void;
+    onConfirm?: () => void;
+    onClose: () => void;
     children?: Snippet;
   } = $props();
 
   function backdrop() {
-    oncancel();
+    onClose();
   }
 
 
@@ -38,7 +38,7 @@
     if (e.key === "Escape" && !e.defaultPrevented) {
       e.preventDefault();
       e.stopPropagation();
-      oncancel();
+      onClose();
     }
   }
 </script>
@@ -75,8 +75,8 @@
         </div>
       {/if}
       <div class="footer">
-        <Button onclick={oncancel}>{t("common.cancel")}</Button>
-        <Button variant={danger ? "danger" : "primary"} onclick={onconfirm} disabled={confirmDisabled}
+        <Button onclick={onClose}>{t("common.cancel")}</Button>
+        <Button variant={danger ? "danger" : "primary"} onclick={onConfirm} disabled={confirmDisabled}
           >{confirmLabel || t("common.confirm")}</Button
         >
       </div>
@@ -91,7 +91,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal-high);
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(6px);
   }

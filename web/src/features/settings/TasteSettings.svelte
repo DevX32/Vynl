@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { t } from "@lib/i18n";
   import Button from "@components/Button.svelte";
   import Dialog from "@components/Dialog.svelte";
@@ -34,17 +34,15 @@
     {/snippet}
   </SettingRow>
 
-  {#if confirming}
-    <Dialog
-      open
-      title={t("settings.tasteResetTitle")}
-      description={t("settings.tasteResetBody")}
-      confirmLabel={t("common.reset")}
-      danger
-      onconfirm={confirmReset}
-      oncancel={() => (confirming = false)}
-    />
-  {/if}
+  <Dialog
+    open={confirming}
+    title={t("settings.tasteResetTitle")}
+    description={t("settings.tasteResetBody")}
+    confirmLabel={t("common.reset")}
+    danger
+    onConfirm={confirmReset}
+    onClose={() => (confirming = false)}
+  />
 </div>
 
 <style>

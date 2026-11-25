@@ -66,7 +66,7 @@
     right: 0;
     margin-inline: auto;
     width: min(360px, calc(100vw - 32px));
-    z-index: 9999;
+    z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
     gap: 6px;

@@ -10,7 +10,7 @@
     eqMaxDb,
     eqMinDb,
     eqResidualBoostDb,
-  } from "@lib/eq.svelte";
+  } from "@lib/eq-engine.svelte";
   import EqCurve from "./EqCurve.svelte";
   import Button from "@components/Button.svelte";
   import Switch from "@components/Switch.svelte";

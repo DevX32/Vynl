@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import {
     ListMusic,
     ListPlus,
@@ -14,7 +14,7 @@
     getIsTrackPlaying,
     matchesCurrentSong,
   } from "@state/now-playing.svelte";
-  import { toggle } from "@lib/player.svelte";
+  import { toggle } from "@lib/playback.svelte";
   import {
     getCurrentPlaylists,
     saveStreamToPlaylist,
@@ -347,7 +347,7 @@
     x={ctx.x}
     y={ctx.y}
     items={ctxItems()}
-    onclose={() => (ctx = null)}
+    onClose={() => (ctx = null)}
   />
 {/if}
 

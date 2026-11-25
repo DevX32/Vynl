@@ -74,6 +74,17 @@
   --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.42);
   --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.55);
 
+  --z-base: 0;
+  --z-raised: 1;
+  --z-above: 2;
+  --z-overlay-low: 40;
+  --z-flyout: 60;
+  --z-float: 100;
+  --z-modal: 500;
+  --z-popover: 999;
+  --z-modal-high: 1000;
+  --z-toast: 9999;
+
   --hover-surface: color-mix(in srgb, var(--accent) 14%, var(--bg-raise));
   --hover-border: color-mix(in srgb, var(--accent) 30%, transparent);
 
@@ -353,5 +364,39 @@ html[data-theme="espresso"] .tbl-head {
 
 .mo-root.mo-root:hover {
   transform: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  display: inline-flex;
+  animation: spin 0.85s linear infinite;
+}
+
+.close-btn {
+  width: 24px;
+  height: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  transform: rotate(45deg);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.close-btn:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+
+.close-btn svg {
+  transform: rotate(-45deg);
+}
+
+.close-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 

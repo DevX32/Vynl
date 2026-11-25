@@ -1,6 +1,6 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { getCurrentVolume } from "@state/player.svelte";
-  import { setVolumeAt } from "@lib/player.svelte";
+  import { setVolumeAt } from "@lib/playback.svelte";
   import { pointerRatio } from "@lib/pointer";
   import { t } from "@lib/i18n";
 

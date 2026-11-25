@@ -494,7 +494,7 @@
     x={ctx.x}
     y={ctx.y}
     items={ctxItems()}
-    onclose={() => (ctx = null)}
+    onClose={() => (ctx = null)}
   />
 {/if}
 

@@ -4,6 +4,7 @@
   import { X } from "lucide-svelte";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
+  import { friendlyError } from "@lib/errors";
   import Button from "@components/Button.svelte";
   import { focusTrap } from "@lib/actions/focus-trap";
   import { vynl } from "@lib/vynl";
@@ -41,7 +42,7 @@
         comment = tags.comment ?? "";
       })
       .catch((e) => {
-        toasts.error(String(e));
+        toasts.error(friendlyError(e, t("common.failed")));
       })
       .finally(() => {
         loading = false;
@@ -72,7 +73,7 @@
       toasts.success(t("library.tagsSaved"));
       closeTagEditor();
     } catch (e) {
-      toasts.error(String(e));
+      toasts.error(e instanceof Error ? e.message : String(e));
     } finally {
       saving = false;
     }
@@ -150,7 +151,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 500;
+    z-index: var(--z-modal);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -176,20 +177,9 @@
     border-bottom: 1px solid var(--line);
   }
   .title { font-size: 16px; font-weight: 600; }
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
   .close-btn:hover {
     background: var(--surface);
     border-color: var(--line-strong);
-  }
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
   }
   .body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
   .field { display: flex; flex-direction: column; gap: 6px; }

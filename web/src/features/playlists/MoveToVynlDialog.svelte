@@ -24,6 +24,7 @@
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import { focusTrap } from "@lib/actions/focus-trap";
+  import Button from "@components/Button.svelte";
   import {
     getCurrentPlaylists,
     refreshPlaylistMeta,
@@ -348,13 +349,13 @@
         <LoaderCircle size={26} stroke-width={1.75} class="spin" />
         <p class="importing-label">{importLabel}</p>
         {@render stageList()}
-        <button
-          class="btn ghost"
+        <Button
+          variant="ghost"
           onclick={() => void cancelImport()}
           disabled={cancelRequested}
         >
           {t("common.cancel")}
-        </button>
+        </Button>
       </div>
     {:else if phase === "destination" && collection}
       <div class="dest">
@@ -424,8 +425,9 @@
                 if (e.key === "Enter") submitCreate();
               }}
             />
-            <button
-              class="btn primary wide"
+            <Button
+              variant="primary"
+              class="wide"
               disabled={!canCreate || busy}
               onclick={submitCreate}
             >
@@ -433,7 +435,7 @@
               <span>
                 {t("moveToVynl.createAndAdd", { n: collection.tracks.length })}
               </span>
-            </button>
+            </Button>
           </div>
         {:else}
           <div class="pane">
@@ -482,13 +484,13 @@
         {/if}
 
         <footer class="foot dest-foot">
-          <button class="btn ghost" onclick={backToLink}>
+          <Button variant="ghost" onclick={backToLink}>
             <ChevronLeft size={13} stroke-width={2} />
             <span>{t("common.back")}</span>
-          </button>
-          <button class="btn ghost" onclick={onClose}>
+          </Button>
+          <Button variant="ghost" onclick={onClose}>
             {t("common.cancel")}
-          </button>
+          </Button>
         </footer>
       </div>
     {:else}
@@ -519,11 +521,11 @@
         {/if}
       </div>
       <footer class="foot">
-        <button class="btn ghost" onclick={onClose} disabled={resolving}>
+        <Button variant="ghost" onclick={onClose} disabled={resolving}>
           {t("common.cancel")}
-        </button>
-        <button
-          class="btn primary"
+        </Button>
+        <Button
+          variant="primary"
           disabled={resolving || url.trim().length === 0}
           onclick={() => void resolveLink()}
         >
@@ -531,7 +533,7 @@
             <LoaderCircle size={14} stroke-width={2} class="spin" />
           {/if}
           <span>{t("moveToVynl.continue")}</span>
-        </button>
+        </Button>
       </footer>
     {/if}
   </div>
@@ -546,7 +548,7 @@
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(6px);
-    z-index: 100;
+    z-index: var(--z-float);
   }
 
   .dialog {
@@ -575,29 +577,6 @@
   .title {
     font-size: 14px;
     font-weight: 600;
-  }
-
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
-
-  .close-btn:hover:not(:disabled) {
-    background: var(--surface);
-    border-color: var(--line-strong);
-  }
-
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
-  }
-
-  .close-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
   }
 
   .body {
@@ -1002,51 +981,7 @@
     flex-shrink: 0;
   }
 
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 14px;
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.03em;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: color 0.15s, background 0.15s, border-color 0.15s;
-  }
-
-  .btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .btn.primary {
-    color: var(--accent);
-    background: var(--accent-soft);
-    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  }
-
-  .btn.primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 60%, transparent);
-  }
-
-  .btn.ghost {
-    background: transparent;
-    color: var(--dim);
-    border: 1px solid var(--line-strong);
-  }
-
-  .btn.ghost:hover:not(:disabled) {
-    color: var(--text);
-    background: var(--bg-raise);
-  }
-
-  .btn.wide {
+  :global(.btn.wide) {
     width: 100%;
   }
 
@@ -1077,15 +1012,4 @@
     text-align: left;
   }
 
-  .foot :global(.spin),
-  .importing :global(.spin),
-  .stage :global(.spin) {
-    animation: spin 0.85s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 </style>

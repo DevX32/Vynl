@@ -259,7 +259,7 @@
     right: -32px;
     display: flex;
     justify-content: flex-end;
-    z-index: 40;
+    z-index: var(--z-overlay-low);
   }
   .dl-panel {
     width: 380px;
@@ -281,20 +281,9 @@
     font-size: 22px;
     letter-spacing: -0.01em;
   }
-  .close-btn {
-    width: 24px;
-    height: 24px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
-  }
   .close-btn:hover {
     background: var(--surface);
     border-color: var(--line-strong);
-  }
-  .close-btn :global(svg) {
-    transform: rotate(-45deg);
   }
   .dl-tabs {
     flex-shrink: 0;
@@ -463,9 +452,5 @@
     background: color-mix(in srgb, var(--accent) 18%, transparent);
     border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   }
-  .spin {
-    display: inline-flex;
-    animation: spin 0.85s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+
 </style>

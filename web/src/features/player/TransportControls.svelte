@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import {
     Pause,
     Play,
@@ -15,7 +15,7 @@
     toggleLoop,
     toggleShuffle,
   } from "@state/player.svelte";
-  import { next, prev, toggle } from "@lib/player.svelte";
+  import { next, prev, toggle } from "@lib/playback.svelte";
   import { t } from "@lib/i18n";
 </script>
 

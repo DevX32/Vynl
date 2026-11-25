@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onDestroy, onMount, untrack } from "svelte";
   import { RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
@@ -120,7 +120,7 @@
     if (_clearingCache) return;
     _clearingCache = true;
     try {
-      const freed = await vynl.clearCache();
+      const freed = await vynl.clearStorageCache();
       const mb = Math.round(freed / (1024 * 1024));
       toasts.success(t("settings.cacheCleared", { mb }));
     } catch (error) {
@@ -492,29 +492,25 @@
   </div>
 </div>
 
-{#if _confirmingClear}
-  <Dialog
-    open
-    title={t("settings.clearCacheTitle")}
-    description={t("settings.clearCacheBody")}
-    confirmLabel={t("common.clear")}
-    danger
-    onconfirm={() => void clearCache()}
-    oncancel={() => (_confirmingClear = false)}
-  />
-{/if}
+<Dialog
+  open={_confirmingClear}
+  title={t("settings.clearCacheTitle")}
+  description={t("settings.clearCacheBody")}
+  confirmLabel={t("common.clear")}
+  danger
+  onConfirm={() => void clearCache()}
+  onClose={() => (_confirmingClear = false)}
+/>
 
-{#if _confirmingRemove}
-  <Dialog
-    open
-    title={t("downloads.removeAllTitle")}
-    description={t("downloads.removeAllBody")}
-    confirmLabel={t("downloads.removeAllConfirm")}
-    danger
-    onconfirm={() => void removeDownloads()}
-    oncancel={() => (_confirmingRemove = false)}
-  />
-{/if}
+<Dialog
+  open={_confirmingRemove}
+  title={t("downloads.removeAllTitle")}
+  description={t("downloads.removeAllBody")}
+  confirmLabel={t("downloads.removeAllConfirm")}
+  danger
+  onConfirm={() => void removeDownloads()}
+  onClose={() => (_confirmingRemove = false)}
+/>
 
 <style>
   .panel {
