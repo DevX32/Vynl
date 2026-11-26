@@ -18,7 +18,6 @@
   let autoQuery = "";
 
   const trimmedQuery = $derived(query.trim());
-  const selected = $derived(results.find((r) => r.id === selectedId) ?? null);
 
   $effect(() => {
     const id = getCurrentId();

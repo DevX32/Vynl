@@ -54,7 +54,7 @@ class PlayerController(
 ) {
     private val failureHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, error ->
         android.util.Log.e("Vynl", "player task failed", error)
-        _state.value = _state.value.copy(error = "Something went wrong â€” try again")
+        _state.value = _state.value.copy(error = "Something went wrong — try again")
     }
     private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob() + failureHandler)
     private val _state = MutableStateFlow(PlaybackState())
@@ -166,14 +166,14 @@ class PlayerController(
     private fun skipErroredItem(player: androidx.media3.session.MediaController) {
         if (player.hasNextMediaItem()) {
             _state.value = _state.value.copy(
-                error = "could not play that track â€” skipping to the next one",
+                error = "could not play that track — skipping to the next one",
             )
             player.seekToNextMediaItem()
             player.prepare()
             player.play()
         } else {
             _state.value = _state.value.copy(
-                error = "that track can't be played â€” nothing else follows it",
+                error = "that track can't be played — nothing else follows it",
             )
         }
     }

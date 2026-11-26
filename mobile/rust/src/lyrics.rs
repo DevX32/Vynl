@@ -399,10 +399,7 @@ async fn fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
         if !with_album && lookup.album.is_empty() {
             break;
         }
-        let mut params = vec![
-            ("s", lookup.title.clone()),
-            ("a", lookup.artist.clone()),
-        ];
+        let mut params = vec![("s", lookup.title.clone()), ("a", lookup.artist.clone())];
         if lookup.duration > 0.0 {
             params.push(("d", format!("{}", lookup.duration.round() as i64)));
         }
