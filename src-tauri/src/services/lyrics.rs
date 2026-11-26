@@ -11,10 +11,12 @@ const FAIL_CACHE_MAX: usize = 500;
 const DISK_CACHE_MAX: usize = 1000;
 const REMOTE_CACHE_MAX: usize = 500;
 const DISK_CACHE_FILE: &str = "lyrics-cache.json";
-const NEGATIVE_CACHE_TTL_MS: u64 = 6 * 60 * 60 * 1000;
+
+const NEGATIVE_CACHE_TTL_MS: u64 = 10 * 60 * 1000;
 static LRC_TIMESTAMP_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[ \t]*\[[ \t]*\d{1,3}:\d{1,2}(?::\d{1,4})?(?:[.,]\d{1,4})?[ \t]*\]").unwrap()
 });
+static META_EXTRA_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\([^)]*\)|\[[^]]*\]").unwrap());
 
 static REMOTE_CACHE: OnceLock<tokio::sync::RwLock<HashMap<String, Option<LyricsResult>>>> =
     OnceLock::new();
@@ -232,39 +234,46 @@ fn load_disk_cache(user_data_dir: &Path) -> (HashMap<String, DiskCacheEntry>, Op
 pub async fn fetch_lyrics_with_cache(
     lookup: &LyricsLookup,
     user_data_dir: &Path,
+    force: bool,
 ) -> Option<LyricsResult> {
     let key = cache_key(lookup);
 
-    {
-        let cache = remote_cache().read().await;
-        if let Some(cached) = cache.get(&key) {
-            return cached.clone();
+    if force {
+        remote_cache().write().await.remove(&key);
+        fail_cache().write().await.remove(&key);
+        disk_cache_remove(user_data_dir, &key);
+    } else {
+        {
+            let cache = remote_cache().read().await;
+            if let Some(cached) = cache.get(&key) {
+                return cached.clone();
+            }
         }
-    }
 
-    {
-        let mut fails = fail_cache().write().await;
-        if let Some(at) = fails.get(&key) {
-            if now_millis().saturating_sub(*at) < NEGATIVE_CACHE_TTL_MS {
+        {
+            let mut fails = fail_cache().write().await;
+            if let Some(at) = fails.get(&key) {
+                if now_millis().saturating_sub(*at) < NEGATIVE_CACHE_TTL_MS {
+                    return None;
+                }
+                fails.remove(&key);
+            }
+        }
+
+        let now = now_millis();
+        let disk = load_disk_cache(user_data_dir).0;
+        if let Some(entry) = disk.get(&key).cloned() {
+            if let Some(hit) = entry.result {
+                disk_cache_touch(user_data_dir, &key);
+                let mut mem_cache = remote_cache().write().await;
+                mem_cache.insert(key, Some(hit.clone()));
+                return Some(hit);
+            }
+            if now.saturating_sub(entry.accessed_at) < NEGATIVE_CACHE_TTL_MS {
                 return None;
             }
-            fails.remove(&key);
+            disk_cache_remove(user_data_dir, &key);
         }
-    }
-
-    let now = now_millis();
-    let disk = load_disk_cache(user_data_dir).0;
-    if let Some(entry) = disk.get(&key).cloned() {
-        if let Some(hit) = entry.result {
-            disk_cache_touch(user_data_dir, &key);
-            let mut mem_cache = remote_cache().write().await;
-            mem_cache.insert(key, Some(hit.clone()));
-            return Some(hit);
-        }
-        if now.saturating_sub(entry.accessed_at) < NEGATIVE_CACHE_TTL_MS {
-            return None;
-        }
-        disk_cache_remove(user_data_dir, &key);
     }
 
     let result = do_fetch(lookup).await;
@@ -371,14 +380,19 @@ fn is_synced_kind(kind: &crate::commands::types::LyricsKind) -> bool {
 }
 
 async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    let lrclib = do_fetch_lrclib(lookup).await;
+    // Query every provider at once. A slow or unreachable provider no longer
+    // adds its full timeout to each lyrics load.
+    let (lrclib, lrcred, better) = tokio::join!(
+        do_fetch_lrclib(lookup),
+        do_fetch_lrcred(lookup),
+        do_fetch_betterlyrics(lookup),
+    );
     if lrclib.as_ref().is_some_and(|hit| is_synced_kind(&hit.kind)) {
         return lrclib;
     }
-    if let Some(hit) = do_fetch_lrcred(lookup).await {
+    if let Some(hit) = lrcred {
         return Some(hit);
     }
-    let better = do_fetch_betterlyrics(lookup).await;
     if better.as_ref().is_some_and(|hit| is_synced_kind(&hit.kind)) {
         return better;
     }
@@ -412,19 +426,15 @@ fn parse_betterlyrics(data: &serde_json::Value) -> Option<LyricsResult> {
 }
 
 async fn do_fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    if lookup.duration <= 0.0 {
-        return None;
-    }
     let client = http_client();
     for with_album in [true, false] {
         if !with_album && lookup.album.is_empty() {
             break;
         }
-        let mut params = vec![
-            ("s", lookup.title.clone()),
-            ("a", lookup.artist.clone()),
-            ("d", format!("{}", lookup.duration.round() as i64)),
-        ];
+        let mut params = vec![("s", lookup.title.clone()), ("a", lookup.artist.clone())];
+        if lookup.duration > 0.0 {
+            params.push(("d", format!("{}", lookup.duration.round() as i64)));
+        }
         if with_album && !lookup.album.is_empty() {
             params.push(("al", lookup.album.clone()));
         }
@@ -450,7 +460,7 @@ async fn do_fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
 
 const DURATION_EXACT_SECS: f64 = 2.0;
 const DURATION_TOLERANCE_SECS: f64 = 5.0;
-const DURATION_HARD_REJECT_SECS: f64 = 8.0;
+const DURATION_HARD_REJECT_SECS: f64 = 12.0;
 
 struct Hit {
     title: String,
@@ -490,11 +500,38 @@ fn duration_acceptable(data: &serde_json::Value, lookup: &LyricsLookup) -> bool 
     }
 }
 
+fn normalize_meta(text: &str) -> String {
+    let cleaned = META_EXTRA_RE.replace_all(text, " ");
+    cleaned
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .filter(|word| {
+            !matches!(
+                word.to_ascii_lowercase().as_str(),
+                "feat"
+                    | "ft"
+                    | "official"
+                    | "video"
+                    | "lyrics"
+                    | "lyric"
+                    | "audio"
+                    | "visualizer"
+                    | "hd"
+                    | "hq"
+                    | "remaster"
+                    | "remastered"
+            )
+        })
+        .map(|word| word.to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn score_hit(hit: &Hit, lookup: &LyricsLookup) -> i32 {
-    let title_lower = hit.title.to_lowercase();
-    let artist_lower = hit.artist.to_lowercase();
-    let lookup_title = lookup.title.to_lowercase();
-    let lookup_artist = lookup.artist.to_lowercase();
+    let title_lower = normalize_meta(&hit.title);
+    let artist_lower = normalize_meta(&hit.artist);
+    let lookup_title = normalize_meta(&lookup.title);
+    let lookup_artist = normalize_meta(&lookup.artist);
 
     let title_match = if title_lower == lookup_title {
         10

@@ -136,6 +136,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     private var lyricsTrackId: String? = null
+    private var lyricsGeneration = 0
 
     private val settings = SettingsStore(application)
     private val updater = AppUpdate(application)
@@ -928,6 +929,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadLyrics(track: CatalogueTrack) {
+        val generation = ++lyricsGeneration
         _lyrics.value = null
         lyricsStatus = LyricsStatus.Loading
         lyricsAvailable = false
@@ -939,13 +941,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     repository.lyrics(track)
                 }
-                if (lyricsTrackId != track.id) return@safeLaunch
+                if (lyricsTrackId != track.id || generation != lyricsGeneration) return@safeLaunch
                 _lyrics.value = result
                 val useful = result.hasDisplayable
                 lyricsStatus = if (useful) LyricsStatus.Ready else LyricsStatus.Missing
                 lyricsAvailable = useful
             } catch (error: Exception) {
-                if (lyricsTrackId != track.id) return@safeLaunch
+                if (lyricsTrackId != track.id || generation != lyricsGeneration) return@safeLaunch
                 _lyrics.value = null
                 lyricsStatus = LyricsStatus.Failed
                 lyricsAvailable = false

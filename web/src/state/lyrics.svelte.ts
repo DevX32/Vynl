@@ -46,6 +46,10 @@ function storeCache(path: string, res: LyricsResult, lyricLines: LyricLine[]): v
   evictOldest(cache, MAX_CACHE);
 }
 
+function dropCache(path: string): void {
+  cache.delete(path);
+}
+
 function tryEmbed(res: LyricsResult, path: string): void {
   if (res.source !== "remote" || res.kind === "ttml" || embedded.has(path)) return;
   const text =
@@ -120,7 +124,7 @@ export function prefetchLyrics(
   })();
 }
 
-export function loadLyrics(id: string | null): void {
+export function loadLyrics(id: string | null, force = false): void {
   if (!id) {
     loadVersion++;
     activeId = null;
@@ -138,8 +142,8 @@ export function loadLyrics(id: string | null): void {
     return;
   }
 
-  if (loadingId === id) return;
-  if (activeId === id && result) return;
+  if (!force && loadingId === id) return;
+  if (!force && activeId === id && result) return;
 
   const version = ++loadVersion;
   activeId = id;
@@ -148,6 +152,7 @@ export function loadLyrics(id: string | null): void {
   lines = [];
   loadError = null;
 
+  if (force) dropCache(track.path);
   const cached = cache.get(track.path);
   if (cached) {
     setFromCache(cached);
@@ -169,12 +174,15 @@ export function loadLyrics(id: string | null): void {
       }
 
       if (!res) {
-        res = await vynl.lyricsFetch({
-          title: track.title,
-          artist: track.artist,
-          album: track.album,
-          duration: track.duration,
-        });
+        res = await vynl.lyricsFetch(
+          {
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+          },
+          force,
+        );
         if (version !== loadVersion) return;
         if (res) tryEmbed(res, track.path);
       }

@@ -9,7 +9,7 @@ const BETTERLYRICS_BASE: &str = "https://lyrics-api.boidu.dev";
 
 const DURATION_EXACT_SECS: f64 = 2.0;
 const DURATION_TOLERANCE_SECS: f64 = 5.0;
-const DURATION_HARD_REJECT_SECS: f64 = 8.0;
+const DURATION_HARD_REJECT_SECS: f64 = 12.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -136,11 +136,50 @@ fn duration_acceptable(data: &serde_json::Value, lookup: &LyricsLookup) -> bool 
     }
 }
 
+fn normalize_meta(text: &str) -> String {
+    let mut cleaned = String::with_capacity(text.len());
+    let mut depth = 0usize;
+    for ch in text.chars() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => {
+                depth = depth.saturating_sub(1);
+                cleaned.push(' ');
+            }
+            _ if depth == 0 => cleaned.push(ch),
+            _ => {}
+        }
+    }
+    cleaned
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .filter(|word| {
+            !matches!(
+                word.to_ascii_lowercase().as_str(),
+                "feat"
+                    | "ft"
+                    | "official"
+                    | "video"
+                    | "lyrics"
+                    | "lyric"
+                    | "audio"
+                    | "visualizer"
+                    | "hd"
+                    | "hq"
+                    | "remaster"
+                    | "remastered"
+            )
+        })
+        .map(|word| word.to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn score_hit(hit: &Hit, lookup: &LyricsLookup) -> i32 {
-    let title_lower = hit.title.to_lowercase();
-    let artist_lower = hit.artist.to_lowercase();
-    let lookup_title = lookup.title.to_lowercase();
-    let lookup_artist = lookup.artist.to_lowercase();
+    let title_lower = normalize_meta(&hit.title);
+    let artist_lower = normalize_meta(&hit.artist);
+    let lookup_title = normalize_meta(&lookup.title);
+    let lookup_artist = normalize_meta(&lookup.artist);
 
     let title_match = if title_lower == lookup_title {
         10
@@ -355,9 +394,6 @@ fn parse_betterlyrics(data: &serde_json::Value) -> Option<LyricsResult> {
 }
 
 async fn fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    if lookup.duration <= 0.0 {
-        return None;
-    }
     let client = http_client();
     for with_album in [true, false] {
         if !with_album && lookup.album.is_empty() {
@@ -366,8 +402,10 @@ async fn fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
         let mut params = vec![
             ("s", lookup.title.clone()),
             ("a", lookup.artist.clone()),
-            ("d", format!("{}", lookup.duration.round() as i64)),
         ];
+        if lookup.duration > 0.0 {
+            params.push(("d", format!("{}", lookup.duration.round() as i64)));
+        }
         if with_album && !lookup.album.is_empty() {
             params.push(("al", lookup.album.clone()));
         }
@@ -395,14 +433,19 @@ async fn fetch_betterlyrics(lookup: &LyricsLookup) -> Option<LyricsResult> {
 }
 
 pub async fn fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    let lrclib = fetch_lrclib(lookup).await;
+    // Run the providers in parallel so one slow service cannot stall the
+    // whole lookup (the native call has a 30s deadline).
+    let (lrclib, lrcred, better) = tokio::join!(
+        fetch_lrclib(lookup),
+        fetch_lrcred(lookup),
+        fetch_betterlyrics(lookup),
+    );
     if lrclib.as_ref().is_some_and(|hit| is_synced(&hit.kind)) {
         return lrclib;
     }
-    if let Some(hit) = fetch_lrcred(lookup).await {
+    if let Some(hit) = lrcred {
         return Some(hit);
     }
-    let better = fetch_betterlyrics(lookup).await;
     if better.as_ref().is_some_and(|hit| is_synced(&hit.kind)) {
         return better;
     }

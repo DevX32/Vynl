@@ -232,8 +232,8 @@ export const vynl = {
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>
     cmd("lyrics_local", { file }),
 
-  lyricsFetch: (lookup: LyricsLookup): Promise<LyricsResult | null> =>
-    cmd("lyrics_fetch", { lookup }),
+  lyricsFetch: (lookup: LyricsLookup, force = false): Promise<LyricsResult | null> =>
+    cmd("lyrics_fetch", { lookup, force }),
 
   lyricsEmbed: (payload: { file: string; text: string }): Promise<void> =>
     cmd("lyrics_embed", payload),

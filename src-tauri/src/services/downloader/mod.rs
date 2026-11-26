@@ -1566,7 +1566,7 @@ async fn process_lyrics_lookup(
         album: track.album.clone(),
         duration: track.duration.unwrap_or(0.0),
     };
-    let fetch_result = lyrics::fetch_lyrics_with_cache(&lookup, user_data_dir).await;
+    let fetch_result = lyrics::fetch_lyrics_with_cache(&lookup, user_data_dir, false).await;
     match fetch_result {
         Some(lr) if !lr.text.trim().is_empty() => {
             let kind = lr.kind;

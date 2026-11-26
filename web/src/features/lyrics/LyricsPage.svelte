@@ -61,6 +61,8 @@
   const result = $derived(getLyricsResult());
   const error = $derived(getLyricsError());
   const playing = $derived(getIsTrackPlaying());
+  const hasRoman = $derived(lines.some((l) => !!l.roman && l.roman.trim() !== ""));
+  const hasContent = $derived(lines.some((l) => l.text.trim() !== "" || isInstrumental(l.text)));
 
   function readAutoScroll(): boolean {
     if (typeof localStorage === "undefined") return true;
@@ -291,7 +293,7 @@
 
   function clearSelection(e: PointerEvent): void {
     const target = e.target as HTMLElement;
-    if (target.closest(".lyr-line") || e.ctrlKey || e.metaKey) return;
+    if (target.closest(".line") || e.ctrlKey || e.metaKey) return;
     selected = [];
   }
 
@@ -360,7 +362,7 @@
           </div>
 
           <div class="lyr-controls">
-            <button class="lyr-icon" onclick={copyAll} aria-label={t("lyrics.copyAllLyrics")}>
+            <button class="lyr-icon" onclick={copyAll} aria-label={t("lyrics.copyAllLyrics")} disabled={!hasContent}>
               <Copy size={14} stroke-width={1.5} />
             </button>
             <button class="lyr-icon" class:active={settingsOpen} onclick={() => (settingsOpen = !settingsOpen)} aria-label={t("common.settings")}>
@@ -378,10 +380,12 @@
                 <span class="settings-label mono">{t("lyrics.autoScroll")}</span>
                 <button class="mini-switch" class:on={autoScroll} onclick={() => setAutoScroll(!autoScroll)} aria-label={t("lyrics.toggleAutoScroll")}><span></span></button>
               </div>
-              <div class="settings-row">
-                <span class="settings-label mono">{t("lyrics.romanization")}</span>
-                <button class="mini-switch" class:on={showRomanization} onclick={() => setRomanization(!showRomanization)} aria-label={t("lyrics.toggleRomanization")}><span></span></button>
-              </div>
+              {#if hasRoman}
+                <div class="settings-row">
+                  <span class="settings-label mono">{t("lyrics.romanization")}</span>
+                  <button class="mini-switch" class:on={showRomanization} onclick={() => setRomanization(!showRomanization)} aria-label={t("lyrics.toggleRomanization")}><span></span></button>
+                </div>
+              {/if}
               <div class="settings-row">
                 <button class="btn-ghost settings-action mono" onclick={() => open("search")}>
                   <Search size={13} stroke-width={1.5} />
@@ -416,15 +420,26 @@
         ontouchmove={noteUserScroll}
       >
         {#if loading && lines.length === 0}
-          <div class="empty mono" transition:fade={{ duration: 120 }}>{t("lyrics.loadingLyrics")}</div>
+          <div class="empty" transition:fade={{ duration: 120 }} role="status" aria-label={t("lyrics.loadingLyrics")}>
+            <div class="skeleton" aria-hidden="true">
+              {#each { length: 6 } as _, i (i)}
+                <div class="skeleton-line" style:--w={`${70 - (i % 3) * 12}%`}></div>
+              {/each}
+            </div>
+          </div>
         {:else if !result && error}
           <div class="empty" transition:fade={{ duration: 120 }}>
             <div class="empty-title display">{t("lyrics.loadFailed")}</div>
-            <button class="btn-ghost settings-action mono" style="margin-top:12px; justify-content:center; width:auto;" onclick={() => loadLyrics(getCurrentId())}>{t("common.retry")}</button>
+            <button class="retry-btn mono" onclick={() => loadLyrics(getCurrentId(), true)}>{t("common.retry")}</button>
           </div>
         {:else if !result}
           <div class="empty" transition:fade={{ duration: 120 }}>
             <div class="empty-title display">{t("lyrics.noLyricsFound")}</div>
+            <button class="retry-btn mono" onclick={() => loadLyrics(getCurrentId(), true)}>{t("common.retry")}</button>
+            <div class="empty-actions">
+              <button class="retry-btn mono" onclick={() => open("search")}><Search size={13} stroke-width={1.5} />{t("lyrics.searchLyrics")}</button>
+              <button class="retry-btn mono" onclick={() => open("paste")}><ClipboardPaste size={13} stroke-width={1.5} />{t("lyrics.paste")}</button>
+            </div>
           </div>
         {:else if lines.length === 0}
           <div class="empty mono" transition:fade={{ duration: 120 }}>{t("lyrics.emptyLyricsFile")}</div>
@@ -605,6 +620,15 @@
     border-color: color-mix(in srgb, var(--accent) 55%, transparent);
     background: color-mix(in srgb, var(--accent) 20%, transparent);
   }
+  .lyr-icon:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .lyr-icon:disabled:hover {
+    color: var(--faint);
+    background: none;
+    border-color: transparent;
+  }
 
   .lyr-settings {
     position: absolute;
@@ -713,6 +737,23 @@
   .empty { margin: auto; text-align:center; color: var(--faint); font-size: 11.5px; }
   .empty-title { font-size: 20px; color: var(--dim); margin-bottom: 6px; }
   .empty-sub { font-size: 11px; }
+  .retry-btn {
+    display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+    margin-top: 12px; padding: 7px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line-strong); background: var(--bg-raise);
+    color: var(--dim); font-size: 11px; letter-spacing: .05em; cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .retry-btn:hover { color: var(--text); border-color: var(--accent); }
+  .retry-btn :global(svg) { color: var(--faint); }
+  .empty-actions { display: flex; gap: 8px; justify-content: center; }
+  .skeleton { width: 100%; max-width: 560px; margin: 8px auto; display: flex; flex-direction: column; gap: 14px; }
+  .skeleton-line {
+    height: 18px; width: var(--w, 70%); margin: 0 auto; border-radius: 6px;
+    background: var(--bg-raise); animation: skel-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes skel-pulse { 0%,100% { opacity: .45; } 50% { opacity: .85; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton-line { animation: none; } }
 
   .line {
     width: 100%;

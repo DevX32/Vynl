@@ -690,7 +690,7 @@ async fn track_synced_lyrics(
 
     let fetched = tokio::task::spawn_blocking(move || {
         tauri::async_runtime::handle().block_on(crate::services::lyrics::fetch_lyrics_with_cache(
-            &lookup, &ud,
+            &lookup, &ud, false,
         ))
     })
     .await
