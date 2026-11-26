@@ -54,14 +54,11 @@ pub fn build_client(ua: &str, timeout_secs: u64) -> Result<Client, String> {
 }
 
 fn transform_secret(secret_bytes: &[u8]) -> Vec<u8> {
-    let transformed: Vec<u8> = secret_bytes
+    secret_bytes
         .iter()
         .enumerate()
         .map(|(i, &b)| b ^ (((i as u8) % 33) + 9))
-        .collect();
-    let joined: String = transformed.iter().map(|b| b.to_string()).collect();
-    let hex_str = hex::encode(joined.as_bytes());
-    hex::decode(&hex_str).unwrap_or_default()
+        .collect()
 }
 
 async fn fetch_latest_totp_secret(client: &Client) -> (u32, Vec<u8>) {

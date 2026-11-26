@@ -56,6 +56,15 @@ pub(crate) fn list_audio_files(dir: &Path) -> Vec<PathBuf> {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if let Some(marker) = name_str.find(".overwrite-backup-") {
+                let fresh = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+                    .is_some_and(|age| age < std::time::Duration::from_secs(300));
+                if fresh {
+                    continue;
+                }
                 let backup_suffix = &name_str[marker + ".overwrite-backup-".len()..];
                 if backup_suffix.chars().all(|c| c.is_ascii_digit()) {
                     let base_name = &name_str[..marker];
@@ -410,10 +419,7 @@ fn scan_library_incremental_unlocked(
         if let Some(cached) = cached {
             let (current_mtime, current_created) = file_times(file);
 
-            if cached.mtime == Some(current_mtime)
-                && current_mtime > 0
-                && !(cached.artist.is_empty() || cached.title.is_empty())
-            {
+            if cached.mtime == Some(current_mtime) && current_mtime > 0 {
                 let mut track = (*cached).clone();
                 if track.added_at.unwrap_or(0) == 0 {
                     track.added_at = Some(resolve_added_at(None, current_created, current_mtime));

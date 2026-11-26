@@ -51,11 +51,18 @@ fn extract_video_id(url: &str) -> Option<String> {
 
     let path = trimmed.split(['?', '#']).next().unwrap_or("");
     let lower = trimmed.to_lowercase();
-    if lower.contains("youtu.be/")
-        || lower.contains("/shorts/")
-        || lower.contains("/embed/")
-        || lower.contains("/live/")
-        || lower.contains("/v/")
+    let is_youtube = lower.starts_with("https://www.youtube.com/")
+        || lower.starts_with("http://www.youtube.com/")
+        || lower.starts_with("https://youtube.com/")
+        || lower.starts_with("http://youtube.com/")
+        || lower.starts_with("https://m.youtube.com/")
+        || lower.starts_with("https://youtu.be/")
+        || lower.starts_with("http://youtu.be/");
+    if is_youtube
+        && (lower.contains("/shorts/")
+            || lower.contains("/embed/")
+            || lower.contains("/live/")
+            || lower.contains("/v/"))
     {
         let last = path.rsplit('/').next().unwrap_or("");
         if valid_video_id(last) {

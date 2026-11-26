@@ -667,10 +667,20 @@ fn staged_path(dest: &Path) -> std::path::PathBuf {
 fn replace_file(from: &Path, to: &Path) -> Result<(), String> {
     match std::fs::rename(from, to) {
         Ok(()) => Ok(()),
-        Err(_) => std::fs::copy(from, to)
-            .map(|_| {
-                let _ = std::fs::remove_file(from);
-            })
-            .map_err(|e| format!("Failed to finish writing {}: {e}", to.display())),
+        Err(_) => {
+            let backup = to.with_extension(format!("replace-backup-{}", std::process::id()));
+            let _ = std::fs::remove_file(&backup);
+            std::fs::rename(to, &backup)
+                .map_err(|e| format!("Failed to back up {}: {e}", to.display()))?;
+            if let Err(error) = std::fs::rename(from, to) {
+                let _ = std::fs::rename(&backup, to);
+                return Err(format!(
+                    "Failed to finish writing {}: {error}",
+                    to.display()
+                ));
+            }
+            let _ = std::fs::remove_file(&backup);
+            Ok(())
+        }
     }
 }

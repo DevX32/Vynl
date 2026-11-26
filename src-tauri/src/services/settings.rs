@@ -31,8 +31,6 @@ fn defaults() -> Settings {
         .or_else(|| dirs::home_dir().map(|home| home.join("Music")))
         .unwrap_or_else(|| Path::new(".").to_path_buf());
     let dir = music.join("Vynl");
-    let _ = fs::create_dir_all(&dir);
-    let dir = dir.canonicalize().unwrap_or(dir);
     Settings {
         output_dir: dir.to_string_lossy().to_string(),
         format: FIXED_FORMAT,
@@ -122,19 +120,26 @@ fn get_settings_unlocked(user_data_dir: &Path) -> Settings {
         return defaults();
     };
     let def = defaults();
+    let default_output = def.output_dir.clone();
     if loaded.output_dir.is_empty() {
-        loaded.output_dir = def.output_dir;
+        loaded.output_dir = default_output.clone();
     } else {
         let abs = std::path::PathBuf::from(&loaded.output_dir);
         if !abs.is_absolute() {
-            loaded.output_dir = def.output_dir;
+            loaded.output_dir = default_output.clone();
         } else {
             let canonical = fs::canonicalize(&abs).unwrap_or(abs);
             if canonical.parent().is_none() {
-                loaded.output_dir = def.output_dir;
+                loaded.output_dir = default_output.clone();
             } else {
                 loaded.output_dir = canonical.to_string_lossy().to_string();
             }
+        }
+    }
+    if loaded.output_dir == default_output {
+        let _ = fs::create_dir_all(&loaded.output_dir);
+        if let Ok(canonical) = fs::canonicalize(&loaded.output_dir) {
+            loaded.output_dir = canonical.to_string_lossy().to_string();
         }
     }
     if loaded.filename_pattern.is_empty() {

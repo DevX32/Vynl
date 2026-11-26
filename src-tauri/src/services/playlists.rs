@@ -167,6 +167,7 @@ pub fn validate_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
         && id != "order"
+        && id != crate::services::sync::LIKED_PLAYLIST_ID
         && id
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')

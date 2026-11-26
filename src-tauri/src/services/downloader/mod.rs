@@ -16,7 +16,7 @@ use crate::services::{audio, catalog, history, lyrics, process as sysproc, util}
 mod matching;
 mod paths;
 mod process;
-mod search;
+pub(crate) mod search;
 
 pub(crate) use matching::filter_and_rank_candidates;
 use paths::tmp_dir;
@@ -695,6 +695,10 @@ async fn download_track(
             );
             track_event(track, TrackStatus::Searching, 0.0, Some(&msg));
             failures.push(msg);
+            if let Some(task) = stdout_task {
+                task.abort();
+            }
+            stderr_task.abort();
             continue;
         }
 
@@ -1681,7 +1685,10 @@ fn move_file(from: &Path, to: &Path) -> Result<(), String> {
                 std::process::id(),
                 serial
             ));
-            std::fs::copy(from, &tmp).map_err(|e| e.to_string())?;
+            if let Err(error) = std::fs::copy(from, &tmp) {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(error.to_string());
+            }
             match std::fs::rename(&tmp, to) {
                 Ok(()) => {
                     let _ = std::fs::remove_file(from);

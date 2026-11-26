@@ -560,7 +560,7 @@ async fn fetch_yt_playlist_collection(list_id: &str) -> Result<Collection, Strin
     let owner = first.playlist.author.clone();
     let cover = first.playlist.cover.clone();
     let mut tracks = first.tracks;
-    crate::services::progress::emit("resolve", tracks.len(), 0);
+    crate::services::progress::emit("resolve", 0, tracks.len());
     let mut continuation = first.continuation.clone();
     let mut pages = 1usize;
     while let Some(token) = continuation.take() {
@@ -569,7 +569,7 @@ async fn fetch_yt_playlist_collection(list_id: &str) -> Result<Collection, Strin
         }
         let page = service()?.playlist_page(&token).await?;
         tracks.extend(page.tracks);
-        crate::services::progress::emit("resolve", tracks.len(), 0);
+        crate::services::progress::emit("resolve", tracks.len(), tracks.len());
         continuation = page.continuation;
         pages += 1;
     }

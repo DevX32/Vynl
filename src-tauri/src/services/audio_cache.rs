@@ -150,15 +150,23 @@ fn prune_cache_dir(dir: &Path) {
     let mut files: Vec<(PathBuf, u64, u64)> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.contains(".partial."))
-        {
-            continue;
-        }
         let Ok(meta) = path.metadata() else { continue };
         if !meta.is_file() {
+            continue;
+        }
+        let is_partial = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.contains(".partial."));
+        if is_partial {
+            let stale = meta
+                .modified()
+                .ok()
+                .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+                .is_some_and(|age| age > std::time::Duration::from_secs(3600));
+            if stale {
+                let _ = std::fs::remove_file(&path);
+            }
             continue;
         }
         let mtime = meta

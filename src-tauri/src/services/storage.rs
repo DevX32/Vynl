@@ -16,6 +16,8 @@ pub fn clear_caches(user_data: &Path) -> u64 {
             let _ = std::fs::remove_file(&path);
         }
     }
+    crate::services::lyrics::clear_memory_caches();
+    crate::services::downloader::search::clear_memory_cache();
 
     freed
 }

@@ -131,6 +131,9 @@ fn normalize_cover(cover: &str) -> Option<String> {
         return Some(cached.clone());
     }
     let normalized = crate::services::cover_cache::normalize_cover_url(cover).into_owned();
+    if cache.len() >= 200 {
+        cache.clear();
+    }
     cache.insert(cover.to_string(), normalized.clone());
     Some(normalized)
 }

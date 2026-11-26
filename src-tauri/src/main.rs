@@ -36,15 +36,6 @@ fn apply_hardware_acceleration() {
             unsafe {
                 std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
             };
-        } else {
-            #[cfg(target_os = "windows")]
-            unsafe {
-                std::env::remove_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS")
-            };
-            #[cfg(target_os = "linux")]
-            unsafe {
-                std::env::remove_var("WEBKIT_DISABLE_COMPOSITING_MODE")
-            };
         }
         return;
     }

@@ -297,6 +297,14 @@ static MATCH_CACHE: once_cell::sync::Lazy<std::sync::Mutex<MatchCacheState>> =
         })
     });
 
+pub fn clear_memory_cache() {
+    let mut guard = MATCH_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    guard.entries.clear();
+    guard.dirty = false;
+    guard.path = None;
+    guard.last_saved = None;
+}
+
 fn with_match_cache<R>(user_data_dir: &Path, f: impl FnOnce(&mut MatchCacheState) -> R) -> R {
     let mut guard = MATCH_CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let path = match_cache_path(user_data_dir);

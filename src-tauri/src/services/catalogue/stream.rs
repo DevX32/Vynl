@@ -96,7 +96,8 @@ pub async fn fetch_complete_file(
             Ok(()) => at = end,
             Err(FetchError::Auth) if refreshes < MAX_REFRESH_ATTEMPTS => {
                 refreshes += 1;
-                match resolver.resolve(video_id, Some(format.itag)).await {
+                let itag = (format.itag != 0).then_some(format.itag);
+                match resolver.resolve(video_id, itag).await {
                     Ok(next) => format = next,
                     Err(error) => {
                         let _ = std::fs::remove_file(&path);

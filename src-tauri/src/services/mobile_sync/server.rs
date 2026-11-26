@@ -689,15 +689,9 @@ async fn track_synced_lyrics(
     let ud = state.user_data.clone();
 
     let fetched = tokio::task::spawn_blocking(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build();
-        match rt {
-            Ok(rt) => rt.block_on(crate::services::lyrics::fetch_lyrics_with_cache(
-                &lookup, &ud,
-            )),
-            Err(_) => None,
-        }
+        tauri::async_runtime::handle().block_on(crate::services::lyrics::fetch_lyrics_with_cache(
+            &lookup, &ud,
+        ))
     })
     .await
     .unwrap_or(None);

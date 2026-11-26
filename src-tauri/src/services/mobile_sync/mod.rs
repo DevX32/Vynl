@@ -233,19 +233,6 @@ fn start_mdns(port: u16) -> Option<mdns_sd::ServiceDaemon> {
     }
 }
 
-fn pair_urls(port: u16) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some(host) = mdns_hostname() {
-        out.push(format!("https://{host}:{port}"));
-    }
-    out.extend(
-        list_lan_addresses()
-            .into_iter()
-            .map(|ip| format!("https://{ip}:{port}")),
-    );
-    out
-}
-
 fn pairing_payload(hosts: &[String], port: u16, pin: &str, fingerprint: &str) -> String {
     let primary = hosts.first().map(String::as_str).unwrap_or_default();
     let mut payload = format!("vynl://pair?h={primary}&p={port}&pin={pin}&fp={fingerprint}");
@@ -270,17 +257,21 @@ fn qr_for_payload(payload: &str) -> Option<String> {
 
 pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
     let cfg = load_config(user_data_dir);
-    let urls = pair_urls(cfg.port);
-    let mut hosts: Vec<String> = list_lan_addresses()
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    if let Some(mdns) = mdns_hostname() {
-        let label = mdns.trim_end_matches(".local").to_string();
-        if !hosts.contains(&label) {
-            hosts.push(label);
+    let addresses = list_lan_addresses();
+    let hostname = mdns_hostname();
+    let mut hosts: Vec<String> = Vec::new();
+    if let Some(mdns) = &hostname {
+        hosts.push(mdns.trim_end_matches(".local").to_string());
+    }
+    for address in &addresses {
+        if !hosts.contains(address) {
+            hosts.push(address.clone());
         }
     }
+    let urls: Vec<String> = hosts
+        .iter()
+        .map(|host| format!("https://{host}:{}", cfg.port))
+        .collect();
 
     let fingerprint = tls::fingerprint(user_data_dir);
     let qr_svg = fingerprint
@@ -291,9 +282,9 @@ pub fn status(user_data_dir: &Path, running: bool) -> MobileSyncStatus {
         running,
         port: cfg.port,
         pairing_pin: cfg.pairing_pin,
-        lan_addresses: list_lan_addresses(),
+        lan_addresses: addresses,
         pair_urls: urls,
-        hostname: mdns_hostname(),
+        hostname,
         qr_svg,
         fingerprint,
     }

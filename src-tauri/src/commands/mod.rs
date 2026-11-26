@@ -877,6 +877,8 @@ pub async fn set_playlist_cover(
     Ok(playlist)
 }
 
+static SYNC_PUSH_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub(crate) fn sync_playlist(app: &AppHandle, _playlist: &Playlist) {
     let Ok(user_data) = user_data_dir(app) else {
         return;
@@ -890,7 +892,12 @@ pub(crate) fn sync_playlist(app: &AppHandle, _playlist: &Playlist) {
     let Ok(settings) = load_settings(app) else {
         return;
     };
+    let generation = SYNC_PUSH_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
     tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        if generation != SYNC_PUSH_GENERATION.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
         {
             eprintln!("[Vynl sync] background push failed: {e}");

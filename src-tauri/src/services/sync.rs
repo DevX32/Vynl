@@ -979,7 +979,7 @@ fn apply_sync_state(data_dir: &Path, output_dir: &Path, state: &SyncState) -> Ap
     }
 
     if !state.order.is_empty()
-        && let Err(error) = playlists::write_order(output_dir, &state.order)
+        && let Err(error) = playlists::reorder_playlists(output_dir, &state.order)
     {
         report.errors.push(format!("order: {error}"));
     }
