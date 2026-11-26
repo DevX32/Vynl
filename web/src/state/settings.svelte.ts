@@ -184,6 +184,13 @@ async function applyExtractedAccent(
   if (currentSettings.dynamicAccent) applyAccentColor(hex);
 }
 
+import.meta.hot?.dispose(() => {
+  _toolsUnlisten?.();
+  _toolsUnlisten = null;
+  _dynamicStop?.();
+  _dynamicStop = null;
+});
+
 function markToolError(name: ToolName, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   _tools = _tools.map((s) =>

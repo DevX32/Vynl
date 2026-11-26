@@ -294,7 +294,7 @@
             <span class="rail-meta">
               <span class="rail-name display">{t("catalogue.likedSongs")}</span>
               <span class="rail-desc mono">
-                {`${t("common.playlist")} Â· ${likedTracks.length} ${
+                {`${t("common.playlist")} · ${likedTracks.length} ${
                   likedTracks.length === 1
                     ? t("library.song")
                     : t("common.songs")
@@ -356,7 +356,7 @@
             <span class="rail-meta">
               <span class="rail-name display">{p.name}</span>
               <span class="rail-desc mono">
-                {`${t("common.playlist")} Â· ${resolveDisplayName(getCurrentSettings().displayName)}`}
+                {`${t("common.playlist")} · ${resolveDisplayName(getCurrentSettings().displayName)}`}
               </span>
             </span>
           {/if}

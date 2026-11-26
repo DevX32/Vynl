@@ -63,8 +63,8 @@ function syncCurrentFromFetched(): void {
   const fresh = _all[_selected] ?? null;
   if (fresh) {
     _current = fresh;
-  } else if (!_selecting && !_meta.some((m) => m.id === _selected)) {
-    _selected = null;
+  } else if (!_selecting) {
+    if (!_meta.some((m) => m.id === _selected)) _selected = null;
     _current = null;
   }
 }

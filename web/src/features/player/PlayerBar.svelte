@@ -205,7 +205,7 @@
           {/key}
         {:else}
           <div class="mini-cover placeholder" class:empty={!current}>
-            {current ? current.title.charAt(0).toUpperCase() : "Â·"}
+            {current ? current.title.charAt(0).toUpperCase() : "·"}
           </div>
         {/if}
       </div>

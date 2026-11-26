@@ -102,11 +102,6 @@ function markSynced(): void {
   }
 }
 
-function hasSynced(): boolean {
-  if (typeof localStorage === "undefined") return false;
-  return localStorage.getItem(TASTE_SYNCED_KEY) === "1";
-}
-
 function persistDismissed(): void {
   if (typeof localStorage === "undefined") return;
   try {
@@ -136,15 +131,14 @@ export async function hydrateTaste(): Promise<void> {
   try {
     const stored = await vynl.tasteLoad();
     if (stored.length > 0) {
-      _entries = stored;
+      const known = new Set(stored.map((entry) => entry.track.id));
+      const extra = _entries.filter((entry) => !known.has(entry.track.id));
+      _entries = extra.length > 0 ? [...stored, ...extra] : stored;
       markSynced();
       persistLocal();
       return;
     }
-    if (hasSynced() && _entries.length > 0) {
-      _entries = [];
-      persistLocal();
-    } else if (_entries.length > 0) {
+    if (_entries.length > 0) {
       await vynl.tasteSave(_entries);
       markSynced();
     }

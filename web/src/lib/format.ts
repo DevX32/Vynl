@@ -6,6 +6,11 @@ const MAX_CACHE_ENTRIES = 500;
 const remote = new Map<string, Promise<string>>();
 const resolved = new Map<string, string>();
 
+export function clearResolvedCovers(): void {
+  resolved.clear();
+  remote.clear();
+}
+
 function evictIfNeeded(map: Map<string, unknown>): void {
   while (map.size > MAX_CACHE_ENTRIES) {
     const oldest = map.keys().next().value;

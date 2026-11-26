@@ -1008,6 +1008,10 @@ let lastMediaSentAt = 0;
 
 const mediaCoverPaths = new Map<string, string>();
 
+export function clearMediaCoverCache(): void {
+  mediaCoverPaths.clear();
+}
+
 async function resolveMediaCover(cover: string | null): Promise<string | null> {
   if (!cover) return null;
   if (!/^https?:\/\//i.test(cover)) return cover;

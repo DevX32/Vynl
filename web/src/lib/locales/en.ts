@@ -56,6 +56,7 @@ export const en = {
     goToAlbum: "Go to album",
     goToArtist: "Go to artist",
     kind: {
+      album: "Album",
       single: "Single",
       ep: "EP",
       compilation: "Compilation",

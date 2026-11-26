@@ -84,10 +84,18 @@
   }
 
   const prebufferSeen = new Set<string>();
+  const PREBUFFER_LIMIT = 24;
 
   function prebufferTrack(track: CatalogueTrack): void {
     const id = track.id;
     if (!id || prebufferSeen.has(id) || isCurrent(track)) return;
+    if (prebufferSeen.size >= PREBUFFER_LIMIT) {
+      const oldest = prebufferSeen.values().next().value;
+      if (oldest) {
+        prebufferSeen.delete(oldest);
+        void vynl.catalogueDiscardPrebuffer(oldest).catch(() => {});
+      }
+    }
     prebufferSeen.add(id);
     void vynl.cataloguePrebuffer(id, track.duration).catch(() => {
       prebufferSeen.delete(id);

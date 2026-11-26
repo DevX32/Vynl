@@ -11,7 +11,7 @@
     matchesCurrentSong,
   } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
-  import { blobSrc, isSameSong } from "../../lib/format";
+  import { blobSrc, songKey } from "../../lib/format";
   import { QUOTES } from "@lib/constants";
   import { resolveDisplayName } from "@lib/nickname.svelte";
   import { t } from "@lib/i18n";
@@ -90,9 +90,13 @@
 
   const allTracks = $derived.by(() => {
     const seen: LibraryTrack[] = [];
+    const ids = new Set<string>();
+    const songs = new Set<string>();
     for (const track of [...library, ...playlistStreams, ...likedStreams]) {
-      if (seen.some((known) => known.id === track.id || isSameSong(known, track)))
-        continue;
+      const key = `${songKey(track.title, track.artist)}|${Math.round(track.duration / 3)}`;
+      if (ids.has(track.id) || (track.duration > 0 && songs.has(key))) continue;
+      ids.add(track.id);
+      if (track.duration > 0) songs.add(key);
       seen.push(track);
     }
     return seen;
@@ -113,6 +117,7 @@
   );
 
   const featuredTrack = $derived.by(() => {
+    void _tick;
     if (allTracks.length === 0) return null;
     const now = new Date();
     return allTracks[(now.getDate() * 31 + now.getMonth()) % allTracks.length];

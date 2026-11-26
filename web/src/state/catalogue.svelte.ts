@@ -473,6 +473,7 @@ export async function loadCatalogueTaste(
     registerCatalogueTracks(_taste);
   } catch (error) {
     if (generation !== _tasteGeneration) return;
+    _tasteKey = "";
     _tasteError = error instanceof Error ? error.message : String(error);
     console.warn("catalogue taste failed:", error);
   } finally {
