@@ -1,7 +1,9 @@
 import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { open as openShell } from "@tauri-apps/plugin-shell";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { saveWindowState, StateFlags } from "@tauri-apps/plugin-window-state";
 import type {
   Collection,
   DownloadEvent,
@@ -252,7 +254,7 @@ export const vynl = {
 
   copyText: (text: string): Promise<void> => writeText(text),
 
-  openExternal: (url: string): Promise<void> => openShell(url),
+  openExternal: (url: string): Promise<void> => openUrl(url),
 
   onToolsUpdate: (cb: (status: ToolStatus) => void): (() => void) =>
     onEvent<ToolStatus>("vynl:tools:update", cb),
@@ -272,7 +274,10 @@ export const vynl = {
 
   installAppUpdate,
 
-  restartApp: (): Promise<void> => cmd("restart_app"),
+  restartApp: async (): Promise<void> => {
+    await saveWindowState(StateFlags.ALL);
+    await relaunch();
+  },
 
   onUpdateStatus: (cb: (status: UpdateStatus) => void): (() => void) =>
     onEvent<UpdateStatus>("vynl:update:status", (status) => {

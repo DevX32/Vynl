@@ -116,7 +116,7 @@ pub fn sync_launch_at_startup(app: &tauri::AppHandle, enabled: bool) {
         autolaunch.disable()
     };
     if let Err(error) = result {
-        eprintln!("could not update autostart: {error}");
+        log::error!("could not update autostart: {error}");
     }
 }
 
@@ -125,11 +125,11 @@ fn apply_window_effects(window: &tauri::WebviewWindow) {
     use window_vibrancy::{apply_acrylic, apply_blur, apply_mica};
 
     if let Err(error) = apply_acrylic(window, Some((0, 0, 0, 0))) {
-        eprintln!("acrylic unavailable: {error}");
+        log::error!("acrylic unavailable: {error}");
         if let Err(error) = apply_mica(window, Some(true)) {
-            eprintln!("mica unavailable: {error}");
+            log::error!("mica unavailable: {error}");
             if let Err(error) = apply_blur(window, Some((0, 0, 0, 0))) {
-                eprintln!("window blur unavailable: {error}");
+                log::error!("window blur unavailable: {error}");
             }
         }
     }
@@ -167,7 +167,7 @@ fn register_global_media_keys(app: tauri::AppHandle) {
             }
             let _ = app_handle.emit("vynl:media-control", action.clone());
         }) {
-            eprintln!("[vynl] global shortcut {accel_str} unavailable: {error}");
+            log::error!("[vynl] global shortcut {accel_str} unavailable: {error}");
         }
     }
 }
@@ -206,8 +206,20 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+                .build(),
+        )
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["mini"])
+                .build(),
+        )
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -226,7 +238,7 @@ pub fn run() {
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 if let Err(error) = app.deep_link().register_all() {
-                    eprintln!("could not register deep link schemes: {error}");
+                    log::error!("could not register deep link schemes: {error}");
                 }
             }
 
@@ -252,7 +264,7 @@ pub fn run() {
             {
                 let allow = |path: &std::path::Path| {
                     if let Err(error) = app.asset_protocol_scope().allow_directory(path, true) {
-                        eprintln!(
+                        log::error!(
                             "could not allow asset access to {}: {error}",
                             path.display()
                         );
@@ -283,7 +295,7 @@ pub fn run() {
 
             let catalogued = crate::services::catalogue::init(&user_data);
             if let Err(error) = &catalogued {
-                eprintln!("catalogue unavailable: {error}");
+                log::error!("catalogue unavailable: {error}");
             }
 
             sync_launch_at_startup(app.handle(), settings.launch_at_startup);
@@ -297,14 +309,14 @@ pub fn run() {
                         match crate::services::sync::pull_sync_state(&ud, &out).await {
                             Ok(_) => {}
                             Err(e) if e.contains("No cloud sync state found") => {}
-                            Err(e) => eprintln!("[Vynl sync] startup pull failed: {e}"),
+                            Err(e) => log::warn!("[Vynl sync] startup pull failed: {e}"),
                         }
                     }
                     if crate::services::sync::is_sync_dirty(&ud)
                         && let Err(error) =
                             crate::services::sync::push_sync_state(&ud, &out, &st).await
                     {
-                        eprintln!("[Vynl sync] retry of pending push failed: {error}");
+                        log::error!("[Vynl sync] retry of pending push failed: {error}");
                     }
                 });
             }
@@ -480,7 +492,6 @@ pub fn run() {
             commands::clear_now_playing,
             commands::check_app_update,
             commands::install_app_update,
-            commands::restart_app,
             commands::player_play,
             commands::player_crossfade,
             commands::player_stop,

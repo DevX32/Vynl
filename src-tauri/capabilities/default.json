@@ -25,8 +25,12 @@
     "dialog:allow-save",
     "dialog:allow-ask",
     "dialog:allow-message",
-    "shell:allow-open",
+    "opener:default",
     "clipboard-manager:allow-write-text",
+    "process:default",
+    "process:allow-restart",
+    "window-state:default",
+    "log:default",
     "updater:default",
     "core:event:default",
     "deep-link:default"

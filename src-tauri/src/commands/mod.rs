@@ -900,7 +900,7 @@ pub(crate) fn sync_playlist(app: &AppHandle, _playlist: &Playlist) {
         }
         if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
         {
-            eprintln!("[Vynl sync] background push failed: {e}");
+            log::warn!("[Vynl sync] background push failed: {e}");
         }
     });
 }
@@ -928,7 +928,7 @@ pub(crate) fn sync_playlist_delete(
     tauri::async_runtime::spawn(async move {
         if let Err(e) = crate::services::sync::push_sync_state(&user_data, &output, &settings).await
         {
-            eprintln!("[Vynl sync] background delete push failed: {e}");
+            log::warn!("[Vynl sync] background delete push failed: {e}");
         }
     });
 }
@@ -1029,7 +1029,7 @@ async fn sync_auth(
             Ok(_) => {}
             Err(e) if e.contains("No cloud sync state found") => {}
             Err(e) => {
-                eprintln!("[Vynl sync] auto pull after sign-in failed: {e}");
+                log::warn!("[Vynl sync] auto pull after sign-in failed: {e}");
                 crate::services::sync::record_sync_error(&user_data, &e);
                 can_push = false;
             }
@@ -1038,7 +1038,7 @@ async fn sync_auth(
             && let Err(e) =
                 crate::services::sync::push_sync_state(&user_data, &output, &settings).await
         {
-            eprintln!("[Vynl sync] auto push after sign-in failed: {e}");
+            log::warn!("[Vynl sync] auto push after sign-in failed: {e}");
         }
     }
     Ok(result)
@@ -1361,7 +1361,7 @@ pub async fn check_app_update(app: AppHandle) -> Result<UpdateStatus, String> {
             Ok(status)
         }
         Err(error) => {
-            eprintln!("update check failed: {error}");
+            log::error!("update check failed: {error}");
             let _ = clear_pending_update(&app);
             let status = UpdateStatus {
                 available: false,
@@ -1434,11 +1434,6 @@ pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-#[tauri::command]
-pub async fn restart_app(app: AppHandle) -> Result<(), String> {
-    app.restart();
 }
 
 #[tauri::command]
