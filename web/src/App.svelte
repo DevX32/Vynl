@@ -245,10 +245,7 @@
       return () => {};
     }
 
-    void getCurrentWindow()
-      .show()
-      .then(() => vynl.applyWindowEffects())
-      .catch(() => {});
+    void getCurrentWindow().show().catch(() => {});
 
     let offConsole: (() => void) | undefined;
     let consoleDisposed = false;

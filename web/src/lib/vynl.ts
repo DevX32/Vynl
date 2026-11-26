@@ -3,7 +3,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { saveWindowState, StateFlags } from "@tauri-apps/plugin-window-state";
 import type {
   Collection,
   DownloadEvent,
@@ -153,8 +152,6 @@ export const vynl = {
 
   mediaControlsReady: (): Promise<void> => cmd("media_controls_ready"),
 
-  applyWindowEffects: (): Promise<void> => cmd("apply_window_effects"),
-
   onMediaControl: (
     cb: (event: MediaControlEvent) => void,
     onReady?: () => void,
@@ -276,10 +273,7 @@ export const vynl = {
 
   installAppUpdate,
 
-  restartApp: async (): Promise<void> => {
-    await saveWindowState(StateFlags.ALL);
-    await relaunch();
-  },
+  restartApp: (): Promise<void> => relaunch(),
 
   onUpdateStatus: (cb: (status: UpdateStatus) => void): (() => void) =>
     onEvent<UpdateStatus>("vynl:update:status", (status) => {

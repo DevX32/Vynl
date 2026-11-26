@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_window_state::AppHandleExt;
 
 enum MediaCommand {
     Update(Option<MediaUpdate>),
@@ -343,7 +342,6 @@ fn handle_event(
         }
         Event::Quit => {
             emit(app, MediaControlAction::Stop);
-            let _ = app.save_window_state(tauri_plugin_window_state::StateFlags::all());
             let exit_app = app.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(300));

@@ -29,7 +29,6 @@
     "clipboard-manager:allow-write-text",
     "process:default",
     "process:allow-restart",
-    "window-state:default",
     "log:default",
     "updater:default",
     "core:event:default",

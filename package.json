@@ -30,7 +30,6 @@
     "@tauri-apps/plugin-log": "~2.10.2",
     "@tauri-apps/plugin-opener": "~2.7.3",
     "@tauri-apps/plugin-process": "~2.4.0",
-    "@tauri-apps/plugin-window-state": "~2.5.0",
     "blobatar": "^2.7.0",
     "lucide-svelte": "^1.0.1"
   }

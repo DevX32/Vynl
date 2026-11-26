@@ -27,4 +27,3 @@ pub mod taste;
 pub mod tools;
 pub mod update;
 pub mod util;
-pub mod window_effects;

@@ -120,6 +120,24 @@ pub fn sync_launch_at_startup(app: &tauri::AppHandle, enabled: bool) {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn apply_window_effects(window: &tauri::WebviewWindow) {
+    use window_vibrancy::{apply_acrylic, apply_blur, apply_mica};
+
+    if let Err(error) = apply_acrylic(window, Some((0, 0, 0, 0))) {
+        log::error!("acrylic unavailable: {error}");
+        if let Err(error) = apply_mica(window, Some(true)) {
+            log::error!("mica unavailable: {error}");
+            if let Err(error) = apply_blur(window, Some((0, 0, 0, 0))) {
+                log::error!("window blur unavailable: {error}");
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn apply_window_effects(_window: &tauri::WebviewWindow) {}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn register_global_media_keys(app: tauri::AppHandle) {
     use crate::commands::types::MediaControlAction;
@@ -198,11 +216,7 @@ pub fn run() {
                 .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
                 .build(),
         )
-        .plugin(
-            tauri_plugin_window_state::Builder::default()
-                .with_denylist(&["mini"])
-                .build(),
-        )
+
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -264,7 +278,7 @@ pub fn run() {
             }
 
             if let Some(win) = app.get_webview_window("main") {
-                crate::services::window_effects::apply(&win);
+                apply_window_effects(&win);
             }
 
             crate::services::tools::remove_unused_binaries(&user_data);
@@ -463,7 +477,6 @@ pub fn run() {
             commands::rpc_update,
             commands::media_update,
             commands::media_controls_ready,
-            commands::apply_window_effects,
             commands::save_now_playing,
             commands::load_now_playing,
             commands::clear_now_playing,
