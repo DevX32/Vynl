@@ -72,42 +72,53 @@ export function blobSrc(
   path: string | null | undefined,
 ): { update: (newPath: string | null | undefined) => void; destroy: () => void } {
   let token = 0;
+  let current: string | null = null;
 
-  function srcFor(p: string): string {
-    if (/^https?:\/\//i.test(p)) {
-      const src = upsizeCover(p);
-      const known = resolved.get(src);
-      if (known) return convertFileSrc(known);
-      node.referrerPolicy = "no-referrer";
-      void cacheRemote(src).then(
-        (local) => {
-          resolved.set(src, local);
-          evictIfNeeded(resolved);
-        },
-        () => {},
-      );
-      return src;
-    }
-    return convertFileSrc(p);
+  function setSrc(src: string, mine: number): void {
+    if (mine !== token || current === src) return;
+    current = src;
+    node.src = src;
   }
 
   function load(p: string | null | undefined): void {
     const mine = ++token;
     if (!p) {
+      current = null;
       node.removeAttribute("src");
       return;
     }
-    const src = srcFor(p);
-    if (node.getAttribute("src") === src || node.src === src) return;
+
+    if (!/^https?:\/\//i.test(p)) {
+      setSrc(convertFileSrc(p), mine);
+      return;
+    }
+
+    const url = upsizeCover(p);
+    const known = resolved.get(url);
+    if (known) {
+      setSrc(convertFileSrc(known), mine);
+      return;
+    }
+
+    node.referrerPolicy = "no-referrer";
+    let remoteLoaded = false;
+    void cacheRemote(url).then(
+      (local) => {
+        resolved.set(url, local);
+        evictIfNeeded(resolved);
+        if (!remoteLoaded) setSrc(convertFileSrc(local), mine);
+      },
+      () => {},
+    );
 
     const preload = new Image();
-    if (/^https?:\/\//i.test(src)) preload.referrerPolicy = "no-referrer";
-    const apply = () => {
-      if (mine === token) node.src = src;
+    preload.referrerPolicy = "no-referrer";
+    preload.onload = () => {
+      remoteLoaded = true;
+      if (!resolved.has(url)) setSrc(url, mine);
     };
-    preload.onload = apply;
-    preload.onerror = apply;
-    preload.src = src;
+    preload.onerror = () => {};
+    preload.src = url;
   }
 
   load(path);
@@ -118,6 +129,7 @@ export function blobSrc(
     },
     destroy() {
       token++;
+      current = null;
     },
   };
 }
