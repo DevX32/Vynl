@@ -284,7 +284,7 @@ pub fn run() {
                     if crate::services::sync::status(&ud).signed_in {
                         match crate::services::sync::pull_sync_state(&ud, &out).await {
                             Ok(_) => {}
-                            Err(e) if e.contains("No cloud sync state found") => {}
+                            Err(e) if e.contains(crate::services::sync::NO_REMOTE_STATE) => {}
                             Err(e) => log::warn!("[Vynl sync] startup pull failed: {e}"),
                         }
                     }

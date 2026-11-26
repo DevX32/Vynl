@@ -104,21 +104,6 @@ pub fn save(user_data: &Path, entries: &[TasteEntry]) -> Result<(), String> {
     save_unlocked(user_data, entries)
 }
 
-pub fn locked_update(
-    user_data: &Path,
-    f: impl FnOnce(&mut Vec<TasteEntry>) -> Result<bool, String>,
-) -> Result<bool, String> {
-    let _guard = taste_mutex()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let mut entries = load_unlocked(user_data);
-    let changed = f(&mut entries)?;
-    if changed {
-        save_unlocked(user_data, &entries)?;
-    }
-    Ok(changed)
-}
-
 pub fn summary(entries: &[TasteEntry]) -> TasteSummary {
     TasteSummary {
         liked: entries.iter().filter(|entry| entry.liked).count(),

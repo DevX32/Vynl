@@ -34,7 +34,7 @@
     getCurrentPlaylists,
     saveStreamToPlaylist,
   } from "@state/playlists.svelte";
-  import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
+  import PlaylistPicker from "@components/PlaylistPicker.svelte";
   import { toasts } from "@lib/toast";
 
   let {

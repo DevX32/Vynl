@@ -390,12 +390,7 @@ fn local_file_for(
         track_number: None,
         url: format!("https://music.youtube.com/watch?v={video_id}"),
     };
-    let ext = downloader::audio_format_ext(&settings.format);
-    let base = downloader::sanitize(&downloader::render_pattern(
-        &settings.filename_pattern,
-        &meta,
-    ));
-    let path = output_dir.join(format!("{base}.{ext}"));
+    let path = downloader::final_output_path_in(&meta, settings, output_dir);
     (path, meta)
 }
 

@@ -1,5 +1,6 @@
 import type { Settings, ToolName, ToolStatus, AudioFormat } from "@lib/types";
 import { BITRATES } from "@lib/constants";
+import { evictOldest } from "@lib/cache";
 import { eqFlat, loadEqDesign } from "@lib/eq-engine.svelte";
 import { vynl } from "@lib/vynl";
 import { toasts } from "@lib/toast";
@@ -142,11 +143,7 @@ const MAX_VIBRANT_CACHE = 500;
 
 function cacheVibrant(cover: string, hex: string): void {
   _vibrantCache.set(cover, hex);
-  while (_vibrantCache.size > MAX_VIBRANT_CACHE) {
-    const oldest = _vibrantCache.keys().next().value;
-    if (oldest === undefined) break;
-    _vibrantCache.delete(oldest);
-  }
+  evictOldest(_vibrantCache, MAX_VIBRANT_CACHE);
 }
 
 function startDynamicAccent(): void {

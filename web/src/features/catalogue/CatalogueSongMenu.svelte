@@ -8,7 +8,7 @@
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
-  import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
+  import PlaylistPicker from "@components/PlaylistPicker.svelte";
 
   let {
     onNavigateAlbum,

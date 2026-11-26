@@ -10,6 +10,20 @@ use types::*;
 
 pub(crate) const MAX_COLLECTION_TRACKS: usize = 10_000;
 
+pub(crate) fn ensure_collection_size(collection: &Collection) -> Result<(), String> {
+    ensure_collection_size_named(collection, "Collection too large")
+}
+
+pub(crate) fn ensure_collection_size_named(
+    collection: &Collection,
+    label: &str,
+) -> Result<(), String> {
+    if collection.tracks.len() > MAX_COLLECTION_TRACKS {
+        return Err(format!("{label} (max {} tracks)", MAX_COLLECTION_TRACKS));
+    }
+    Ok(())
+}
+
 pub struct AppState {
     pub settings: Mutex<Option<Settings>>,
     pub pending_confirm: Mutex<Option<String>>,
@@ -147,17 +161,12 @@ pub async fn downloaded_paths(
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
     let settings = load_settings(&app)?;
-    let ext = crate::services::downloader::audio_format_ext(&settings.format);
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     Ok(collection
         .tracks
         .iter()
         .filter_map(|t| {
-            let base = crate::services::downloader::sanitize(
-                &crate::services::downloader::render_pattern(&settings.filename_pattern, t),
-            );
-            let path =
-                std::path::PathBuf::from(&settings.output_dir).join(format!("{}.{}", base, ext));
+            let path = crate::services::downloader::final_output_path(t, &settings);
             if !path.is_file() {
                 return None;
             }
@@ -173,12 +182,7 @@ pub async fn start_download(
     opts: Option<DownloadOpts>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if collection.tracks.len() > MAX_COLLECTION_TRACKS {
-        return Err(format!(
-            "Collection too large (max {} tracks)",
-            MAX_COLLECTION_TRACKS
-        ));
-    }
+    ensure_collection_size(&collection)?;
     let (user_data, settings) = get_user_data_and_settings(&app)?;
     let download_opts = opts.unwrap_or(DownloadOpts {
         matches: None,
@@ -309,12 +313,7 @@ pub async fn matches(
     collection: Collection,
     app: AppHandle,
 ) -> Result<HashMap<String, Vec<SearchCandidate>>, String> {
-    if collection.tracks.len() > MAX_COLLECTION_TRACKS {
-        return Err(format!(
-            "Collection too large (max {} tracks)",
-            MAX_COLLECTION_TRACKS
-        ));
-    }
+    ensure_collection_size(&collection)?;
     let user_data = user_data_dir(&app)?;
     crate::services::downloader::find_matches(&collection, &user_data).await
 }
@@ -326,12 +325,7 @@ pub async fn cancel_stream_import() {
 
 #[tauri::command]
 pub async fn sync_done(collection: Collection, app: AppHandle) -> Result<Vec<String>, String> {
-    if collection.tracks.len() > MAX_COLLECTION_TRACKS {
-        return Err(format!(
-            "Collection too large (max {} tracks)",
-            MAX_COLLECTION_TRACKS
-        ));
-    }
+    ensure_collection_size(&collection)?;
     let user_data = user_data_dir(&app)?;
     let settings = {
         let state = app.state::<AppState>();
@@ -966,7 +960,7 @@ pub async fn sync_now(app: AppHandle) -> Result<crate::services::sync::SyncState
     let settings = load_settings(&app)?;
     let state = match crate::services::sync::pull_sync_state(&user_data, &output).await {
         Ok(state) => state,
-        Err(e) if e.contains("No cloud sync state found") => {
+        Err(e) if e.contains(crate::services::sync::NO_REMOTE_STATE) => {
             crate::services::sync::build_sync_state(&user_data, &output, &settings)
         }
         Err(e) => {
@@ -1027,7 +1021,7 @@ async fn sync_auth(
         let mut can_push = true;
         match crate::services::sync::pull_sync_state(&user_data, &output).await {
             Ok(_) => {}
-            Err(e) if e.contains("No cloud sync state found") => {}
+            Err(e) if e.contains(crate::services::sync::NO_REMOTE_STATE) => {}
             Err(e) => {
                 log::warn!("[Vynl sync] auto pull after sign-in failed: {e}");
                 crate::services::sync::record_sync_error(&user_data, &e);

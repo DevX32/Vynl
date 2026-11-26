@@ -9,8 +9,16 @@ import { getLibrary, getLibraryRevision, onLibraryChanged, refreshLibrary } from
 import { moveItem } from "@lib/reorder";
 import { getCatalogueTrack, enrichLibraryTrack, getCatalogueRevision } from "./catalogue.svelte";
 import { songKey } from "@lib/format";
+import { evictOldest } from "@lib/cache";
+import {
+  catalogueIdFromPath as catalogueIdOf,
+  cataloguePath,
+  isCataloguePath,
+} from "@lib/catalogue";
 import { vynl } from "@lib/vynl";
 import { scheduleCloudSyncPush } from "./sync.svelte";
+
+export { isCataloguePath };
 
 let _meta = $state<PlaylistMeta[]>([]);
 let _all = $state<Record<string, Playlist>>({});
@@ -239,7 +247,7 @@ export async function removeFromPlaylist(
 ): Promise<void> {
   const pl = await vynl.removeFromPlaylist(id, trackPath);
   syncAfterMutation(pl);
-  if (!trackPath.startsWith("ytm:")) {
+  if (!isCataloguePath(trackPath)) {
     await refreshLibrary();
   }
   await refreshMeta();
@@ -289,16 +297,6 @@ onLibraryChanged(() => {
   _failedCovers = new Set();
 });
 
-export function isCataloguePath(path: string): boolean {
-  return path.startsWith("ytm:");
-}
-
-function catalogueIdOf(path: string): string | null {
-  if (!path.startsWith("ytm:")) return null;
-  const id = path.slice(4);
-  return id.length > 0 ? id : null;
-}
-
 function streamTrackOf(track: CatalogueTrack): LibraryTrack {
   const known = getCatalogueTrack(track.id);
   const duration =
@@ -311,7 +309,7 @@ function streamTrackOf(track: CatalogueTrack): LibraryTrack {
           : 0;
   return {
     id: track.id,
-    path: `ytm:${track.id}`,
+    path: cataloguePath(track.id),
     title: track.title,
     artist: track.artist,
     album: track.album?.name ?? "",
@@ -332,7 +330,7 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
     if (pl.id === "liked") continue;
     const markAt = new Map((pl.adds ?? []).map((mark) => [mark.trackId, mark.at]));
     for (const track of pl.streams) {
-      const at = markAt.get(`ytm:${track.id}`) ?? 0;
+      const at = markAt.get(cataloguePath(track.id)) ?? 0;
       const known = seen.get(track.id);
       if (known && (known.addedAt ?? 0) >= at) continue;
       seen.set(track.id, {
@@ -427,10 +425,7 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
 
   _tracksCache.delete(pl);
   _tracksCache.set(pl, { library, catalogueRevision, result });
-  if (_tracksCache.size > 64) {
-    const oldest = _tracksCache.keys().next().value;
-    if (oldest !== undefined) _tracksCache.delete(oldest);
-  }
+  evictOldest(_tracksCache, 64);
   return result;
 }
 
@@ -470,9 +465,6 @@ export function getPlaylistCovers(id: string): string[] {
   }
   const result = resolvePlaylistCovers(pl.cover, tracksOf(pl));
   _coversCache.set(id, { failed: _failedCovers, revision, meta, result });
-  if (_coversCache.size > 128) {
-    const oldest = _coversCache.keys().next().value;
-    if (oldest !== undefined) _coversCache.delete(oldest);
-  }
+  evictOldest(_coversCache, 128);
   return result;
 }

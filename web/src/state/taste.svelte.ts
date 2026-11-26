@@ -1,4 +1,6 @@
 import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
+import { cataloguePath } from "@lib/catalogue";
+import { readStringSet } from "@lib/storage";
 import { vynl } from "@lib/vynl";
 import { getCatalogueTrack, enrichCatalogueTrack, removeFromCatalogueTaste } from "./catalogue.svelte";
 import { scheduleCloudSyncPush } from "./sync.svelte";
@@ -69,16 +71,7 @@ function loadTaste(): TasteEntry[] {
 }
 
 function loadDismissed(): Set<string> {
-  if (typeof localStorage === "undefined") return new Set();
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((v): v is string => typeof v === "string" && v.length > 0));
-  } catch {
-    return new Set();
-  }
+  return readStringSet(DISMISSED_KEY);
 }
 
 let _entries = $state<TasteEntry[]>(loadTaste());
@@ -292,7 +285,7 @@ export function getLikedStreamTracks(): LibraryTrack[] {
               : 0;
       return {
         id: track.id,
-        path: `ytm:${track.id}`,
+        path: cataloguePath(track.id),
         title: track.title,
         artist: track.artist,
         album: track.album?.name ?? "",

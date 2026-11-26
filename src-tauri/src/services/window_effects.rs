@@ -6,8 +6,6 @@ static VIBRANCY_FALLBACK_LOGGED: std::sync::atomic::AtomicBool =
 fn note_vibrancy_fallback(layer: &str, error: impl std::fmt::Display) {
     use std::sync::atomic::Ordering;
 
-    // Unsupported vibrancy is expected on some Windows builds; report the
-    // first fallback at debug level instead of logging an error every time.
     if !VIBRANCY_FALLBACK_LOGGED.swap(true, Ordering::Relaxed) {
         log::debug!("{layer} unavailable, falling back: {error}");
     }

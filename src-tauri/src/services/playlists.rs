@@ -37,24 +37,6 @@ fn order_meta_file(output_dir: &Path) -> std::path::PathBuf {
     playlists_dir(output_dir).join(ORDER_META_FILE)
 }
 
-pub fn order_updated_at(output_dir: &Path) -> i64 {
-    let _lock = ORDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(meta) = util::read_json::<OrderMeta>(&order_meta_file(output_dir)) {
-        return meta.updated_at.max(0);
-    }
-    let mtime = fs::metadata(order_file(output_dir))
-        .and_then(|meta| meta.modified())
-        .ok()
-        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as i64)
-        .unwrap_or(0);
-    let _ = util::write_json(
-        &order_meta_file(output_dir),
-        &OrderMeta { updated_at: mtime },
-    );
-    mtime
-}
-
 pub fn read_order(output_dir: &Path) -> Vec<String> {
     util::read_json::<Vec<String>>(&order_file(output_dir)).unwrap_or_default()
 }
@@ -281,61 +263,6 @@ pub fn upsert_playlist(output_dir: &Path, playlist: &Playlist) -> Result<(), Str
     write_playlist(output_dir, playlist)
 }
 
-pub fn rekey_playlist(
-    output_dir: &Path,
-    user_data_dir: &Path,
-    old_id: &str,
-    new_id: &str,
-) -> Result<Playlist, String> {
-    if !validate_id(old_id) || !validate_id(new_id) {
-        return Err("invalid playlist id".into());
-    }
-    if old_id == new_id {
-        return get_playlist(output_dir, old_id).ok_or_else(|| "playlist not found".into());
-    }
-    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
-    let mut pl = read_playlist(output_dir, old_id).ok_or("playlist not found")?;
-    if playlist_file(output_dir, new_id).exists() {
-        return Err("a playlist with that id already exists".into());
-    }
-    if let Some(cover) = pl.cover.clone()
-        && let Some(name) = Path::new(&cover)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(str::to_string)
-        && name.starts_with(&format!("pl-{old_id}."))
-    {
-        let ext = Path::new(&name)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("jpg");
-        let renamed = covers_dir(user_data_dir).join(format!("pl-{new_id}.{ext}"));
-        match fs::rename(&cover, &renamed) {
-            Ok(()) => pl.cover = Some(renamed.to_string_lossy().to_string()),
-            Err(_) => pl.cover = None,
-        }
-    }
-    pl.id = new_id.to_string();
-    write_playlist(output_dir, &pl)?;
-    let _ = fs::remove_file(playlist_file(output_dir, old_id));
-    let order = read_order(output_dir);
-    let mut seen = std::collections::HashSet::new();
-    let next: Vec<String> = order
-        .into_iter()
-        .map(|id| if id == old_id { new_id.to_string() } else { id })
-        .filter(|id| seen.insert(id.clone()))
-        .collect();
-    let next = if next.iter().any(|id| id == new_id) {
-        next
-    } else {
-        let mut next = next;
-        next.push(new_id.to_string());
-        next
-    };
-    write_order(output_dir, &next)?;
-    Ok(pl)
-}
-
 fn to_base36(mut num: u64) -> String {
     const CHARS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     if num == 0 {
@@ -438,26 +365,6 @@ pub fn delete_playlist(output_dir: &Path, user_data_dir: &Path, id: &str) -> Res
     }
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     delete_playlist_locked(output_dir, user_data_dir, id)
-}
-
-pub fn delete_playlist_if_stale(
-    output_dir: &Path,
-    user_data_dir: &Path,
-    id: &str,
-    deleted_at: i64,
-) -> Result<bool, String> {
-    if !validate_id(id) {
-        return Err("invalid playlist id".into());
-    }
-    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
-    let Some(current) = read_playlist(output_dir, id) else {
-        return Ok(false);
-    };
-    if current.updated_at > deleted_at {
-        return Ok(false);
-    }
-    delete_playlist_locked(output_dir, user_data_dir, id)?;
-    Ok(true)
 }
 
 pub fn remove_paths_from_all(output_dir: &Path, paths: &[String]) {

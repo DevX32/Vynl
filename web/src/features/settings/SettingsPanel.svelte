@@ -2,6 +2,7 @@
   import { onDestroy, onMount, untrack } from "svelte";
   import { RefreshCw } from "lucide-svelte";
   import { t } from "@lib/i18n";
+  import { isCataloguePath } from "@lib/catalogue";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
   import ColorPicker from "@components/ColorPicker.svelte";
   import ThemePicker from "@components/ThemePicker.svelte";
@@ -99,7 +100,7 @@
     _removingDownloads = true;
     try {
       const current = getCurrentTrack();
-      const currentIsDownloaded = !!current && !current.path.startsWith("ytm:");
+      const currentIsDownloaded = !!current && !isCataloguePath(current.path);
       const result = await vynl.deleteAllLibraryTracks();
       if (currentIsDownloaded) {
         if (getIsTrackPlaying()) toggle();

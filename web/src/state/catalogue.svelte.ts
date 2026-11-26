@@ -9,12 +9,21 @@ import type {
   LibraryTrack,
 } from "@lib/types";
 import { vynl } from "@lib/vynl";
+import { evictOldest } from "@lib/cache";
+import { readStringSet } from "@lib/storage";
+import { shuffle } from "@lib/shuffle";
+import {
+  CATALOGUE_PREFIX,
+  cataloguePath,
+  catalogueIdFromPath,
+} from "@lib/catalogue";
 import { refreshLibrary } from "./library.svelte";
 import { refreshPlaylists } from "./playlists.svelte";
 
+export { cataloguePath, catalogueIdFromPath };
+
 const REGISTRY_KEY = "vynl.catalogue.registry.v1";
 const REGISTRY_LIMIT = 800;
-const CATALOGUE_PREFIX = "ytm:";
 
 interface StoredTrack {
   id: string;
@@ -241,16 +250,6 @@ export function enrichLibraryTrack(track: LibraryTrack): LibraryTrack {
   return track;
 }
 
-export function cataloguePath(id: string): string {
-  return `${CATALOGUE_PREFIX}${id}`;
-}
-
-export function catalogueIdFromPath(path: string | null | undefined): string | null {
-  if (!path || !path.startsWith(CATALOGUE_PREFIX)) return null;
-  const id = path.slice(CATALOGUE_PREFIX.length);
-  return id.length > 0 ? id : null;
-}
-
 let _searchQuery = $state("");
 let _results = $state<CatalogueSearchResults | null>(null);
 let _searching = $state(false);
@@ -306,16 +305,7 @@ const TASTE_CACHE = "vynl.taste.mix.v1";
 const DISMISSED_KEY = "vynl.taste.dismissed.v1";
 
 function readDismissedIds(): Set<string> {
-  if (typeof localStorage === "undefined") return new Set();
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((v): v is string => typeof v === "string" && v.length > 0));
-  } catch {
-    return new Set();
-  }
+  return readStringSet(DISMISSED_KEY);
 }
 
 interface TasteCache {
@@ -415,15 +405,6 @@ export function resetCatalogueTaste(): void {
 const TASTE_KEEP = 30;
 const TASTE_TOTAL = 60;
 
-function shuffle<T>(items: readonly T[]): T[] {
-  const arr = [...items];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 export async function loadCatalogueTaste(
   seeds: readonly string[],
   force = false,
@@ -486,10 +467,7 @@ const DETAIL_CACHE_CAP = 48;
 function cappedSet<K, V>(map: Map<K, V>, key: K, value: V, cap: number): void {
   if (map.has(key)) map.delete(key);
   map.set(key, value);
-  while (map.size > cap) {
-    const oldest = map.keys().next().value as K;
-    map.delete(oldest);
-  }
+  evictOldest(map, cap);
 }
 
 const albumCache = new Map<string, CatalogueAlbumDetail>();

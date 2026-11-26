@@ -1,6 +1,7 @@
 import type { LibraryTrack, NowPlaying } from "@lib/types";
 import { RPC_THROTTLE } from "@lib/constants";
 import { moveItem } from "@lib/reorder";
+import { shuffle } from "@lib/shuffle";
 import { vynl } from "@lib/vynl";
 import { getLibrary, whenLibraryLoaded, onLibraryChanged } from "./library.svelte";
 import {
@@ -141,7 +142,7 @@ function findTrackByPath(path: string | null | undefined): LibraryTrack | null {
   if (!path) return null;
   const track = libraryByPath().get(path);
   if (track) return track;
-  const catalogueId = path.startsWith("ytm:") ? path.slice(4) : null;
+  const catalogueId = catalogueIdFromPath(path);
   return catalogueId ? getCatalogueTrack(catalogueId) : null;
 }
 
@@ -174,12 +175,7 @@ function tracksForPaths(
 const SHUFFLE_HISTORY_LIMIT = 500;
 
 function shuffled(paths: readonly string[]): string[] {
-  const result = [...paths];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
+  return shuffle(paths);
 }
 
 function fallbackScope(): string[] {

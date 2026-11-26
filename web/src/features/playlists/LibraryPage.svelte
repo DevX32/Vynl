@@ -42,7 +42,7 @@
   import ContextMenu, {
     type CtxEntry,
   } from "../../components/ContextMenu.svelte";
-  import PlaylistPicker from "../vault/PlaylistPicker.svelte";
+  import PlaylistPicker from "@components/PlaylistPicker.svelte";
   import VirtualList from "../../components/VirtualList.svelte";
   import {
     addToPlaylist,

@@ -11,27 +11,14 @@ import { toggleMute } from "@state/player.svelte";
 import {
   MINI_COMMAND_EVENT,
   MINI_REQUEST_STATE_EVENT,
+  miniTrackSnapshot,
   sendMiniState,
 } from "@lib/mini-sync";
 import { getCurrentTrack, getIsTrackPlaying } from "@state/now-playing.svelte";
 import type { MiniCommand, MiniSyncState } from "@lib/types";
 
 function currentSnapshot(): MiniSyncState {
-  const track = getCurrentTrack();
-  return {
-    track: track
-      ? {
-          id: track.id,
-          path: track.path,
-          title: track.title,
-          artist: track.artist,
-          album: track.album,
-          cover: track.cover,
-          duration: track.duration,
-        }
-      : null,
-    playing: getIsTrackPlaying(),
-  };
+  return miniTrackSnapshot(getCurrentTrack(), getIsTrackPlaying());
 }
 
 export function initMiniBridge(): () => void {

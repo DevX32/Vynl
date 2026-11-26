@@ -56,6 +56,8 @@ import { untrack } from "svelte";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { clamp01 } from "@lib/pointer";
 import { friendlyError } from "@lib/errors";
+import { evictOldest } from "@lib/cache";
+import { catalogueIdFromPath as catalogueIdOf } from "@lib/catalogue";
 import { t } from "@lib/i18n";
 import type {
   CatalogueStreamInfo,
@@ -88,14 +90,6 @@ let reconcilePending = false;
 let pauseIntent = 0;
 let resumeToken = 0;
 let resumePending = 0;
-
-const CATALOGUE_PREFIX = "ytm:";
-
-function catalogueIdOf(path: string | null | undefined): string | null {
-  if (!path || !path.startsWith(CATALOGUE_PREFIX)) return null;
-  const id = path.slice(CATALOGUE_PREFIX.length);
-  return id.length > 0 ? id : null;
-}
 
 interface PrebufferEntry {
   status: "pending" | "ready" | "failed";
@@ -1020,11 +1014,7 @@ async function resolveMediaCover(cover: string | null): Promise<string | null> {
   try {
     const local = await vynl.cacheCover(cover);
     mediaCoverPaths.set(cover, local);
-    while (mediaCoverPaths.size > 200) {
-      const oldest = mediaCoverPaths.keys().next().value;
-      if (oldest === undefined) break;
-      mediaCoverPaths.delete(oldest);
-    }
+    evictOldest(mediaCoverPaths, 200);
     return local;
   } catch {
     return cover;
@@ -1035,8 +1025,6 @@ let mediaUpdateChain: Promise<void> = Promise.resolve();
 let lastMediaUpdateWarningAt = 0;
 
 function warnMediaUpdateFailed(error: unknown): void {
-  // Media updates are retried every second, so a persistent failure would
-  // otherwise flood the console. Log the first failure, then at most once/minute.
   const now = Date.now();
   if (now - lastMediaUpdateWarningAt < 60_000) return;
   lastMediaUpdateWarningAt = now;

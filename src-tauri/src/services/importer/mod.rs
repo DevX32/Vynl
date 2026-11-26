@@ -107,12 +107,10 @@ pub async fn import_stream_playlist(
     playlist_name: Option<String>,
     app: AppHandle,
 ) -> Result<StreamImportResult, String> {
-    if collection.tracks.len() > crate::commands::MAX_COLLECTION_TRACKS {
-        return Err(format!(
-            "this collection is too large to import (max {} tracks)",
-            crate::commands::MAX_COLLECTION_TRACKS
-        ));
-    }
+    crate::commands::ensure_collection_size_named(
+        &collection,
+        "this collection is too large to import",
+    )?;
     if IMPORT_BUSY
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()

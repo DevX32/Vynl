@@ -12,7 +12,7 @@
     getCurrentTrack,
     getIsTrackPlaying,
   } from "@state/now-playing.svelte";
-  import { sendMiniState } from "@lib/mini-sync";
+  import { miniTrackSnapshot, sendMiniState } from "@lib/mini-sync";
   import MiniPlayer from "./features/player/MiniPlayer.svelte";
   import { initSettings, getCurrentSettings } from "@state/settings.svelte";
   import {
@@ -157,22 +157,7 @@
 
   $effect(() => {
     if (isMini) return;
-    const track = getCurrentTrack();
-    const playing = getIsTrackPlaying();
-    sendMiniState({
-      track: track
-        ? {
-            id: track.id,
-            path: track.path,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            cover: track.cover,
-            duration: track.duration,
-          }
-        : null,
-      playing,
-    });
+    sendMiniState(miniTrackSnapshot(getCurrentTrack(), getIsTrackPlaying()));
   });
 
   const playlists = $derived(getCurrentPlaylists());
@@ -267,8 +252,6 @@
 
     let offConsole: (() => void) | undefined;
     let consoleDisposed = false;
-    // In dev the webview devtools already show console output; only forward it
-    // to the Rust logger in packaged builds, where devtools aren't available.
     if (import.meta.env.PROD) {
       void attachConsole().then(
         (off) => {

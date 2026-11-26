@@ -32,7 +32,7 @@
   import TrackCover from "@components/TrackCover.svelte";
   import EqualizerBars from "@components/EqualizerBars.svelte";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
-  import PlaylistPicker from "@features/vault/PlaylistPicker.svelte";
+  import PlaylistPicker from "@components/PlaylistPicker.svelte";
   import VirtualList from "@components/VirtualList.svelte";
 
   let {

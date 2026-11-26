@@ -1,5 +1,10 @@
 import { emit } from "@tauri-apps/api/event";
-import type { MiniCommand, MiniSyncState } from "@lib/types";
+import type { LibraryTrack, MiniCommand, MiniSyncState } from "@lib/types";
+
+type MiniTrackSource = Pick<
+  LibraryTrack,
+  "id" | "path" | "title" | "artist" | "album" | "cover" | "duration"
+>;
 
 export const MINI_STATE_EVENT = "vynl:mini:state";
 export const MINI_COMMAND_EVENT = "vynl:mini:command";
@@ -10,6 +15,26 @@ function safeEmit(event: string, payload: unknown): void {
   void emit(event, payload).catch((error) => {
     console.warn(`[vynl] mini ${event} emit failed`, error);
   });
+}
+
+export function miniTrackSnapshot(
+  track: MiniTrackSource | null | undefined,
+  playing: boolean,
+): MiniSyncState {
+  return {
+    track: track
+      ? {
+          id: track.id,
+          path: track.path,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          cover: track.cover,
+          duration: track.duration,
+        }
+      : null,
+    playing,
+  };
 }
 
 export function sendMiniState(state: MiniSyncState): void {

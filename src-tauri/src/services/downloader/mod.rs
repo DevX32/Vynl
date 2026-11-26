@@ -156,9 +156,13 @@ const MAX_COVER_BYTES: usize = 15 * 1024 * 1024;
 
 type CoverMap = Arc<std::sync::Mutex<HashMap<String, Option<PathBuf>>>>;
 
-fn final_output_path(track: &TrackMeta, settings: &Settings) -> PathBuf {
+pub fn final_output_path(track: &TrackMeta, settings: &Settings) -> PathBuf {
+    final_output_path_in(track, settings, Path::new(&settings.output_dir))
+}
+
+pub fn final_output_path_in(track: &TrackMeta, settings: &Settings, output_dir: &Path) -> PathBuf {
     let base_name = sanitize(&render_pattern(&settings.filename_pattern, track));
-    PathBuf::from(&settings.output_dir).join(format!(
+    output_dir.join(format!(
         "{}.{}",
         base_name,
         audio_format_ext(&settings.format)
@@ -967,12 +971,7 @@ async fn process_track(
         return TrackOutcome::Skipped;
     }
 
-    let base_name = sanitize(&render_pattern(&settings.filename_pattern, track));
-    let final_path = PathBuf::from(&settings.output_dir).join(format!(
-        "{}.{}",
-        base_name,
-        audio_format_ext(&settings.format)
-    ));
+    let final_path = final_output_path(track, settings);
 
     if final_path.exists() && !settings.overwrite {
         emit_track(app, track, TrackStatus::Skipped, 0.0, None);

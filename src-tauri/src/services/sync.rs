@@ -10,6 +10,7 @@ use crate::commands::types::Playlist;
 use crate::services::{playlists, util};
 
 pub const LIKED_PLAYLIST_ID: &str = "liked";
+pub const NO_REMOTE_STATE: &str = "No cloud sync state found";
 
 const SUPABASE_URL: &str = match option_env!("SUPABASE_URL") {
     Some(value) => value,
@@ -1052,7 +1053,7 @@ pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncS
     let row = list
         .into_iter()
         .next()
-        .ok_or_else(|| "No cloud sync state found.".to_string())?;
+        .ok_or_else(|| format!("{NO_REMOTE_STATE}."))?;
     let data = row
         .get("data")
         .cloned()
