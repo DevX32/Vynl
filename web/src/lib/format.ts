@@ -72,21 +72,12 @@ export function blobSrc(
 ): { update: (newPath: string | null | undefined) => void; destroy: () => void } {
   let token = 0;
 
-  function load(p: string | null | undefined): void {
-    ++token;
-    if (!p) {
-      node.removeAttribute("src");
-      return;
-    }
+  function srcFor(p: string): string {
     if (/^https?:\/\//i.test(p)) {
       const src = upsizeCover(p);
       const known = resolved.get(src);
-      if (known) {
-        node.src = convertFileSrc(known);
-        return;
-      }
+      if (known) return convertFileSrc(known);
       node.referrerPolicy = "no-referrer";
-      node.src = src;
       void cacheRemote(src).then(
         (local) => {
           resolved.set(src, local);
@@ -94,9 +85,28 @@ export function blobSrc(
         },
         () => {},
       );
+      return src;
+    }
+    return convertFileSrc(p);
+  }
+
+  function load(p: string | null | undefined): void {
+    const mine = ++token;
+    if (!p) {
+      node.removeAttribute("src");
       return;
     }
-    node.src = convertFileSrc(p);
+    const src = srcFor(p);
+    if (node.getAttribute("src") === src || node.src === src) return;
+
+    const preload = new Image();
+    if (/^https?:\/\//i.test(src)) preload.referrerPolicy = "no-referrer";
+    const apply = () => {
+      if (mine === token) node.src = src;
+    };
+    preload.onload = apply;
+    preload.onerror = apply;
+    preload.src = src;
   }
 
   load(path);
@@ -107,10 +117,6 @@ export function blobSrc(
     },
     destroy() {
       token++;
-      const src = node.getAttribute("src");
-      if (src && src.startsWith("blob:")) {
-        URL.revokeObjectURL(src);
-      }
     },
   };
 }

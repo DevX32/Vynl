@@ -191,6 +191,16 @@ if ("mediaSession" in navigator && !IS_MINI) {
   navigator.mediaSession.setActionHandler("pause", handleMediaPause);
   navigator.mediaSession.setActionHandler("nexttrack", next);
   navigator.mediaSession.setActionHandler("previoustrack", prev);
+  navigator.mediaSession.setActionHandler("stop", handleMediaStop);
+  navigator.mediaSession.setActionHandler("seekto", (details) => {
+    if (typeof details.seekTime === "number") seekToTime(details.seekTime);
+  });
+  navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+    seekOffset(-(details.seekOffset ?? 10));
+  });
+  navigator.mediaSession.setActionHandler("seekforward", (details) => {
+    seekOffset(details.seekOffset ?? 10);
+  });
 }
 
 let playReconcileStartedAt = 0;
@@ -397,9 +407,13 @@ export function setVolumeAt(ratio: number): void {
 }
 
 function updateMediaSession(): void {
-  if (!("mediaSession" in navigator)) return;
+  if (!("mediaSession" in navigator) || IS_MINI) return;
   const np = getCurrentTrack();
-  if (!np) return;
+  if (!np) {
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = "none";
+    return;
+  }
   const meta: MediaMetadataInit = {
     title: np.title,
     artist: np.artist,
@@ -990,22 +1004,30 @@ export function reorderQueueTrack(fromPath: string, toPath: string): void {
 
 type CurrentMedia = ReturnType<typeof getCurrentTrack>;
 
-let lastMediaSignature: string | null = null;
 let lastMediaSentAt = 0;
 
-function mediaSignature(np: CurrentMedia, playing: boolean): string {
-  if (!np) return "";
-  return [
-    np.id,
-    np.title,
-    np.artist,
-    np.album,
-    np.duration,
-    np.cover ?? "",
-    playing ? "1" : "0",
-  ].join("\u001f");
+const mediaCoverPaths = new Map<string, string>();
+
+async function resolveMediaCover(cover: string | null): Promise<string | null> {
+  if (!cover) return null;
+  if (!/^https?:\/\//i.test(cover)) return cover;
+  const cached = mediaCoverPaths.get(cover);
+  if (cached) return cached;
+  try {
+    const local = await vynl.cacheCover(cover);
+    mediaCoverPaths.set(cover, local);
+    while (mediaCoverPaths.size > 200) {
+      const oldest = mediaCoverPaths.keys().next().value;
+      if (oldest === undefined) break;
+      mediaCoverPaths.delete(oldest);
+    }
+    return local;
+  } catch {
+    return cover;
+  }
 }
 
+let mediaUpdateChain: Promise<void> = Promise.resolve();
 function sendMediaUpdate(
   np: CurrentMedia,
   playing: boolean,
@@ -1022,26 +1044,23 @@ function sendMediaUpdate(
         position,
       }
     : null;
-  void vynl.mediaUpdate(payload).catch((error) => {
-    console.warn("[vynl] media update failed:", error);
-  });
+  mediaUpdateChain = mediaUpdateChain
+    .then(async () => {
+      if (payload) payload.cover = await resolveMediaCover(payload.cover);
+      await vynl.mediaUpdate(payload);
+    })
+    .catch((error) => {
+      console.warn("[vynl] media update failed:", error);
+    });
 }
 
-function syncMedia(
-  np: CurrentMedia,
-  playing: boolean,
-  position: number,
-  force = false,
-): void {
-  const signature = mediaSignature(np, playing);
-  if (!force && signature === lastMediaSignature) return;
-  lastMediaSignature = signature;
+function syncMedia(np: CurrentMedia, playing: boolean, position: number): void {
   lastMediaSentAt = Date.now();
   sendMediaUpdate(np, playing, position);
 }
 
 function syncMediaNow(): void {
-  syncMedia(getCurrentTrack(), getIsTrackPlaying(), getCurrentTime(), true);
+  syncMedia(getCurrentTrack(), getIsTrackPlaying(), getCurrentTime());
 }
 
 function handleMediaPlay(): void {
@@ -1054,17 +1073,19 @@ function handleMediaPause(): void {
 
 function handleMediaStop(): void {
   if (getIsTrackPlaying()) pausePlayback();
-  if (catalogueIdOf(getCurrentTrack()?.path)) return;
   seekToTime(0);
 }
 
-let lastMediaActionAt = 0;
+let lastMediaAction: { action: string; at: number } | null = null;
 function handleMediaControl(event: MediaControlEvent): void {
   const now = Date.now();
-  if (now - lastMediaActionAt < 250 && event.action !== "seek" && event.action !== "seekBy" && event.action !== "setVolume") {
+  if (
+    lastMediaAction?.action === event.action &&
+    now - lastMediaAction.at < 150
+  ) {
     return;
   }
-  lastMediaActionAt = now;
+  lastMediaAction = { action: event.action, at: now };
   switch (event.action) {
     case "play":
       handleMediaPlay();
@@ -1106,18 +1127,25 @@ function handleMediaControl(event: MediaControlEvent): void {
 }
 
 if (typeof window !== "undefined" && !IS_MINI) {
-  $effect.root(() => {
+  const disposeMediaEffect = $effect.root(() => {
     $effect(() => {
       const np = getCurrentTrack();
       const playing = getIsTrackPlaying();
-      syncMedia(np, playing, untrack(() => getCurrentTime()), true);
+      syncMedia(np, playing, untrack(() => getCurrentTime()));
     });
   });
-  window.setInterval(() => {
+  const mediaTimer = window.setInterval(() => {
     const np = getCurrentTrack();
     if (!np) return;
     if (Date.now() - lastMediaSentAt < 1_000) return;
-    syncMedia(np, getIsTrackPlaying(), getCurrentTime(), true);
+    syncMedia(np, getIsTrackPlaying(), getCurrentTime());
   }, 1_000);
-  vynl.onMediaControl(handleMediaControl);
+  const unlistenMediaControl = vynl.onMediaControl(handleMediaControl, () => {
+    void vynl.mediaControlsReady().catch(() => {});
+  });
+  import.meta.hot?.dispose(() => {
+    disposeMediaEffect();
+    window.clearInterval(mediaTimer);
+    unlistenMediaControl();
+  });
 }
