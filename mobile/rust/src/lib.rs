@@ -12,20 +12,31 @@ use client::CatalogueClient;
 
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static CLIENT: OnceLock<CatalogueClient> = OnceLock::new();
+static RUNTIME_FAILED: OnceLock<()> = OnceLock::new();
+static CLIENT_FAILED: OnceLock<()> = OnceLock::new();
 
 fn client() -> Option<&'static CatalogueClient> {
     if let Some(client) = CLIENT.get() {
         return Some(client);
     }
+    if CLIENT_FAILED.get().is_some() {
+        return None;
+    }
     match std::panic::catch_unwind(CatalogueClient::new) {
         Ok(built) => Some(CLIENT.get_or_init(|| built)),
-        Err(_) => None,
+        Err(_) => {
+            let _ = CLIENT_FAILED.set(());
+            None
+        }
     }
 }
 
 fn runtime() -> Option<&'static tokio::runtime::Runtime> {
     if let Some(runtime) = RUNTIME.get() {
         return Some(runtime);
+    }
+    if RUNTIME_FAILED.get().is_some() {
+        return None;
     }
     match std::panic::catch_unwind(|| {
         tokio::runtime::Builder::new_multi_thread()
@@ -36,7 +47,10 @@ fn runtime() -> Option<&'static tokio::runtime::Runtime> {
             .expect("could not start the catalogue runtime")
     }) {
         Ok(built) => Some(RUNTIME.get_or_init(|| built)),
-        Err(_) => None,
+        Err(_) => {
+            let _ = RUNTIME_FAILED.set(());
+            None
+        }
     }
 }
 

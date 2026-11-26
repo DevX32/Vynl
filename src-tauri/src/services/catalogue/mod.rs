@@ -516,7 +516,9 @@ fn extract_yt_playlist_id(url: &str) -> Option<String> {
     if !url.contains("youtube.com") && !url.contains("youtu.be") {
         return None;
     }
-    let query = url.split(['?', '#']).nth(1)?;
+    let after_host = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let before_fragment = after_host.split_once('#').map_or(after_host, |(p, _)| p);
+    let query = before_fragment.split_once('?')?.1;
     for part in query.split('&') {
         let Some((k, v)) = part.split_once('=') else {
             continue;
@@ -787,9 +789,4 @@ pub async fn catalogue_add_to_playlist(
         crate::commands::sync_playlist(&app, playlist);
     }
     Ok(result)
-}
-
-#[allow(dead_code)]
-fn _keep_runtime_alive(service: &CatalogueService) -> Arc<tokio::runtime::Runtime> {
-    service.runtime.clone()
 }

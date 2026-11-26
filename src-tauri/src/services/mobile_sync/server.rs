@@ -445,8 +445,12 @@ async fn lockout_for(state: &SharedState, key: &str) -> bool {
 
 async fn record_failure(state: &SharedState, key: &str) {
     let mut attempts = state.attempts.lock().await;
-    if attempts.len() >= MAX_ATTEMPT_ENTRIES {
-        attempts.clear();
+    if attempts.len() >= MAX_ATTEMPT_ENTRIES && !attempts.contains_key(key) {
+        let now = now_secs();
+        attempts.retain(|_, entry| entry.locked_until.is_some_and(|until| until > now));
+        if attempts.len() >= MAX_ATTEMPT_ENTRIES {
+            return;
+        }
     }
     let entry = attempts.entry(key.to_string()).or_insert(Attempt {
         failures: 0,

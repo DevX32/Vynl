@@ -137,7 +137,7 @@ fn artist_matches(a: &str, b: &str) -> bool {
     let a = a.trim();
     let b = b.trim();
     if a.is_empty() || b.is_empty() {
-        return true;
+        return a.is_empty() && b.is_empty();
     }
     a.eq_ignore_ascii_case(b)
         || a.to_lowercase().contains(&b.to_lowercase())

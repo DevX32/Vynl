@@ -1707,8 +1707,7 @@ impl StreamSession {
             })
         {
             control.cancel();
-            buffer.close();
-            let _ = std::fs::remove_file(&path);
+            buffer.fail(format!("could not start the stream decoder: {error}"));
             cache.finish(&video_id, &file_name, false);
             return Err(format!("could not start the stream decoder: {error}"));
         }

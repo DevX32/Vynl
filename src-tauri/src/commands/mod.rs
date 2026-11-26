@@ -47,11 +47,14 @@ fn canonicalize_in_output(file: &str, canonical_output: &Path) -> Result<PathBuf
         return Err("Path must be absolute".into());
     }
 
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "invalid path: missing file name".to_string())?;
     let canonical = fs::canonicalize(path)
         .or_else(|_| {
             path.parent()
                 .and_then(|parent| fs::canonicalize(parent).ok())
-                .map(|parent| parent.join(path.file_name().unwrap_or_default()))
+                .map(|parent| parent.join(file_name))
                 .ok_or_else(|| {
                     std::io::Error::new(
                         std::io::ErrorKind::NotFound,
@@ -675,9 +678,13 @@ fn prune_empty_dirs(root: &Path) {
             }
         }
     }
+    let protected = root.join("playlists");
     dirs.sort_by_key(|dir| dir.as_os_str().len());
     dirs.reverse();
     for dir in dirs {
+        if dir == protected || dir.starts_with(&protected) {
+            continue;
+        }
         let _ = fs::remove_dir(dir);
     }
 }
@@ -1124,18 +1131,22 @@ pub async fn save_playlist_cover(
 }
 
 #[tauri::command]
-pub async fn library_read_tags(file: String) -> Result<crate::services::audio::TrackTags, String> {
-    Ok(crate::services::audio::read_tags(std::path::Path::new(
-        &file,
-    )))
+pub async fn library_read_tags(
+    file: String,
+    app: AppHandle,
+) -> Result<crate::services::audio::TrackTags, String> {
+    let validated = require_path_in_output(&file, &app)?;
+    Ok(crate::services::audio::read_tags(&validated))
 }
 
 #[tauri::command]
 pub async fn library_write_tags(
     file: String,
     tags: crate::services::audio::TrackTags,
+    app: AppHandle,
 ) -> Result<(), String> {
-    crate::services::audio::write_tags(std::path::Path::new(&file), &tags)
+    let validated = require_path_in_output(&file, &app)?;
+    crate::services::audio::write_tags(&validated, &tags)
 }
 
 #[tauri::command]
@@ -1436,14 +1447,22 @@ pub async fn player_play(
     path: String,
     seek_to: Option<f64>,
     generation: u64,
+    app: AppHandle,
 ) -> Result<(), String> {
+    require_path_in_output(&path, &app)?;
     tokio::task::spawn_blocking(move || crate::services::player::play(&path, seek_to, generation))
         .await
         .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn player_crossfade(path: String, generation: u64, fade_secs: f64) -> Result<(), String> {
+pub async fn player_crossfade(
+    path: String,
+    generation: u64,
+    fade_secs: f64,
+    app: AppHandle,
+) -> Result<(), String> {
+    require_path_in_output(&path, &app)?;
     tokio::task::spawn_blocking(move || {
         crate::services::player::crossfade(&path, generation, fade_secs)
     })

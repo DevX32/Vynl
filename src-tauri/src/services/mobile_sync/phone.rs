@@ -10,8 +10,6 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-const CATALOGUE_PREFIX: &str = "ytm:";
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MobileTrack {
@@ -174,10 +172,6 @@ async fn stream_audio(
     if !catalogue::valid_video_id(video_id) {
         return error(StatusCode::BAD_REQUEST, "This track has no video id.");
     }
-    if video_id.starts_with(CATALOGUE_PREFIX) {
-        return error(StatusCode::BAD_REQUEST, "This track has no video id.");
-    }
-
     let path = match catalogue::fetch_to_cache(video_id).await {
         Ok(path) => path,
         Err(message) => return error(StatusCode::BAD_GATEWAY, clean(message)),

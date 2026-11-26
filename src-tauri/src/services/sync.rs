@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex as StdMutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -114,7 +114,14 @@ fn write_sync_meta(data_dir: &Path, meta: &SyncMeta) {
     let _ = util::write_json(&sync_meta_path(data_dir), meta);
 }
 
+static SYNC_META_LOCK: StdMutex<()> = StdMutex::new(());
+
+fn sync_meta_lock() -> std::sync::MutexGuard<'static, ()> {
+    SYNC_META_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn mark_sync_dirty(data_dir: &Path) {
+    let _guard = sync_meta_lock();
     let mut meta = read_sync_meta(data_dir);
     if meta.dirty {
         return;
@@ -128,18 +135,21 @@ pub fn is_sync_dirty(data_dir: &Path) -> bool {
 }
 
 pub fn record_sync_error(data_dir: &Path, error: &str) {
+    let _guard = sync_meta_lock();
     let mut meta = read_sync_meta(data_dir);
     meta.last_error = Some(error.to_string());
     write_sync_meta(data_dir, &meta);
 }
 
 pub fn clear_sync_error(data_dir: &Path) {
+    let _guard = sync_meta_lock();
     let mut meta = read_sync_meta(data_dir);
     meta.last_error = None;
     write_sync_meta(data_dir, &meta);
 }
 
 pub fn set_sync_result(data_dir: &Path, error: Option<&str>) {
+    let _guard = sync_meta_lock();
     let mut meta = read_sync_meta(data_dir);
     meta.dirty = error.is_some();
     meta.last_error = error.map(str::to_string);
@@ -592,13 +602,7 @@ fn sync_state_cache_path(data_dir: &Path) -> std::path::PathBuf {
 }
 
 fn write_sync_state_cache_rs(data_dir: &Path, state: &SyncState) {
-    let path = sync_state_cache_path(data_dir);
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(data) = serde_json::to_vec_pretty(state) {
-        let _ = std::fs::write(path, data);
-    }
+    let _ = util::write_json(&sync_state_cache_path(data_dir), state);
 }
 
 pub fn read_sync_state_cache(data_dir: &Path) -> Option<SyncState> {
@@ -620,22 +624,24 @@ fn read_deleted_playlists(data_dir: &Path) -> std::collections::HashMap<String, 
 }
 
 fn write_deleted_playlists(data_dir: &Path, map: &std::collections::HashMap<String, i64>) {
-    let path = deleted_playlists_path(data_dir);
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(data) = serde_json::to_vec_pretty(map) {
-        let _ = std::fs::write(path, data);
-    }
+    let _ = util::write_json(&deleted_playlists_path(data_dir), map);
+}
+
+static DELETED_LOCK: StdMutex<()> = StdMutex::new(());
+
+fn deleted_lock() -> std::sync::MutexGuard<'static, ()> {
+    DELETED_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 pub fn record_deleted_playlist(data_dir: &Path, id: &str) {
+    let _guard = deleted_lock();
     let mut map = read_deleted_playlists(data_dir);
     map.insert(id.to_string(), util::now_ms());
     write_deleted_playlists(data_dir, &map);
 }
 
 fn forget_deleted_playlist(data_dir: &Path, id: &str) {
+    let _guard = deleted_lock();
     let mut map = read_deleted_playlists(data_dir);
     if map.remove(id).is_some() {
         write_deleted_playlists(data_dir, &map);
