@@ -265,7 +265,7 @@ async fn do_import(
         ) {
             Ok(updated) => playlist = updated,
             Err(error) => {
-                eprintln!("[Vynl] could not set the imported playlist cover: {error}")
+                log::error!("[Vynl] could not set the imported playlist cover: {error}")
             }
         }
     }

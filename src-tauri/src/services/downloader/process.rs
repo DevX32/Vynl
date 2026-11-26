@@ -205,7 +205,7 @@ pub(super) async fn watch_for_stall(
             if done.load(Ordering::Relaxed) {
                 return;
             }
-            eprintln!(
+            log::warn!(
                 "[downloader] yt-dlp pid {id} stalled for {}s, terminating",
                 idle.as_secs()
             );

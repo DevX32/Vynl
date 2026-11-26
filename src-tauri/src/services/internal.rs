@@ -88,13 +88,13 @@ async fn fetch_latest_totp_secret(client: &Client) -> (u32, Vec<u8>) {
                     key_bytes: key_bytes.clone(),
                     fetched_at: Instant::now(),
                 });
-                eprintln!("[Vynl] Fetched TOTP secret v{ver} from community endpoint");
+                log::warn!("[Vynl] Fetched TOTP secret v{ver} from community endpoint");
                 return (ver, key_bytes);
             }
         }
-        eprintln!("[Vynl] Failed to fetch TOTP secret from community endpoint, using fallback");
+        log::warn!("[Vynl] Failed to fetch TOTP secret from community endpoint, using fallback");
     } else {
-        eprintln!("[Vynl] Could not reach TOTP secrets endpoint, using fallback");
+        log::warn!("[Vynl] Could not reach TOTP secrets endpoint, using fallback");
     }
 
     (
@@ -226,7 +226,7 @@ async fn get_access_token(
 
     for offset in &windows {
         let totp_code = generate_totp_from_key(&key_bytes, *offset)?;
-        eprintln!(
+        log::warn!(
             "[Vynl] fetching access token (version: {totp_version}, offset: {offset}, key_len: {})",
             key_bytes.len()
         );
@@ -268,7 +268,7 @@ async fn get_access_token(
         }
 
         let body = error_body(resp).await;
-        eprintln!("[Vynl] access token request failed: HTTP {status}");
+        log::warn!("[Vynl] access token request failed: HTTP {status}");
         last_err = token_failure_message(status, &body);
         tokio::time::sleep(Duration::from_millis(800)).await;
     }
@@ -326,7 +326,7 @@ async fn get_client_token(
     let status = resp.status();
     if !status.is_success() {
         let body = error_body(resp).await;
-        eprintln!("[Vynl] Client token HTTP {status}: {body}");
+        log::warn!("[Vynl] Client token HTTP {status}: {body}");
         return Err(token_failure_message(status, &body));
     }
 
@@ -361,7 +361,7 @@ pub async fn graphql_query(
 
         if status.as_u16() == 429 {
             let backoff_ms = 1000 * (attempt + 1);
-            eprintln!(
+            log::warn!(
                 "[Vynl] GraphQL 429, retrying in {backoff_ms}ms (attempt {})",
                 attempt + 1
             );

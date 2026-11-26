@@ -225,7 +225,7 @@ fn start_mdns(port: u16) -> Option<mdns_sd::ServiceDaemon> {
     }
 
     if registered {
-        eprintln!("[mobile_sync] advertising {label}.local:{port} over mDNS");
+        log::warn!("[mobile_sync] advertising {label}.local:{port} over mDNS");
         Some(daemon)
     } else {
         let _ = daemon.shutdown();

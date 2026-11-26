@@ -452,7 +452,7 @@ fn scan_library_incremental_unlocked(
                 match handle.join() {
                     Ok(track) => probed.push(track),
                     Err(_) => {
-                        eprintln!(
+                        log::error!(
                             "[Vynl library] metadata probe panicked for {}",
                             file.display()
                         );

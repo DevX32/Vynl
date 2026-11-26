@@ -754,7 +754,7 @@ pub async fn search_lyrics(
             {
                 Ok(results) => results,
                 Err(err) => {
-                    eprintln!("LRCLIB search response could not be parsed: {err}");
+                    log::warn!("LRCLIB search response could not be parsed: {err}");
                     Vec::new()
                 }
             }

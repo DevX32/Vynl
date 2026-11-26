@@ -1067,7 +1067,7 @@ pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncS
         clear_sync_error(data_dir);
     } else {
         for error in &report.errors {
-            eprintln!("[Vynl sync] {error}");
+            log::error!("[Vynl sync] {error}");
         }
         record_sync_error(data_dir, &report.errors.join("; "));
     }

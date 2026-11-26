@@ -117,7 +117,7 @@ impl Iterator for FileSource {
                 Ok(Some(packet)) => packet,
                 Ok(None) => return None,
                 Err(error) => {
-                    eprintln!("[Vynl] audio read error: {error}");
+                    log::error!("[Vynl] audio read error: {error}");
                     return None;
                 }
             };
@@ -132,7 +132,7 @@ impl Iterator for FileSource {
                     self.samples.extend_from_slice(&buffer);
                 }
                 Err(error) => {
-                    eprintln!("[Vynl] audio decode error: {error}");
+                    log::error!("[Vynl] audio decode error: {error}");
                 }
             }
         }
@@ -512,7 +512,7 @@ pub fn transcode_to_mp3(
             Ok(audio) => audio,
             Err(e) => {
                 skipped += 1;
-                eprintln!("skipped undecodable audio packet: {e}");
+                log::warn!("skipped undecodable audio packet: {e}");
                 continue;
             }
         };
@@ -531,7 +531,7 @@ pub fn transcode_to_mp3(
     }
 
     if skipped > 0 {
-        eprintln!("{skipped} audio packet(s) could not be decoded");
+        log::error!("{skipped} audio packet(s) could not be decoded");
     }
 
     if result.is_ok() {

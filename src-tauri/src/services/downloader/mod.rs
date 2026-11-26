@@ -594,7 +594,7 @@ async fn download_track(
         let id = match child.id() {
             Some(id) if id > 0 => id,
             Some(id) => {
-                eprintln!(
+                log::warn!(
                     "[downloader] Warning: child.id() returned {id}, attempting alternative tracking"
                 );
                 let _ = child.kill().await;
@@ -744,7 +744,7 @@ async fn download_track(
                     match remux {
                         Ok(()) => Ok(()),
                         Err(remux_error) => {
-                            eprintln!(
+                            log::error!(
                                 "opusmux refused the source ({remux_error}); transcoding to mp3 instead"
                             );
                             let fallback_src = stream.clone();
@@ -1647,11 +1647,11 @@ async fn move_tagged_to_output(
         if let Some(parent) = sidecar.parent()
             && let Err(e) = std::fs::create_dir_all(parent)
         {
-            eprintln!("lyrics sidecar mkdir failed for {parent:?}: {e}");
+            log::warn!("lyrics sidecar mkdir failed for {parent:?}: {e}");
         }
         match std::fs::write(&sidecar, text) {
             Ok(()) => lyrics::remove_stale_sidecars(&canonical, ext),
-            Err(e) => eprintln!("lyrics sidecar write failed for {sidecar:?}: {e}"),
+            Err(e) => log::warn!("lyrics sidecar write failed for {sidecar:?}: {e}"),
         }
     }
 

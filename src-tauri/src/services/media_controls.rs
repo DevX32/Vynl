@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_window_state::AppHandleExt;
 
 enum MediaCommand {
     Update(Option<MediaUpdate>),
@@ -62,7 +63,7 @@ pub fn start(app: AppHandle) -> MediaController {
                 let mut controls = match create_controls(hwnd) {
                     Ok(controls) => controls,
                     Err(error) => {
-                        eprintln!("media controls unavailable: {error}");
+                        log::error!("media controls unavailable: {error}");
                         return;
                     }
                 };
@@ -72,7 +73,7 @@ pub fn start(app: AppHandle) -> MediaController {
                 if let Err(error) = controls.attach(move |event| {
                     handle_event(&event_app, event, &event_tx);
                 }) {
-                    eprintln!("media controls attach failed: {error}");
+                    log::error!("media controls attach failed: {error}");
                     return;
                 }
 
@@ -95,7 +96,7 @@ pub fn start(app: AppHandle) -> MediaController {
             });
 
         if let Err(error) = result {
-            eprintln!("media controls thread failed: {error}");
+            log::error!("media controls thread failed: {error}");
             return MediaController::disabled();
         }
 
@@ -342,6 +343,7 @@ fn handle_event(
         }
         Event::Quit => {
             emit(app, MediaControlAction::Stop);
+            let _ = app.save_window_state(tauri_plugin_window_state::StateFlags::all());
             let exit_app = app.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(300));

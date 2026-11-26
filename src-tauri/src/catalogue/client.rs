@@ -162,8 +162,8 @@ impl CatalogueClient {
         for task in tasks {
             match task.await {
                 Ok(Ok(tracks)) => lists.push(tracks),
-                Ok(Err(error)) => eprintln!("taste radio failed: {error:#}"),
-                Err(error) => eprintln!("taste radio task failed: {error}"),
+                Ok(Err(error)) => log::error!("taste radio failed: {error:#}"),
+                Err(error) => log::error!("taste radio task failed: {error}"),
             }
         }
         if lists.is_empty() {

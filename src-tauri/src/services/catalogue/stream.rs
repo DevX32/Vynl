@@ -266,7 +266,7 @@ impl UrlResolver {
             Ok(_) => {}
             Err(error) => {
                 if webm.is_ok() {
-                    eprintln!("catalogue: webm stream unusable for {video_id}: {error:#}");
+                    log::error!("catalogue: webm stream unusable for {video_id}: {error:#}");
                 }
             }
         }
@@ -1659,7 +1659,7 @@ impl StreamSession {
                     );
                 }));
                 if result.is_err() {
-                    eprintln!("[Vynl] stream fetch thread panicked");
+                    log::error!("[Vynl] stream fetch thread panicked");
                     failure.fail("the stream downloader crashed".into());
                 }
             })
@@ -1701,7 +1701,7 @@ impl StreamSession {
                     );
                 }));
                 if result.is_err() {
-                    eprintln!("[Vynl] stream decode thread panicked");
+                    log::error!("[Vynl] stream decode thread panicked");
                     panic_control.cancel();
                     panic_buffer.fail("the stream decoder crashed".into());
                 }
@@ -1882,7 +1882,7 @@ fn decode_loop(
                 };
             }
             Err(error) => {
-                eprintln!("catalogue: seek in {video_id} failed: {error}");
+                log::error!("catalogue: seek in {video_id} failed: {error}");
                 buffer.fail(format!("this stream could not be seeked: {error}"));
                 abandon_cache(&store, &cache, &video_id, &file_name);
                 return;
@@ -1912,7 +1912,7 @@ fn decode_loop(
             Ok(audio) => audio,
             Err(error) => {
                 decode_errors += 1;
-                eprintln!("catalogue: skipped undecodable packet for {video_id}: {error}");
+                log::error!("catalogue: skipped undecodable packet for {video_id}: {error}");
                 continue;
             }
         };
@@ -1932,7 +1932,7 @@ fn decode_loop(
     }
 
     if decode_errors >= 10 && refresh_count.load(Ordering::Relaxed) > 0 {
-        eprintln!(
+        log::error!(
             "catalogue: {video_id} had {decode_errors} decode errors after a URL refresh; dropping the poisoned cache"
         );
         buffer.fail("the stream could not be decoded after a URL refresh".into());

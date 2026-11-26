@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { attachConsole } from "@tauri-apps/plugin-log";
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -261,6 +262,16 @@
 
     void getCurrentWindow().show().catch(() => {});
 
+    let offConsole: (() => void) | undefined;
+    let consoleDisposed = false;
+    void attachConsole().then(
+      (off) => {
+        if (consoleDisposed) off();
+        else offConsole = off;
+      },
+      () => {},
+    );
+
     let offDeepLink: (() => void) | undefined;
     let deepLinkDisposed = false;
     void (async () => {
@@ -328,6 +339,8 @@
       .catch(console.error);
     return () => {
       disposed = true;
+      consoleDisposed = true;
+      offConsole?.();
       deepLinkDisposed = true;
       offDeepLink?.();
       disposeMini?.();

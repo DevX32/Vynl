@@ -610,7 +610,7 @@ async fn try_internal_collection(
             Some(Ok(collection))
         }
         Err(e) => {
-            eprintln!(
+            log::warn!(
                 "[Vynl] Internal API failed for {}, falling back to embed: {e}",
                 collection_kind_str(&link.kind)
             );

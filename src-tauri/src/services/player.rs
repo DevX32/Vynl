@@ -1114,7 +1114,7 @@ fn stop_playback_for_device_change(
             true
         }
         Err(e) => {
-            eprintln!("device change: reopen output failed: {e}");
+            log::warn!("device change: reopen output failed: {e}");
             false
         }
     }
@@ -1145,7 +1145,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
     let (out, h) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("audio output unavailable: {e}");
+            log::warn!("audio output unavailable: {e}");
             while let Ok(req) = rx.recv() {
                 let _ = req
                     .reply_tx
@@ -1409,7 +1409,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                     PlayerResp::Ok
                                 }
                                 Err(e) => {
-                                    eprintln!("device change: could not resume {path}: {e}");
+                                    log::warn!("device change: could not resume {path}: {e}");
                                     emit_stream_error(&path, &e, generation);
                                     seek_floor = None;
                                     if sink.is_none() {
@@ -1627,7 +1627,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                                 ) {
                                                     Ok(prepared) => Some(prepared.audio),
                                                     Err(error) => {
-                                                        eprintln!(
+                                                        log::error!(
                                                             "device change: could not re-resolve {path}: {error}"
                                                         );
                                                         None
@@ -1661,7 +1661,7 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
                                             seek_floor = seek_floor_for(pos);
                                         }
                                         Err(e) => {
-                                            eprintln!(
+                                            log::warn!(
                                                 "device change: could not resume {path}: {e}"
                                             );
                                             emit_stream_error(&path, &e, generation);

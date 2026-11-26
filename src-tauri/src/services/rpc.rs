@@ -282,7 +282,7 @@ fn worker_tx() -> Option<mpsc::Sender<Option<RpcPresence>>> {
         {
             Ok(_) => *guard = Some(tx),
             Err(error) => {
-                eprintln!("discord rpc worker failed to start: {error}");
+                log::error!("discord rpc worker failed to start: {error}");
                 return None;
             }
         }
