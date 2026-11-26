@@ -50,8 +50,9 @@
   });
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key !== "Escape") return;
+    if (event.key !== "Escape" || saving || event.defaultPrevented) return;
     event.preventDefault();
+    event.stopPropagation();
     closeTagEditor();
   }
 

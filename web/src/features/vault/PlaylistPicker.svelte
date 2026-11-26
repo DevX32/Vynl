@@ -62,6 +62,7 @@
   function handleKey(e: KeyboardEvent): void {
     if (e.key === "Escape" && !e.defaultPrevented) {
       e.preventDefault();
+      if (busy) return;
       if (creating) {
         creating = false;
       } else {
@@ -72,7 +73,13 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="overlay" onclick={onSkip} role="presentation">
+<div
+  class="overlay"
+  role="presentation"
+  onclick={() => {
+    if (!busy) onSkip();
+  }}
+>
   <div
     class="dialog"
     onclick={(e) => e.stopPropagation()}

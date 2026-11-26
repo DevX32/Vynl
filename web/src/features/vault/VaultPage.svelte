@@ -44,6 +44,7 @@
   let progress = $state<Record<string, TrackProgress>>({});
   let summary = $state<DownloadSummary | null>(null);
   let running = $state(false);
+  let starting = $state(false);
   let reviewing = $state(false);
   let error = $state<string | null>(null);
   let matches = $state<Record<string, SearchCandidate[]>>({});
@@ -327,12 +328,17 @@
   }
 
   async function beginDownload(): Promise<void> {
-    if (!collection || running) return;
-    if (settings.confirmMatches && Object.keys(matches).length === 0) {
-      await findAndReview();
-      return;
+    if (!collection || running || starting) return;
+    starting = true;
+    try {
+      if (settings.confirmMatches && Object.keys(matches).length === 0) {
+        await findAndReview();
+        return;
+      }
+      await refreshDone({ force: true });
+    } finally {
+      starting = false;
     }
-    await refreshDone({ force: true });
     await confirmDownload();
   }
 
@@ -365,9 +371,14 @@
 
   async function confirmDownload(): Promise<void> {
     const target = collection;
-    if (!target || running) return;
+    if (!target || running || starting) return;
     if (syncOnlyNew) {
-      await refreshDone({ force: true });
+      starting = true;
+      try {
+        await refreshDone({ force: true });
+      } finally {
+        starting = false;
+      }
       if (collection !== target) return;
     }
     const gen = ++dlGeneration;
@@ -855,7 +866,7 @@
 
     <DownloadFooter
       {collection}
-      {running}
+      running={running || starting}
       {reviewing}
       {summary}
       {counts}

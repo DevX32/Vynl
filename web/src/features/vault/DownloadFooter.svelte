@@ -96,6 +96,7 @@
         <button
           class="download-btn"
           class:done={finishedOk}
+          disabled={running}
           onclick={finishedOk
             ? onDone
             : reviewing

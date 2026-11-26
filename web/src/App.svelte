@@ -1,5 +1,5 @@
 ﻿<script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -117,6 +117,7 @@
   } | null>(null);
   let moveToVynlOpen = $state(false);
   let createTarget = $state(false);
+  let createBusy = $state(false);
   let createVal = $state("");
   let createCoverFile = $state<File | null>(null);
   let createCoverPreview = $state<string | null>(null);
@@ -130,10 +131,22 @@
   $effect(() => {
     if (createTarget) {
       createVal = "";
-      if (createCoverPreview) URL.revokeObjectURL(createCoverPreview);
+      const prev = untrack(() => createCoverPreview);
+      if (prev) URL.revokeObjectURL(prev);
       createCoverFile = null;
       createCoverPreview = null;
+    } else {
+      const prev = untrack(() => createCoverPreview);
+      if (prev) {
+        URL.revokeObjectURL(prev);
+        createCoverFile = null;
+        createCoverPreview = null;
+      }
     }
+    return () => {
+      const prev = untrack(() => createCoverPreview);
+      if (prev) URL.revokeObjectURL(prev);
+    };
   });
 
   $effect(() => {
@@ -429,7 +442,8 @@
   }
 
   async function confirmCreatePlaylist(): Promise<void> {
-    if (!createVal.trim()) return;
+    if (createBusy || !createVal.trim()) return;
+    createBusy = true;
     const name = createVal.trim();
     const coverFile = createCoverFile;
     const coverPreview = createCoverPreview;
@@ -452,7 +466,9 @@
       navigate("playlist");
     } catch (err) {
       console.warn("create playlist failed:", err);
+      toasts.error(t("playlists.createFailed"));
     } finally {
+      createBusy = false;
       createCoverFile = null;
       createCoverPreview = null;
     }
@@ -665,7 +681,9 @@
     class="backdrop"
     role="presentation"
     transition:fade={{ duration: 150 }}
-    onclick={() => (createTarget = false)}
+    onclick={() => {
+      if (!createBusy) createTarget = false;
+    }}
   >
     <div
       class="edit-panel"
@@ -677,7 +695,7 @@
       out:fly={{ y: 8, duration: 140, easing: cubicIn }}
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => {
-        if (e.key === "Escape" && !e.defaultPrevented) {
+        if (e.key === "Escape" && !e.defaultPrevented && !createBusy) {
           e.preventDefault();
           createTarget = false;
         }
@@ -686,7 +704,7 @@
     >
       <div class="edit-head">
         <span class="edit-title">{t("common.newPlaylistTitle")}</span>
-        <button class="edit-close" onclick={() => (createTarget = false)} aria-label={t("common.close")}>
+        <button class="edit-close" onclick={() => (createTarget = false)} disabled={createBusy} aria-label={t("common.close")}>
           <X size={12} stroke-width={1.6} />
         </button>
       </div>
@@ -722,7 +740,7 @@
                 if (e.key === "Enter") void confirmCreatePlaylist();
               }}
             />
-            <button class="action-btn-sm" onclick={() => void confirmCreatePlaylist()} disabled={!createVal.trim()}>
+            <button class="action-btn-sm" onclick={() => void confirmCreatePlaylist()} disabled={createBusy || !createVal.trim()}>
               {t("common.create")}
             </button>
           </div>
@@ -761,6 +779,7 @@
           editTarget = null;
         }
       }}
+      use:focusTrap
     >
       <div class="edit-head">
         <span class="edit-title">{t("playlist.editPlaylist")}</span>
@@ -829,7 +848,9 @@
   danger
   confirmDisabled={editBusy}
   onConfirm={() => void confirmEditDeletePlaylist()}
-  onClose={() => (editDeleteConfirm = false)}
+  onClose={() => {
+    if (!editBusy) editDeleteConfirm = false;
+  }}
 />
 
 {#if moveToVynlOpen}
@@ -1098,8 +1119,6 @@
   .edit-action:hover:not(:disabled) {
     background: var(--bg-raise);
   }
-
-
 
   .edit-action:disabled {
     opacity: 0.45;

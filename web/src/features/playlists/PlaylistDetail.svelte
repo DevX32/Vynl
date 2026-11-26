@@ -65,6 +65,7 @@
     tracksOf,
   } from "@state/playlists.svelte";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import BulkTracksOverlay from "@components/BulkTracksOverlay.svelte";
 
   let q = $state("");
@@ -298,7 +299,6 @@
     coverBusy = true;
     try {
       await setPlaylistCover(pl.id, null);
-      editOpen = false;
     } catch (err) {
       console.warn("remove playlist cover failed:", err);
       toasts.error(t("playlist.coverFailed"));
@@ -587,6 +587,7 @@
             editOpen = false;
           }
         }}
+        use:focusTrap
       >
         <div class="edit-head">
           <span class="edit-title">{t("playlist.editPlaylist")}</span>
@@ -657,7 +658,9 @@
     danger
     confirmDisabled={editBusy}
     onConfirm={() => void confirmDeletePlaylist()}
-    onClose={() => (confirmDeletePlaylistOpen = false)}
+    onClose={() => {
+      if (!editBusy) confirmDeletePlaylistOpen = false;
+    }}
   />
 </div>
 
@@ -1249,8 +1252,6 @@
   .edit-action:hover:not(:disabled) {
     background: var(--bg-raise);
   }
-
-
 
   .edit-action:disabled {
     opacity: 0.45;

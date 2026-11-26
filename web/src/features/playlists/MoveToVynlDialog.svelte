@@ -195,6 +195,12 @@
 
   function backToLink(): void {
     phase = "link";
+    error = null;
+    collection = null;
+    resolveState = null;
+    matchState = null;
+    saveState = null;
+    cancelRequested = false;
   }
 
   function handleKey(e: KeyboardEvent): void {

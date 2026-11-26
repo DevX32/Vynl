@@ -382,6 +382,7 @@ export const en = {
     version: "Version",
     versionLine: "Version {version}",
     checkFailed: "Update check failed: {error}",
+    restartFailed: "Couldn't restart Vynl: {error}",
     checkUpdates: "Check for updates",
     check: "Check",
     upToDate: "You're on the latest version",
@@ -434,6 +435,7 @@ export const en = {
     deleteTitle: "Delete Playlist",
     deleteBody:'"{name}" and every song in it will be permanently deleted. This action cannot be undone.',
     deleteFailed: "Failed to delete playlist",
+    createFailed: "Couldn't create the playlist",
     renameTitle: "Rename playlist",
     newDesc: "Name it, add a cover if you want.",
     expandSidebar: "Expand Sidebar",
@@ -459,6 +461,8 @@ export const en = {
   shortcuts: {
     title: "Keyboard Shortcuts",
     categories: {
+      playback: "Playback",
+      volume: "Volume",
       interface: "Interface",
     },
     actions: {

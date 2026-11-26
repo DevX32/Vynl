@@ -11,18 +11,20 @@
   } from "@lib/color";
   import { clamp01, pointerRatio } from "@lib/pointer";
   import { t } from "@lib/i18n";
-import { focusTrap } from "@lib/actions/focus-trap";
+  import { focusTrap } from "@lib/actions/focus-trap";
 
   let {
     value,
     presets,
     onchange,
+    onpreview,
     label,
     disabled = false,
   }: {
     value: string;
     presets: readonly string[];
     onchange: (hex: string) => void;
+    onpreview?: (hex: string) => void;
     label: string;
     disabled?: boolean;
   } = $props();
@@ -36,6 +38,7 @@ import { focusTrap } from "@lib/actions/focus-trap";
   let sat = $state(0);
   let val = $state(0);
   let hexText = $state("");
+  let skipHexCommit = false;
 
   function sameColor(a: string, b: string): boolean {
     return a.toLowerCase() === b.toLowerCase();
@@ -66,7 +69,12 @@ import { focusTrap } from "@lib/actions/focus-trap";
   function applyHsv(): void {
     const hex = hsvToHex(hue, sat, val);
     hexText = hex.slice(1);
-    onchange(hex);
+    if (onpreview) onpreview(hex);
+    else onchange(hex);
+  }
+
+  function commitHsv(): void {
+    onchange(hsvToHex(hue, sat, val));
   }
 
   function svPointer(e: PointerEvent): void {
@@ -114,6 +122,10 @@ import { focusTrap } from "@lib/actions/focus-trap";
 
   function commitHexText(): void {
     if (disabled) return;
+    if (skipHexCommit) {
+      skipHexCommit = false;
+      return;
+    }
     const candidate = hexText.trim().startsWith("#")
       ? hexText.trim()
       : `#${hexText.trim()}`;
@@ -140,6 +152,8 @@ import { focusTrap } from "@lib/actions/focus-trap";
       (e.currentTarget as HTMLInputElement).blur();
     } else if (e.key === "Escape") {
       e.preventDefault();
+      e.stopPropagation();
+      skipHexCommit = true;
       hexText = normalizeHex(value).slice(1);
       (e.currentTarget as HTMLInputElement).blur();
     }
@@ -157,6 +171,7 @@ import { focusTrap } from "@lib/actions/focus-trap";
       return;
     }
     open = !open;
+    if (open) skipHexCommit = false;
   }
 
   function closePopover(): void {
@@ -208,7 +223,15 @@ import { focusTrap } from "@lib/actions/focus-trap";
 
   {#if open}
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" role="presentation" transition:fade={{ duration: 150 }} onclick={closePopover}>
+    <div
+      class="modal-backdrop"
+      role="presentation"
+      transition:fade={{ duration: 150 }}
+      onpointerdown={(e) => {
+        if (e.target === e.currentTarget) skipHexCommit = true;
+      }}
+      onclick={closePopover}
+    >
       <div
         class="modal-panel"
         role="dialog"
@@ -235,6 +258,8 @@ import { focusTrap } from "@lib/actions/focus-trap";
           bind:this={svEl}
           onpointerdown={handleSvDown}
           onpointermove={handleSvMove}
+          onpointerup={commitHsv}
+          onpointercancel={commitHsv}
         >
           <div class="sv-surface" style:background={`hsl(${hue}, 100%, 50%)`}>
             <div class="sv-white"></div>
@@ -254,6 +279,8 @@ import { focusTrap } from "@lib/actions/focus-trap";
           bind:this={hueEl}
           onpointerdown={handleHueDown}
           onpointermove={handleHueMove}
+          onpointerup={commitHsv}
+          onpointercancel={commitHsv}
         >
           <div
             class="hue-indicator"

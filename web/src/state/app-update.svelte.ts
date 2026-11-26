@@ -67,7 +67,7 @@ function armRestart(delay: number): void {
     void vynl.restartApp().catch((e: unknown) => {
       disarmRestart();
       _installing = false;
-      toasts.error(t("update.checkFailed", { error: errText(e) }));
+      toasts.error(t("update.restartFailed", { error: errText(e) }));
     });
   }, delay);
 }

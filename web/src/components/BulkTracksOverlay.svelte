@@ -131,10 +131,10 @@
   aria-label={title}
   transition:fade={{ duration: 150 }}
   onkeydown={(e) => {
-    if (e.key === "Escape") onClose();
+    if (e.key === "Escape" && !busy) onClose();
   }}
   onclick={(e) => {
-    if (e.target === e.currentTarget) onClose();
+    if (e.target === e.currentTarget && !busy) onClose();
   }}
 >
   <div
@@ -148,6 +148,7 @@
       <button
         class="icon-btn close-btn"
         onclick={onClose}
+        disabled={busy}
         aria-label={t("common.close")}
       >
         <X size={12} stroke-width={1.6} />

@@ -48,6 +48,7 @@
   let resumeTimer: ReturnType<typeof setTimeout> | null = null;
   let scrollRaf: number | null = null;
   let passiveRaf: number | null = null;
+  let initialRaf: number | null = null;
   let passiveLast: number | null = null;
   let lastTrackId: string | null = null;
   let didInitialScroll = false;
@@ -193,7 +194,10 @@
     if (activeIndex < 0) return;
     if (!didInitialScroll) {
       didInitialScroll = true;
-      requestAnimationFrame(() => scrollToActive(true));
+      initialRaf = requestAnimationFrame(() => {
+        initialRaf = null;
+        scrollToActive(true);
+      });
       return;
     }
     scrollToActive(false);
@@ -203,6 +207,7 @@
     return () => {
       if (toastTimer) clearTimeout(toastTimer);
       if (resumeTimer) clearTimeout(resumeTimer);
+      if (initialRaf !== null) cancelAnimationFrame(initialRaf);
       cancelScroll();
       cancelPassive();
     };
