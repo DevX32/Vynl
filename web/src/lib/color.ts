@@ -136,7 +136,7 @@ function currentAccentText(): Rgb {
   return parseCssColor(raw) ?? ACCENT_TEXT_DARK;
 }
 
-function writeAccent(rgb: Rgb, text: Rgb): void {
+function writeAccent(rgb: Rgb, text: Rgb, persist = false): void {
   const [r, g, b] = rgb;
   const rgbStr = `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
   const root = document.documentElement.style;
@@ -144,7 +144,11 @@ function writeAccent(rgb: Rgb, text: Rgb): void {
   root.setProperty("--accent-soft", `rgba(${rgbStr}, 0.11)`);
   root.setProperty("--accent-glow", `rgba(${rgbStr}, 0.38)`);
   root.setProperty("--accent-text", rgbToHexString(text));
-  if (typeof localStorage !== "undefined" && window.location.hash !== "#mini") {
+  if (
+    persist &&
+    typeof localStorage !== "undefined" &&
+    window.location.hash !== "#mini"
+  ) {
     localStorage.setItem("vynl.accent", rgbToHexString(rgb));
   }
 }
@@ -179,7 +183,11 @@ function prefersReducedMotion(): boolean {
 
 let _accentRaf = 0;
 
-export function applyAccentColor(hex: string, animate = true): void {
+export function applyAccentColor(
+  hex: string,
+  animate = true,
+  persist = true,
+): void {
   const color = isValidHexColor(hex) ? hex.trim() : DEFAULT_ACCENT_COLOR;
   const target = hexToRgb(color);
   if (!target) return;
@@ -189,7 +197,7 @@ export function applyAccentColor(hex: string, animate = true): void {
   const targetText = accentTextTarget(relativeLuminance(target));
 
   if (!animate || prefersReducedMotion() || sameRgb(currentAccentBase(), target)) {
-    writeAccent(target, targetText);
+    writeAccent(target, targetText, persist);
     return;
   }
 
@@ -205,6 +213,7 @@ export function applyAccentColor(hex: string, animate = true): void {
       _accentRaf = requestAnimationFrame(step);
     } else {
       _accentRaf = 0;
+      writeAccent(target, targetText, persist);
     }
   };
   _accentRaf = requestAnimationFrame(step);

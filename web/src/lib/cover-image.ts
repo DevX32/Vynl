@@ -16,12 +16,16 @@ async function decode(file: File): Promise<ImageBitmap> {
 
 function usesAlpha(bitmap: ImageBitmap): boolean {
   const probe = document.createElement("canvas");
-  probe.width = 1;
-  probe.height = 1;
+  probe.width = 8;
+  probe.height = 8;
   const ctx = probe.getContext("2d", { willReadFrequently: true });
   if (!ctx) return false;
-  ctx.drawImage(bitmap, 0, 0, 1, 1);
-  return ctx.getImageData(0, 0, 1, 1).data[3] < 255;
+  ctx.drawImage(bitmap, 0, 0, probe.width, probe.height);
+  const { data } = ctx.getImageData(0, 0, probe.width, probe.height);
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true;
+  }
+  return false;
 }
 
 export async function normalizeCoverImage(

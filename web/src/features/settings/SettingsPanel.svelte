@@ -9,7 +9,7 @@
   import Switch from "@components/Switch.svelte";
   import Dialog from "@components/Dialog.svelte";
   import { getCurrentSettings, patchSettings } from "@state/settings.svelte";
-  import { ACCENT_PRESETS } from "@lib/color";
+  import { ACCENT_PRESETS, applyAccentColor } from "@lib/color";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
   import { refreshLibrary } from "@state/library.svelte";
@@ -243,6 +243,7 @@
         presets={ACCENT_PRESETS}
         label={t("settings.accentColorCustom")}
         disabled={settings.dynamicAccent}
+        onpreview={(hex) => applyAccentColor(hex, false, false)}
         onchange={(hex) => void patchSettings({ accentColor: hex })}
       />
       <div class="hint mono">
