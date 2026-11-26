@@ -1032,6 +1032,17 @@ async function resolveMediaCover(cover: string | null): Promise<string | null> {
 }
 
 let mediaUpdateChain: Promise<void> = Promise.resolve();
+let lastMediaUpdateWarningAt = 0;
+
+function warnMediaUpdateFailed(error: unknown): void {
+  // Media updates are retried every second, so a persistent failure would
+  // otherwise flood the console. Log the first failure, then at most once/minute.
+  const now = Date.now();
+  if (now - lastMediaUpdateWarningAt < 60_000) return;
+  lastMediaUpdateWarningAt = now;
+  console.warn("[vynl] media update failed:", error);
+}
+
 function sendMediaUpdate(
   np: CurrentMedia,
   playing: boolean,
@@ -1053,9 +1064,7 @@ function sendMediaUpdate(
       if (payload) payload.cover = await resolveMediaCover(payload.cover);
       await vynl.mediaUpdate(payload);
     })
-    .catch((error) => {
-      console.warn("[vynl] media update failed:", error);
-    });
+    .catch(warnMediaUpdateFailed);
 }
 
 function syncMedia(np: CurrentMedia, playing: boolean, position: number): void {

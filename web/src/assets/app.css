@@ -285,6 +285,11 @@ select {
   color: var(--faint);
 }
 
+html[data-theme="espresso"]:not([data-platform="linux"]) #app {
+  -webkit-backdrop-filter: blur(24px) saturate(1.25);
+  backdrop-filter: blur(24px) saturate(1.25);
+}
+
 html[data-theme="espresso"] .tbl-head {
   background: transparent;
 }

@@ -1450,6 +1450,13 @@ pub fn media_controls_ready(app: AppHandle) {
 }
 
 #[tauri::command]
+pub fn apply_window_effects(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        crate::services::window_effects::apply(&win);
+    }
+}
+
+#[tauri::command]
 pub async fn player_play(
     path: String,
     seek_to: Option<f64>,

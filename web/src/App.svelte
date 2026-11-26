@@ -260,17 +260,24 @@
       return () => {};
     }
 
-    void getCurrentWindow().show().catch(() => {});
+    void getCurrentWindow()
+      .show()
+      .then(() => vynl.applyWindowEffects())
+      .catch(() => {});
 
     let offConsole: (() => void) | undefined;
     let consoleDisposed = false;
-    void attachConsole().then(
-      (off) => {
-        if (consoleDisposed) off();
-        else offConsole = off;
-      },
-      () => {},
-    );
+    // In dev the webview devtools already show console output; only forward it
+    // to the Rust logger in packaged builds, where devtools aren't available.
+    if (import.meta.env.PROD) {
+      void attachConsole().then(
+        (off) => {
+          if (consoleDisposed) off();
+          else offConsole = off;
+        },
+        () => {},
+      );
+    }
 
     let offDeepLink: (() => void) | undefined;
     let deepLinkDisposed = false;

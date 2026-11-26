@@ -120,24 +120,6 @@ pub fn sync_launch_at_startup(app: &tauri::AppHandle, enabled: bool) {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn apply_window_effects(window: &tauri::WebviewWindow) {
-    use window_vibrancy::{apply_acrylic, apply_blur, apply_mica};
-
-    if let Err(error) = apply_acrylic(window, Some((0, 0, 0, 0))) {
-        log::error!("acrylic unavailable: {error}");
-        if let Err(error) = apply_mica(window, Some(true)) {
-            log::error!("mica unavailable: {error}");
-            if let Err(error) = apply_blur(window, Some((0, 0, 0, 0))) {
-                log::error!("window blur unavailable: {error}");
-            }
-        }
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn apply_window_effects(_window: &tauri::WebviewWindow) {}
-
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn register_global_media_keys(app: tauri::AppHandle) {
     use crate::commands::types::MediaControlAction;
@@ -211,7 +193,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(
             tauri_plugin_log::Builder::new()
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
+                .max_file_size(500_000)
                 .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
                 .build(),
         )
@@ -280,15 +263,8 @@ pub fn run() {
                 }
             }
 
-            if let Some(win) = app.get_webview_window("main")
-                && let Ok(icon) =
-                    tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico"))
-            {
-                let _ = win.set_icon(icon);
-            }
-
             if let Some(win) = app.get_webview_window("main") {
-                apply_window_effects(&win);
+                crate::services::window_effects::apply(&win);
             }
 
             crate::services::tools::remove_unused_binaries(&user_data);
@@ -487,6 +463,7 @@ pub fn run() {
             commands::rpc_update,
             commands::media_update,
             commands::media_controls_ready,
+            commands::apply_window_effects,
             commands::save_now_playing,
             commands::load_now_playing,
             commands::clear_now_playing,

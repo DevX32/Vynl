@@ -153,6 +153,8 @@ export const vynl = {
 
   mediaControlsReady: (): Promise<void> => cmd("media_controls_ready"),
 
+  applyWindowEffects: (): Promise<void> => cmd("apply_window_effects"),
+
   onMediaControl: (
     cb: (event: MediaControlEvent) => void,
     onReady?: () => void,
