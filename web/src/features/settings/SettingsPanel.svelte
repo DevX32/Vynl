@@ -34,6 +34,13 @@
     sleepAtEndOfTrack,
     startSleepTimer,
   } from "@state/sleep-timer.svelte";
+  import {
+    clearNowPlaying,
+    getCurrentTrack,
+    getIsTrackPlaying,
+  } from "@state/now-playing.svelte";
+  import { clearMediaCoverCache, toggle } from "@lib/playback.svelte";
+  import { clearResolvedCovers } from "@lib/format";
 
   const settings = $derived(getCurrentSettings());
 
@@ -91,7 +98,13 @@
     if (_removingDownloads) return;
     _removingDownloads = true;
     try {
+      const current = getCurrentTrack();
+      const currentIsDownloaded = !!current && !current.path.startsWith("ytm:");
       const result = await vynl.deleteAllLibraryTracks();
+      if (currentIsDownloaded) {
+        if (getIsTrackPlaying()) toggle();
+        clearNowPlaying();
+      }
       await Promise.all([refreshLibrary(), refreshPlaylists(), refreshDownloads()]);
       if (result.failed > 0) {
         toasts.error(
@@ -121,6 +134,8 @@
     _clearingCache = true;
     try {
       const freed = await vynl.clearStorageCache();
+      clearResolvedCovers();
+      clearMediaCoverCache();
       const mb = Math.round(freed / (1024 * 1024));
       toasts.success(t("settings.cacheCleared", { mb }));
     } catch (error) {

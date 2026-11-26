@@ -483,12 +483,15 @@
     const file = input.files?.[0];
     input.value = "";
     if (!file || !editTarget || editBusy) return;
+    const target = editTarget;
     editBusy = true;
     try {
       const { ext, data } = await normalizeCoverImage(file);
-      const savedPath = await vynl.savePlaylistCover(editTarget.id, ext, data);
-      await setPlaylistCover(editTarget.id, savedPath);
-      editTarget = { ...editTarget, cover: savedPath };
+      const savedPath = await vynl.savePlaylistCover(target.id, ext, data);
+      await setPlaylistCover(target.id, savedPath);
+      if (editTarget?.id === target.id) {
+        editTarget = { ...editTarget, cover: savedPath };
+      }
     } catch (err) {
       console.warn("set playlist cover failed:", err);
       toasts.error(t("playlist.coverFailed"));
@@ -762,7 +765,9 @@
     class="backdrop"
     role="presentation"
     transition:fade={{ duration: 150 }}
-    onclick={() => (editTarget = null)}
+    onclick={() => {
+      if (!editBusy) editTarget = null;
+    }}
   >
     <div
       class="edit-panel"
@@ -774,7 +779,7 @@
       out:fly={{ y: 8, duration: 140, easing: cubicIn }}
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => {
-        if (e.key === "Escape") {
+        if (e.key === "Escape" && !editBusy) {
           e.preventDefault();
           editTarget = null;
         }
@@ -783,7 +788,7 @@
     >
       <div class="edit-head">
         <span class="edit-title">{t("playlist.editPlaylist")}</span>
-        <button class="edit-close" onclick={() => (editTarget = null)} aria-label={t("common.cancel")}>
+        <button class="edit-close" onclick={() => (editTarget = null)} disabled={editBusy} aria-label={t("common.cancel")}>
           <X size={12} stroke-width={1.6} />
         </button>
       </div>

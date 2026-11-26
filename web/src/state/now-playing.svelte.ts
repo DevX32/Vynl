@@ -461,7 +461,6 @@ export function requestPlay(id: string, queue?: string[]): void {
 
 function refreshQueues(): void {
   const byPath = libraryByPath();
-  if (byPath.size === 0) return;
 
   let changed = false;
 
@@ -822,6 +821,12 @@ export function advanceContextIndex(newTrackId: string): void {
   if (idx >= 0) {
     _contextIndex = idx;
   }
+}
+
+export function clearNowPlaying(): void {
+  _state = null;
+  _currentTime = 0;
+  flushNowPlaying();
 }
 
 export function clearUserQueue(): void {

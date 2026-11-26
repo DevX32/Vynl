@@ -150,12 +150,16 @@
   }
 
   async function addPaths(paths: string[]): Promise<void> {
-    if (!pl) return;
+    if (!pl || downloadBusy) return;
+    downloadBusy = true;
     try {
       await addToPlaylist(pl.id, paths);
+      adding = false;
     } catch (e) {
       console.warn("addToPlaylist error:", e);
       toasts.error(t("playlist.addFailed"));
+    } finally {
+      downloadBusy = false;
     }
   }
 
@@ -388,7 +392,7 @@
             {currentTracks.length}
             {currentTracks.length === 1
               ? t("library.song")
-              : t("common.songs")} Â· {t("common.about")}
+              : t("common.songs")} · {t("common.about")}
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
@@ -462,7 +466,7 @@
             class:dragging={drag.dragging && drag.grabIdx === i}
             role="button"
             tabindex="0"
-            aria-label={`${trk.title} â€” ${trk.artist}`}
+            aria-label={`${trk.title} — ${trk.artist}`}
             style:cursor={!q
               ? drag.dragging
                 ? "grabbing"

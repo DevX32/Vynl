@@ -15,6 +15,7 @@
   import { vynl } from "../../lib/vynl";
   import { refreshLibrary, getLibrary, getLibraryError } from "@state/library.svelte";
   import {
+    clearNowPlaying,
     getCurrentTrack,
     getIsTrackPlaying,
     matchesCurrentSong,
@@ -268,7 +269,12 @@
     if (!target || deleteBusy) return;
     deleteBusy = true;
     try {
+      const wasPlaying = getCurrentTrack()?.path === target.path;
       await vynl.deleteLibraryTrack(target.path, target.id);
+      if (wasPlaying) {
+        if (getIsTrackPlaying()) toggle();
+        clearNowPlaying();
+      }
       await refreshLibrary();
       await refreshPlaylists();
       toasts.success(t("library.deleted", { title: target.title }));
@@ -295,13 +301,13 @@
         <div class="sub mono">
           {#if hits.length > 0}
             {hits.length}
-            {hits.length === 1 ? t("library.song") : t("common.songs")} Â·
+            {hits.length === 1 ? t("library.song") : t("common.songs")} ·
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
           {/if}
           {#if scanning}
-            Â· {t("player.scanning")}{/if}
+            · {t("player.scanning")}{/if}
         </div>
         {#if libraryError}
           <div class="lib-error" role="alert">
