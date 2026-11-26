@@ -1018,7 +1018,7 @@
     cursor:pointer;
   }
   .modal-card {
-    position:relative; min-width:360px; max-width:460px; max-height:80%; overflow:hidden;
+    position:relative; min-width:min(360px, calc(100vw - 32px)); max-width:min(520px, calc(100vw - 32px)); max-height:80%; overflow:hidden;
     display:flex; flex-direction:column; gap:14px; padding:24px 28px;
     background: var(--surface); border:1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
