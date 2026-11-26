@@ -1,4 +1,6 @@
 ﻿<script lang="ts">
+  import { fly, fade } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import {
     SlidersHorizontal as SettingsIcon,
     Disc3,
@@ -105,7 +107,8 @@
   });
 
   let accountMenuOpen = $state(false);
-  let accountMenuStyle = $state("");
+  let accountMenuLeft = $state(0);
+  let accountMenuBottom = $state(0);
   let accountWrap: HTMLDivElement | undefined = $state();
   let accountButton: HTMLButtonElement | undefined = $state();
 
@@ -121,8 +124,8 @@
       const left = sidebarOpen
         ? rect.left + margin
         : Math.min(rect.right + margin, window.innerWidth - width - margin);
-      const bottom = Math.max(4, window.innerHeight - rect.bottom - 8);
-      accountMenuStyle = `left: ${left}px; bottom: ${bottom}px;`;
+      accountMenuLeft = left;
+      accountMenuBottom = Math.max(4, window.innerHeight - rect.bottom - 8);
     }
     void refreshSyncStatus().catch(() => {});
   }
@@ -373,7 +376,14 @@
   <div class="sidebar-foot">
     <div class="account-wrap" bind:this={accountWrap}>
       {#if accountMenuOpen}
-        <div class="account-menu" style={accountMenuStyle} role="menu">
+        <div
+          class="account-menu"
+          style:left={`${accountMenuLeft}px`}
+          style:bottom={`${accountMenuBottom}px`}
+          role="menu"
+          in:fly={{ y: 6, duration: 140, easing: cubicOut }}
+          out:fade={{ duration: 90 }}
+        >
           <div class="account-menu-head">
             <span class="menu-avatar">
               <Blobatar {...avatar} class="avatar-blob" />
@@ -868,31 +878,12 @@
     background: var(--surface);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
     overflow: hidden;
-    animation: account-menu-in 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
-    backdrop-filter: none;
   }
 
   .account-menu-foot {
     padding: 6px;
     border-top: 1px solid var(--line);
     background: var(--bg-raise);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .account-menu {
-      animation: none;
-    }
-  }
-
-  @keyframes account-menu-in {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 
   .account-menu-head {

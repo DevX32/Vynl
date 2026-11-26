@@ -177,16 +177,38 @@
     padding: 14px 18px;
     border-bottom: 1px solid var(--line);
   }
-  .title { font-size: 16px; font-weight: 600; }
+  .title {
+    font-size: 16px;
+    font-weight: 600;
+  }
   .close-btn:hover {
     background: var(--surface);
     border-color: var(--line-strong);
   }
-  .body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .row { display: flex; gap: 12px; }
-  .row .field { flex: 1; }
-  .label { font-size: 11px; color: var(--dim); letter-spacing: 0.1em; }
+  .body {
+    padding: 18px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+  }
+  .row .field {
+    flex: 1;
+  }
+  .label {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
   .text {
     background: var(--bg-raise);
     border: 1px solid var(--line-strong);
@@ -197,7 +219,12 @@
     width: 100%;
     resize: vertical;
   }
-  .loading { color: var(--faint); font-size: 12px; text-align: center; padding: 24px 0; }
+  .loading {
+    color: var(--faint);
+    font-size: 12px;
+    text-align: center;
+    padding: 24px 0;
+  }
   .foot {
     display: flex; justify-content: flex-end; gap: 8px;
     padding: 12px 18px; border-top: 1px solid var(--line);

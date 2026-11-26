@@ -58,6 +58,12 @@
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+
+  .btn:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--line-strong);
   }
 
   .btn:disabled {
@@ -66,7 +72,13 @@
   }
 
   .btn.primary {
-    color: var(--text);
-    border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+    background: var(--accent-soft);
+  }
+
+  .btn.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border-color: var(--accent);
   }
 </style>

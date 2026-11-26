@@ -199,7 +199,7 @@
     <div class="dl-body">
       {#if hits.length === 0}
         <div class="dl-empty mono">
-          <FolderOpen size={16} stroke-width={1.5} style="flex-shrink:0" />
+          <FolderOpen size={16} stroke-width={1.5} />
           <span>{emptyText}</span>
         </div>
       {:else}
@@ -312,13 +312,18 @@
     cursor: pointer;
     transition: background 0.12s, color 0.12s;
   }
-  .dl-tab:hover { color: var(--dim); }
+  .dl-tab:hover {
+    color: var(--dim);
+  }
   .dl-tab.active {
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--shadow-sm);
   }
-  .dl-search { flex-shrink: 0; margin-bottom: 10px; }
+  .dl-search {
+    flex-shrink: 0;
+    margin-bottom: 10px;
+  }
   .dl-tools {
     flex-shrink: 0;
     display: flex;
@@ -364,6 +369,9 @@
     color: var(--faint);
     font-size: 11.5px;
   }
+  .dl-empty :global(svg) {
+    flex-shrink: 0;
+  }
   .dl-row {
     --cover-size: 36px;
     display: flex;
@@ -373,8 +381,12 @@
     border-radius: var(--radius-sm);
     transition: background 0.12s;
   }
-  .dl-row:hover { background: var(--bg-raise); }
-  .dl-row.on { background: var(--accent-soft); }
+  .dl-row:hover {
+    background: var(--bg-raise);
+  }
+  .dl-row.on {
+    background: var(--accent-soft);
+  }
   .dl-row-main {
     flex: 1;
     min-width: 0;
@@ -418,8 +430,13 @@
     cursor: pointer;
     transition: color 0.15s, background 0.15s;
   }
-  .icon-btn.mini:hover { color: var(--text); background: var(--bg-raise); }
-  .icon-btn.mini.added { color: var(--green); }
+  .icon-btn.mini:hover {
+    color: var(--text);
+    background: var(--bg-raise);
+  }
+  .icon-btn.mini.added {
+    color: var(--green);
+  }
   .dl-foot {
     flex-shrink: 0;
     display: flex;
@@ -443,7 +460,10 @@
     transition: background 0.15s, border-color 0.15s, color 0.15s;
     white-space: nowrap;
   }
-  .dl-btn:disabled { opacity: 0.35; cursor: default; }
+  .dl-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
   .dl-btn.primary {
     color: var(--accent);
     background: var(--accent-soft);

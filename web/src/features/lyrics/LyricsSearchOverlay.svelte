@@ -162,12 +162,18 @@
     appearance: none;
     border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
     border-radius: var(--radius-sm);
-    background: none;
-    color: var(--dim);
+    background: var(--accent-soft);
+    color: var(--accent);
     padding: 7px 16px;
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border-color: var(--accent);
   }
 
   .btn:disabled {
