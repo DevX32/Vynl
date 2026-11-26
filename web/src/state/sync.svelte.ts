@@ -38,6 +38,11 @@ export async function refreshSyncStatus(): Promise<SyncStatus> {
 let _pushTimer: ReturnType<typeof setTimeout> | null = null;
 let _pushing = false;
 let _pushQueued = false;
+let _syncingNow = false;
+
+function updateSyncing(): void {
+  _syncing = _pushing || _syncingNow;
+}
 
 async function runCloudSyncPush(): Promise<void> {
   if (!_status.signedIn) return;
@@ -46,7 +51,7 @@ async function runCloudSyncPush(): Promise<void> {
     return;
   }
   _pushing = true;
-  _syncing = true;
+  updateSyncing();
   try {
     await vynl.syncPush();
   } catch (e) {
@@ -54,7 +59,7 @@ async function runCloudSyncPush(): Promise<void> {
   } finally {
     await refreshSyncStatus().catch(() => {});
     _pushing = false;
-    _syncing = false;
+    updateSyncing();
     if (_pushQueued) {
       _pushQueued = false;
       void runCloudSyncPush();
@@ -91,12 +96,14 @@ export function retryPendingSync(): void {
 }
 
 export async function runCloudSyncNow(): Promise<void> {
-  if (_syncing) return;
-  _syncing = true;
+  if (_pushing || _syncingNow) return;
+  _syncingNow = true;
+  updateSyncing();
   try {
     await vynl.syncNow();
     await refreshSyncStatus();
   } finally {
-    _syncing = false;
+    _syncingNow = false;
+    updateSyncing();
   }
 }

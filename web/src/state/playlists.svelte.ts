@@ -124,7 +124,7 @@ export async function selectPlaylist(id: string | null): Promise<void> {
     console.warn("selectPlaylist failed:", e);
     if (gen === _selectGeneration) _current = null;
   } finally {
-    _selecting = false;
+    if (gen === _selectGeneration) _selecting = false;
   }
 }
 
