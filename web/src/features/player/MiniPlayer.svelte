@@ -314,8 +314,6 @@
     void win.hide();
   }
 
-
-
   function onHeadDoubleClick(e: MouseEvent): void {
     if (e.target === e.currentTarget) expand();
   }

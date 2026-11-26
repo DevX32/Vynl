@@ -336,8 +336,6 @@
     cursor: default;
   }
 
-
-
   .shortcut-btn {
     display: flex;
     align-items: center;

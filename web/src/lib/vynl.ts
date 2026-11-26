@@ -108,8 +108,6 @@ export const vynl = {
 
   importBackup: (): Promise<RestoredBackup | null> => cmd("import_backup"),
 
-
-
   matches: (
     collection: Collection,
   ): Promise<Record<string, SearchCandidate[]>> =>
@@ -222,7 +220,6 @@ export const vynl = {
 
   syncResolveMissingSource: (path: string): Promise<string | null> =>
     cmd("sync_resolve_missing_source", { path }),
-
 
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>
     cmd("lyrics_local", { file }),

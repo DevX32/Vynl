@@ -302,7 +302,6 @@ export async function searchCatalogue(query: string): Promise<void> {
   }
 }
 
-
 const TASTE_CACHE = "vynl.taste.mix.v1";
 const DISMISSED_KEY = "vynl.taste.dismissed.v1";
 
@@ -495,7 +494,6 @@ function cappedSet<K, V>(map: Map<K, V>, key: K, value: V, cap: number): void {
 const albumCache = new Map<string, CatalogueAlbumDetail>();
 const artistCache = new Map<string, CatalogueArtist>();
 const playlistCache = new Map<string, CataloguePlaylistDetail>();
-
 
 export async function loadCatalogueAlbum(
   id: string,

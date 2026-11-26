@@ -63,7 +63,7 @@ export async function extractVibrantColor(
 
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-    const l = (max + min) / 510; 
+    const l = (max + min) / 510;
     if (l < 0.22 || l > 0.9) continue;
 
     const d = max - min;
