@@ -1443,6 +1443,11 @@ pub fn media_update(
 }
 
 #[tauri::command]
+pub fn media_controls_ready(app: AppHandle) {
+    crate::services::media_controls::flush_early_actions(&app);
+}
+
+#[tauri::command]
 pub async fn player_play(
     path: String,
     seek_to: Option<f64>,

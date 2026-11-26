@@ -149,8 +149,12 @@ export const vynl = {
   mediaUpdate: (state: MediaUpdate | null): Promise<void> =>
     cmd("media_update", { state }),
 
-  onMediaControl: (cb: (event: MediaControlEvent) => void): (() => void) =>
-    onEvent<MediaControlEvent>("vynl:media-control", cb),
+  mediaControlsReady: (): Promise<void> => cmd("media_controls_ready"),
+
+  onMediaControl: (
+    cb: (event: MediaControlEvent) => void,
+    onReady?: () => void,
+  ): (() => void) => onEvent<MediaControlEvent>("vynl:media-control", cb, onReady),
 
   listPlaylists: (): Promise<PlaylistMeta[]> => cmd("list_playlists"),
 

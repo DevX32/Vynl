@@ -1,11 +1,13 @@
 use crate::commands::types::{MediaControlAction, MediaUpdate};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 enum MediaCommand {
     Update(Option<MediaUpdate>),
+    Volume(f64),
     Shutdown,
 }
 
@@ -50,6 +52,7 @@ pub fn start(app: AppHandle) -> MediaController {
         let hwnd: Option<usize> = None;
 
         let (tx, rx) = mpsc::channel::<MediaCommand>();
+        let thread_tx = tx.clone();
         let result = std::thread::Builder::new()
             .name("vynl-media-controls".to_string())
             .spawn(move || {
@@ -64,9 +67,10 @@ pub fn start(app: AppHandle) -> MediaController {
                     }
                 };
 
+                let event_tx = thread_tx.clone();
                 let event_app = app.clone();
                 if let Err(error) = controls.attach(move |event| {
-                    handle_event(&event_app, event);
+                    handle_event(&event_app, event, &event_tx);
                 }) {
                     eprintln!("media controls attach failed: {error}");
                     return;
@@ -75,6 +79,16 @@ pub fn start(app: AppHandle) -> MediaController {
                 while let Ok(command) = rx.recv() {
                     match command {
                         MediaCommand::Update(update) => apply_update(&mut controls, update),
+                        MediaCommand::Volume(volume) => {
+                            #[cfg(target_os = "linux")]
+                            {
+                                let _ = controls.set_volume(volume);
+                            }
+                            #[cfg(not(target_os = "linux"))]
+                            {
+                                let _ = volume;
+                            }
+                        }
                         MediaCommand::Shutdown => break,
                     }
                 }
@@ -148,14 +162,25 @@ fn build_metadata<'a>(
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+std::thread_local! {
+    static LAST_METADATA_KEY: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpdate>) {
     let Some(update) = update else {
+        LAST_METADATA_KEY.with(|key| *key.borrow_mut() = None);
         let _ = controls.set_metadata(cleared_metadata());
         let _ = controls.set_playback(souvlaki::MediaPlayback::Stopped);
         return;
     };
 
-    let cover = update.cover.as_deref().map(cover_url);
+    let cover = update
+        .cover
+        .as_deref()
+        .filter(|path| !path.trim().is_empty())
+        .map(cover_url);
     let max_secs = Duration::from_secs(60 * 60 * 24 * 365 * 30).as_secs_f64();
     let duration = (update.duration > 0.0 && update.duration.is_finite())
         .then(|| std::time::Duration::from_secs_f64(update.duration.min(max_secs)));
@@ -169,15 +194,33 @@ fn apply_update(controls: &mut souvlaki::MediaControls, update: Option<MediaUpda
     } else {
         non_empty(&update.artist)
     };
-    if controls
-        .set_metadata(build_metadata(
-            &update,
-            album,
-            artist,
-            cover.as_deref(),
-            duration,
-        ))
-        .is_err()
+    let metadata_key = format!(
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        update.title,
+        update.artist,
+        update.album,
+        cover.as_deref().unwrap_or(""),
+        duration.map(|d| d.as_micros()).unwrap_or(0),
+    );
+    let metadata_changed = LAST_METADATA_KEY.with(|key| {
+        let mut key = key.borrow_mut();
+        if key.as_ref() == Some(&metadata_key) {
+            false
+        } else {
+            *key = Some(metadata_key);
+            true
+        }
+    });
+    if metadata_changed
+        && controls
+            .set_metadata(build_metadata(
+                &update,
+                album,
+                artist,
+                cover.as_deref(),
+                duration,
+            ))
+            .is_err()
     {
         let _ = controls.set_metadata(build_metadata(&update, album, artist, None, duration));
     }
@@ -227,6 +270,26 @@ fn non_empty(value: &str) -> Option<&str> {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn encode_uri_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for ch in path.chars() {
+        if ch.is_ascii_alphanumeric()
+            || matches!(
+                ch,
+                '/' | ':' | '-' | '.' | '_' | '~' | '!' | '$' | '&' | '+' | ',' | ';' | '=' | '@'
+            )
+        {
+            out.push(ch);
+        } else {
+            for byte in ch.to_string().bytes() {
+                out.push_str(&format!("%{byte:02X}"));
+            }
+        }
+    }
+    out
+}
+
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn cover_url(path: &str) -> String {
     if path.starts_with("http://") || path.starts_with("https://") {
@@ -247,7 +310,7 @@ fn cover_url(path: &str) -> String {
     {
         let normalized = path.replace('\\', "/");
         let path = normalized.strip_prefix("file://").unwrap_or(&normalized);
-        format!("file://{path}")
+        format!("file://{}", encode_uri_path(path))
     }
 }
 
@@ -260,7 +323,11 @@ fn signed_offset(direction: souvlaki::SeekDirection, seconds: f64) -> f64 {
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-fn handle_event(app: &AppHandle, event: souvlaki::MediaControlEvent) {
+fn handle_event(
+    app: &AppHandle,
+    event: souvlaki::MediaControlEvent,
+    event_tx: &Sender<MediaCommand>,
+) {
     use souvlaki::MediaControlEvent as Event;
 
     const SEEK_STEP_SECONDS: f64 = 10.0;
@@ -274,7 +341,12 @@ fn handle_event(app: &AppHandle, event: souvlaki::MediaControlEvent) {
             None
         }
         Event::Quit => {
-            app.exit(0);
+            emit(app, MediaControlAction::Stop);
+            let exit_app = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                exit_app.exit(0);
+            });
             None
         }
         Event::Play => Some(MediaControlAction::Play),
@@ -292,7 +364,10 @@ fn handle_event(app: &AppHandle, event: souvlaki::MediaControlEvent) {
         Event::SetPosition(position) => Some(MediaControlAction::Seek {
             position: position.0.as_secs_f64(),
         }),
-        Event::SetVolume(volume) => Some(MediaControlAction::SetVolume { volume }),
+        Event::SetVolume(volume) => {
+            let _ = event_tx.send(MediaCommand::Volume(volume));
+            Some(MediaControlAction::SetVolume { volume })
+        }
         Event::OpenUri(_) => None,
     };
 
@@ -302,6 +377,34 @@ fn handle_event(app: &AppHandle, event: souvlaki::MediaControlEvent) {
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+static MEDIA_READY: AtomicBool = AtomicBool::new(false);
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+static EARLY_ACTIONS: Mutex<Vec<MediaControlAction>> = Mutex::new(Vec::new());
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+const MAX_EARLY_ACTIONS: usize = 64;
+
+pub fn flush_early_actions(app: &AppHandle) {
+    MEDIA_READY.store(true, Ordering::SeqCst);
+    let Ok(mut early) = EARLY_ACTIONS.lock() else {
+        return;
+    };
+    for action in std::mem::take(&mut *early) {
+        let _ = app.emit("vynl:media-control", action);
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn emit(app: &AppHandle, action: MediaControlAction) {
+    if !MEDIA_READY.load(Ordering::SeqCst) {
+        if let Ok(mut early) = EARLY_ACTIONS.lock()
+            && early.len() < MAX_EARLY_ACTIONS
+        {
+            early.push(action);
+        }
+        return;
+    }
     let _ = app.emit("vynl:media-control", action);
 }
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+pub fn flush_early_actions(_app: &AppHandle) {}

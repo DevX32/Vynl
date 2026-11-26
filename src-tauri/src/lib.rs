@@ -479,6 +479,7 @@ pub fn run() {
             commands::lyrics_search,
             commands::rpc_update,
             commands::media_update,
+            commands::media_controls_ready,
             commands::save_now_playing,
             commands::load_now_playing,
             commands::clear_now_playing,
