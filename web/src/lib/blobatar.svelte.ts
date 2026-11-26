@@ -10,7 +10,7 @@ export function avatarRevision(): number {
 
 type AvatarBackground = "default" | "none" | "square" | "circle" | "squircle";
 
-export interface AvatarCustomization {
+interface AvatarCustomization {
   seed: string;
   shape: string | null;
   hue: number | null;

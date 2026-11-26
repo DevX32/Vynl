@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type SelectOption = {
+  type SelectOption = {
     value: string;
     label: string;
     disabled?: boolean;

@@ -2,7 +2,7 @@ import { t } from "@lib/i18n";
 import { toasts } from "@lib/toast";
 import { formatSleepRemaining } from "@lib/playback";
 
-export type SleepTimerMode = "off" | "time" | "end";
+type SleepTimerMode = "off" | "time" | "end";
 
 let _mode = $state<SleepTimerMode>("off");
 let _remaining = $state(0);

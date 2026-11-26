@@ -134,7 +134,7 @@ export function stripAlbumSuffix(
   return title;
 }
 
-export interface WikiSplit {
+interface WikiSplit {
   body: string;
   attribution: string | null;
 }

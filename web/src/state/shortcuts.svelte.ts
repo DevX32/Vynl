@@ -2,7 +2,7 @@ import { getCurrentVolume, toggleMute } from "@state/player.svelte";
 import { toggle, setVolumeAt } from "@lib/playback.svelte";
 import { closeEq, getEqOpen } from "@state/eq-state.svelte";
 
-export interface KeyBinding {
+interface KeyBinding {
   key: string;
   ctrl?: boolean;
   meta?: boolean;

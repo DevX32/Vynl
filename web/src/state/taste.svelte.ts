@@ -360,10 +360,6 @@ export function getTasteSummary(): {
   };
 }
 
-export function getDismissedTasteIds(): ReadonlySet<string> {
-  return _dismissed;
-}
-
 export function dismissTasteTrack(id: string): void {
   if (!id || _dismissed.has(id)) return;
   const next = new Set(_dismissed);
@@ -376,14 +372,6 @@ export function dismissTasteTrack(id: string): void {
   }
   persistDismissed();
   removeFromCatalogueTaste(id);
-}
-
-export function undismissTasteTrack(id: string): void {
-  if (!id || !_dismissed.has(id)) return;
-  const next = new Set(_dismissed);
-  next.delete(id);
-  _dismissed = next;
-  persistDismissed();
 }
 
 export function resetTaste(): void {

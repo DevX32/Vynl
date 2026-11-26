@@ -2,7 +2,7 @@
   import { Pencil, Trash2, Plus, Import } from "lucide-svelte";
   import { t } from "@lib/i18n";
 
-  export interface CtxItem {
+  interface CtxItem {
     label: string;
     icon?: typeof import("lucide-svelte").Pencil;
     danger?: boolean;
