@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-
+use super::{
+    audio_format_ext, emit_track, normalize, render_pattern, same_song, sanitize, song_key,
+};
 use crate::commands::types::{Collection, Settings, TrackMeta, TrackStatus};
 use crate::services::history;
-use super::{audio_format_ext, emit_track, normalize, render_pattern, same_song, sanitize, song_key};
 
 pub(super) fn move_file(from: &Path, to: &Path) -> Result<(), String> {
     match std::fs::rename(from, to) {
@@ -35,8 +36,6 @@ pub(super) fn move_file(from: &Path, to: &Path) -> Result<(), String> {
         }
     }
 }
-
-
 
 pub(super) fn cleanup_tmp_dir(tmp: &Path) {
     if !tmp.exists() {
@@ -90,7 +89,6 @@ pub(super) fn is_already_on_disk(existing: &HashMap<String, Vec<f64>>, track: &T
     };
     durations.iter().any(|d| same_song(*d, track.duration))
 }
-
 
 pub(super) fn deduplicate_tracks(
     tracks: &[TrackMeta],

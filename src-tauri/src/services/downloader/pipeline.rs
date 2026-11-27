@@ -12,15 +12,22 @@ use tokio::sync::{Mutex, Semaphore};
 use crate::commands::types::*;
 use crate::services::{audio, history, process as sysproc};
 
-use super::finalize::{move_tagged_to_output, process_lyrics_lookup, record_failure, verify_track_duration};
+use super::finalize::{
+    move_tagged_to_output, process_lyrics_lookup, record_failure, verify_track_duration,
+};
 use super::fs::final_output_path;
-use super::media::{emit_track, fetch_cover_now, CoverMap};
+use super::media::{CoverMap, emit_track, fetch_cover_now};
 use super::paths::{audio_format_ext, tmp_dir};
 use super::process::resolve_tool;
-use super::request::{base_args, find_downloaded_stream, is_safe_candidate_url, sanitize_key_component};
+use super::request::{
+    base_args, find_downloaded_stream, is_safe_candidate_url, sanitize_key_component,
+};
 use super::search::search_and_rank_candidates;
 use super::tagging::tag;
-use super::{CANCELLED_DOWNLOAD, CHILDREN, DOWNLOAD_STALL_TIMEOUT, DOWNLOAD_WORKERS, ProcessResult, TEMP_KEY_GEN, describe_no_audio_format, last_error, progress_from_line, watch_for_stall};
+use super::{
+    CANCELLED_DOWNLOAD, CHILDREN, DOWNLOAD_STALL_TIMEOUT, DOWNLOAD_WORKERS, ProcessResult,
+    TEMP_KEY_GEN, describe_no_audio_format, last_error, progress_from_line, watch_for_stall,
+};
 
 pub(super) async fn download_track(
     track: &TrackMeta,

@@ -12,8 +12,7 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use reqwest::header::{ACCEPT, CONTENT_RANGE, RANGE, USER_AGENT};
 
 use super::cache::StreamCache;
-use super::store::{FetchError, FETCH_CHUNK, FETCH_STALL, MAX_REFRESH_ATTEMPTS};
-
+use super::store::{FETCH_CHUNK, FETCH_STALL, FetchError, MAX_REFRESH_ATTEMPTS};
 
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
@@ -282,7 +281,12 @@ impl UrlResolver {
         let output = tokio::time::timeout(Duration::from_secs(30), command.output())
             .await
             .map_err(|_| "yt-dlp timed out while resolving the stream".to_string())?
-            .map_err(|e| format!("yt-dlp failed: {}", crate::services::catalogue::sanitize_error(&e.to_string())))?;
+            .map_err(|e| {
+                format!(
+                    "yt-dlp failed: {}",
+                    crate::services::catalogue::sanitize_error(&e.to_string())
+                )
+            })?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let line = stderr
@@ -456,4 +460,3 @@ async fn probe_content(
         .and_then(|(_, total)| total.trim().parse::<u64>().ok());
     Some((total, mime))
 }
-

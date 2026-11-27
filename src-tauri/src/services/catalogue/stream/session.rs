@@ -1,8 +1,8 @@
 use std::fs::{File, OpenOptions};
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use symphonia::core::codecs::audio::AudioDecoderOptions;
@@ -15,10 +15,10 @@ use ytmusic::AudioFormat as YtAudioFormat;
 
 use crate::services::audio;
 
-use super::buffer::{StreamBuffer, DEFAULT_CHANNELS, DEFAULT_RATE};
-use super::cache::{abandon_cache, StreamCache};
-use super::resolver::{ext_for, UrlResolver};
-use super::store::{fetch_loop, RangeReader, RangeStore, SessionControl};
+use super::buffer::{DEFAULT_CHANNELS, DEFAULT_RATE, StreamBuffer};
+use super::cache::{StreamCache, abandon_cache};
+use super::resolver::{UrlResolver, ext_for};
+use super::store::{RangeReader, RangeStore, SessionControl, fetch_loop};
 
 pub struct StreamSession {
     pub video_id: String,
@@ -72,7 +72,11 @@ impl StreamSession {
             }
         };
 
-        let control = Arc::new(SessionControl { cancelled: AtomicBool::new(false), complete: AtomicBool::new(false), fetched: AtomicU64::new(0) });
+        let control = Arc::new(SessionControl {
+            cancelled: AtomicBool::new(false),
+            complete: AtomicBool::new(false),
+            fetched: AtomicU64::new(0),
+        });
         let buffer = Arc::new(StreamBuffer::new());
         let store = Arc::new(RangeStore::new(
             total,
@@ -208,7 +212,6 @@ impl Drop for StreamSession {
         std::thread::spawn(move || cache.finish(&video_id, &file_name, complete));
     }
 }
-
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn decode_loop(
@@ -490,4 +493,3 @@ pub fn prepare_blocking(
         .runtime
         .block_on(prepare(cache, resolver, video_id, start, duration_hint))
 }
-

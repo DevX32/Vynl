@@ -3,8 +3,8 @@ use std::fs::OpenOptions;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -311,7 +311,11 @@ impl StreamCache {
         })
     }
 
-    pub(super) fn remove_one_active(state: &mut CacheState, video_id: &str, file_name: &str) -> bool {
+    pub(super) fn remove_one_active(
+        state: &mut CacheState,
+        video_id: &str,
+        file_name: &str,
+    ) -> bool {
         if let Some(active) = state.active.get_mut(video_id) {
             if let Some(pos) = active.iter().position(|f| f == file_name) {
                 active.remove(pos);

@@ -1,29 +1,29 @@
-﻿use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use regex::Regex;
 
 use crate::commands::types::*;
 
-mod matching;
-mod paths;
-mod process;
-mod resolve;
 mod finalize;
 mod fs;
+mod matching;
 mod media;
 mod orchestrator;
+mod paths;
 mod pipeline;
-mod text;
+mod process;
 mod request;
+mod resolve;
 mod tagging;
-use text::*;
-use request::*;
+mod text;
 use fs::*;
+pub use fs::{final_output_path, final_output_path_in, find_song_on_disk, get_done_track_ids};
 use media::*;
-pub use resolve::resolve_link;
 pub use orchestrator::download_collection;
 use pipeline::run_pass;
-pub use fs::{final_output_path, final_output_path_in, find_song_on_disk, get_done_track_ids};
+use request::*;
+pub use resolve::resolve_link;
+use text::*;
 pub(crate) mod search;
 
 pub(crate) use matching::filter_and_rank_candidates;
@@ -85,7 +85,6 @@ pub(super) static BUSY: AtomicBool = AtomicBool::new(false);
 pub(super) static GENERATION: AtomicU64 = AtomicU64::new(0);
 pub(super) static TEMP_KEY_GEN: AtomicU64 = AtomicU64::new(0);
 
-
 pub(super) const DOWNLOAD_WORKERS: usize = 4;
 
 pub(super) const DOWNLOAD_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
@@ -98,10 +97,6 @@ pub(super) const MAX_COVER_BYTES: usize = 15 * 1024 * 1024;
 pub(super) const STREAM_EXTS: &[&str] = &[
     "webm", "m4a", "mp4", "opus", "ogg", "oga", "aac", "mpga", "weba", "m4b",
 ];
-
-
-
-
 
 pub(super) struct ProcessResult {
     pub(super) ok: bool,

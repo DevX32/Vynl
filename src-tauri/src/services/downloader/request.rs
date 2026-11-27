@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use super::{STREAM_EXTS, UA, keep_native, search::common_yt_args};
 use crate::commands::types::AudioFormat;
-use super::{keep_native, STREAM_EXTS, UA, search::common_yt_args};
 
 pub(super) fn sanitize_key_component(value: &str) -> String {
     value
@@ -10,7 +10,6 @@ pub(super) fn sanitize_key_component(value: &str) -> String {
         .take(64)
         .collect()
 }
-
 
 pub(super) fn is_safe_candidate_url(url: &str) -> bool {
     let trimmed = url.trim();
@@ -29,7 +28,6 @@ pub(super) fn is_safe_candidate_url(url: &str) -> bool {
     crate::services::rpc::is_public_host(host)
         && crate::services::util::host_resolves_publicly(host)
 }
-
 
 pub(super) fn base_args(format: &AudioFormat) -> Vec<String> {
     let audio_format = if keep_native(format) {
@@ -62,7 +60,6 @@ pub(super) fn base_args(format: &AudioFormat) -> Vec<String> {
     args
 }
 
-
 pub(super) fn find_downloaded_stream(tmp: &Path, track_id: &str) -> Option<PathBuf> {
     let prefix = format!("{track_id}.");
     let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
@@ -85,4 +82,3 @@ pub(super) fn find_downloaded_stream(tmp: &Path, track_id: &str) -> Option<PathB
     }
     best.map(|(_, path)| path)
 }
-

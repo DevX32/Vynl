@@ -2,9 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use rodio::source::SeekError;
 use rodio::Source;
-
+use rodio::source::SeekError;
 
 #[derive(Clone)]
 pub(super) struct FadeControl(Arc<FadeOrder>);
@@ -159,4 +158,3 @@ where
         self.inner.try_seek(pos)
     }
 }
-

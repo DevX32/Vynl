@@ -8,7 +8,10 @@ use crate::services::{history, lyrics, util};
 
 use super::*;
 
-pub(super) async fn emit_final_summary(app_handle: &tauri::AppHandle, summary: &Arc<Mutex<DownloadSummary>>) {
+pub(super) async fn emit_final_summary(
+    app_handle: &tauri::AppHandle,
+    summary: &Arc<Mutex<DownloadSummary>>,
+) {
     let s = summary.lock().await;
     let _ = app_handle.emit("vynl:dl", DownloadEvent::Summary { payload: s.clone() });
 
@@ -171,4 +174,3 @@ pub(super) async fn move_tagged_to_output(
     );
     Ok(())
 }
-

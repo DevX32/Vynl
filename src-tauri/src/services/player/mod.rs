@@ -1,5 +1,5 @@
-pub(crate) mod eq;
 mod engine;
+pub(crate) mod eq;
 mod fade;
 mod track;
 
@@ -172,7 +172,7 @@ pub(super) fn valid_seek_time(time: f64) -> bool {
 pub(super) const STREAM_OFFSET_CAP_SECS: f64 = 86_400.0 * 3650.0;
 pub(super) const MAX_CROSSFADE_SECS: f64 = 20.0;
 
-pub(crate) use engine::{send, to_result, PlayerCmd, PlayerResp, PlayStreamRequest};
+pub(crate) use engine::{PlayStreamRequest, PlayerCmd, PlayerResp, send, to_result};
 pub(crate) use track::TrackInput;
 
 pub fn play(path: &str, seek_to: Option<f64>, generation: u64) -> Result<(), String> {
@@ -331,4 +331,3 @@ pub fn is_playing(generation: u64) -> Result<bool, String> {
         Err(e) => Err(e),
     }
 }
-

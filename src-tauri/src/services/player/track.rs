@@ -9,7 +9,7 @@ use crate::services::catalogue::stream::{StreamSession, StreamSource};
 
 use super::eq::EqualizerSource;
 use super::fade::{FadeControl, FadeSource};
-use super::{playback_speed, replay_gain_linear, valid_seek_time, PAUSED, REPLAY_GAIN};
+use super::{PAUSED, REPLAY_GAIN, playback_speed, replay_gain_linear, valid_seek_time};
 
 pub(crate) type DecodedStream = (
     Box<dyn Source<Item = f32> + Send>,
@@ -159,4 +159,3 @@ pub(super) struct FadingOut {
     pub(super) track: TrackSink,
     pub(super) until: Duration,
 }
-

@@ -8,12 +8,12 @@ use tokio::sync::Mutex;
 
 use crate::commands::types::*;
 
-use super::fs::{cleanup_tmp_dir, deduplicate_tracks, existing_songs};
 use super::finalize::emit_final_summary;
+use super::fs::{cleanup_tmp_dir, deduplicate_tracks, existing_songs};
 use super::media::start_cover_prefetch;
 use super::paths::tmp_dir;
-use super::process::{resolve_tool, CANCELLED_DOWNLOAD};
-use super::{run_pass, BUSY, GENERATION};
+use super::process::{CANCELLED_DOWNLOAD, resolve_tool};
+use super::{BUSY, GENERATION, run_pass};
 
 pub async fn download_collection(
     collection: Collection,
@@ -158,6 +158,3 @@ async fn download_collection_inner(
     let _ = app_handle.emit("vynl:dl", DownloadEvent::Finished);
     Ok(())
 }
-
-
-

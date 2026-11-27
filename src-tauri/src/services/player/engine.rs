@@ -1,14 +1,20 @@
 use std::path::PathBuf;
-use std::sync::mpsc;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use rodio::{OutputStream, OutputStreamHandle};
 
 use crate::services::catalogue::stream::PreparedAudio;
 
-use super::track::{apply_pending_pause, open_input, open_track, seek_sink, FadingOut, TrackInput, TrackSink};
-use super::{clamp_speed, emit_playback_tick, emit_stream_error, reported_pos, scale_volume, valid_seek_time, DEVICE_POLL_INTERVAL, MAX_CROSSFADE_SECS, PAUSED, REPLAY_GAIN, SPEED, STREAM_OFFSET_CAP_SECS, TICK_INTERVAL, TickKey, VOLUME};
+use super::track::{
+    FadingOut, TrackInput, TrackSink, apply_pending_pause, open_input, open_track, seek_sink,
+};
+use super::{
+    DEVICE_POLL_INTERVAL, MAX_CROSSFADE_SECS, PAUSED, REPLAY_GAIN, SPEED, STREAM_OFFSET_CAP_SECS,
+    TICK_INTERVAL, TickKey, VOLUME, clamp_speed, emit_playback_tick, emit_stream_error,
+    reported_pos, scale_volume, valid_seek_time,
+};
 
 pub(crate) struct PlayStreamRequest {
     pub(crate) path: String,
@@ -64,14 +70,15 @@ pub(super) struct PlayerChannel {
     cmd_tx: mpsc::Sender<PlayerRequest>,
 }
 
-pub(super) static CHANNEL: once_cell::sync::Lazy<PlayerChannel> = once_cell::sync::Lazy::new(|| {
-    let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerRequest>();
-    let thread_tx = cmd_tx.clone();
+pub(super) static CHANNEL: once_cell::sync::Lazy<PlayerChannel> =
+    once_cell::sync::Lazy::new(|| {
+        let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerRequest>();
+        let thread_tx = cmd_tx.clone();
 
-    std::thread::spawn(move || player_thread(cmd_rx, thread_tx));
+        std::thread::spawn(move || player_thread(cmd_rx, thread_tx));
 
-    PlayerChannel { cmd_tx }
-});
+        PlayerChannel { cmd_tx }
+    });
 
 pub(super) const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -114,8 +121,6 @@ pub(super) fn default_output_device_name() -> Option<String> {
         None => Some(name),
     }
 }
-
-
 
 pub(super) fn stop_fading_out(fading: &mut Option<FadingOut>) {
     if let Some(out) = fading.take() {
@@ -269,7 +274,10 @@ pub(super) fn finish_device_change(
     install_source(handle, sink, fading, input, position, true)
 }
 
-pub(super) fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerRequest>) {
+pub(super) fn player_thread(
+    rx: mpsc::Receiver<PlayerRequest>,
+    cmd_tx: mpsc::Sender<PlayerRequest>,
+) {
     let (out, h) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
@@ -838,4 +846,3 @@ pub(super) fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sen
     drop(output);
     drop(handle);
 }
-

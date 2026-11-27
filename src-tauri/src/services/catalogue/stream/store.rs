@@ -18,7 +18,6 @@ pub(super) const MAX_FETCH_ATTEMPTS: u32 = 4;
 pub(super) const MAX_REFRESH_ATTEMPTS: u32 = 3;
 pub(super) const MAX_REDIRECT_HOPS: usize = 6;
 
-
 pub(super) struct SessionControl {
     pub(super) cancelled: AtomicBool,
     pub(super) complete: AtomicBool,
@@ -459,4 +458,3 @@ impl MediaSource for RangeReader {
         Some(self.total)
     }
 }
-

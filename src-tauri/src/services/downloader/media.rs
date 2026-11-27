@@ -9,7 +9,9 @@ use tokio::sync::Semaphore;
 use crate::commands::types::*;
 use crate::services::{audio, util as svcutil};
 
-use super::{CANCELLED_DOWNLOAD, COVER_PREFETCH_WORKERS, MAX_COVER_BYTES, UA, sanitize_key_component};
+use super::{
+    CANCELLED_DOWNLOAD, COVER_PREFETCH_WORKERS, MAX_COVER_BYTES, UA, sanitize_key_component,
+};
 
 pub(super) type CoverMap = Arc<std::sync::Mutex<HashMap<String, Option<PathBuf>>>>;
 
@@ -20,7 +22,6 @@ pub(super) async fn probe_duration(file: &Path) -> Option<f64> {
         .ok()
         .flatten()
 }
-
 
 pub(super) async fn fetch_cover(url: &str, dest: &str) -> bool {
     let url = crate::services::cover_cache::normalize_cover_url(url).into_owned();
@@ -93,7 +94,6 @@ pub(super) fn emit_track(
     let _ = app.emit("vynl:dl", &event);
 }
 
-
 pub(super) fn start_cover_prefetch(
     collection: &Collection,
     tmp: &Path,
@@ -147,7 +147,6 @@ pub(super) fn start_cover_prefetch(
     (covers, joiner)
 }
 
-
 pub(super) async fn fetch_cover_now(
     track: &TrackMeta,
     collection: &Collection,
@@ -165,4 +164,3 @@ pub(super) async fn fetch_cover_now(
         None
     }
 }
-
