@@ -426,7 +426,15 @@ img[data-cover-state="error"] {
 
 .art:has(img[data-cover-state="loading"]),
 .hero-cover:has(img[data-cover-state="loading"]),
-.cover:has(img[data-cover-state="loading"]) {
+.cover:has(img[data-cover-state="loading"]),
+.track-cover:has(img[data-cover-state="loading"]),
+.featured-art:has(img[data-cover-state="loading"]),
+.recent-art:has(img[data-cover-state="loading"]),
+.edit-cover:has(img[data-cover-state="loading"]),
+.coll-cover-tile:has(img[data-cover-state="loading"]),
+.head-image:has(img[data-cover-state="loading"]),
+.rail-cover-tile:has(img[data-cover-state="loading"]),
+.art-backdrop:has(img[data-cover-state="loading"]) {
   background: linear-gradient(90deg, var(--bg-raise) 25%, color-mix(in srgb, var(--line) 60%, var(--bg-raise)) 50%, var(--bg-raise) 75%);
   background-size: 200% 100%;
   animation: cover-skeleton 1.2s linear infinite;
