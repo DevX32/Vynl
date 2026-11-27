@@ -49,7 +49,7 @@ export const THEMES: readonly Theme[] = [
       vynl: "#14141c",
       scrollbar: "rgba(240, 240, 240, 0.12)",
       scrollbarHover: "rgba(240, 240, 240, 0.22)",
-      placeholderGlow: "rgba(185, 167, 255, 0.08)",
+      placeholderGlow: "rgba(134, 133, 239, 0.08)",
     },
   },
   {
@@ -71,7 +71,7 @@ export const THEMES: readonly Theme[] = [
       vynl: "#050505",
       scrollbar: "rgba(202, 211, 245, 0.14)",
       scrollbarHover: "rgba(202, 211, 245, 0.24)",
-      placeholderGlow: "rgba(198, 160, 246, 0.09)",
+      placeholderGlow: "rgba(134, 133, 239, 0.09)",
     },
   },
 ] as const;

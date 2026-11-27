@@ -31,6 +31,6 @@ class SettingsStore(context: Context) {
         const val KEY_DISPLAY_NAME = "vynl.display_name"
         const val KEY_NICKNAME = "vynl.nickname"
         const val KEY_ONBOARDED = "vynl.onboarded"
-        const val DEFAULT_ACCENT = 0xFFA894E8.toInt()
+        const val DEFAULT_ACCENT = 0xFF8685EF.toInt()
     }
 }

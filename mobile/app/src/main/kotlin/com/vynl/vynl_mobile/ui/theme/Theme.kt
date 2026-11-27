@@ -31,9 +31,9 @@ object VynlColors {
     val warning = Color(0xFFD9A15C)
     val success = Color(0xFF8FD694)
 
-    val accentDefault = Color(0xFFA894E8)
+    val accentDefault = Color(0xFF8685EF)
     val accentOn = Color(0xFF161128)
-    val accentSoft = Color(0x1CB9A7FF)
+    val accentSoft = Color(0x1C8685EF)
 
     val accent: Color get() = Accent.color
 

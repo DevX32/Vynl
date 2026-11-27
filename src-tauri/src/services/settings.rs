@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::commands::types::Settings;
 use crate::services::util;
-const DEFAULT_ACCENT_COLOR: &str = "#a894e8";
+const DEFAULT_ACCENT_COLOR: &str = "#8685ef";
 const DEFAULT_THEME: &str = "vynl";
 
 crate::declare_file_mutex!();

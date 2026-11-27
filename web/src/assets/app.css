@@ -39,9 +39,9 @@
   --faint: #7a7a7a;
   --line: rgba(240, 240, 240, 0.03);
   --line-strong: rgba(240, 240, 240, 0.07);
-  --accent: #a894e8;
-  --accent-soft: rgba(185, 167, 255, 0.11);
-  --accent-glow: rgba(185, 167, 255, 0.38);
+  --accent: #8685ef;
+  --accent-soft: rgba(134, 133, 239, 0.11);
+  --accent-glow: rgba(134, 133, 239, 0.38);
   --green: #8fd694;
   --red: #ff6b61;
   --red-bg: rgba(255, 107, 97, 0.5);
@@ -53,7 +53,7 @@
   --vynl-disc: min(272px, 32vh);
   --scrollbar: rgba(240, 240, 240, 0.12);
   --scrollbar-hover: rgba(240, 240, 240, 0.22);
-  --placeholder-glow: rgba(185, 167, 255, 0.08);
+  --placeholder-glow: rgba(134, 133, 239, 0.08);
   --placeholder-gradient:
     radial-gradient(
       circle at 50% 50%,

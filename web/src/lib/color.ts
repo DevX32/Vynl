@@ -1,7 +1,7 @@
-export const DEFAULT_ACCENT_COLOR = "#a894e8";
+export const DEFAULT_ACCENT_COLOR = "#8685ef";
 
 export const ACCENT_PRESETS = [
-  "#a894e8",
+  "#8685ef",
   "#7aa2f7",
   "#8fd694",
   "#e8c86a",
