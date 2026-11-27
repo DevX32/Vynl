@@ -140,10 +140,12 @@
     const cRect = c.getBoundingClientRect();
     const eRect = el.getBoundingClientRect();
     const current = c.scrollTop;
-    const offset = eRect.top - cRect.top + current;
+    const center = eRect.top - cRect.top + current + eRect.height / 2;
+    const height = el.offsetHeight;
+    const offset = center - height / 2;
     const topPad = 84;
     const target =
-      offset - topPad - Math.max(0, (c.clientHeight - eRect.height) * 0.18);
+      offset - topPad - Math.max(0, (c.clientHeight - height) * 0.18);
     const max = Math.max(0, c.scrollHeight - c.clientHeight);
     return Math.max(0, Math.min(target, max));
   }
@@ -163,11 +165,12 @@
     cancelScroll();
     const start = c.scrollTop;
     const distance = target - start;
-    const duration = Math.min(560, 180 + Math.abs(distance) * 0.28);
+    const abs = Math.abs(distance);
+    const duration = abs < 120 ? 260 : Math.min(500, 200 + abs * 0.22);
     const t0 = performance.now();
     const step = (now: number) => {
       const p = Math.min(1, (now - t0) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
+      const eased = 1 - Math.pow(1 - p, 4);
       c.scrollTop = start + distance * eased;
       if (p < 1) scrollRaf = requestAnimationFrame(step);
       else scrollRaf = null;
@@ -542,34 +545,34 @@
             </div>
           </div>
         {:else if !result && error}
-          <div class="empty" transition:fade={{ duration: 120 }}>
+          <div class="empty empty-state" transition:fade={{ duration: 120 }}>
             <div class="empty-title display">{t("lyrics.loadFailed")}</div>
-            <button
-              class="retry-btn mono"
-              onclick={() => loadLyrics(getCurrentId(), true)}
-            >
-              {t("common.retry")}
-            </button>
+            <div class="empty-actions">
+              <button
+                class="empty-btn primary mono"
+                onclick={() => loadLyrics(getCurrentId(), true)}
+              >
+                {t("common.retry")}
+              </button>
+            </div>
           </div>
         {:else if !result}
-          <div class="empty" transition:fade={{ duration: 120 }}>
+          <div class="empty empty-state" transition:fade={{ duration: 120 }}>
             <div class="empty-title display">{t("lyrics.noLyricsFound")}</div>
-            <button
-              class="retry-btn mono"
-              onclick={() => loadLyrics(getCurrentId(), true)}
-            >
-              {t("common.retry")}
-            </button>
             <div class="empty-actions">
-              <button class="retry-btn mono" onclick={() => open("search")}>
-                <Search size={13} stroke-width={1.5} />{t(
-                  "lyrics.searchLyrics",
-                )}
+              <button
+                class="empty-btn primary mono"
+                onclick={() => loadLyrics(getCurrentId(), true)}
+              >
+                {t("common.retry")}
               </button>
-              <button class="retry-btn mono" onclick={() => open("paste")}>
-                <ClipboardPaste size={13} stroke-width={1.5} />{t(
-                  "lyrics.paste",
-                )}
+              <button class="empty-btn ghost mono" onclick={() => open("search")}>
+                <Search size={14} stroke-width={1.5} />
+                {t("lyrics.searchLyrics")}
+              </button>
+              <button class="empty-btn ghost mono" onclick={() => open("paste")}>
+                <ClipboardPaste size={14} stroke-width={1.5} />
+                {t("lyrics.paste")}
               </button>
             </div>
           </div>
@@ -1014,41 +1017,72 @@
   .empty-sub {
     font-size: 11px;
   }
-  .retry-btn {
+  .empty-state {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    padding: 24px 16px;
+  }
+  .empty-state .empty-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+  .empty-btn {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
     justify-content: center;
-    margin-top: 12px;
-    padding: 7px 14px;
+    gap: 8px;
+    padding: 10px 18px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--line-strong);
-    background: var(--bg-raise);
-    color: var(--dim);
-    font-size: 11px;
-    letter-spacing: 0.05em;
+    font-size: 12px;
+    letter-spacing: 0.03em;
     cursor: pointer;
     transition:
       color 0.15s,
       border-color 0.15s,
-      background 0.15s;
+      background 0.15s,
+      transform 0.1s;
   }
-  .retry-btn:hover {
-    color: var(--accent);
-    border-color: var(--hover-border);
-    background: var(--hover-surface);
+  .empty-btn:active {
+    transform: translateY(1px);
   }
-  .retry-btn :global(svg) {
+  .empty-btn.primary {
+    color: var(--bg, #0e0e10);
+    background: var(--text);
+    border: 1px solid var(--text);
+  }
+  .empty-btn.primary:hover {
+    background: var(--dim);
+    border-color: var(--dim);
+  }
+  .empty-btn.ghost {
+    color: var(--dim);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .empty-btn.ghost:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  .empty-btn.ghost :global(svg) {
     color: var(--faint);
     transition: color 0.15s;
   }
-  .retry-btn:hover :global(svg) {
-    color: var(--accent);
-  }
-  .empty-actions {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
+  .empty-btn.ghost:hover :global(svg) {
+    color: var(--text);
   }
   .skeleton {
     width: 100%;
@@ -1076,8 +1110,13 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .skeleton-line {
+    .skeleton-line,
+    .dots span {
       animation: none;
+    }
+    .line,
+    .roman {
+      transition: none;
     }
   }
 
@@ -1118,6 +1157,7 @@
     color: var(--text);
     font-weight: 600;
     transform: scale(1.12);
+    will-change: transform;
   }
   .line.before {
     color: color-mix(in srgb, var(--dim) 62%, var(--bg));

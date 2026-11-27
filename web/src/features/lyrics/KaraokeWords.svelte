@@ -38,10 +38,16 @@
 <span class="karaoke" aria-hidden="true">
   {#each words as word, i (i)}
     {@const pct = fill(i)}
-    <span class="word" class:active={pct > 0} class:bg={!!word.bg}>
+    <span class="word" class:active={i === activeWord} class:bg={!!word.bg}>
       <span
         class="wipe"
         style:--fill={`${Math.max(0, Math.min(100, pct * 100))}%`}
+        style:background-image={pct <= 0.005
+          ? "linear-gradient(var(--unlit), var(--unlit))"
+          : pct >= 0.995
+            ? "linear-gradient(var(--lit), var(--lit))"
+            : undefined}
+        style:color={pct <= 0.005 || pct >= 0.995 ? "transparent" : undefined}
       >
         {word.text}
       </span>
@@ -73,11 +79,9 @@
     color: transparent;
     background-image: linear-gradient(
       90deg,
-      var(--lit) 0%,
-      var(--lit) calc(var(--fill) - 0.6em),
+      var(--lit) calc(var(--fill) - 0.15em),
       color-mix(in srgb, var(--lit) 55%, var(--unlit)) var(--fill),
-      var(--unlit) calc(var(--fill) + 0.6em),
-      var(--unlit) 100%
+      var(--unlit) calc(var(--fill) + 0.15em)
     );
     -webkit-background-clip: text;
     background-clip: text;
