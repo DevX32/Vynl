@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { ListMusic, ThumbsDown } from "lucide-svelte";
+  import { ListMusic, ThumbsDown, RefreshCw } from "lucide-svelte";
   import type { CatalogueTrack } from "@lib/types";
   import {
     getCurrentPlaylists,
     saveStreamToPlaylist,
   } from "@state/playlists.svelte";
   import { t } from "@lib/i18n";
+  import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
   import PlaylistPicker from "@components/PlaylistPicker.svelte";
@@ -14,10 +15,12 @@
     onNavigateAlbum,
     onNavigateArtist,
     onDismiss,
+    onReplaceWithLocal,
   }: {
     onNavigateAlbum?: (id: string) => void;
     onNavigateArtist?: (id: string) => void;
     onDismiss?: (track: CatalogueTrack) => void;
+    onReplaceWithLocal?: (track: CatalogueTrack, localPath: string) => void;
   } = $props();
 
   let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(
@@ -25,6 +28,16 @@
   );
   let pickerTarget = $state<CatalogueTrack | null>(null);
   let pickerBusy = $state(false);
+  let localPath = $state<string | null>(null);
+
+  async function checkLocal(track: CatalogueTrack): Promise<void> {
+    localPath = null;
+    try {
+      localPath = await vynl.findLocalForTrack(track);
+    } catch {
+      localPath = null;
+    }
+  }
 
   const playlists = $derived(getCurrentPlaylists());
 
@@ -32,6 +45,7 @@
     e.preventDefault();
     e.stopPropagation();
     ctx = { x: e.clientX, y: e.clientY, track };
+    void checkLocal(track);
   }
 
   function ctxItems(): CtxEntry[] {
@@ -46,6 +60,16 @@
         },
       },
     ];
+    if (localPath) {
+      items.push({
+        label: t("catalogue.replaceWithLocal"),
+        icon: RefreshCw,
+        action: () => {
+          onReplaceWithLocal?.(track, localPath!);
+          localPath = null;
+        },
+      });
+    }
     if (onDismiss) {
       items.push({
         label: t("catalogue.notInterested"),

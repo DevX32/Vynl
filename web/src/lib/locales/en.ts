@@ -54,6 +54,7 @@ export const en = {
     addPartial: "Added {done}, {failed} failed",
     addedToPlaylist: "Added to {name}",
     saveFailed: "Could not add this track to your library",
+    replaceWithLocal: "Replace stream with local file",
     goToAlbum: "Go to album",
     goToArtist: "Go to artist",
     kind: {

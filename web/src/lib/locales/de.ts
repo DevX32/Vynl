@@ -57,6 +57,7 @@ export const de = {
     addedToPlaylist: "Zu {name} hinzugefügt",
     saveFailed:
       "Dieser Titel konnte nicht zu deiner Bibliothek hinzugefügt werden",
+    replaceWithLocal: "Stream durch lokale Datei ersetzen",
     goToAlbum: "Zum Album",
     goToArtist: "Zum Künstler",
     kind: {
