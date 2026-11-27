@@ -2,7 +2,8 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use super::{SessionControl, StreamSession};
+use super::session::StreamSession;
+use super::store::SessionControl;
 
 const MAX_BUFFER_SECS: f64 = 6.0;
 pub(super) const DEFAULT_RATE: u32 = 48_000;
