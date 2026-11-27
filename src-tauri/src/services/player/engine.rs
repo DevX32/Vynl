@@ -1,478 +1,24 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock, mpsc};
+use std::sync::mpsc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use rodio::source::SeekError;
-use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use rodio::{OutputStream, OutputStreamHandle};
 
-use crate::services::catalogue::stream::{PreparedAudio, StreamSession, StreamSource};
+use crate::services::catalogue::stream::PreparedAudio;
 
-mod eq;
+use super::track::{apply_pending_pause, open_input, open_track, seek_sink, FadingOut, TrackInput, TrackSink};
+use super::{clamp_speed, emit_playback_tick, emit_stream_error, reported_pos, scale_volume, valid_seek_time, DEVICE_POLL_INTERVAL, MAX_CROSSFADE_SECS, PAUSED, REPLAY_GAIN, SPEED, STREAM_OFFSET_CAP_SECS, TICK_INTERVAL, TickKey, VOLUME};
 
-pub(crate) use eq::EqualizerSource;
-pub use eq::{
-    EQ_BAND_COUNT, EQ_FREQS, EQ_MAX_DB, EQ_MIN_DB, EqDesign, eq_design, normalize_eq_bands, set_eq,
-};
-
-static VOLUME: AtomicU32 = AtomicU32::new(75);
-static PAUSED: AtomicBool = AtomicBool::new(false);
-static SPEED: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
-static REPLAY_GAIN: AtomicBool = AtomicBool::new(false);
-
-const MIN_SPEED: f32 = 0.5;
-const MAX_SPEED: f32 = 2.0;
-const REPLAY_GAIN_MIN_LINEAR: f32 = 0.25;
-const REPLAY_GAIN_MAX_LINEAR: f32 = 4.0;
-
-pub const PLAYBACK_TICK_EVENT: &str = "vynl:player:tick";
-const TICK_INTERVAL: Duration = Duration::from_millis(100);
-const DEVICE_POLL_INTERVAL: Duration = Duration::from_secs(2);
-static APP: OnceLock<AppHandle> = OnceLock::new();
-
-pub fn set_app_handle(app: &AppHandle) {
-    let _ = APP.set(app.clone());
+pub(crate) struct PlayStreamRequest {
+    pub(crate) path: String,
+    pub(crate) input: TrackInput,
+    pub(crate) start: f64,
+    pub(crate) generation: u64,
+    pub(crate) preserve_pause: bool,
 }
 
-pub fn app_handle() -> Option<AppHandle> {
-    APP.get().cloned()
-}
-
-#[derive(Clone, Serialize)]
-pub struct PlaybackTick {
-    pub generation: u64,
-    pub position: f64,
-    pub playing: bool,
-    pub finished: bool,
-    pub duration: Option<f64>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StreamErrorEvent {
-    pub video_id: String,
-    pub message: String,
-    pub generation: u64,
-}
-
-type TickKey = (u64, bool, bool, u64);
-
-fn reported_pos(sink: Option<&TrackSink>, floor: Option<Duration>) -> f64 {
-    let pos = sink
-        .map(|s| s.sink.get_pos() + s.position_offset)
-        .unwrap_or_default();
-    pos.max(floor.unwrap_or_default()).as_secs_f64()
-}
-
-fn emit_playback_tick(
-    generation: u64,
-    sink: Option<&TrackSink>,
-    seek_floor: Option<Duration>,
-    duration_secs: Option<f64>,
-    last_key: &mut Option<TickKey>,
-) {
-    if generation == 0 {
-        return;
-    }
-
-    let has_sink = sink.is_some();
-    let empty = sink.map(|s| s.sink.empty()).unwrap_or(false);
-    let paused = PAUSED.load(Ordering::Relaxed);
-    let starved = sink
-        .as_ref()
-        .and_then(|track| track._session.as_ref())
-        .is_some_and(|session| session.recently_underrun(750));
-    let playing = has_sink && !empty && !paused && !starved;
-    let finished = has_sink && empty && !paused;
-    let position = reported_pos(sink, seek_floor);
-
-    let key: TickKey = (generation, playing, finished, position.to_bits());
-    if !playing && *last_key == Some(key) {
-        return;
-    }
-    *last_key = Some(key);
-
-    let Some(app) = APP.get() else { return };
-    if has_sink
-        && empty
-        && let Some(track) = sink
-        && let Some(session) = &track._session
-        && let Some(message) = session.error()
-    {
-        let _ = app.emit(
-            "vynl:player:stream-error",
-            StreamErrorEvent {
-                video_id: session.video_id.clone(),
-                message,
-                generation,
-            },
-        );
-    }
-    let _ = app.emit(
-        PLAYBACK_TICK_EVENT,
-        PlaybackTick {
-            generation,
-            position,
-            playing,
-            finished,
-            duration: duration_secs,
-        },
-    );
-}
-
-fn emit_stream_error(path: &str, message: &str, generation: u64) {
-    let video_id = path.strip_prefix("ytm:").unwrap_or_default().to_string();
-    let Some(app) = APP.get() else { return };
-    let _ = app.emit(
-        "vynl:player:stream-error",
-        StreamErrorEvent {
-            video_id,
-            message: message.to_string(),
-            generation,
-        },
-    );
-}
-
-fn scale_volume(raw: u32) -> f32 {
-    let v = raw as f32 / 100.0;
-    (v * v).min(0.8)
-}
-
-fn clamp_speed(speed: f32) -> f32 {
-    if speed.is_finite() {
-        speed.clamp(MIN_SPEED, MAX_SPEED)
-    } else {
-        1.0
-    }
-}
-
-fn playback_speed() -> f32 {
-    f32::from_bits(SPEED.load(Ordering::Relaxed))
-}
-
-fn replay_gain_linear(db: f32) -> f32 {
-    if db.is_finite() {
-        10f32
-            .powf(db / 20.0)
-            .clamp(REPLAY_GAIN_MIN_LINEAR, REPLAY_GAIN_MAX_LINEAR)
-    } else {
-        1.0
-    }
-}
-
-fn valid_seek_time(time: f64) -> bool {
-    time.is_finite() && time >= 0.0 && time < Duration::MAX.as_secs_f64()
-}
-
-#[derive(Clone)]
-struct FadeControl(Arc<FadeOrder>);
-struct FadeOrder {
-    to: AtomicU32,
-    ramp: AtomicU32,
-    serial: AtomicU32,
-    live: AtomicU32,
-}
-
-impl FadeControl {
-    fn settled(gain: f32) -> Self {
-        let gain = gain.clamp(0.0, 1.0);
-        Self(Arc::new(FadeOrder {
-            to: AtomicU32::new(gain.to_bits()),
-            ramp: AtomicU32::new(0),
-            serial: AtomicU32::new(0),
-            live: AtomicU32::new(gain.to_bits()),
-        }))
-    }
-
-    fn ramp_to(&self, to: f32, secs: f64, sample_rate: u32, channels: u16) {
-        let samples = if secs.is_finite() && secs > 0.0 && sample_rate > 0 {
-            (secs * sample_rate as f64 * channels.max(1) as f64)
-                .round()
-                .min(u32::MAX as f64) as u32
-        } else {
-            0
-        };
-        self.0
-            .to
-            .store(to.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
-        self.0.ramp.store(samples, Ordering::Relaxed);
-        self.0.serial.fetch_add(1, Ordering::Release);
-    }
-
-    fn take_order(&self, since: Option<u32>) -> Option<(u32, f32, u32)> {
-        let serial = self.0.serial.load(Ordering::Acquire);
-        if serial != self.0.serial.load(Ordering::Acquire) || Some(serial) == since {
-            return None;
-        }
-        Some((
-            serial,
-            f32::from_bits(self.0.to.load(Ordering::Relaxed)),
-            self.0.ramp.load(Ordering::Relaxed),
-        ))
-    }
-
-    fn current(&self) -> f32 {
-        f32::from_bits(self.0.live.load(Ordering::Relaxed))
-    }
-
-    fn publish(&self, gain: f32) {
-        self.0
-            .live
-            .store(gain.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
-    }
-}
-
-struct FadeSource<S> {
-    inner: S,
-    control: FadeControl,
-    gain: f32,
-    to: f32,
-    step: f32,
-    left: u32,
-    serial: Option<u32>,
-}
-
-impl<S> FadeSource<S>
-where
-    S: Source<Item = f32>,
-{
-    fn new(inner: S, control: FadeControl) -> Self {
-        let gain = control.current();
-        Self {
-            inner,
-            control,
-            serial: None,
-            gain,
-            to: gain,
-            step: 0.0,
-            left: 0,
-        }
-    }
-
-    fn retarget(&mut self) {
-        let Some((serial, to, ramp)) = self.control.take_order(self.serial) else {
-            return;
-        };
-        self.serial = Some(serial);
-        self.to = to;
-        self.left = ramp;
-        self.step = if ramp > 0 {
-            (to - self.gain) / ramp as f32
-        } else {
-            0.0
-        };
-    }
-
-    #[inline]
-    fn glide(&mut self, sample: f32) -> f32 {
-        if self.left > 0 {
-            self.gain += self.step;
-            self.left -= 1;
-            if self.left == 0 {
-                self.gain = self.to;
-                self.control.publish(self.gain);
-            }
-        } else if self.gain != self.to {
-            self.gain = self.to;
-            self.control.publish(self.gain);
-        }
-        sample * self.gain
-    }
-}
-
-impl<S> Iterator for FadeSource<S>
-where
-    S: Source<Item = f32>,
-{
-    type Item = f32;
-
-    fn next(&mut self) -> Option<f32> {
-        self.retarget();
-        let sample = self.inner.next()?;
-        Some(self.glide(sample))
-    }
-}
-
-impl<S> Source for FadeSource<S>
-where
-    S: Source<Item = f32>,
-{
-    fn current_frame_len(&self) -> Option<usize> {
-        self.inner.current_frame_len()
-    }
-
-    fn channels(&self) -> u16 {
-        self.inner.channels()
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.inner.sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        self.inner.total_duration()
-    }
-
-    fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
-        self.inner.try_seek(pos)
-    }
-}
-
-type DecodedStream = (
-    Box<dyn Source<Item = f32> + Send>,
-    Option<f64>,
-    Option<Arc<StreamSession>>,
-);
-
-enum TrackInput {
-    File(PathBuf),
-    CatalogueFile(PathBuf),
-    Stream(Arc<StreamSession>),
-}
-
-impl TrackInput {
-    fn is_stream(&self) -> bool {
-        matches!(self, Self::Stream(_))
-    }
-}
-
-fn track_replay_gain(input: &TrackInput) -> Option<f32> {
-    if !REPLAY_GAIN.load(Ordering::Relaxed) {
-        return None;
-    }
-    match input {
-        TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
-            crate::services::audio::replay_gain_db(path)
-        }
-        TrackInput::Stream(_) => None,
-    }
-}
-
-fn apply_pending_pause(
-    sink: &mut Option<TrackSink>,
-    fading: &mut Option<FadingOut>,
-    pending_pause: &mut Option<u64>,
-    generation: u64,
-) {
-    if pending_pause.take() == Some(generation) {
-        let mut paused_any = false;
-        if let Some(t) = sink {
-            t.sink.pause();
-            paused_any = true;
-        }
-        if let Some(out) = fading {
-            out.track.sink.pause();
-            paused_any = true;
-        }
-        if paused_any {
-            PAUSED.store(true, Ordering::Relaxed);
-        }
-    }
-}
-
-struct TrackSink {
-    sink: Sink,
-    fade: FadeControl,
-    sample_rate: u32,
-    channels: u16,
-    position_offset: Duration,
-    _session: Option<Arc<StreamSession>>,
-}
-
-impl TrackSink {
-    fn open(
-        handle: &OutputStreamHandle,
-        input: TrackInput,
-        fade_secs: f64,
-        position_offset: Duration,
-    ) -> Result<(Self, Option<f64>), String> {
-        let replay_gain = track_replay_gain(&input);
-        let (source, total, session): DecodedStream = match input {
-            TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
-                let source = crate::services::audio::FileSource::open(&path)?;
-                let total = source.total_duration().map(|d| d.as_secs_f64());
-                (Box::new(source), total, None)
-            }
-            TrackInput::Stream(session) => {
-                let source = StreamSource::new(&session);
-                let total = source.total_duration().map(|d| d.as_secs_f64());
-                (Box::new(source), total, Some(session))
-            }
-        };
-        let sample_rate = source.sample_rate().max(1);
-        let channels = source.channels().max(1);
-        let fade_secs = if fade_secs.is_finite() {
-            fade_secs
-        } else {
-            0.0
-        };
-        let control = FadeControl::settled(if fade_secs > 0.0 { 0.0 } else { 1.0 });
-        if fade_secs > 0.0 {
-            control.ramp_to(1.0, fade_secs, sample_rate, channels);
-        }
-        let sink = Sink::try_new(handle).map_err(|e| format!("sink: {e}"))?;
-        sink.append(FadeSource::new(
-            EqualizerSource::new(source).amplify(replay_gain_linear(replay_gain.unwrap_or(0.0))),
-            control.clone(),
-        ));
-        sink.set_speed(playback_speed());
-        Ok((
-            Self {
-                sink,
-                fade: control,
-                sample_rate,
-                channels,
-                position_offset,
-                _session: session,
-            },
-            total,
-        ))
-    }
-}
-
-fn open_track(
-    handle: Option<&OutputStreamHandle>,
-    path: &str,
-    fade_secs: f64,
-) -> Result<(TrackSink, Option<f64>), String> {
-    let handle = handle.ok_or_else(|| "No audio output device".to_string())?;
-    TrackSink::open(
-        handle,
-        TrackInput::File(PathBuf::from(path)),
-        fade_secs,
-        Duration::ZERO,
-    )
-}
-
-fn open_input(
-    handle: Option<&OutputStreamHandle>,
-    input: TrackInput,
-    fade_secs: f64,
-    position_offset: Duration,
-) -> Result<(TrackSink, Option<f64>), String> {
-    let handle = handle.ok_or_else(|| "No audio output device".to_string())?;
-    TrackSink::open(handle, input, fade_secs, position_offset)
-}
-
-fn seek_sink(sink: &Sink, time: f64) -> Result<(), String> {
-    if !valid_seek_time(time) {
-        return Err("invalid seek time".into());
-    }
-    sink.try_seek(Duration::from_secs_f64(time))
-        .map_err(|e| format!("seek: {e}"))
-}
-
-struct PlayStreamRequest {
-    path: String,
-    input: TrackInput,
-    start: f64,
-    generation: u64,
-    preserve_pause: bool,
-}
-
-enum PlayerCmd {
+pub(crate) enum PlayerCmd {
     Play(String, Option<f64>, u64),
     PlayStream(PlayStreamRequest),
     FinishDeviceChange {
@@ -502,23 +48,23 @@ enum PlayerCmd {
 }
 
 #[derive(Clone)]
-enum PlayerResp {
+pub(crate) enum PlayerResp {
     Ok,
     F64(f64),
     Bool(bool),
     Err(String),
 }
 
-struct PlayerRequest {
+pub(super) struct PlayerRequest {
     cmd: PlayerCmd,
     reply_tx: mpsc::Sender<PlayerResp>,
 }
 
-struct PlayerChannel {
+pub(super) struct PlayerChannel {
     cmd_tx: mpsc::Sender<PlayerRequest>,
 }
 
-static CHANNEL: once_cell::sync::Lazy<PlayerChannel> = once_cell::sync::Lazy::new(|| {
+pub(super) static CHANNEL: once_cell::sync::Lazy<PlayerChannel> = once_cell::sync::Lazy::new(|| {
     let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerRequest>();
     let thread_tx = cmd_tx.clone();
 
@@ -527,9 +73,9 @@ static CHANNEL: once_cell::sync::Lazy<PlayerChannel> = once_cell::sync::Lazy::ne
     PlayerChannel { cmd_tx }
 });
 
-const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
-fn to_result(resp: Result<PlayerResp, String>) -> Result<(), String> {
+pub(crate) fn to_result(resp: Result<PlayerResp, String>) -> Result<(), String> {
     match resp {
         Ok(PlayerResp::Ok) => Ok(()),
         Ok(PlayerResp::Err(e)) => Err(e),
@@ -538,7 +84,7 @@ fn to_result(resp: Result<PlayerResp, String>) -> Result<(), String> {
     }
 }
 
-fn send(cmd: PlayerCmd) -> Result<PlayerResp, String> {
+pub(crate) fn send(cmd: PlayerCmd) -> Result<PlayerResp, String> {
     let (reply_tx, reply_rx) = mpsc::channel::<PlayerResp>();
     CHANNEL
         .cmd_tx
@@ -553,7 +99,7 @@ fn send(cmd: PlayerCmd) -> Result<PlayerResp, String> {
     }
 }
 
-fn default_output_device_name() -> Option<String> {
+pub(super) fn default_output_device_name() -> Option<String> {
     use rodio::cpal::traits::{DeviceTrait, HostTrait};
     let host = rodio::cpal::default_host();
     let device = host.default_output_device()?;
@@ -569,25 +115,19 @@ fn default_output_device_name() -> Option<String> {
     }
 }
 
-const STREAM_OFFSET_CAP_SECS: f64 = 86_400.0 * 3650.0;
-const MAX_CROSSFADE_SECS: f64 = 20.0;
 
-struct FadingOut {
-    track: TrackSink,
-    until: Duration,
-}
 
-fn stop_fading_out(fading: &mut Option<FadingOut>) {
+pub(super) fn stop_fading_out(fading: &mut Option<FadingOut>) {
     if let Some(out) = fading.take() {
         out.track.sink.stop();
     }
 }
 
-fn seek_floor_for(time: f64) -> Option<Duration> {
+pub(super) fn seek_floor_for(time: f64) -> Option<Duration> {
     valid_seek_time(time).then(|| Duration::from_secs_f64(time))
 }
 
-fn begin_crossfade(
+pub(super) fn begin_crossfade(
     handle: &Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
@@ -642,7 +182,7 @@ fn begin_crossfade(
     Ok(total)
 }
 
-fn install_source(
+pub(super) fn install_source(
     handle: &Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
@@ -683,7 +223,7 @@ fn install_source(
     Ok(total)
 }
 
-fn stop_playback_for_device_change(
+pub(super) fn stop_playback_for_device_change(
     output: &mut Option<OutputStream>,
     handle: &mut Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
@@ -708,7 +248,7 @@ fn stop_playback_for_device_change(
     }
 }
 
-fn finish_device_change(
+pub(super) fn finish_device_change(
     handle: &Option<OutputStreamHandle>,
     sink: &mut Option<TrackSink>,
     fading: &mut Option<FadingOut>,
@@ -729,7 +269,7 @@ fn finish_device_change(
     install_source(handle, sink, fading, input, position, true)
 }
 
-fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerRequest>) {
+pub(super) fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerRequest>) {
     let (out, h) = match OutputStream::try_default() {
         Ok(v) => v,
         Err(e) => {
@@ -1299,159 +839,3 @@ fn player_thread(rx: mpsc::Receiver<PlayerRequest>, cmd_tx: mpsc::Sender<PlayerR
     drop(handle);
 }
 
-pub fn play(path: &str, seek_to: Option<f64>, generation: u64) -> Result<(), String> {
-    to_result(send(PlayerCmd::Play(path.to_string(), seek_to, generation)))
-}
-
-pub fn crossfade(path: &str, generation: u64, fade_secs: f64) -> Result<(), String> {
-    to_result(send(PlayerCmd::Crossfade(
-        path.to_string(),
-        generation,
-        fade_secs,
-    )))
-}
-
-pub fn play_stream(
-    path: String,
-    session: Arc<StreamSession>,
-    start: f64,
-    generation: u64,
-) -> Result<(), String> {
-    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
-        path,
-        input: TrackInput::Stream(session),
-        start,
-        generation,
-        preserve_pause: false,
-    })))
-}
-
-pub fn play_cached_stream(
-    path: String,
-    file: String,
-    start: Option<f64>,
-    generation: u64,
-) -> Result<(), String> {
-    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
-        path,
-        input: TrackInput::CatalogueFile(PathBuf::from(file)),
-        start: start.unwrap_or(0.0),
-        generation,
-        preserve_pause: false,
-    })))
-}
-
-pub fn seek_stream_source(
-    path: String,
-    session: Arc<StreamSession>,
-    start: f64,
-    generation: u64,
-    playing: bool,
-) -> Result<(), String> {
-    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
-        path,
-        input: TrackInput::Stream(session),
-        start,
-        generation,
-        preserve_pause: !playing,
-    })))
-}
-
-pub fn seek_cached_stream_source(
-    path: String,
-    file: String,
-    start: f64,
-    generation: u64,
-    playing: bool,
-) -> Result<(), String> {
-    to_result(send(PlayerCmd::PlayStream(PlayStreamRequest {
-        path,
-        input: TrackInput::CatalogueFile(PathBuf::from(file)),
-        start,
-        generation,
-        preserve_pause: !playing,
-    })))
-}
-
-pub fn crossfade_stream(
-    path: String,
-    session: Arc<StreamSession>,
-    start: f64,
-    generation: u64,
-    fade_secs: f64,
-) -> Result<(), String> {
-    to_result(send(PlayerCmd::CrossfadeStream {
-        path,
-        input: TrackInput::Stream(session),
-        start,
-        generation,
-        fade_secs,
-    }))
-}
-
-pub fn crossfade_cached_stream(
-    path: String,
-    file: String,
-    start: f64,
-    generation: u64,
-    fade_secs: f64,
-) -> Result<(), String> {
-    to_result(send(PlayerCmd::CrossfadeStream {
-        path,
-        input: TrackInput::CatalogueFile(PathBuf::from(file)),
-        start,
-        generation,
-        fade_secs,
-    }))
-}
-
-pub fn stop(generation: u64) -> Result<(), String> {
-    to_result(send(PlayerCmd::Stop(generation)))
-}
-
-pub fn pause(generation: u64) -> Result<(), String> {
-    to_result(send(PlayerCmd::Pause(generation)))
-}
-
-pub fn resume(generation: u64) -> Result<bool, String> {
-    match send(PlayerCmd::Resume(generation)) {
-        Ok(PlayerResp::Bool(resumed)) => Ok(resumed),
-        Ok(PlayerResp::Err(e)) => Err(e),
-        Err(e) => Err(e),
-        _ => Err("unexpected".into()),
-    }
-}
-
-pub fn seek(time: f64, generation: u64) -> Result<(), String> {
-    to_result(send(PlayerCmd::Seek(time, generation)))
-}
-
-pub fn set_volume(vol: u32) {
-    let _ = send(PlayerCmd::Volume(vol));
-}
-
-pub fn set_speed(speed: f32) {
-    let _ = send(PlayerCmd::Speed(speed));
-}
-
-pub fn set_replay_gain(enabled: bool) {
-    let _ = send(PlayerCmd::ReplayGain(enabled));
-}
-
-pub fn get_position(generation: u64) -> Result<f64, String> {
-    match send(PlayerCmd::GetPosition(generation)) {
-        Ok(PlayerResp::F64(v)) => Ok(v),
-        Ok(PlayerResp::Err(e)) => Err(e),
-        Ok(_) => Err("unexpected".into()),
-        Err(e) => Err(e),
-    }
-}
-
-pub fn is_playing(generation: u64) -> Result<bool, String> {
-    match send(PlayerCmd::IsPlaying(generation)) {
-        Ok(PlayerResp::Bool(v)) => Ok(v),
-        Ok(PlayerResp::Err(e)) => Err(e),
-        Ok(_) => Err("unexpected".into()),
-        Err(e) => Err(e),
-    }
-}
