@@ -235,7 +235,7 @@ pub async fn fetch_lyrics_with_cache(
     lookup: &LyricsLookup,
     user_data_dir: &Path,
     force: bool,
-) -> Option<LyricsResult> {
+) -> Result<Option<LyricsResult>, String> {
     let key = cache_key(lookup);
 
     if force {
@@ -246,7 +246,7 @@ pub async fn fetch_lyrics_with_cache(
         {
             let cache = remote_cache().read().await;
             if let Some(cached) = cache.get(&key) {
-                return cached.clone();
+                return Ok(cached.clone());
             }
         }
 
@@ -254,7 +254,7 @@ pub async fn fetch_lyrics_with_cache(
             let mut fails = fail_cache().write().await;
             if let Some(at) = fails.get(&key) {
                 if now_millis().saturating_sub(*at) < NEGATIVE_CACHE_TTL_MS {
-                    return None;
+                    return Ok(None);
                 }
                 fails.remove(&key);
             }
@@ -267,16 +267,16 @@ pub async fn fetch_lyrics_with_cache(
                 disk_cache_touch(user_data_dir, &key);
                 let mut mem_cache = remote_cache().write().await;
                 mem_cache.insert(key, Some(hit.clone()));
-                return Some(hit);
+                return Ok(Some(hit));
             }
             if now.saturating_sub(entry.accessed_at) < NEGATIVE_CACHE_TTL_MS {
-                return None;
+                return Ok(None);
             }
             disk_cache_remove(user_data_dir, &key);
         }
     }
 
-    let result = do_fetch(lookup).await;
+    let result = do_fetch(lookup).await?;
 
     {
         let mut cache = remote_cache().write().await;
@@ -303,7 +303,7 @@ pub async fn fetch_lyrics_with_cache(
 
     disk_cache_update(user_data_dir, &key, result.clone());
 
-    result
+    Ok(result)
 }
 
 fn path_cache_key(path: &str) -> String {
@@ -379,24 +379,22 @@ fn is_synced_kind(kind: &crate::commands::types::LyricsKind) -> bool {
     )
 }
 
-async fn do_fetch(lookup: &LyricsLookup) -> Option<LyricsResult> {
-    // Query every provider at once. A slow or unreachable provider no longer
-    // adds its full timeout to each lyrics load.
+async fn do_fetch(lookup: &LyricsLookup) -> Result<Option<LyricsResult>, String> {
     let (lrclib, lrcred, better) = tokio::join!(
         do_fetch_lrclib(lookup),
         do_fetch_lrcred(lookup),
         do_fetch_betterlyrics(lookup),
     );
     if lrclib.as_ref().is_some_and(|hit| is_synced_kind(&hit.kind)) {
-        return lrclib;
+        return Ok(lrclib);
     }
     if let Some(hit) = lrcred {
-        return Some(hit);
+        return Ok(Some(hit));
     }
     if better.as_ref().is_some_and(|hit| is_synced_kind(&hit.kind)) {
-        return better;
+        return Ok(better);
     }
-    lrclib.or(better)
+    Ok(lrclib.or(better))
 }
 
 const BETTERLYRICS_BASE: &str = "https://lyrics-api.boidu.dev";

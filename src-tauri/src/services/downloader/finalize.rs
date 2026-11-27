@@ -71,7 +71,7 @@ pub(super) async fn process_lyrics_lookup(
     };
     let fetch_result = lyrics::fetch_lyrics_with_cache(&lookup, user_data_dir, false).await;
     match fetch_result {
-        Some(lr) if !lr.text.trim().is_empty() => {
+        Ok(Some(lr)) if !lr.text.trim().is_empty() => {
             let kind = lr.kind;
             let text = lr.text;
             match kind {

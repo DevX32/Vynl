@@ -23,12 +23,8 @@ pub async fn lyrics_fetch(
     app: AppHandle,
 ) -> Result<Option<LyricsResult>, String> {
     let user_data = user_data_dir(&app)?;
-    Ok(crate::services::lyrics::fetch_lyrics_with_cache(
-        &lookup,
-        &user_data,
-        force.unwrap_or(false),
-    )
-    .await)
+    crate::services::lyrics::fetch_lyrics_with_cache(&lookup, &user_data, force.unwrap_or(false))
+        .await
 }
 
 #[tauri::command]

@@ -694,9 +694,13 @@ async fn track_synced_lyrics(
         ))
     })
     .await
-    .unwrap_or(None);
+    .unwrap_or(Ok(None));
 
-    match fetched.and_then(|res| result_lyrics_kind(&res.kind).map(|kind| (kind, res))) {
+    match fetched
+        .ok()
+        .flatten()
+        .and_then(|res| result_lyrics_kind(&res.kind).map(|kind| (kind, res)))
+    {
         Some((kind, res)) => Json(MobileLyrics {
             kind: kind.into(),
             text: res.text,
