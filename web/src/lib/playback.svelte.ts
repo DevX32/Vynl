@@ -24,12 +24,8 @@ import {
   nowPlayingFromTrack,
   findTrackById,
   peekNextId,
-  peekPrevId,
   isSeekDragging,
-  setSeekDragging,
-  setDragTime,
 } from "@state/now-playing.svelte";
-import { prefetchLyrics } from "@state/lyrics.svelte";
 import {
   getCrossfade,
   getCurrentVolume,
@@ -53,124 +49,30 @@ import {
 } from "@state/sleep-timer.svelte";
 import { vynl } from "@lib/vynl";
 import { untrack } from "svelte";
-import { convertFileSrc } from "@tauri-apps/api/core";
+
 import { clamp01 } from "@lib/pointer";
 import { friendlyError } from "@lib/errors";
-import { evictOldest } from "@lib/cache";
 import { catalogueIdFromPath as catalogueIdOf } from "@lib/catalogue";
 import { t } from "@lib/i18n";
 import type {
   CatalogueStreamInfo,
   LibraryTrack,
-  MediaControlEvent,
-  MediaUpdate,
   PlaybackTick,
   StreamErrorEvent,
 } from "@lib/types";
 
-const IS_MINI =
-  typeof window !== "undefined" && window.location.hash.startsWith("#mini");
 
-function normalizeDuration(value: number | undefined): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
-    ? value
-    : 0;
-}
+import { isSeekUnsupported, extractVideoId } from "./playback-utils";
+import { seekState, initSeek, seekRatio, seekFlush, seekToTime, seekOffset, cancelSeek } from "./playback-seek";
+export { seekRatio, seekFlush, seekToTime, seekOffset, cancelSeek };
+import { initMedia, clearMediaCoverCache, syncMedia, syncMediaNow, getLastMediaSentAt, handleMediaControl, handleMediaPlay, handleMediaPause, handleMediaStop, updateMediaSession } from "./playback-media";
+export { clearMediaCoverCache };
 
-let playGeneration = Date.now();
-let pendingRetry: number | null = null;
-let consecutivePlayFailures = 0;
-const MAX_CONSECUTIVE_PLAY_FAILURES = 3;
-let seekPending = false;
-let seekRequestId = 0;
-let pendingPlayGeneration: number | null = null;
-let lastPositionCheckpoint = Date.now();
-let reconcilePending = false;
 
-let pauseIntent = 0;
-let resumeToken = 0;
-let resumePending = 0;
 
-interface PrebufferEntry {
-  status: "pending" | "ready" | "failed";
-  at: number;
-}
 
-interface PrebufferTarget {
-  videoId: string;
-  duration?: number;
-}
+import { prebufferState, schedulePrebuffers } from "./playback-prebuffer";
 
-const prebufferState = new Map<string, PrebufferEntry>();
-const PREBUFFER_REFRESH_MS = 45_000;
-const PREBUFFER_CHECK_MS = 5_000;
-let lastPrebufferCheck = 0;
-let prebufferCandidates: string[] = [];
-
-function requestPrebuffer(target: PrebufferTarget, force: boolean): void {
-  const now = Date.now();
-  const entry = prebufferState.get(target.videoId);
-  if (!force && entry && now - entry.at < PREBUFFER_REFRESH_MS) return;
-  if (entry?.status === "pending") return;
-
-  prebufferState.set(target.videoId, { status: "pending", at: now });
-  void vynl
-    .cataloguePrebuffer(target.videoId, target.duration)
-    .then(() => {
-      if (!prebufferCandidates.includes(target.videoId)) return;
-      prebufferState.set(target.videoId, { status: "ready", at: Date.now() });
-    })
-    .catch((error) => {
-      if (!prebufferCandidates.includes(target.videoId)) return;
-      prebufferState.set(target.videoId, { status: "failed", at: Date.now() });
-      console.warn("[vynl] prebuffer failed:", error);
-    });
-}
-
-function schedulePrebuffers(force = false): void {
-  if (typeof window === "undefined") return;
-  if (getCurrentLoop() === "one") return;
-  const currentId = getCurrentTrack()?.id ?? null;
-
-  const nextTrack = findTrackById(
-    peekNextId(
-      getUserQueuePaths(),
-      getContextQueuePaths(),
-      getContextIndex(),
-      currentId,
-      getCurrentShuffle(),
-      getCurrentLoop(),
-    ),
-  );
-  const prevTrack = findTrackById(
-    peekPrevId(
-      currentId,
-      getContextQueuePaths(),
-      getContextIndex(),
-      getCurrentShuffle(),
-      getCurrentLoop(),
-    ),
-  );
-
-  if (nextTrack) prefetchLyrics(nextTrack);
-
-  const targets: PrebufferTarget[] = [];
-  for (const track of [nextTrack, prevTrack]) {
-    const videoId = catalogueIdOf(track?.path);
-    if (!videoId) continue;
-    if (targets.some((target) => target.videoId === videoId)) continue;
-    targets.push({ videoId, duration: track?.duration });
-  }
-
-  for (const stale of prebufferCandidates) {
-    if (targets.some((target) => target.videoId === stale)) continue;
-    prebufferState.delete(stale);
-    void vynl.catalogueDiscardPrebuffer(stale).catch(() => {});
-  }
-  prebufferCandidates = targets.map((target) => target.videoId);
-
-  for (const target of targets) requestPrebuffer(target, force);
-}
 
 onMuteChange(applyVolume);
 onSpeedChange(applySpeed);
@@ -197,72 +99,46 @@ if ("mediaSession" in navigator && !IS_MINI) {
   });
 }
 
-let playReconcileStartedAt = 0;
-const RECONCILE_STALE_MS = 10_000;
-
-function beginPlayReconcile(generation: number): void {
-  pendingPlayGeneration = generation;
-  playReconcileStartedAt = Date.now();
-}
-
-function finishPlayReconcile(generation: number): void {
-  if (pendingPlayGeneration === generation) {
-    pendingPlayGeneration = null;
-    playReconcileStartedAt = 0;
-  }
-}
-
-function reconcileIsStale(): boolean {
-  return (
-    pendingPlayGeneration !== null &&
-    Date.now() - playReconcileStartedAt >= RECONCILE_STALE_MS
-  );
-}
-
-const CROSSFADE_TAIL = 0.75;
-let crossfadeTried = false;
-let pendingStreamError: StreamErrorEvent | null = null;
-
-function resetCrossfade(): void {
-  crossfadeTried = false;
-}
+import { playbackPhase, beginPlayReconcile, finishPlayReconcile, reconcileIsStale, resetCrossfade, CROSSFADE_TAIL } from "./playback-reconcile";
+import { retryState, MAX_CONSECUTIVE_PLAY_FAILURES, clearRetry, scheduleRetry, handlePlayReject, initRetry } from "./playback-retry";
+import { IS_MINI, ps, PREBUFFER_CHECK_MS } from "./playback-state";
 
 function handleStreamError(event: StreamErrorEvent): void {
-  if (event.generation !== playGeneration) return;
+  if (event.generation !== ps.playGeneration) return;
   const np = getCurrentTrack();
   if (!np) return;
   if (catalogueIdOf(np.path) !== event.videoId) return;
   if (!np.playing) {
-    pendingStreamError = event;
+    playbackPhase.pendingStreamError = event;
     return;
   }
   updatePlaying(false);
   updateMediaSession();
-  consecutivePlayFailures += 1;
+  retryState.failures += 1;
   setPlayError(friendlyError(event.message, t("error.couldNotPlay")));
-  if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
+  if (retryState.failures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
     return;
   }
   scheduleRetry(np.id);
 }
 
 function handleTick(tick: PlaybackTick): void {
-  if (tick.generation !== playGeneration) return;
+  if (tick.generation !== ps.playGeneration) return;
   const np = getCurrentTrack();
   if (!np) return;
 
   if (tick.finished) {
-    const streamError = pendingStreamError;
-    pendingStreamError = null;
+    const streamError = playbackPhase.pendingStreamError;
+    playbackPhase.pendingStreamError = null;
     if (np.playing) {
       updatePlaying(false);
       updateMediaSession();
       if (streamError && catalogueIdOf(np.path) === streamError.videoId) {
-        consecutivePlayFailures += 1;
+        retryState.failures += 1;
         setPlayError(
           friendlyError(streamError.message, t("error.couldNotPlay")),
         );
-        if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
+        if (retryState.failures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
           return;
         }
         scheduleRetry(np.id);
@@ -278,20 +154,20 @@ function handleTick(tick: PlaybackTick): void {
   }
 
   if (tick.playing) {
-    if (consecutivePlayFailures > 0) {
-      consecutivePlayFailures = 0;
+    if (retryState.failures > 0) {
+      retryState.failures = 0;
     }
 
-    if (pendingPlayGeneration === playGeneration) {
-      finishPlayReconcile(playGeneration);
+    if (playbackPhase.pendingPlayGeneration === ps.playGeneration) {
+      finishPlayReconcile(ps.playGeneration);
     }
-    if (pauseIntent === 0 && !np.playing) {
+    if (ps.pauseIntent === 0 && !np.playing) {
       updatePlaying(true);
       updateMediaSession();
     }
   }
 
-  if (isSeekDragging() || seekPending) return;
+  if (isSeekDragging() || seekState.pending) return;
 
   if (Number.isFinite(tick.position)) {
     updateTime(tick.position);
@@ -310,29 +186,28 @@ function handleTick(tick: PlaybackTick): void {
     patchNowPlaying({ duration: tick.duration });
   }
 
-  if (tick.playing && Date.now() - lastPositionCheckpoint >= 5_000) {
-    lastPositionCheckpoint = Date.now();
+  if (tick.playing && Date.now() - ps.lastPositionCheckpoint >= 5_000) {
+    ps.lastPositionCheckpoint = Date.now();
     checkpointNowPlaying();
   }
 
   if (
     tick.playing &&
-    !seekPending &&
+    !seekState.pending &&
     !isSeekDragging() &&
-    Date.now() - lastPrebufferCheck >= PREBUFFER_CHECK_MS
+    Date.now() - ps.lastPrebufferCheck >= PREBUFFER_CHECK_MS
   ) {
-    lastPrebufferCheck = Date.now();
+    ps.lastPrebufferCheck = Date.now();
     schedulePrebuffers();
   }
 }
 
-let _playerUnlisten: (() => void) | null = null;
 
 if (typeof window !== "undefined" && !IS_MINI) {
-  (_playerUnlisten as (() => void) | null)?.();
+  (ps.playerUnlisten as (() => void) | null)?.();
   const offTick = vynl.onPlaybackTick(handleTick);
   const offStreamError = vynl.onStreamError(handleStreamError);
-  _playerUnlisten = () => {
+  ps.playerUnlisten = () => {
     offTick();
     offStreamError();
   };
@@ -340,13 +215,13 @@ if (typeof window !== "undefined" && !IS_MINI) {
 
 async function reconcilePlaybackState(): Promise<void> {
   const np = getCurrentTrack();
-  if (!np || reconcilePending || isSeekDragging() || seekPending) return;
+  if (!np || ps.reconcilePending || isSeekDragging() || seekState.pending) return;
 
-  reconcilePending = true;
-  const generation = playGeneration;
+  ps.reconcilePending = true;
+  const generation = ps.playGeneration;
   const trackId = np.id;
   const isCurrent = (): boolean =>
-    generation === playGeneration && getCurrentTrack()?.id === trackId;
+    generation === ps.playGeneration && getCurrentTrack()?.id === trackId;
 
   try {
     if (!isCurrent()) return;
@@ -362,7 +237,7 @@ async function reconcilePlaybackState(): Promise<void> {
       updateMediaSession();
     }
   } finally {
-    reconcilePending = false;
+    ps.reconcilePending = false;
   }
 }
 
@@ -379,8 +254,8 @@ if (typeof document !== "undefined") {
   import.meta.hot?.dispose(() => {
     document.removeEventListener("visibilitychange", onVisibilityChange);
     window.removeEventListener("focus", onWindowActive);
-    _playerUnlisten?.();
-    _playerUnlisten = null;
+    ps.playerUnlisten?.();
+    ps.playerUnlisten = null;
   });
 }
 
@@ -400,107 +275,6 @@ export function applyReplayGain(): void {
 export function setVolumeAt(ratio: number): void {
   setVolume(clamp01(ratio));
   applyVolume();
-}
-
-function updateMediaSession(): void {
-  if (!("mediaSession" in navigator) || IS_MINI) return;
-  const np = getCurrentTrack();
-  if (!np) {
-    navigator.mediaSession.metadata = null;
-    navigator.mediaSession.playbackState = "none";
-    return;
-  }
-  const meta: MediaMetadataInit = {
-    title: np.title,
-    artist: np.artist,
-    album: np.album || undefined,
-  };
-  if (np.cover) {
-    meta.artwork = [
-      {
-        src: /^https?:\/\//i.test(np.cover)
-          ? np.cover
-          : convertFileSrc(np.cover),
-      },
-    ];
-  }
-  navigator.mediaSession.metadata = new MediaMetadata(meta);
-  navigator.mediaSession.playbackState = getIsTrackPlaying()
-    ? "playing"
-    : "paused";
-}
-
-function isPlayInterrupt(err: unknown): boolean {
-  return (
-    err instanceof DOMException &&
-    (err.name === "AbortError" || err.name === "NotAllowedError")
-  );
-}
-
-function clearRetry(): void {
-  if (pendingRetry !== null) {
-    clearTimeout(pendingRetry);
-    pendingRetry = null;
-  }
-}
-
-function scheduleRetry(failedId: string | null): void {
-  clearRetry();
-  pendingRetry = window.setTimeout(() => {
-    pendingRetry = null;
-    if (pauseIntent > 0) return;
-    if ((getCurrentTrack()?.id ?? null) !== failedId) return;
-    if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
-      updatePlaying(false);
-      updateMediaSession();
-      return;
-    }
-    setPlayError(null);
-    next();
-  }, 1600);
-}
-
-function handlePlayReject(err: unknown): void {
-  if (isPlayInterrupt(err)) return;
-  console.error("[vynl] native play failed:", err);
-  updatePlaying(false);
-  updateMediaSession();
-  consecutivePlayFailures += 1;
-  if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
-    setPlayError(t("error.couldNotPlay"));
-    return;
-  }
-  setPlayError(friendlyError(err, t("error.couldNotPlay")));
-  const failedId = getCurrentTrack()?.id ?? null;
-  scheduleRetry(failedId);
-}
-
-function isSeekUnsupported(error: unknown): boolean {
-  const message = String(error).toLowerCase();
-  return message.includes("seek:") && message.includes("support");
-}
-
-function extractVideoId(value: string): string | null {
-  const raw = value.trim();
-  if (!raw) return null;
-  if (/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
-  try {
-    const url = new URL(raw);
-    const host = url.hostname.replace(/^www\./, "").toLowerCase();
-    if (host === "youtu.be") {
-      const id = url.pathname.split("/").filter(Boolean)[0];
-      return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
-    }
-    if (host.endsWith("youtube.com")) {
-      const v = url.searchParams.get("v");
-      if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
-      const parts = url.pathname.split("/").filter(Boolean);
-      const idx = parts.findIndex((p) => p === "shorts" || p === "embed");
-      const id = idx >= 0 ? parts[idx + 1] : null;
-      return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
-    }
-  } catch {}
-  return null;
 }
 
 async function resolveMissingStreamVideoId(
@@ -553,7 +327,7 @@ async function playNative(
   try {
     await vynl.playerPlay(path, normalizedSeek, generation);
   } catch (error) {
-    if (generation !== playGeneration) throw error;
+    if (generation !== ps.playGeneration) throw error;
     const missingId = await resolveMissingStreamVideoId(path);
     if (missingId) {
       const np = getCurrentTrack();
@@ -580,21 +354,21 @@ function loadAndPlayNative(path: string, gen: number, seekTo?: number): void {
   void playNative(path, seekTo, gen)
     .then((info) => {
       finishPlayReconcile(gen);
-      if (gen !== playGeneration) return;
+      if (gen !== ps.playGeneration) return;
       if (info?.duration && info.duration > 0) {
         const np = getCurrentTrack();
         if (np && !(np.duration > 0)) {
           patchNowPlaying({ duration: info.duration });
         }
       }
-      if (pendingStreamError) return;
+      if (playbackPhase.pendingStreamError) return;
       updatePlaying(true);
       updateMediaSession();
       schedulePrebuffers();
     })
     .catch((err) => {
       finishPlayReconcile(gen);
-      if (gen !== playGeneration) return;
+      if (gen !== ps.playGeneration) return;
       handlePlayReject(err);
     });
 }
@@ -624,11 +398,11 @@ export function playTrack(
   }
 
   setPlayError(null);
-  pendingStreamError = null;
+  playbackPhase.pendingStreamError = null;
   resetCrossfade();
-  consecutivePlayFailures = 0;
+  retryState.failures = 0;
   cancelSeek(false);
-  const gen = ++playGeneration;
+  const gen = ++ps.playGeneration;
   setNowPlaying({ ...nowPlayingFromTrack(track, seekTo ?? 0), playing: true });
   loadAndPlayNative(track.path, gen, seekTo);
 }
@@ -636,20 +410,20 @@ export function playTrack(
 async function resumeOrPlay(
   path: string,
   seekTo?: number,
-  generation = playGeneration,
+  generation = ps.playGeneration,
 ): Promise<void> {
-  if (generation === playGeneration) {
+  if (generation === ps.playGeneration) {
     clearRetry();
-    pendingStreamError = null;
+    playbackPhase.pendingStreamError = null;
   }
-  const token = resumeToken;
+  const token = ps.resumeToken;
   beginPlayReconcile(generation);
   try {
     let resumed = false;
     try {
       resumed = await vynl.playerResume(generation);
     } catch {}
-    if (generation !== playGeneration || token !== resumeToken) return;
+    if (generation !== ps.playGeneration || token !== ps.resumeToken) return;
     if (!resumed) {
       const duration = getCurrentTrack()?.duration ?? 0;
       const atEnd =
@@ -658,7 +432,7 @@ async function resumeOrPlay(
         seekTo >= Math.max(0, duration - 0.5);
       await playNative(path, atEnd ? undefined : seekTo, generation);
     }
-    if (generation !== playGeneration || token !== resumeToken) return;
+    if (generation !== ps.playGeneration || token !== ps.resumeToken) return;
     updatePlaying(true);
     updateMediaSession();
   } finally {
@@ -667,14 +441,14 @@ async function resumeOrPlay(
 }
 
 function pausePlayback(): void {
-  const generation = playGeneration;
-  resumeToken += 1;
-  const token = resumeToken;
-  pauseIntent += 1;
+  const generation = ps.playGeneration;
+  ps.resumeToken += 1;
+  const token = ps.resumeToken;
+  ps.pauseIntent += 1;
   const finish = (): void => {
-    pauseIntent -= 1;
-    if (generation !== playGeneration) return;
-    if (token !== resumeToken) return;
+    ps.pauseIntent -= 1;
+    if (generation !== ps.playGeneration) return;
+    if (token !== ps.resumeToken) return;
     updatePlaying(false);
     updateMediaSession();
   };
@@ -689,32 +463,32 @@ function pausePlayback(): void {
 
 export function toggle(): void {
   if (reconcileIsStale()) {
-    pendingPlayGeneration = null;
-    playReconcileStartedAt = 0;
+    playbackPhase.pendingPlayGeneration = null;
+    playbackPhase.playReconcileStartedAt = 0;
   }
   const np = getCurrentTrack();
   if (!np) return;
   const effectivelyPlaying =
-    np.playing !== pauseIntent > 0 || resumePending > 0;
+    np.playing !== ps.pauseIntent > 0 || ps.resumePending > 0;
   if (effectivelyPlaying) {
     pausePlayback();
   } else {
     const seekTo = getCurrentTime() || 0;
     if (np.path) {
-      resumeToken += 1;
-      resumePending += 1;
-      const resumeGeneration = playGeneration;
+      ps.resumeToken += 1;
+      ps.resumePending += 1;
+      const resumeGeneration = ps.playGeneration;
       void resumeOrPlay(
         np.path,
         seekTo > 0 ? seekTo : undefined,
         resumeGeneration,
       )
         .catch((error) => {
-          if (resumeGeneration !== playGeneration) return;
+          if (resumeGeneration !== ps.playGeneration) return;
           handlePlayReject(error);
         })
         .finally(() => {
-          resumePending -= 1;
+          ps.resumePending -= 1;
         });
     }
   }
@@ -758,17 +532,17 @@ function startTrack(nextTrack: LibraryTrack): void {
   consumeNextTrack(nextTrack);
   clearRetry();
   setPlayError(null);
-  pendingStreamError = null;
+  playbackPhase.pendingStreamError = null;
   resetCrossfade();
   cancelSeek(false);
-  const gen = ++playGeneration;
+  const gen = ++ps.playGeneration;
   setNowPlaying({ ...nowPlayingFromTrack(nextTrack), playing: true });
   loadAndPlayNative(nextTrack.path, gen);
 }
 
 function maybeStartCrossfade(position: number): boolean {
   const fade = getCrossfade();
-  if (fade <= 0 || crossfadeTried) return false;
+  if (fade <= 0 || playbackPhase.crossfadeTried) return false;
 
   const np = getCurrentTrack();
   if (
@@ -778,7 +552,7 @@ function maybeStartCrossfade(position: number): boolean {
     np.duration <= 0
   )
     return false;
-  if (isSeekDragging() || seekPending) return false;
+  if (isSeekDragging() || seekState.pending) return false;
   if (getCurrentLoop() === "one") return false;
   if (getSleepMode() === "end") return false;
 
@@ -795,10 +569,10 @@ function maybeStartCrossfade(position: number): boolean {
     if (prebufferState.get(nextVideoId)?.status !== "ready") return false;
   }
 
-  crossfadeTried = true;
+  playbackPhase.crossfadeTried = true;
 
-  const generation = ++playGeneration;
-  const pauseToken = pauseIntent;
+  const generation = ++ps.playGeneration;
+  const pauseToken = ps.pauseIntent;
   const crossfade = nextVideoId
     ? vynl.catalogueCrossfadeStream(
         nextVideoId,
@@ -811,11 +585,11 @@ function maybeStartCrossfade(position: number): boolean {
   void crossfade
     .then(() => {
       if (nextVideoId) prebufferState.delete(nextVideoId);
-      if (generation !== playGeneration) return;
+      if (generation !== ps.playGeneration) return;
       consumeNextTrack(nextTrack);
       setNowPlaying({
         ...nowPlayingFromTrack(nextTrack),
-        playing: pauseToken === pauseIntent,
+        playing: pauseToken === ps.pauseIntent,
       });
       updateMediaSession();
       resetCrossfade();
@@ -823,11 +597,11 @@ function maybeStartCrossfade(position: number): boolean {
     })
     .catch((error) => {
       console.warn("[vynl] crossfade failed:", error);
-      if (playGeneration === generation && generation > 0) {
-        playGeneration = generation - 1;
+      if (ps.playGeneration === generation && generation > 0) {
+        ps.playGeneration = generation - 1;
       }
       if (nextVideoId) prebufferState.delete(nextVideoId);
-      crossfadeTried = true;
+      playbackPhase.crossfadeTried = true;
     });
 
   return true;
@@ -869,126 +643,17 @@ export function prev(): void {
 
   clearRetry();
   setPlayError(null);
-  pendingStreamError = null;
+  playbackPhase.pendingStreamError = null;
   resetCrossfade();
   cancelSeek(false);
-  const gen = ++playGeneration;
+  const gen = ++ps.playGeneration;
   setNowPlaying(nowPlayingFromTrack(prevTrack));
   loadAndPlayNative(prevTrack.path, gen);
 }
 
-let _seekTarget: number | null = null;
-
-function clampSeekTarget(time: number, total?: number): number | null {
-  if (!Number.isFinite(time)) return null;
-  const duration = total ?? getCurrentTrack()?.duration ?? 0;
-  const lower = Math.max(0, time);
-  return Number.isFinite(duration) && duration > 0
-    ? Math.min(lower, duration)
-    : lower;
-}
-
-function requestSeek(time: number): void {
-  const target = clampSeekTarget(time);
-  if (target === null) return;
-
-  _seekTarget = target;
-  setDragTime(target);
-  seekPending = true;
-  const requestId = ++seekRequestId;
-  const generation = playGeneration;
-  const np = getCurrentTrack();
-  const videoId = catalogueIdOf(np?.path);
-
-  const seek = videoId
-    ? vynl.catalogueSeekStream(
-        videoId,
-        target,
-        np?.duration,
-        generation,
-        getIsTrackPlaying(),
-        requestId,
-      )
-    : vynl.playerSeek(target, generation);
-
-  void seek
-    .then(() => {
-      if (requestId !== seekRequestId || generation !== playGeneration) return;
-      seekPending = false;
-      _seekTarget = null;
-      updateTime(target, true);
-      syncMediaNow();
-    })
-    .catch((error) => {
-      if (requestId !== seekRequestId || generation !== playGeneration) return;
-      seekPending = false;
-      _seekTarget = null;
-      console.warn("[vynl] seek failed:", error);
-      void vynl
-        .playerGetPosition(generation)
-        .then((position) => {
-          if (
-            Number.isFinite(position) &&
-            requestId === seekRequestId &&
-            generation === playGeneration
-          ) {
-            updateTime(position);
-          }
-        })
-        .catch(() => {});
-    });
-}
-
-export function seekRatio(ratio: number, total?: number): void {
-  if (!getCurrentTrack() || !Number.isFinite(ratio)) return;
-  const duration = normalizeDuration(total);
-  if (duration <= 0) {
-    cancelSeek();
-    return;
-  }
-  const target = clampSeekTarget(ratio * duration, duration);
-  if (target === null) return;
-  seekRequestId += 1;
-  seekPending = false;
-  setDragTime(target);
-  _seekTarget = target;
-}
-
-export function seekFlush(): void {
-  if (_seekTarget !== null) requestSeek(_seekTarget);
-}
-
-export function seekToTime(time: number): void {
-  requestSeek(time);
-}
-
-export function seekOffset(delta: number): void {
-  if (!Number.isFinite(delta)) return;
-  const base = _seekTarget ?? getCurrentTime();
-  requestSeek(base + delta);
-}
-
-export function cancelSeek(restorePosition = true): void {
-  seekRequestId += 1;
-  seekPending = false;
-  _seekTarget = null;
-  setSeekDragging(false);
-  if (restorePosition) {
-    const generation = playGeneration;
-    void vynl
-      .playerGetPosition(generation)
-      .then((position) => {
-        if (generation === playGeneration && Number.isFinite(position)) {
-          updateTime(position);
-        }
-      })
-      .catch(() => {});
-  }
-}
-
 export function clearPlayError(): void {
   setPlayError(null);
-  pendingStreamError = null;
+  playbackPhase.pendingStreamError = null;
 }
 
 export function removeQueueTrack(path: string): void {
@@ -1007,153 +672,22 @@ export function reorderQueueTrack(fromPath: string, toPath: string): void {
   }
 }
 
-type CurrentMedia = ReturnType<typeof getCurrentTrack>;
-
-let lastMediaSentAt = 0;
-
-const mediaCoverPaths = new Map<string, string>();
-
-export function clearMediaCoverCache(): void {
-  mediaCoverPaths.clear();
-}
-
-async function resolveMediaCover(cover: string | null): Promise<string | null> {
-  if (!cover) return null;
-  if (!/^https?:\/\//i.test(cover)) return cover;
-  const cached = mediaCoverPaths.get(cover);
-  if (cached) return cached;
-  try {
-    const local = await vynl.cacheCover(cover);
-    mediaCoverPaths.set(cover, local);
-    evictOldest(mediaCoverPaths, 200);
-    return local;
-  } catch {
-    return cover;
-  }
-}
-
-let mediaUpdateChain: Promise<void> = Promise.resolve();
-let lastMediaUpdateWarningAt = 0;
-
-function warnMediaUpdateFailed(error: unknown): void {
-  const now = Date.now();
-  if (now - lastMediaUpdateWarningAt < 60_000) return;
-  lastMediaUpdateWarningAt = now;
-  console.warn("[vynl] media update failed:", error);
-}
-
-function sendMediaUpdate(
-  np: CurrentMedia,
-  playing: boolean,
-  position: number,
-): void {
-  const payload: MediaUpdate | null = np
-    ? {
-        title: np.title,
-        artist: np.artist,
-        album: np.album,
-        duration: np.duration,
-        cover: np.cover,
-        playing,
-        position,
-      }
-    : null;
-  mediaUpdateChain = mediaUpdateChain
-    .then(async () => {
-      if (payload) payload.cover = await resolveMediaCover(payload.cover);
-      await vynl.mediaUpdate(payload);
-    })
-    .catch(warnMediaUpdateFailed);
-}
-
-function syncMedia(np: CurrentMedia, playing: boolean, position: number): void {
-  lastMediaSentAt = Date.now();
-  sendMediaUpdate(np, playing, position);
-}
-
-function syncMediaNow(): void {
-  syncMedia(getCurrentTrack(), getIsTrackPlaying(), getCurrentTime());
-}
-
-function handleMediaPlay(): void {
-  if (!getIsTrackPlaying()) toggle();
-}
-
-function handleMediaPause(): void {
-  if (getIsTrackPlaying()) toggle();
-}
-
-function handleMediaStop(): void {
-  if (getIsTrackPlaying()) pausePlayback();
-  seekToTime(0);
-}
-
-let lastMediaAction: { action: string; at: number } | null = null;
-function handleMediaControl(event: MediaControlEvent): void {
-  const now = Date.now();
-  if (
-    lastMediaAction?.action === event.action &&
-    now - lastMediaAction.at < 150
-  ) {
-    return;
-  }
-  lastMediaAction = { action: event.action, at: now };
-  switch (event.action) {
-    case "play":
-      handleMediaPlay();
-      break;
-    case "pause":
-      handleMediaPause();
-      break;
-    case "toggle":
-      toggle();
-      break;
-    case "next":
-      next();
-      break;
-    case "previous":
-      prev();
-      break;
-    case "stop":
-      handleMediaStop();
-      break;
-    case "seek":
-      seekToTime(event.position);
-      break;
-    case "seekBy":
-      seekOffset(event.offset);
-      break;
-    case "setVolume":
-      setVolumeAt(clamp01(event.volume));
-      break;
-    case "volumeUp":
-      setVolumeAt(getCurrentVolume() + 0.05);
-      break;
-    case "volumeDown":
-      setVolumeAt(getCurrentVolume() - 0.05);
-      break;
-    case "mute":
-      toggleMute();
-      break;
-  }
-}
+initSeek({ getPlayGeneration: () => ps.playGeneration, syncMediaNow });
+initMedia({ toggle, next, prev, pausePlayback, seekToTime, seekOffset, setVolumeAt, getCurrentVolume: getCurrentVolume, toggleMute });
+initRetry({ getPauseIntent: () => ps.pauseIntent, next, updateMediaSession });
 
 if (typeof window !== "undefined" && !IS_MINI) {
   const disposeMediaEffect = $effect.root(() => {
     $effect(() => {
       const np = getCurrentTrack();
       const playing = getIsTrackPlaying();
-      syncMedia(
-        np,
-        playing,
-        untrack(() => getCurrentTime()),
-      );
+      syncMedia(np, playing, untrack(() => getCurrentTime()));
     });
   });
   const mediaTimer = window.setInterval(() => {
     const np = getCurrentTrack();
     if (!np) return;
-    if (Date.now() - lastMediaSentAt < 1_000) return;
+    if (Date.now() - getLastMediaSentAt() < 1_000) return;
     syncMedia(np, getIsTrackPlaying(), getCurrentTime());
   }, 1_000);
   const unlistenMediaControl = vynl.onMediaControl(handleMediaControl, () => {
