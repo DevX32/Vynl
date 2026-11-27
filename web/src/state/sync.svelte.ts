@@ -55,7 +55,13 @@ async function runCloudSyncPush(): Promise<void> {
   try {
     await vynl.syncPush();
   } catch (e) {
-    console.warn("[sync] cloud push failed", e);
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("Conflict:")) {
+      _status = { ..._status, pending: true, lastError: msg };
+      void vynl.syncPull().then(() => refreshSyncStatus()).catch(() => {});
+    } else {
+      console.warn("[sync] cloud push failed", e);
+    }
   } finally {
     await refreshSyncStatus().catch(() => {});
     _pushing = false;

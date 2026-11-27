@@ -768,12 +768,52 @@ pub async fn push_sync_state(
     result
 }
 
+async fn fetch_remote_updated_at(data_dir: &Path) -> Result<Option<i64>, String> {
+    let session = valid_session(data_dir).await?;
+    let uid = urlencoded_user_id(&session.user_id);
+    let request = http()?
+        .get(format!(
+            "{}/rest/v1/sync_state?select=updated_at&user_id=eq.{uid}",
+            base_url()
+        ))
+        .header("Accept", "application/json");
+    let response = rest_headers(data_dir, request)
+        .await?
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach Vynl Sync: {e}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        if status.as_u16() == 404 {
+            return Ok(None);
+        }
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Sync push failed (HTTP {status}): {body}"));
+    }
+    let body = response.text().await.unwrap_or_default();
+    let list: Vec<serde_json::Value> = serde_json::from_str(&body).unwrap_or_default();
+    let updated = list
+        .first()
+        .and_then(|row| row.get("updated_at"))
+        .and_then(|v| v.as_i64());
+    Ok(updated)
+}
+
 async fn push_sync_state_inner(
     data_dir: &Path,
     output_dir: &Path,
     settings: &crate::commands::types::Settings,
 ) -> Result<(), String> {
     let session = valid_session(data_dir).await?;
+    let meta = read_sync_meta(data_dir);
+    let last_synced = meta.last_synced_at.unwrap_or(0);
+
+    if let Ok(Some(remote_updated)) = fetch_remote_updated_at(data_dir).await
+        && remote_updated > last_synced
+    {
+        return Err("Conflict: remote has newer changes. Pull first.".to_string());
+    }
+
     let state = build_sync_state(data_dir, output_dir, settings);
     write_sync_state_cache_rs(data_dir, &state);
     let data =
