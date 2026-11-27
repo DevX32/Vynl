@@ -102,6 +102,10 @@ export const vynl = {
 
   downloadedPaths: (collection: Collection): Promise<string[]> =>
     cmd("downloaded_paths", { collection }),
+  checkDuplicates: (collection: Collection): Promise<Record<string, string>> =>
+    cmd("check_duplicates", { collection }),
+  findLocalForTrack: (track: CatalogueTrack): Promise<string | null> =>
+    cmd("find_local_for_track", { track }),
 
   startDownload: (collection: Collection, opts?: DownloadOpts): Promise<void> =>
     cmd("start_download", { collection, opts: opts ?? null }),

@@ -4,6 +4,7 @@ use tauri::AppHandle;
 
 use super::types::*;
 use super::{ensure_collection_size, get_user_data_and_settings, load_settings, user_data_dir};
+use std::path::Path;
 
 #[tauri::command]
 pub async fn resolve(url: String, app: AppHandle) -> Result<Collection, String> {
@@ -43,6 +44,58 @@ pub async fn downloaded_paths(
             seen.insert(path.clone()).then_some(path)
         })
         .collect())
+}
+
+#[tauri::command]
+pub async fn find_local_for_track(
+    track: crate::catalogue::CatalogueTrack,
+    app: AppHandle,
+) -> Result<Option<String>, String> {
+    let settings = load_settings(&app)?;
+    let user_data = user_data_dir(&app)?;
+    let output = Path::new(&settings.output_dir);
+    let meta = crate::commands::types::TrackMeta {
+        id: track.id.clone(),
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+        album: track
+            .album
+            .as_ref()
+            .map(|a| a.name.clone())
+            .unwrap_or_default(),
+        year: None,
+        duration: track.duration,
+        cover: track.cover.clone(),
+        track_number: None,
+        url: format!("https://music.youtube.com/watch?v={}", track.id),
+    };
+    Ok(
+        crate::services::downloader::find_song_on_disk(output, &user_data, &meta)
+            .map(|p| p.to_string_lossy().to_string()),
+    )
+}
+
+#[tauri::command]
+pub async fn check_duplicates(
+    collection: Collection,
+    app: AppHandle,
+) -> Result<HashMap<String, String>, String> {
+    let settings = load_settings(&app)?;
+    let user_data = user_data_dir(&app)?;
+    let output = Path::new(&settings.output_dir);
+    let existing = crate::services::downloader::existing_songs(output, &user_data);
+    let mut result = HashMap::new();
+    for track in &collection.tracks {
+        if crate::services::downloader::is_already_on_disk(&existing, track) {
+            let path = crate::services::downloader::find_song_on_disk(output, &user_data, track);
+            result.insert(
+                track.id.clone(),
+                path.map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+            );
+        }
+    }
+    Ok(result)
 }
 
 #[tauri::command]

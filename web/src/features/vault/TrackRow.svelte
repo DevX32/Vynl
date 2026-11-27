@@ -18,6 +18,7 @@
     picked,
     allowPick,
     onpick,
+    duplicatePath = null,
   }: {
     track: TrackMeta;
     progress: TrackProgress | undefined;
@@ -25,6 +26,7 @@
     picked?: number;
     allowPick?: boolean;
     onpick?: (trackId: string, index: number) => void;
+    duplicatePath?: string | null;
   } = $props();
 
   const SOURCE: Record<MatchSource, string> = {
@@ -90,7 +92,12 @@
   </span>
 
   <div class="c-title">
-    <div class="title">{track.title}</div>
+    <div class="title">
+      {track.title}
+      {#if duplicatePath}
+        <span class="dup-badge mono" title={duplicatePath}>{t("trackRow.exists")}</span>
+      {/if}
+    </div>
     <div class="sub mono">
       {track.artist}{#if track.album}
         · {track.album}{/if}
@@ -187,6 +194,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.3;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dup-badge {
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--amber);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+    flex-shrink: 0;
   }
 
   .sub {

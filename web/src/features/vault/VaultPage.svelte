@@ -50,6 +50,7 @@
   let matches = $state<Record<string, SearchCandidate[]>>({});
   let picks = $state<Record<string, number>>({});
   let doneIds = $state<string[]>([]);
+  let duplicates = $state<Record<string, string>>({});
   let syncOnlyNew = $state(true);
   let dlGeneration = $state(0);
   let searchResults = $state<SearchResult[]>([]);
@@ -201,6 +202,7 @@
       if (gen !== searchGen) return;
       collection = c;
       addedTrackIds = new Set(c.tracks.map((t) => t.id));
+      duplicates = await vynl.checkDuplicates(c).catch(() => ({}));
       await refreshDone({ force: true });
     } catch (e) {
       if (gen !== searchGen) return;
@@ -850,6 +852,7 @@
               picked={picks[track.id]}
               allowPick={reviewing && !running}
               onpick={(id, i) => (picks[id] = i)}
+              duplicatePath={duplicates[track.id] ?? null}
             />
           {/each}
         </div>

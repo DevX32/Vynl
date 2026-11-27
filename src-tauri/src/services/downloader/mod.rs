@@ -17,7 +17,10 @@ mod resolve;
 mod tagging;
 mod text;
 use fs::*;
-pub use fs::{final_output_path, final_output_path_in, find_song_on_disk, get_done_track_ids};
+pub use fs::{
+    existing_songs, final_output_path, final_output_path_in, find_song_on_disk, get_done_track_ids,
+    is_already_on_disk,
+};
 use media::*;
 pub use orchestrator::download_collection;
 use pipeline::run_pass;

@@ -70,7 +70,7 @@ pub fn find_song_on_disk(
     None
 }
 
-pub(super) fn existing_songs(output_dir: &Path, user_data_dir: &Path) -> HashMap<String, Vec<f64>> {
+pub fn existing_songs(output_dir: &Path, user_data_dir: &Path) -> HashMap<String, Vec<f64>> {
     let mut map: HashMap<String, Vec<f64>> = HashMap::new();
     for track in crate::services::library::scan_cached_library(output_dir, user_data_dir).0 {
         if track.title.trim().is_empty() {
@@ -83,7 +83,7 @@ pub(super) fn existing_songs(output_dir: &Path, user_data_dir: &Path) -> HashMap
     map
 }
 
-pub(super) fn is_already_on_disk(existing: &HashMap<String, Vec<f64>>, track: &TrackMeta) -> bool {
+pub fn is_already_on_disk(existing: &HashMap<String, Vec<f64>>, track: &TrackMeta) -> bool {
     let Some(durations) = existing.get(&song_key(&track.title, &track.artist)) else {
         return false;
     };
