@@ -9,6 +9,7 @@ use tokio::time::{Duration, sleep};
 
 use super::internal;
 use crate::commands::types::*;
+use ytmusic::YtMusic;
 
 const EMBED_BASE: &str = "https://open.spotify.com/embed";
 const TRACK_PAGE_BASE: &str = "https://open.spotify.com/track";
@@ -619,6 +620,113 @@ async fn try_internal_collection(
     }
 }
 
+async fn try_ytmusic_fallback(link: &CatalogLink) -> Option<Result<Collection, String>> {
+    let client = build_client().ok()?;
+    let kind_str = collection_kind_str(&link.kind);
+    let url = format!("{EMBED_BASE}/{}/{}/", kind_str, link.id);
+    let entity = match fetch_entity(&client, &url).await {
+        Ok(EmbedResult::Entity(e)) => e,
+        _ => return None,
+    };
+    let title = entity
+        .get("name")
+        .and_then(|v| v.as_str())
+        .or_else(|| entity.get("title").and_then(|v| v.as_str()))?
+        .to_string();
+
+    let yt = YtMusic::anonymous();
+    match link.kind {
+        crate::commands::types::CollectionKind::Playlist => {
+            let results = yt.search_playlists(&title).await.ok()?;
+            let first = results.first()?;
+            let detail = yt.playlist_page(&first.id).await.ok()?;
+            Some(Ok(Collection {
+                kind: crate::commands::types::CollectionKind::Playlist,
+                id: first.id.clone(),
+                title: first.title.clone(),
+                owner: first.author.clone(),
+                cover: ytmusic::best_thumbnail(&first.thumbnails).map(|th| {
+                    crate::services::cover_cache::normalize_cover_url(&th.url).into_owned()
+                }),
+                tracks: detail
+                    .tracks
+                    .iter()
+                    .map(|t| TrackMeta {
+                        id: t.video_id.clone().unwrap_or_default(),
+                        title: t.title.clone(),
+                        artist: t
+                            .artists
+                            .iter()
+                            .map(|a| a.name.trim())
+                            .filter(|n| !n.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        album: t.album.as_ref().map(|a| a.name.clone()).unwrap_or_default(),
+                        year: None,
+                        duration: t.duration.map(|d| d.as_secs_f64()),
+                        cover: t.thumbnails.last().map(|th| {
+                            crate::services::cover_cache::normalize_cover_url(&th.url).into_owned()
+                        }),
+                        track_number: None,
+                        url: format!(
+                            "https://music.youtube.com/watch?v={}",
+                            t.video_id.clone().unwrap_or_default()
+                        ),
+                    })
+                    .collect(),
+            }))
+        }
+        crate::commands::types::CollectionKind::Album => {
+            let results = yt.search_albums(&title).await.ok()?;
+            let first = results.first()?;
+            let detail = yt.album(&first.browse_id).await.ok()?;
+            Some(Ok(Collection {
+                kind: crate::commands::types::CollectionKind::Album,
+                id: first.browse_id.clone(),
+                title: first.title.clone(),
+                owner: None,
+                cover: ytmusic::best_thumbnail(&first.thumbnails).map(|th| {
+                    crate::services::cover_cache::normalize_cover_url(&th.url).into_owned()
+                }),
+                tracks: detail
+                    .tracks
+                    .iter()
+                    .filter_map(|t| {
+                        let id = t.video_id.clone()?;
+                        if id.is_empty() {
+                            return None;
+                        }
+                        Some(TrackMeta {
+                            id,
+                            title: t.title.clone(),
+                            artist: t
+                                .artists
+                                .iter()
+                                .map(|a| a.name.trim())
+                                .filter(|n| !n.is_empty())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            album: first.title.clone(),
+                            year: first.year.map(|y| y as i64),
+                            duration: t.duration.map(|d| d.as_secs_f64()),
+                            cover: ytmusic::best_thumbnail(&first.thumbnails).map(|th| {
+                                crate::services::cover_cache::normalize_cover_url(&th.url)
+                                    .into_owned()
+                            }),
+                            track_number: None,
+                            url: format!(
+                                "https://music.youtube.com/watch?v={}",
+                                t.video_id.clone().unwrap_or_default()
+                            ),
+                        })
+                    })
+                    .collect(),
+            }))
+        }
+        _ => None,
+    }
+}
+
 pub async fn fetch_collection(link: &CatalogLink) -> Result<Collection, String> {
     let internal = match link.kind {
         crate::commands::types::CollectionKind::Playlist => {
@@ -637,11 +745,11 @@ pub async fn fetch_collection(link: &CatalogLink) -> Result<Collection, String> 
     let kind_str = collection_kind_str(&link.kind);
     let url = format!("{EMBED_BASE}/{}/{}/", kind_str, link.id);
 
-    let result = fetch_entity(&client, &url).await?;
+    let result = fetch_entity(&client, &url).await;
 
     let entity = match result {
-        EmbedResult::Entity(e) => e,
-        EmbedResult::NotFound => {
+        Ok(EmbedResult::Entity(e)) => e,
+        Ok(EmbedResult::NotFound) => {
             return Err(format!(
                 "This link is empty, private, or unavailable{}.",
                 if link.id.len() != 22 {
@@ -651,9 +759,12 @@ pub async fn fetch_collection(link: &CatalogLink) -> Result<Collection, String> 
                 }
             ));
         }
-        EmbedResult::NoData => {
+        Ok(EmbedResult::NoData) | Err(_) => {
+            if let Some(collection) = try_ytmusic_fallback(link).await {
+                return collection;
+            }
             return Err(format!(
-                "No data returned for this {}. It may be blocked in your region — try a different link.",
+                "No data returned for this {}. It may be blocked in your region - try a different link.",
                 kind_str
             ));
         }

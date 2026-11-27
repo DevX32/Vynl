@@ -270,6 +270,11 @@ async fn get_access_token(
         let body = error_body(resp).await;
         log::warn!("[Vynl] access token request failed: HTTP {status}");
         last_err = token_failure_message(status, &body);
+        if body.to_ascii_lowercase().contains("not permitted")
+            || body.to_ascii_lowercase().contains("developer terms")
+        {
+            return Err(last_err);
+        }
         tokio::time::sleep(Duration::from_millis(800)).await;
     }
 
