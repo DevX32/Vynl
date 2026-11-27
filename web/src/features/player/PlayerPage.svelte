@@ -8,10 +8,7 @@
   import { clearPlayError, seekOffset } from "@lib/playback.svelte";
   import { isInputField, shouldYieldToTarget } from "@state/shortcuts.svelte";
   import { getCurrentPlayError } from "@state/player.svelte";
-  import {
-    getLyricsOpen,
-    closeLyrics,
-  } from "@state/player.svelte";
+  import { getLyricsOpen, closeLyrics } from "@state/player.svelte";
   import NowPlayingArt from "./NowPlayingArt.svelte";
   import LyricsOverlay from "./LyricsOverlay.svelte";
   import ArtBackdrop from "../../components/ArtBackdrop.svelte";
@@ -84,7 +81,6 @@
       {/if}
     </div>
   </div>
-
 </section>
 
 <style>

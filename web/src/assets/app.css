@@ -386,7 +386,10 @@ html[data-theme="espresso"] .tbl-head {
   background: var(--surface);
   border: 1px solid var(--line);
   transform: rotate(45deg);
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .close-btn:hover:not(:disabled) {
@@ -402,4 +405,3 @@ html[data-theme="espresso"] .tbl-head {
   opacity: 0.35;
   cursor: default;
 }
-

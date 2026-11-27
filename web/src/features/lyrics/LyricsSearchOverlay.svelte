@@ -5,7 +5,11 @@
   import { vynl } from "@lib/vynl";
   import type { LrcSearchResult, LyricsResult } from "@lib/types";
   import { getCurrentId, getCurrentTrack } from "@state/now-playing.svelte";
-  import { lyricsKindOf, setLyricsManual, toLyricLines } from "@state/lyrics.svelte";
+  import {
+    lyricsKindOf,
+    setLyricsManual,
+    toLyricLines,
+  } from "@state/lyrics.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -33,7 +37,10 @@
     });
   });
 
-  async function run(q = query, scoped = q.trim() === autoQuery.trim()): Promise<void> {
+  async function run(
+    q = query,
+    scoped = q.trim() === autoQuery.trim(),
+  ): Promise<void> {
     const trimmed = q.trim();
     if (!trimmed) {
       results = [];
@@ -48,16 +55,22 @@
       const current = getCurrentTrack();
       const data = await vynl.lyricsSearch({
         query: trimmed,
-        ...(scoped && current ? { trackName: current.title, artistName: current.artist } : {}),
+        ...(scoped && current
+          ? { trackName: current.title, artistName: current.artist }
+          : {}),
       });
       if (ver !== version) return;
-      results = [...data].sort((a, b) => Number(Boolean(b.syncedLyrics)) - Number(Boolean(a.syncedLyrics)));
+      results = [...data].sort(
+        (a, b) =>
+          Number(Boolean(b.syncedLyrics)) - Number(Boolean(a.syncedLyrics)),
+      );
       selectedId = results[0]?.id ?? null;
     } catch (e) {
       if (ver !== version) return;
       results = [];
       selectedId = null;
-      error = e instanceof Error && e.message ? e.message : t("lyrics.searchFailed");
+      error =
+        e instanceof Error && e.message ? e.message : t("lyrics.searchFailed");
     } finally {
       if (ver === version) loading = false;
     }
@@ -70,7 +83,11 @@
   function apply(item: LrcSearchResult): void {
     const text = item.syncedLyrics ?? item.plainLyrics ?? "";
     if (!text) return;
-    const result: LyricsResult = { kind: lyricsKindOf(text), text, source: "remote" };
+    const result: LyricsResult = {
+      kind: lyricsKindOf(text),
+      text,
+      source: "remote",
+    };
     setLyricsManual(result, toLyricLines(result));
     onClose();
   }
@@ -92,7 +109,8 @@
   }
 
   function kindLabel(item: LrcSearchResult): string {
-    if (item.instrumental && !item.syncedLyrics && !item.plainLyrics) return t("lyrics.instrumental");
+    if (item.instrumental && !item.syncedLyrics && !item.plainLyrics)
+      return t("lyrics.instrumental");
     return item.syncedLyrics ? t("lyrics.synced") : t("lyrics.plain");
   }
 </script>
@@ -115,7 +133,12 @@
       spellcheck="false"
       autocomplete="off"
     />
-    <button class="search-go mono" type="button" onclick={() => run()} disabled={loading || !trimmedQuery}>
+    <button
+      class="search-go mono"
+      type="button"
+      onclick={() => run()}
+      disabled={loading || !trimmedQuery}
+    >
       {t("common.search")}
     </button>
   </div>
@@ -147,14 +170,22 @@
           <div class="result" class:active>
             <button class="result-row" type="button" onclick={() => pick(item)}>
               <div class="result-main">
-                <div class="result-title display">{item.trackName || t("common.unknownArtist")}</div>
+                <div class="result-title display">
+                  {item.trackName || t("common.unknownArtist")}
+                </div>
                 <div class="result-meta mono">
-                  {item.artistName || t("common.unknownArtist")}{#if item.albumName} · {item.albumName}{/if}
+                  {item.artistName ||
+                    t("common.unknownArtist")}{#if item.albumName}
+                    · {item.albumName}{/if}
                 </div>
               </div>
               <div class="result-tags mono">
-                <span class="tag" class:synced={!!item.syncedLyrics}>{kindLabel(item)}</span>
-                {#if fmtDuration(item.duration)}<span class="tag">{fmtDuration(item.duration)}</span>{/if}
+                <span class="tag" class:synced={!!item.syncedLyrics}>
+                  {kindLabel(item)}
+                </span>
+                {#if fmtDuration(item.duration)}<span class="tag">
+                    {fmtDuration(item.duration)}
+                  </span>{/if}
               </div>
             </button>
 
@@ -166,8 +197,19 @@
                   <p class="preview-empty mono">{t("lyrics.instrumental")}</p>
                 {/if}
                 <div class="preview-actions">
-                  <button class="action ghost mono" type="button" onclick={() => (selectedId = null)}>{t("common.cancel")}</button>
-                  <button class="action primary mono" type="button" onclick={() => apply(item)} disabled={!text}>
+                  <button
+                    class="action ghost mono"
+                    type="button"
+                    onclick={() => (selectedId = null)}
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    class="action primary mono"
+                    type="button"
+                    onclick={() => apply(item)}
+                    disabled={!text}
+                  >
                     {t("lyrics.apply")}
                   </button>
                 </div>
@@ -209,10 +251,14 @@
   }
 
   .search-icon :global(.spin) {
-    animation: spin .9s linear infinite;
+    animation: spin 0.9s linear infinite;
   }
 
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .search-input {
     width: 100%;
@@ -225,7 +271,9 @@
     outline: none;
   }
 
-  .search-input::placeholder { color: var(--faint); }
+  .search-input::placeholder {
+    color: var(--faint);
+  }
 
   .search-go {
     appearance: none;
@@ -235,13 +283,18 @@
     color: var(--dim);
     padding: 11px 0 11px 12px;
     font-size: 10px;
-    letter-spacing: .08em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     cursor: pointer;
   }
 
-  .search-go:hover:not(:disabled) { color: var(--accent); }
-  .search-go:disabled { opacity: .45; cursor: default; }
+  .search-go:hover:not(:disabled) {
+    color: var(--accent);
+  }
+  .search-go:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
 
   .body {
     min-height: 220px;
@@ -279,7 +332,9 @@
     max-width: 34ch;
   }
 
-  .message.error .message-title { color: var(--red); }
+  .message.error .message-title {
+    color: var(--red);
+  }
 
   .list {
     display: flex;
@@ -290,7 +345,9 @@
     border-bottom: 1px solid var(--line);
   }
 
-  .result:last-child { border-bottom: 0; }
+  .result:last-child {
+    border-bottom: 0;
+  }
 
   .result-row {
     width: 100%;
@@ -311,7 +368,9 @@
     color: var(--accent);
   }
 
-  .result-main { min-width: 0; }
+  .result-main {
+    min-width: 0;
+  }
 
   .result-title {
     font-size: 14px;
@@ -320,14 +379,14 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: color .15s;
+    transition: color 0.15s;
   }
 
   .result-meta {
     margin-top: 4px;
     font-size: 10px;
     color: var(--faint);
-    letter-spacing: .03em;
+    letter-spacing: 0.03em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -344,7 +403,7 @@
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     font-size: 9px;
-    letter-spacing: .07em;
+    letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--dim);
     white-space: nowrap;
@@ -403,7 +462,7 @@
     color: var(--dim);
     padding: 7px 12px;
     font-size: 10px;
-    letter-spacing: .06em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     cursor: pointer;
     display: inline-flex;
@@ -411,8 +470,13 @@
     gap: 6px;
   }
 
-  .action:hover:not(:disabled) { color: var(--text); }
-  .action:disabled { opacity: .45; cursor: default; }
+  .action:hover:not(:disabled) {
+    color: var(--text);
+  }
+  .action:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
 
   .action.primary {
     color: var(--accent);
@@ -425,6 +489,11 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .search-icon :global(.spin), .result-title, .action { animation: none !important; transition: none !important; }
+    .search-icon :global(.spin),
+    .result-title,
+    .action {
+      animation: none !important;
+      transition: none !important;
+    }
   }
 </style>

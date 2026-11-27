@@ -13,13 +13,41 @@ export interface EqPreset {
 }
 
 export const EQ_PRESETS: readonly EqPreset[] = [
-  { id: "flat", labelKey: "eq.presets.flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  { id: "bass", labelKey: "eq.presets.bass", gains: [8, 6, 4, 2, 0, 0, 0, 0, 1, 2] },
-  { id: "treble", labelKey: "eq.presets.treble", gains: [-2, -1, 0, 0, 0, 1, 2, 4, 6, 7] },
-  { id: "vocal", labelKey: "eq.presets.vocal", gains: [-3, -3, -1, 2, 4, 4, 3, 1, 0, -1] },
-  { id: "rock", labelKey: "eq.presets.rock", gains: [5, 4, 3, 1, -1, -1, 1, 3, 4, 4] },
-  { id: "podcast", labelKey: "eq.presets.podcast", gains: [-5, -4, -1, 3, 5, 5, 3, 0, -2, -4] },
-  { id: "acoustic", labelKey: "eq.presets.acoustic", gains: [4, 3, 2, 0, 1, 2, 2, 3, 2, 1] },
+  {
+    id: "flat",
+    labelKey: "eq.presets.flat",
+    gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  {
+    id: "bass",
+    labelKey: "eq.presets.bass",
+    gains: [8, 6, 4, 2, 0, 0, 0, 0, 1, 2],
+  },
+  {
+    id: "treble",
+    labelKey: "eq.presets.treble",
+    gains: [-2, -1, 0, 0, 0, 1, 2, 4, 6, 7],
+  },
+  {
+    id: "vocal",
+    labelKey: "eq.presets.vocal",
+    gains: [-3, -3, -1, 2, 4, 4, 3, 1, 0, -1],
+  },
+  {
+    id: "rock",
+    labelKey: "eq.presets.rock",
+    gains: [5, 4, 3, 1, -1, -1, 1, 3, 4, 4],
+  },
+  {
+    id: "podcast",
+    labelKey: "eq.presets.podcast",
+    gains: [-5, -4, -1, 3, 5, 5, 3, 0, -2, -4],
+  },
+  {
+    id: "acoustic",
+    labelKey: "eq.presets.acoustic",
+    gains: [4, 3, 2, 0, 1, 2, 2, 3, 2, 1],
+  },
   {
     id: "electronic",
     labelKey: "eq.presets.electronic",
@@ -30,9 +58,21 @@ export const EQ_PRESETS: readonly EqPreset[] = [
     labelKey: "eq.presets.classical",
     gains: [3, 2, 1, 0, -1, -1, 0, 2, 3, 4],
   },
-  { id: "hiphop", labelKey: "eq.presets.hiphop", gains: [7, 6, 3, 2, -1, 1, 0, 2, 3, 3] },
-  { id: "jazz", labelKey: "eq.presets.jazz", gains: [4, 3, 1, 2, -1, -1, 1, 2, 3, 3] },
-  { id: "latin", labelKey: "eq.presets.latin", gains: [5, 4, 1, -1, -1, 1, 2, 3, 4, 3] },
+  {
+    id: "hiphop",
+    labelKey: "eq.presets.hiphop",
+    gains: [7, 6, 3, 2, -1, 1, 0, 2, 3, 3],
+  },
+  {
+    id: "jazz",
+    labelKey: "eq.presets.jazz",
+    gains: [4, 3, 1, 2, -1, -1, 1, 2, 3, 3],
+  },
+  {
+    id: "latin",
+    labelKey: "eq.presets.latin",
+    gains: [5, 4, 1, -1, -1, 1, 2, 3, 4, 3],
+  },
   {
     id: "loudness",
     labelKey: "eq.presets.loudness",

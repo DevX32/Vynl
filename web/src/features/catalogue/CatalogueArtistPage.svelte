@@ -1,6 +1,17 @@
 <script lang="ts">
-  import { Play, Shuffle, User, AlertCircle, LoaderCircle } from "lucide-svelte";
-  import type { CatalogueAlbum, CatalogueArtist, CatalogueTrack, Page } from "@lib/types";
+  import {
+    Play,
+    Shuffle,
+    User,
+    AlertCircle,
+    LoaderCircle,
+  } from "lucide-svelte";
+  import type {
+    CatalogueAlbum,
+    CatalogueArtist,
+    CatalogueTrack,
+    Page,
+  } from "@lib/types";
   import { cataloguePath, loadCatalogueArtist } from "@state/catalogue.svelte";
   import { requestPlay } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
@@ -56,19 +67,13 @@
   function baseKey(title: string): string {
     let text = title.toLowerCase();
     text = text.replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
-    text = text.replace(
-      new RegExp(`[-–—]\\s*(${LANGUAGES})\\b`, "gi"),
-      " ",
-    );
+    text = text.replace(new RegExp(`[-–—]\\s*(${LANGUAGES})\\b`, "gi"), " ");
     return text.replace(/[^a-z0-9]+/g, " ").trim();
   }
 
   function baseTitle(title: string): string {
     let text = title.replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
-    text = text.replace(
-      new RegExp(`[-–—]\\s*(${LANGUAGES})\\b`, "gi"),
-      " ",
-    );
+    text = text.replace(new RegExp(`[-–—]\\s*(${LANGUAGES})\\b`, "gi"), " ");
     text = text.replace(/\s{2,}/g, " ");
     text = text.replace(/(?:\s*[-–—·:]\s*)+$/g, "").trim();
     return text || title.trim();
@@ -304,7 +309,8 @@
           tracks={topTracks}
           showAlbum={true}
           onPlayTrack={playTrack}
-          onNavigateAlbum={(albumId) => onNavigate(`catalogue:album:${albumId}`)}
+          onNavigateAlbum={(albumId) =>
+            onNavigate(`catalogue:album:${albumId}`)}
         >
           {#snippet children()}
             {@render belowTable()}
@@ -356,7 +362,7 @@
     padding-bottom: 36px;
     padding-right: 2px;
   }
-.hero {
+  .hero {
     display: flex;
     align-items: center;
     gap: 20px;
@@ -430,7 +436,9 @@
     border: none;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: transform 0.15s, background 0.15s;
+    transition:
+      transform 0.15s,
+      background 0.15s;
   }
 
   .play-big :global(svg) {
@@ -463,7 +471,10 @@
     justify-content: center;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .icon-btn.round :global(svg) {

@@ -62,7 +62,11 @@ export function plainLine(line: string): string {
   return cleanLineText(line.replace(STAMP_RE, ""));
 }
 
-function parseEnhancedWords(body: string, offset = 0, lineStart = 0): Word[] | null {
+function parseEnhancedWords(
+  body: string,
+  offset = 0,
+  lineStart = 0,
+): Word[] | null {
   const stamps: number[] = [];
   WORD_TAG_RE.lastIndex = 0;
   let wm: RegExpExecArray | null;
@@ -91,7 +95,8 @@ function parseEnhancedWords(body: string, offset = 0, lineStart = 0): Word[] | n
 function distributeWords(text: string, start: number, end: number): Word[] {
   const parts = text.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return [];
-  const slice = Math.max(end - start, MIN_WORD_SECS * parts.length) / parts.length;
+  const slice =
+    Math.max(end - start, MIN_WORD_SECS * parts.length) / parts.length;
   return parts.map((text, i) => ({
     time: start + i * slice,
     text,
@@ -111,8 +116,11 @@ function isChronological(lyricLines: LyricLine[]): boolean {
 
 function applyEstimatedWords(lyricLines: LyricLine[]): LyricLine[] {
   return lyricLines.map((line, i) => {
-    if (line.time < 0 || line.words?.length || isInstrumental(line.text)) return line;
-    const next = lyricLines.slice(i + 1).find((candidate) => candidate.time > line.time);
+    if (line.time < 0 || line.words?.length || isInstrumental(line.text))
+      return line;
+    const next = lyricLines
+      .slice(i + 1)
+      .find((candidate) => candidate.time > line.time);
     const end = next ? next.time : line.time + NOMINAL_LINE_SECS;
     const words = distributeWords(line.text, line.time, end);
     return words.length > 0 ? { ...line, end, words } : line;
@@ -121,7 +129,9 @@ function applyEstimatedWords(lyricLines: LyricLine[]): LyricLine[] {
 
 function finalizeLrcLines(lyricLines: LyricLine[]): LyricLine[] {
   if (isChronological(lyricLines)) return applyEstimatedWords(lyricLines);
-  const timed = lyricLines.filter((l) => l.time >= 0).sort((a, b) => a.time - b.time);
+  const timed = lyricLines
+    .filter((l) => l.time >= 0)
+    .sort((a, b) => a.time - b.time);
   const untimed = lyricLines.filter((l) => l.time < 0);
   return applyEstimatedWords([...timed, ...untimed]);
 }
@@ -165,7 +175,12 @@ function parseClock(value: string): number {
   return Number.isFinite(secs) ? secs : 0;
 }
 
-function parseTtmlTime(value: string, offset: number, tickRate: number, frameRate: number): number {
+function parseTtmlTime(
+  value: string,
+  offset: number,
+  tickRate: number,
+  frameRate: number,
+): number {
   const v = value.trim();
   const tick = /^([+-]?\d+(?:\.\d+)?)t$/.exec(v);
   if (tick) {
@@ -176,9 +191,18 @@ function parseTtmlTime(value: string, offset: number, tickRate: number, frameRat
   if (m) {
     let frac = 0;
     if (m[5]) {
-      frac = m[4] === ":" && frameRate > 0 ? Number(m[5]) / frameRate : Number(`0.${m[5]}`);
+      frac =
+        m[4] === ":" && frameRate > 0
+          ? Number(m[5]) / frameRate
+          : Number(`0.${m[5]}`);
     }
-    return Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + frac + offset;
+    return (
+      Number(m[1] ?? 0) * 3600 +
+      Number(m[2]) * 60 +
+      Number(m[3]) +
+      frac +
+      offset
+    );
   }
   const secs = Number(v.replace(/s$/i, ""));
   return (Number.isFinite(secs) ? secs : 0) + offset;
@@ -202,7 +226,9 @@ function decodeEntities(s: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, d: string) => String.fromCharCode(Number(d)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) =>
+      String.fromCharCode(parseInt(h, 16)),
+    )
     .replace(/&amp;/g, "&");
 }
 
@@ -304,10 +330,12 @@ function parseTtml(text: string): LyricLine[] {
   const timing = body.getAttribute("itunes:timing");
   if (timing) offset += parseOffsetAttr(`offset="${timing}"`);
 
-  const parseTime = (raw: string): number => parseTtmlTime(raw, offset, tickRate, frameRate);
+  const parseTime = (raw: string): number =>
+    parseTtmlTime(raw, offset, tickRate, frameRate);
   const attr = (el: Element, name: string): string | null =>
     el.getAttribute(name) ?? el.getAttributeNS("*", name.split(":")[1]);
-  const roleOf = (el: Element): string => (attr(el, "ttm:role") ?? "").toLowerCase();
+  const roleOf = (el: Element): string =>
+    (attr(el, "ttm:role") ?? "").toLowerCase();
 
   const out: LyricLine[] = [];
   const romans: Array<{ time: number; text: string }> = [];
@@ -320,7 +348,9 @@ function parseTtml(text: string): LyricLine[] {
     const endRawNum = endRaw !== null ? parseTime(endRaw) : null;
     const end = endRawNum !== null && endRawNum > start ? endRawNum : null;
     const role = roleOf(p);
-    const romanRole = /translation|romanization|romaji|translit|roman/.test(role);
+    const romanRole = /translation|romanization|romaji|translit|roman/.test(
+      role,
+    );
 
     const spans: RawSpan[] = [];
     collectSpans(p, spans, false, false, parseTime, attr);
@@ -360,7 +390,11 @@ function parseTtml(text: string): LyricLine[] {
       });
     }
 
-    const lineText = words.map((w) => w.text).join(" ").replace(/\s+/g, " ").trim();
+    const lineText = words
+      .map((w) => w.text)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!lineText) return;
 
     if (romanRole) {

@@ -1,6 +1,16 @@
 <script lang="ts">
-  import { Play, Shuffle, ListMusic, AlertCircle, LoaderCircle } from "lucide-svelte";
-  import type { CataloguePlaylistDetail, CatalogueTrack, Page } from "@lib/types";
+  import {
+    Play,
+    Shuffle,
+    ListMusic,
+    AlertCircle,
+    LoaderCircle,
+  } from "lucide-svelte";
+  import type {
+    CataloguePlaylistDetail,
+    CatalogueTrack,
+    Page,
+  } from "@lib/types";
   import {
     appendCataloguePlaylistPage,
     cataloguePath,
@@ -115,7 +125,8 @@
           {(playlist.trackCount ?? tracks.length) === 1
             ? t("common.trackLc")
             : t("common.tracks")}
-          {#if totalDur > 0} · {fmtTotalDuration(totalDur)}{/if}
+          {#if totalDur > 0}
+            · {fmtTotalDuration(totalDur)}{/if}
         </div>
       </div>
 
@@ -161,7 +172,8 @@
         showAlbum={true}
         onPlayTrack={playTrack}
         onNavigateAlbum={(albumId) => onNavigate(`catalogue:album:${albumId}`)}
-        onNavigateArtist={(artistId) => onNavigate(`catalogue:artist:${artistId}`)}
+        onNavigateArtist={(artistId) =>
+          onNavigate(`catalogue:artist:${artistId}`)}
       />
 
       {#if detail.continuation}
@@ -172,7 +184,9 @@
             onclick={() => void loadMore()}
           >
             {#if loadingMore}
-              <span class="spin"><LoaderCircle size={13} stroke-width={1.5} /></span>
+              <span class="spin">
+                <LoaderCircle size={13} stroke-width={1.5} />
+              </span>
               {t("common.loading")}
             {:else}
               {t("catalogue.loadMore")}
@@ -203,7 +217,7 @@
     overflow: hidden;
     gap: 12px;
   }
-.hero {
+  .hero {
     display: flex;
     align-items: flex-end;
     gap: 20px;
@@ -290,7 +304,9 @@
     border: none;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: transform 0.15s, background 0.15s;
+    transition:
+      transform 0.15s,
+      background 0.15s;
   }
 
   .play-big :global(svg) {
@@ -323,7 +339,10 @@
     justify-content: center;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .icon-btn.round :global(svg) {

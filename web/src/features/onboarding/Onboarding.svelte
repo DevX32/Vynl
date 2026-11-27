@@ -40,7 +40,7 @@
       <input
         class="dlg-input name-input"
         bind:value={name}
-        placeholder={placeholder}
+        {placeholder}
         maxlength={32}
         autocomplete="off"
         autofocus

@@ -473,13 +473,7 @@ export interface MediaUpdate {
 
 export type MediaControlEvent =
   | {
-      action:
-        | "play"
-        | "pause"
-        | "toggle"
-        | "next"
-        | "previous"
-        | "stop";
+      action: "play" | "pause" | "toggle" | "next" | "previous" | "stop";
     }
   | { action: "seek"; position: number }
   | { action: "seekBy"; offset: number }

@@ -94,10 +94,12 @@ There is currently no automated test suite, so these checks are what CI runs:
 ```bash
 # Frontend type checking
 bun run typecheck
+bun run build
 
 # Rust linting and formatting
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 
 Changes to the audio pipeline (`src-tauri/src/services/audio.rs`) should be

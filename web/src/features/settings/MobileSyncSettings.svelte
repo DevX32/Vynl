@@ -2,7 +2,10 @@
   import { onMount } from "svelte";
   import { t } from "@lib/i18n";
   import Button from "@components/Button.svelte";
-  import { openMobileSyncUi, refreshMobileSync } from "@state/mobile-sync.svelte";
+  import {
+    openMobileSyncUi,
+    refreshMobileSync,
+  } from "@state/mobile-sync.svelte";
   import SettingRow from "./SettingRow.svelte";
 
   onMount(() => {
@@ -10,7 +13,10 @@
   });
 </script>
 
-<SettingRow label={t("settings.mobileSync")} hint={t("settings.mobileSyncHint")}>
+<SettingRow
+  label={t("settings.mobileSync")}
+  hint={t("settings.mobileSyncHint")}
+>
   {#snippet control()}
     <Button size="sm" onclick={openMobileSyncUi}>
       {t("common.open")}

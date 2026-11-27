@@ -107,13 +107,7 @@
     </defs>
 
     {#each GRID_FREQS as freq (freq)}
-      <line
-        class="grid"
-        x1={x(freq)}
-        x2={x(freq)}
-        y1={PAD_Y}
-        y2={H - PAD_Y}
-      />
+      <line class="grid" x1={x(freq)} x2={x(freq)} y1={PAD_Y} y2={H - PAD_Y} />
     {/each}
 
     {#each gridDbs as db (db)}

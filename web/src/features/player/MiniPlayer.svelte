@@ -203,9 +203,7 @@
         applyTheme(settings.theme, false);
         applyAccentColor(settings.accentColor, false);
         syncAccentFromStorage();
-      } catch {
-
-      }
+      } catch {}
     })();
     requestMiniState();
 
@@ -319,7 +317,9 @@
   }
 
   const displayTime = $derived(seeking ? previewTime : time);
-  const seekRatio = $derived(duration > 0 ? Math.min(1, displayTime / duration) : 0);
+  const seekRatio = $derived(
+    duration > 0 ? Math.min(1, displayTime / duration) : 0,
+  );
   const volRatio = $derived(volume);
 </script>
 
@@ -342,17 +342,13 @@
   <div class="scrim" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
 
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="mini-head"
-    data-tauri-drag-region
-    ondblclick={onHeadDoubleClick}
-  >
-    <span class="mini-brand display" data-tauri-drag-region aria-hidden="true"
-      >VYNL</span
-    >
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="mini-head" data-tauri-drag-region ondblclick={onHeadDoubleClick}>
+    <span class="mini-brand display" data-tauri-drag-region aria-hidden="true">
+      VYNL
+    </span>
     <div class="mini-head-btns">
       <button
         class="mini-btn"
@@ -376,13 +372,18 @@
         </div>
         <div class="sleeve">
           {#if track?.cover}
-            <img class="cover" use:blobSrc={track.cover} alt="" draggable="false" />
+            <img
+              class="cover"
+              use:blobSrc={track.cover}
+              alt=""
+              draggable="false"
+            />
           {:else}
             <div class="cover placeholder">
               {#if track}
-                <span class="ph-initial display"
-                  >{track.title.charAt(0).toUpperCase()}</span
-                >
+                <span class="ph-initial display">
+                  {track.title.charAt(0).toUpperCase()}
+                </span>
               {:else}
                 <span class="ph">
                   <Music2 size={17} stroke-width={1.1} />
@@ -396,9 +397,9 @@
     </div>
 
     <div class="info">
-      <span class="title display" class:muted={!track}
-        >{track?.title ?? t("player.nothingPlaying")}</span
-      >
+      <span class="title display" class:muted={!track}>
+        {track?.title ?? t("player.nothingPlaying")}
+      </span>
       {#if track}
         <span class="artist">{track.artist}</span>
       {/if}
@@ -754,11 +755,7 @@
         rgba(255, 255, 255, 0.05) 214deg,
         transparent 250deg
       ),
-      linear-gradient(
-        150deg,
-        rgba(255, 255, 255, 0.1) 0%,
-        transparent 32%
-      );
+      linear-gradient(150deg, rgba(255, 255, 255, 0.1) 0%, transparent 32%);
     mix-blend-mode: screen;
     pointer-events: none;
   }
@@ -799,11 +796,7 @@
     align-items: center;
     justify-content: center;
     background:
-      linear-gradient(
-        155deg,
-        rgba(255, 255, 255, 0.05) 0%,
-        transparent 55%
-      ),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.05) 0%, transparent 55%),
       var(--placeholder-gradient);
     color: var(--faint);
   }

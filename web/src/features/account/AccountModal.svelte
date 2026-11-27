@@ -3,7 +3,13 @@
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { LoaderCircle, X, Dices } from "lucide-svelte";
-  import { avatarProps, getAvatarCustom, saveAvatarCustom, randomAvatarSeed, avatarRevision } from "@lib/blobatar.svelte";
+  import {
+    avatarProps,
+    getAvatarCustom,
+    saveAvatarCustom,
+    randomAvatarSeed,
+    avatarRevision,
+  } from "@lib/blobatar.svelte";
   import { Blobatar } from "@blobatar/svelte";
   import { t } from "@lib/i18n";
   import { vynl } from "@lib/vynl";
@@ -32,7 +38,8 @@
 
   const syncHint = $derived.by(() => {
     if (!navigator.onLine) return t("account.syncOffline");
-    if (status.lastError) return t("account.syncError", { error: status.lastError });
+    if (status.lastError)
+      return t("account.syncError", { error: status.lastError });
     if (status.pending) return t("account.syncPending");
     if (status.lastSyncedAt) {
       return t("account.lastSynced", {
@@ -205,7 +212,11 @@
   >
     <div class="head">
       <span class="brand mono">VYNL</span>
-      <button class="icon-btn close-btn" onclick={onclose} aria-label={t("common.close")}>
+      <button
+        class="icon-btn close-btn"
+        onclick={onclose}
+        aria-label={t("common.close")}
+      >
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -249,13 +260,12 @@
       </div>
 
       {#if !loaded}
-        <div class="loading mono"><LoaderCircle size={16} stroke-width={1.6} />{t("common.loading")}</div>
+        <div class="loading mono">
+          <LoaderCircle size={16} stroke-width={1.6} />{t("common.loading")}
+        </div>
       {:else if status.signedIn}
         <div class="row-group">
-          <SettingRow
-            label={t("account.syncStatus")}
-            hint={syncHint}
-          >
+          <SettingRow label={t("account.syncStatus")} hint={syncHint}>
             {#snippet control()}
               <Button
                 variant="ghost"
@@ -264,7 +274,9 @@
                 onclick={() => void syncNow()}
               >
                 {#if syncing}
-                  <span class="spin"><LoaderCircle size={13} stroke-width={1.6} /></span>
+                  <span class="spin">
+                    <LoaderCircle size={13} stroke-width={1.6} />
+                  </span>
                   {t("account.syncing")}
                 {:else}
                   {t("account.syncNow")}
@@ -284,7 +296,9 @@
                 onclick={() => void signOut()}
               >
                 {#if signingOut}
-                  <span class="spin"><LoaderCircle size={13} stroke-width={1.6} /></span>
+                  <span class="spin">
+                    <LoaderCircle size={13} stroke-width={1.6} />
+                  </span>
                   {t("account.signingOut")}
                 {:else}
                   {t("account.signOut")}
@@ -317,7 +331,9 @@
               <input
                 class="dlg-input input-control"
                 type="password"
-                autocomplete={mode === "signin" ? "current-password" : "new-password"}
+                autocomplete={mode === "signin"
+                  ? "current-password"
+                  : "new-password"}
                 bind:value={password}
                 placeholder={t("account.passwordPlaceholder")}
                 disabled={busy}
@@ -335,11 +351,23 @@
         {/if}
 
         <div class="row-group actions">
-          <SettingRow label={mode === "signin" ? t("account.signIn") : t("account.createAccount")} hint={modeHint}>
+          <SettingRow
+            label={mode === "signin"
+              ? t("account.signIn")
+              : t("account.createAccount")}
+            hint={modeHint}
+          >
             {#snippet control()}
-              <Button variant="primary" size="sm" disabled={busy || !canSubmit} onclick={() => void submit()}>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={busy || !canSubmit}
+                onclick={() => void submit()}
+              >
                 {#if busy}
-                  <span class="spin"><LoaderCircle size={13} stroke-width={1.6} /></span>
+                  <span class="spin">
+                    <LoaderCircle size={13} stroke-width={1.6} />
+                  </span>
                   {verb}
                 {:else}
                   {verb}

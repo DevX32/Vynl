@@ -193,10 +193,10 @@
       <button
         type="button"
         class="swatch"
-        class:selected={selected}
+        class:selected
         style:background={color}
         onclick={() => commitPreset(color)}
-        disabled={disabled}
+        {disabled}
         aria-label={color}
         aria-pressed={selected}
       >
@@ -211,7 +211,7 @@
       type="button"
       class="swatch custom"
       class:selected={!presets.some((c) => sameColor(value, c))}
-      disabled={disabled}
+      {disabled}
       aria-label={label}
       aria-haspopup="dialog"
       aria-expanded={open}
@@ -247,7 +247,12 @@
       >
         <div class="modal-header">
           <span class="modal-title mono">{label}</span>
-          <button type="button" class="icon-btn close-btn" onclick={closePopover} aria-label={t("common.close")}>
+          <button
+            type="button"
+            class="icon-btn close-btn"
+            onclick={closePopover}
+            aria-label={t("common.close")}
+          >
             <X size={12} stroke-width={1.6} />
           </button>
         </div>

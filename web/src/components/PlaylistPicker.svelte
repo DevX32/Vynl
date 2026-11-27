@@ -95,9 +95,7 @@
         <span class="title">{t("common.addToPlaylist")}</span>
         <span class="sub mono">
           {trackCount}
-          {trackCount === 1
-            ? t("common.trackLc")
-            : t("common.tracks")}
+          {trackCount === 1 ? t("common.trackLc") : t("common.tracks")}
           {#if suggestedName}
             · {suggestedName}{/if}
         </span>
@@ -156,17 +154,25 @@
             if (e.key === "Enter") submitCreate();
           }}
         />
-        <button class="btn primary" disabled={!canCreate || busy} onclick={submitCreate}>
+        <button
+          class="btn primary"
+          disabled={!canCreate || busy}
+          onclick={submitCreate}
+        >
           {t("common.create")}
         </button>
       {:else}
-        <button class="btn primary" disabled={busy} onclick={() => (creating = true)}>
+        <button
+          class="btn primary"
+          disabled={busy}
+          onclick={() => (creating = true)}
+        >
           <Plus size={13} stroke-width={2} />
           <span>{t("common.newPlaylist")}</span>
         </button>
-        <button class="btn ghost" disabled={busy} onclick={onSkip}
-          >{t("common.cancel")}</button
-        >
+        <button class="btn ghost" disabled={busy} onclick={onSkip}>
+          {t("common.cancel")}
+        </button>
       {/if}
     </footer>
   </div>

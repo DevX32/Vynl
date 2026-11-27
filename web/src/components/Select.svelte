@@ -73,7 +73,9 @@
 
   function scrollActiveIntoView() {
     if (!listEl) return;
-    const el = listEl.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
+    const el = listEl.querySelector<HTMLElement>(
+      `[data-index="${activeIndex}"]`,
+    );
     el?.scrollIntoView({ block: "nearest" });
   }
 
@@ -160,18 +162,22 @@
     aria-haspopup="listbox"
     aria-expanded={open}
     aria-controls="{uid}-list"
-    aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+    aria-activedescendant={open && activeIndex >= 0
+      ? optionId(activeIndex)
+      : undefined}
     aria-label={label}
     onclick={toggle}
     onkeydown={handleTriggerKey}
   >
-    <span class="select-value">{selected ? selected.label : (placeholder ?? t("common.select"))}</span>
+    <span class="select-value">
+      {selected ? selected.label : (placeholder ?? t("common.select"))}
+    </span>
     <ChevronDown size={14} stroke-width={1.5} />
   </button>
 
   {#if open}
-        <!-- svelte-ignore a11y_interactive_supports_focus -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       id="{uid}-list"
       class="select-list"
@@ -180,7 +186,6 @@
       aria-label={label}
     >
       {#each options as opt, i}
-
         <div
           id={optionId(i)}
           role="option"
@@ -299,7 +304,9 @@
     color: var(--text);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: background 0.1s, color 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s;
   }
 
   .sm .select-option {

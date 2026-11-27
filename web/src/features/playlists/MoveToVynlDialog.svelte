@@ -259,7 +259,9 @@
       : saveState || (phase === "importing" && matchDone)
         ? "active"
         : "pending";
-    const saveDetail = saveState ? `${saveState.done} / ${saveState.total}` : "";
+    const saveDetail = saveState
+      ? `${saveState.done} / ${saveState.total}`
+      : "";
 
     return [
       {
@@ -392,7 +394,11 @@
           </div>
         </div>
 
-        <div class="seg" role="tablist" aria-label={t("moveToVynl.destination")}>
+        <div
+          class="seg"
+          role="tablist"
+          aria-label={t("moveToVynl.destination")}
+        >
           <button
             class="seg-btn"
             class:active={tab === "new"}
@@ -503,7 +509,10 @@
       <div class="body">
         <p class="description">{t("moveToVynl.description")}</p>
         {@render stageList()}
-        <div class="input-wrap" class:warn={url.trim() !== "" && !looksValid(url)}>
+        <div
+          class="input-wrap"
+          class:warn={url.trim() !== "" && !looksValid(url)}
+        >
           <Link2 size={15} stroke-width={1.75} />
           <input
             class="link-input"
@@ -806,7 +815,9 @@
     font-weight: 500;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: color 0.12s, background 0.12s;
+    transition:
+      color 0.12s,
+      background 0.12s;
   }
 
   .seg-btn:hover {
@@ -1017,5 +1028,4 @@
     width: 100%;
     text-align: left;
   }
-
 </style>

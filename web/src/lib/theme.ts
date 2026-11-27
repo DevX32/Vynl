@@ -99,7 +99,10 @@ const CSS_VARS: Record<keyof ThemeColors, string> = {
   placeholderGlow: "--placeholder-glow",
 };
 
-const CSS_VAR_ENTRIES = Object.entries(CSS_VARS) as [keyof ThemeColors, string][];
+const CSS_VAR_ENTRIES = Object.entries(CSS_VARS) as [
+  keyof ThemeColors,
+  string,
+][];
 
 function solidColor(color: string): string {
   const match = color.match(/^rgba?\(([^)]+)\)$/i);

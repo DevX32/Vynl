@@ -93,7 +93,11 @@ function installAppUpdate(): Promise<void> {
 export const vynl = {
   resolve: (url: string): Promise<Collection> => cmd("resolve", { url }),
 
-  searchTracks: (query: string, limit?: number, offset?: number): Promise<SearchResult[]> =>
+  searchTracks: (
+    query: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<SearchResult[]> =>
     cmd("search_tracks", { query, limit: limit ?? 20, offset: offset ?? 0 }),
 
   downloadedPaths: (collection: Collection): Promise<string[]> =>
@@ -104,8 +108,7 @@ export const vynl = {
 
   cancelDownload: (): Promise<void> => cmd("cancel_download"),
 
-  exportBackup: (): Promise<ExportSummary | null> =>
-    cmd("export_backup", {}),
+  exportBackup: (): Promise<ExportSummary | null> => cmd("export_backup", {}),
 
   importBackup: (): Promise<RestoredBackup | null> => cmd("import_backup"),
 
@@ -155,7 +158,8 @@ export const vynl = {
   onMediaControl: (
     cb: (event: MediaControlEvent) => void,
     onReady?: () => void,
-  ): (() => void) => onEvent<MediaControlEvent>("vynl:media-control", cb, onReady),
+  ): (() => void) =>
+    onEvent<MediaControlEvent>("vynl:media-control", cb, onReady),
 
   listPlaylists: (): Promise<PlaylistMeta[]> => cmd("list_playlists"),
 
@@ -177,21 +181,14 @@ export const vynl = {
   addToPlaylist: (id: string, paths: string[]): Promise<Playlist> =>
     cmd("add_to_playlist", { id, paths }),
 
-  removeFromPlaylist: (
-    id: string,
-    trackPath: string,
-  ): Promise<Playlist> => cmd("remove_from_playlist", { id, trackPath }),
+  removeFromPlaylist: (id: string, trackPath: string): Promise<Playlist> =>
+    cmd("remove_from_playlist", { id, trackPath }),
 
-  moveInPlaylist: (
-    id: string,
-    from: number,
-    to: number,
-  ): Promise<Playlist> => cmd("move_in_playlist", { id, from, to }),
+  moveInPlaylist: (id: string, from: number, to: number): Promise<Playlist> =>
+    cmd("move_in_playlist", { id, from, to }),
 
-  setPlaylistCover: (
-    id: string,
-    cover: string | null,
-  ): Promise<Playlist> => cmd("set_playlist_cover", { id, cover }),
+  setPlaylistCover: (id: string, cover: string | null): Promise<Playlist> =>
+    cmd("set_playlist_cover", { id, cover }),
 
   savePlaylistCover: (
     id: string,
@@ -229,8 +226,10 @@ export const vynl = {
   lyricsLocal: (file: string): Promise<LyricsResult | null> =>
     cmd("lyrics_local", { file }),
 
-  lyricsFetch: (lookup: LyricsLookup, force = false): Promise<LyricsResult | null> =>
-    cmd("lyrics_fetch", { lookup, force }),
+  lyricsFetch: (
+    lookup: LyricsLookup,
+    force = false,
+  ): Promise<LyricsResult | null> => cmd("lyrics_fetch", { lookup, force }),
 
   lyricsEmbed: (payload: { file: string; text: string }): Promise<void> =>
     cmd("lyrics_embed", payload),
@@ -313,8 +312,7 @@ export const vynl = {
     path: string,
     generation: number,
     fadeSecs: number,
-  ): Promise<void> =>
-    cmd("player_crossfade", { path, generation, fadeSecs }),
+  ): Promise<void> => cmd("player_crossfade", { path, generation, fadeSecs }),
 
   playerSeek: (time: number, generation?: number): Promise<void> =>
     cmd("player_seek", { time, generation: generation ?? 0 }),

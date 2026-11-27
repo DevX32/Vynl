@@ -1,11 +1,11 @@
 <script lang="ts">
   import {
-  Search,
-  LoaderCircle,
-  Link2,
-  ListChecks,
-  FolderDown,
-} from "lucide-svelte";
+    Search,
+    LoaderCircle,
+    Link2,
+    ListChecks,
+    FolderDown,
+  } from "lucide-svelte";
   import type { Snippet } from "svelte";
   import { t } from "@lib/i18n";
 
@@ -22,9 +22,7 @@
     return {
       duration: calm ? 0 : duration,
       css: (t: number) =>
-        `height: ${height * t}px;` +
-        `opacity: ${t};` +
-        `overflow: hidden;`,
+        `height: ${height * t}px;` + `opacity: ${t};` + `overflow: hidden;`,
     };
   }
 
@@ -54,8 +52,16 @@
 
   const STEPS = [
     { icon: Link2, title: t("vault.step1Title"), body: t("vault.step1Body") },
-    { icon: ListChecks, title: t("vault.step2Title"), body: t("vault.step2Body") },
-    { icon: FolderDown, title: t("vault.step3Title"), body: t("vault.step3Body") },
+    {
+      icon: ListChecks,
+      title: t("vault.step2Title"),
+      body: t("vault.step2Body"),
+    },
+    {
+      icon: FolderDown,
+      title: t("vault.step3Title"),
+      body: t("vault.step3Body"),
+    },
   ];
 
   function clearDebounce() {
@@ -176,7 +182,9 @@
         {#each STEPS as step, i (step.title)}
           {@const Icon = step.icon}
           <li class="step">
-            <span class="step-index mono">{String(i + 1).padStart(2, "0")}</span>
+            <span class="step-index mono">
+              {String(i + 1).padStart(2, "0")}
+            </span>
             <span class="step-icon"><Icon size={14} stroke-width={1.5} /></span>
             <span class="step-copy">
               <span class="step-title">{step.title}</span>

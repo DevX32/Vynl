@@ -5,7 +5,12 @@
     getCurrentTrack,
     setSeekDragging,
   } from "@state/now-playing.svelte";
-  import { cancelSeek, seekFlush, seekOffset, seekRatio } from "@lib/playback.svelte";
+  import {
+    cancelSeek,
+    seekFlush,
+    seekOffset,
+    seekRatio,
+  } from "@lib/playback.svelte";
   import { pointerRatio } from "@lib/pointer";
   import { t } from "@lib/i18n";
 

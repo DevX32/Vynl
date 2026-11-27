@@ -42,8 +42,10 @@
       <span
         class="wipe"
         style:--fill={`${Math.max(0, Math.min(100, pct * 100))}%`}
-      >{word.text}</span></span
-    >{#if i < words.length - 1 && (word.sep ?? true)}{" "}{/if}
+      >
+        {word.text}
+      </span>
+    </span>{#if i < words.length - 1 && (word.sep ?? true)}{" "}{/if}
   {/each}
 </span>
 

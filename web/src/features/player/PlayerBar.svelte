@@ -16,13 +16,20 @@
   import { listen } from "@tauri-apps/api/event";
   import { MINI_CLOSED_EVENT } from "@lib/mini-sync";
   import { getCurrentTrack, getCurrentTime } from "@state/now-playing.svelte";
-  import { getCurrentMuted, getCurrentVolume, toggleMute, getLyricsOpen, toggleLyrics } from "@state/player.svelte";
-  import { applyReplayGain, applySpeed, applyVolume } from "@lib/playback.svelte";
-  import { catalogueIdFromPath } from "@state/catalogue.svelte";
   import {
-    getTasteLikedIds,
-    toggleTasteLike,
-  } from "@state/taste.svelte";
+    getCurrentMuted,
+    getCurrentVolume,
+    toggleMute,
+    getLyricsOpen,
+    toggleLyrics,
+  } from "@state/player.svelte";
+  import {
+    applyReplayGain,
+    applySpeed,
+    applyVolume,
+  } from "@lib/playback.svelte";
+  import { catalogueIdFromPath } from "@state/catalogue.svelte";
+  import { getTasteLikedIds, toggleTasteLike } from "@state/taste.svelte";
   import type { CatalogueTrack } from "@lib/types";
   import { blobSrc, fmtTime } from "../../lib/format";
   import { t } from "@lib/i18n";
@@ -211,8 +218,8 @@
       </div>
       <div class="mini-meta">
         <span class="mini-title display">
-          {current?.title ?? t("player.nothingPlaying")}</span
-        >
+          {current?.title ?? t("player.nothingPlaying")}
+        </span>
         <span class="mini-artist mono">
           {#if current?.artist}
             {#each current.artist.split(", ") as artistName, i}

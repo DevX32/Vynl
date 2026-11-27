@@ -201,62 +201,66 @@
     <div class="unavailable mono">{t("eq.unavailable")}</div>
   {:else}
     <div class="eq" class:off={!settings.eqEnabled}>
-    <div class="chips">
-      {#each EQ_PRESETS as preset (preset.id)}
-        <Button
-          size="sm"
-          selected={activePreset === preset.id}
-          disabled={!settings.eqEnabled}
-          onclick={() => applyPreset(preset)}
-        >
-          {t(preset.labelKey)}
-        </Button>
-      {/each}
-    </div>
-
-    <div class="curve-wrap">
-      <EqCurve {bands} disabled={!settings.eqEnabled} />
-      {#if isFlatCurve}
-        <div class="curve-note mono">{t("eq.curveFlat")}</div>
-      {/if}
-      {#if clipRisk}
-        <div class="curve-warn mono">{t("eq.clipRisk")}</div>
-      {/if}
-    </div>
-
-    <div class="bands">
-      {#each eqBands() as freq, i (freq)}
-        <div class="band">
-          <div class="db mono" class:boost={bands[i] > 0} class:cut={bands[i] < 0}>
-            {dbLabel(bands[i])}
-          </div>
-          <div
-            class="track"
-            style:--fill={`${fill(i)}%`}
-            role="slider"
-            tabindex={settings.eqEnabled ? 0 : -1}
-            aria-label={`${freqLabel(freq)} ${t("settings.equalizerBand")}`}
-            aria-valuemin={eqMinDb()}
-            aria-valuemax={eqMaxDb()}
-            aria-valuenow={bands[i]}
-            aria-valuetext={`${dbLabel(bands[i])} dB`}
-            aria-disabled={!settings.eqEnabled}
-            onpointerdown={(e) => bandDown(e, i)}
-            onpointermove={(e) => bandMove(e, i)}
-            ondblclick={() => setBand(i, 0)}
-            onkeydown={(e) => bandKey(e, i)}
+      <div class="chips">
+        {#each EQ_PRESETS as preset (preset.id)}
+          <Button
+            size="sm"
+            selected={activePreset === preset.id}
+            disabled={!settings.eqEnabled}
+            onclick={() => applyPreset(preset)}
           >
-            <span
-              class="thumb"
-              style:bottom={`calc((100% - ${THUMB}px) * ${ratio(i)})`}
-            ></span>
+            {t(preset.labelKey)}
+          </Button>
+        {/each}
+      </div>
+
+      <div class="curve-wrap">
+        <EqCurve {bands} disabled={!settings.eqEnabled} />
+        {#if isFlatCurve}
+          <div class="curve-note mono">{t("eq.curveFlat")}</div>
+        {/if}
+        {#if clipRisk}
+          <div class="curve-warn mono">{t("eq.clipRisk")}</div>
+        {/if}
+      </div>
+
+      <div class="bands">
+        {#each eqBands() as freq, i (freq)}
+          <div class="band">
+            <div
+              class="db mono"
+              class:boost={bands[i] > 0}
+              class:cut={bands[i] < 0}
+            >
+              {dbLabel(bands[i])}
+            </div>
+            <div
+              class="track"
+              style:--fill={`${fill(i)}%`}
+              role="slider"
+              tabindex={settings.eqEnabled ? 0 : -1}
+              aria-label={`${freqLabel(freq)} ${t("settings.equalizerBand")}`}
+              aria-valuemin={eqMinDb()}
+              aria-valuemax={eqMaxDb()}
+              aria-valuenow={bands[i]}
+              aria-valuetext={`${dbLabel(bands[i])} dB`}
+              aria-disabled={!settings.eqEnabled}
+              onpointerdown={(e) => bandDown(e, i)}
+              onpointermove={(e) => bandMove(e, i)}
+              ondblclick={() => setBand(i, 0)}
+              onkeydown={(e) => bandKey(e, i)}
+            >
+              <span
+                class="thumb"
+                style:bottom={`calc((100% - ${THUMB}px) * ${ratio(i)})`}
+              ></span>
+            </div>
+            <div class="freq mono">{freqLabel(freq)}</div>
+            <div class="group mono">
+              {#if GROUP_LABEL[i]}{t(GROUP_LABEL[i]!)}{:else}&nbsp;{/if}
+            </div>
           </div>
-          <div class="freq mono">{freqLabel(freq)}</div>
-          <div class="group mono">
-            {#if GROUP_LABEL[i]}{t(GROUP_LABEL[i]!)}{:else}&nbsp;{/if}
-          </div>
-        </div>
-      {/each}
+        {/each}
       </div>
     </div>
   {/if}
@@ -458,7 +462,9 @@
   }
 
   .track:focus-visible {
-    box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
+    box-shadow:
+      0 0 0 2px var(--accent-soft),
+      0 0 0 1px var(--accent);
   }
 
   .thumb {

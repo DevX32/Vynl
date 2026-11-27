@@ -1,11 +1,5 @@
 ﻿<script lang="ts">
-  import {
-    ListMusic,
-    ListPlus,
-    Pause,
-    Play,
-    Clock,
-  } from "lucide-svelte";
+  import { ListMusic, ListPlus, Pause, Play, Clock } from "lucide-svelte";
   import type { CatalogueTrack } from "@lib/types";
   import {
     addToQueue,
@@ -24,7 +18,7 @@
     refreshAfterCatalogueSave,
     saveCatalogueTrack,
   } from "@state/catalogue.svelte";
-  import { fmtTime,  stripAlbumSuffix } from "@lib/format";
+  import { fmtTime, stripAlbumSuffix } from "@lib/format";
   import { t } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import { vynl } from "@lib/vynl";
@@ -59,7 +53,9 @@
   const isPlaying = $derived(getIsTrackPlaying());
   const playlists = $derived(getCurrentPlaylists());
 
-  let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(null);
+  let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(
+    null,
+  );
   let pickerTarget = $state<CatalogueTrack | null>(null);
   let pickerBusy = $state(false);
   let streamTarget = $state<CatalogueTrack | null>(null);
@@ -76,11 +72,7 @@
 
   function isCurrent(track: CatalogueTrack): boolean {
     if (nowPlaying?.id === track.id) return true;
-    return matchesCurrentSong(
-      track.title,
-      track.artist,
-      track.duration ?? 0,
-    );
+    return matchesCurrentSong(track.title, track.artist, track.duration ?? 0);
   }
 
   const prebufferSeen = new Set<string>();
@@ -181,9 +173,7 @@
         result.playlist?.name ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: name }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
     } catch (error) {
       console.warn("catalogue add to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -223,9 +213,7 @@
       await saveStreamToPlaylist(target, mixId);
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: name }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -266,87 +254,89 @@
   </div>
 
   <div class="tracks" bind:this={tracksEl}>
-  {#if tracks.length === 0}
-    <div class="tbl-empty">
-      <ListMusic size={28} stroke-width={1.1} />
-      <span class="empty-title display">{emptyTitle || t("catalogue.noResults")}</span>
-      {#if emptyHint}
-        <span class="empty-sub mono">{emptyHint}</span>
-      {/if}
-    </div>
-  {:else}
-    {#snippet row(track: CatalogueTrack, i: number)}
-      {@const current = isCurrent(track)}
-      <div
-        class="row"
-        class:playing={current}
-        role="button"
-        tabindex="0"
-        aria-label={`${stripAlbumSuffix(track.title, track.album?.name)} - ${track.artist}`}
-        onclick={() => rowAction(track)}
-        onpointerenter={() => prebufferTrack(track)}
-        onkeydown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            rowAction(track);
-          }
-        }}
-        oncontextmenu={(e) => showCtx(e, track)}
-      >
-        <span class="c-num mono">
-          {#if current}
-            <EqualizerBars />
-          {:else}
-            {String(i + 1).padStart(2, "0")}
-          {/if}
+    {#if tracks.length === 0}
+      <div class="tbl-empty">
+        <ListMusic size={28} stroke-width={1.1} />
+        <span class="empty-title display">
+          {emptyTitle || t("catalogue.noResults")}
         </span>
-        <div class="c-cover">
-          <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
-        </div>
-        <div class="c-meta">
-          <span class="c-title" class:accent={current}>
-            {stripAlbumSuffix(track.title, track.album?.name)}
-          </span>
-          {#if showAlbum && track.album}
-            <span class="c-album">{track.album.name}</span>
-          {/if}
-        </div>
-        <div class="c-artists">
-          {#each track.artists as artist, idx (artist.id ?? `${artist.name}:${idx}`)}
-            {#if idx > 0}<span class="comma">{", "}</span>{/if}
-            {#if artist.id && onNavigateArtist}
-              <button
-                type="button"
-                class="artist-link"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  onNavigateArtist?.(artist.id ?? "");
-                }}
-              >
-                {artist.name}
-              </button>
-            {:else}
-              <span>{artist.name}</span>
-            {/if}
-          {/each}
-        </div>
-        <div class="c-end">
-          <span class="c-dur mono">{fmtTime(track.duration, "--:--")}</span>
-        </div>
+        {#if emptyHint}
+          <span class="empty-sub mono">{emptyHint}</span>
+        {/if}
       </div>
-    {/snippet}
+    {:else}
+      {#snippet row(track: CatalogueTrack, i: number)}
+        {@const current = isCurrent(track)}
+        <div
+          class="row"
+          class:playing={current}
+          role="button"
+          tabindex="0"
+          aria-label={`${stripAlbumSuffix(track.title, track.album?.name)} - ${track.artist}`}
+          onclick={() => rowAction(track)}
+          onpointerenter={() => prebufferTrack(track)}
+          onkeydown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              rowAction(track);
+            }
+          }}
+          oncontextmenu={(e) => showCtx(e, track)}
+        >
+          <span class="c-num mono">
+            {#if current}
+              <EqualizerBars />
+            {:else}
+              {String(i + 1).padStart(2, "0")}
+            {/if}
+          </span>
+          <div class="c-cover">
+            <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
+          </div>
+          <div class="c-meta">
+            <span class="c-title" class:accent={current}>
+              {stripAlbumSuffix(track.title, track.album?.name)}
+            </span>
+            {#if showAlbum && track.album}
+              <span class="c-album">{track.album.name}</span>
+            {/if}
+          </div>
+          <div class="c-artists">
+            {#each track.artists as artist, idx (artist.id ?? `${artist.name}:${idx}`)}
+              {#if idx > 0}<span class="comma">{", "}</span>{/if}
+              {#if artist.id && onNavigateArtist}
+                <button
+                  type="button"
+                  class="artist-link"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    onNavigateArtist?.(artist.id ?? "");
+                  }}
+                >
+                  {artist.name}
+                </button>
+              {:else}
+                <span>{artist.name}</span>
+              {/if}
+            {/each}
+          </div>
+          <div class="c-end">
+            <span class="c-dur mono">{fmtTime(track.duration, "--:--")}</span>
+          </div>
+        </div>
+      {/snippet}
 
-    <VirtualList
-      items={tracks}
-      {row}
-      scrollEl={tracksEl ?? null}
-      rowKey={(t, idx) => `${t.id}#${idx}`}
-      estimateRowHeight={56}
-    />
-  {/if}
-  {#if children}
-    {@render children()}
-  {/if}
+      <VirtualList
+        items={tracks}
+        {row}
+        scrollEl={tracksEl ?? null}
+        rowKey={(t, idx) => `${t.id}#${idx}`}
+        estimateRowHeight={56}
+      />
+    {/if}
+    {#if children}
+      {@render children()}
+    {/if}
   </div>
 </div>
 

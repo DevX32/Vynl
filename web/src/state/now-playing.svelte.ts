@@ -3,7 +3,11 @@ import { RPC_THROTTLE } from "@lib/constants";
 import { moveItem } from "@lib/reorder";
 import { shuffle } from "@lib/shuffle";
 import { vynl } from "@lib/vynl";
-import { getLibrary, whenLibraryLoaded, onLibraryChanged } from "./library.svelte";
+import {
+  getLibrary,
+  whenLibraryLoaded,
+  onLibraryChanged,
+} from "./library.svelte";
 import {
   catalogueIdFromPath,
   getCatalogueRevision,
@@ -34,16 +38,17 @@ function writeNowPlaying(): void {
     });
     return;
   }
-  void vynl.saveNowPlaying({
-    id: _state.id,
-    path: _state.path,
-    time: _currentTime,
-    queue: _contextQueue,
-    userQueue: _userQueue,
-    contextQueue: _contextQueue,
-    contextIndex: _contextIndex,
-    timestamp: Date.now(),
-  })
+  void vynl
+    .saveNowPlaying({
+      id: _state.id,
+      path: _state.path,
+      time: _currentTime,
+      queue: _contextQueue,
+      userQueue: _userQueue,
+      contextQueue: _contextQueue,
+      contextIndex: _contextIndex,
+      timestamp: Date.now(),
+    })
     .catch((error) => {
       console.warn("saveNowPlaying failed:", error);
     });
@@ -69,7 +74,10 @@ export function checkpointNowPlaying(): void {
   persistNowPlaying();
 }
 
-if (typeof window !== "undefined" && !window.location.hash.startsWith("#mini")) {
+if (
+  typeof window !== "undefined" &&
+  !window.location.hash.startsWith("#mini")
+) {
   const flush = () => flushNowPlaying();
   window.addEventListener("pagehide", flush);
   window.addEventListener("beforeunload", flush);
@@ -116,7 +124,9 @@ function libraryByPath(): Map<string, LibraryTrack> {
   }
 
   if (_catalogueRevision !== catalogueRevision) {
-    _cataloguePathMap = new Map(getCatalogueTracks().map((track) => [track.path, track]));
+    _cataloguePathMap = new Map(
+      getCatalogueTracks().map((track) => [track.path, track]),
+    );
     _catalogueRevision = catalogueRevision;
     dirty = true;
   }
@@ -132,7 +142,9 @@ function libraryByPath(): Map<string, LibraryTrack> {
   return _pathMap;
 }
 
-export function findTrackById(id: string | null | undefined): LibraryTrack | null {
+export function findTrackById(
+  id: string | null | undefined,
+): LibraryTrack | null {
   if (!id) return null;
   libraryByPath();
   return _idMap.get(id) ?? null;
@@ -235,11 +247,15 @@ function takeShufflePath(
 ): string | null {
   const scope = new Set(_shuffleScope);
   const byPath = libraryByPath();
-  _shuffleUpcoming = _shuffleUpcoming.filter((path) => scope.has(path) && byPath.has(path));
+  _shuffleUpcoming = _shuffleUpcoming.filter(
+    (path) => scope.has(path) && byPath.has(path),
+  );
 
   if (_shuffleUpcoming.length === 0 && loop === "all") {
     refillShuffleSession(currentPath);
-    _shuffleUpcoming = _shuffleUpcoming.filter((path) => scope.has(path) && byPath.has(path));
+    _shuffleUpcoming = _shuffleUpcoming.filter(
+      (path) => scope.has(path) && byPath.has(path),
+    );
   }
 
   const path = _shuffleUpcoming[0] ?? null;
@@ -285,8 +301,7 @@ export function getContextUpcoming(
     const upcoming = tracksForPaths(_shuffleUpcoming, byPath, seen);
     if (upcoming.length > 0) return upcoming;
     if (loop !== "all") return [];
-    const scope =
-      _contextQueue.length > 0 ? _contextQueue : _shuffleScope;
+    const scope = _contextQueue.length > 0 ? _contextQueue : _shuffleScope;
     return tracksForPaths(scope, byPath, seen);
   }
   if (loop === "all" && _contextQueue.length === 0) {
@@ -320,15 +335,16 @@ function syncRpc(force = false): void {
     });
     return;
   }
-  void vynl.rpcUpdate({
-    title: _state.title,
-    artist: _state.artist,
-    album: _state.album,
-    duration: _state.duration,
-    time: _currentTime,
-    playing: _state.playing,
-    cover: _state.cover,
-  })
+  void vynl
+    .rpcUpdate({
+      title: _state.title,
+      artist: _state.artist,
+      album: _state.album,
+      duration: _state.duration,
+      time: _currentTime,
+      playing: _state.playing,
+      cover: _state.cover,
+    })
     .catch((error) => {
       console.warn("rpcUpdate failed:", error);
     });
@@ -357,7 +373,10 @@ export function getPlayToken(): number {
   return _playToken;
 }
 
-export function setNowPlaying(t: NowPlaying, opts: { skipTaste?: boolean } = {}): void {
+export function setNowPlaying(
+  t: NowPlaying,
+  opts: { skipTaste?: boolean } = {},
+): void {
   _state = t;
   _currentTime = t.time;
   _playToken += 1;
@@ -499,7 +518,9 @@ function refreshQueues(): void {
     const currentPath = _state?.path ?? null;
     const at = currentPath ? contextQueue.indexOf(currentPath) : -1;
     const next =
-      at >= 0 ? at : Math.max(0, Math.min(_contextIndex, contextQueue.length - 1));
+      at >= 0
+        ? at
+        : Math.max(0, Math.min(_contextIndex, contextQueue.length - 1));
     if (next !== _contextIndex) {
       _contextIndex = next;
       changed = true;
@@ -742,7 +763,9 @@ export function peekPrevId(
   if (shuffle) {
     const currentPath = findTrackById(currentId)?.path;
     if (!currentPath) return null;
-    const history = _shuffleHistory.filter((path) => trackAt(path) !== undefined);
+    const history = _shuffleHistory.filter(
+      (path) => trackAt(path) !== undefined,
+    );
     const walked =
       history[history.length - 1] === currentPath
         ? history
@@ -779,7 +802,9 @@ export function pickPrevId(
   if (shuffle) {
     const currentPath = findTrackById(currentId)?.path;
     if (!currentPath) return null;
-    _shuffleHistory = _shuffleHistory.filter((path) => trackAt(path) !== undefined);
+    _shuffleHistory = _shuffleHistory.filter(
+      (path) => trackAt(path) !== undefined,
+    );
     if (_shuffleHistory[_shuffleHistory.length - 1] !== currentPath) {
       _shuffleHistory = [..._shuffleHistory, currentPath].slice(
         -SHUFFLE_HISTORY_LIMIT,
@@ -846,8 +871,7 @@ export async function restoreNowPlaying(): Promise<{
     console.warn("hydrateTaste restore failed:", error);
   });
   if (!saved) return null;
-  const track =
-    findTrackById(saved.id) ?? findTrackByPath(saved.path);
+  const track = findTrackById(saved.id) ?? findTrackByPath(saved.path);
   if (!track) {
     if (getLibrary().length > 0 || getCatalogueTracks().length > 0) {
       void vynl.clearNowPlaying().catch((error) => {
@@ -859,14 +883,21 @@ export async function restoreNowPlaying(): Promise<{
   setSeekDragging(false);
   const savedTime =
     Number.isFinite(saved.time) && (saved.time as number) >= 0
-      ? Math.min(saved.time as number, track.duration > 0 ? track.duration : Number.MAX_VALUE)
+      ? Math.min(
+          saved.time as number,
+          track.duration > 0 ? track.duration : Number.MAX_VALUE,
+        )
       : 0;
   setNowPlaying(nowPlayingFromTrack(track, savedTime), { skipTaste: true });
   if (saved.userQueue && saved.userQueue.length > 0) {
-    _userQueue = saved.userQueue.filter((p): p is string => typeof p === "string");
+    _userQueue = saved.userQueue.filter(
+      (p): p is string => typeof p === "string",
+    );
   }
   if (saved.contextQueue && saved.contextQueue.length > 0) {
-    _contextQueue = saved.contextQueue.filter((p): p is string => typeof p === "string");
+    _contextQueue = saved.contextQueue.filter(
+      (p): p is string => typeof p === "string",
+    );
     const maxIdx = _contextQueue.length - 1;
     const idx = saved.contextIndex;
     _contextIndex =
@@ -874,7 +905,9 @@ export async function restoreNowPlaying(): Promise<{
         ? Math.min(Math.max(0, Math.floor(idx)), maxIdx)
         : 0;
   } else if (saved.queue && saved.queue.length > 0) {
-    _contextQueue = saved.queue.filter((p): p is string => typeof p === "string");
+    _contextQueue = saved.queue.filter(
+      (p): p is string => typeof p === "string",
+    );
     _contextIndex = 0;
   }
   refreshQueues();

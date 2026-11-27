@@ -26,9 +26,9 @@
   const downloading = $derived(!!status?.downloading);
   const failed = $derived(!!status?.error);
   const busy = $derived(checking || installing);
-const upToDate = $derived(
-  !failed && getUpdateCheckedAt() !== null && !available && !ready,
-);
+  const upToDate = $derived(
+    !failed && getUpdateCheckedAt() !== null && !available && !ready,
+  );
 
   onMount(() => {
     void initAppUpdate();
@@ -69,17 +69,13 @@ const upToDate = $derived(
     </div>
   </div>
 
-  <SettingRow
-    label={rowLabel}
-    hint={rowHint}
-  >
+  <SettingRow label={rowLabel} hint={rowHint}>
     {#snippet control()}
       {#if downloading}
-        <Button
-          size="sm"
-          disabled
-        >
-          <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
+        <Button size="sm" disabled>
+          <span class="spin">
+            <LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" />
+          </span>
         </Button>
       {:else if available}
         <Button
@@ -89,7 +85,9 @@ const upToDate = $derived(
           disabled={busy}
         >
           {#if busy}
-            <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
+            <span class="spin">
+              <LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" />
+            </span>
           {:else}
             {chipLabel}
           {/if}
@@ -101,7 +99,9 @@ const upToDate = $derived(
           disabled={busy}
         >
           {#if busy}
-            <span class="spin"><LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" /></span>
+            <span class="spin">
+              <LoaderCircle size={14} stroke-width={1.5} aria-hidden="true" />
+            </span>
           {:else}
             {chipLabel}
           {/if}

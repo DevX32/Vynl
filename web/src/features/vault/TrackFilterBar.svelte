@@ -9,7 +9,13 @@
   }: {
     total: number;
     trackFilter: string;
-    counts: { done: number; skipped: number; failed: number; queued: number; active: number };
+    counts: {
+      done: number;
+      skipped: number;
+      failed: number;
+      queued: number;
+      active: number;
+    };
     onFilterChange: (filter: string) => void;
   } = $props();
 </script>
@@ -19,41 +25,59 @@
     class="filter-tab"
     class:active={trackFilter === "all"}
     onclick={() => onFilterChange("all")}
-  >{total} {t("vault.all")}</button>
+  >
+    {total}
+    {t("vault.all")}
+  </button>
   {#if counts.queued > 0}
     <button
       class="filter-tab queued"
       class:active={trackFilter === "queued"}
       onclick={() => onFilterChange("queued")}
-    >{counts.queued} {t("vault.queued")}</button>
+    >
+      {counts.queued}
+      {t("vault.queued")}
+    </button>
   {/if}
   {#if counts.active > 0}
     <button
       class="filter-tab active-tab"
       class:active={trackFilter === "active"}
       onclick={() => onFilterChange("active")}
-    >{counts.active} {t("vault.active")}</button>
+    >
+      {counts.active}
+      {t("vault.active")}
+    </button>
   {/if}
   {#if counts.done > 0}
     <button
       class="filter-tab done"
       class:active={trackFilter === "done"}
       onclick={() => onFilterChange("done")}
-    >{counts.done} {t("common.done")}</button>
+    >
+      {counts.done}
+      {t("common.done")}
+    </button>
   {/if}
   {#if counts.skipped > 0}
     <button
       class="filter-tab skipped"
       class:active={trackFilter === "skipped"}
       onclick={() => onFilterChange("skipped")}
-    >{counts.skipped} {t("vault.skipped")}</button>
+    >
+      {counts.skipped}
+      {t("vault.skipped")}
+    </button>
   {/if}
   {#if counts.failed > 0}
     <button
       class="filter-tab failed"
       class:active={trackFilter === "failed"}
       onclick={() => onFilterChange("failed")}
-    >{counts.failed} {t("common.failed")}</button>
+    >
+      {counts.failed}
+      {t("common.failed")}
+    </button>
   {/if}
 </div>
 
@@ -83,7 +107,10 @@
     letter-spacing: 0.04em;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
 
   .filter-tab:hover {

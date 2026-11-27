@@ -13,7 +13,7 @@
     ChevronUp,
     LogIn,
     LogOut,
-      UserRound,
+    UserRound,
     Import,
   } from "lucide-svelte";
   import { Blobatar } from "@blobatar/svelte";
@@ -145,26 +145,29 @@
         accountButton?.focus();
         return;
       }
-      const items = accountWrap?.querySelectorAll<HTMLButtonElement>(
-        '[role="menuitem"]',
-      );
+      const items =
+        accountWrap?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
       if (!items || items.length === 0) return;
       const list = Array.from(items);
       const active = document.activeElement as HTMLButtonElement | null;
       const index = active ? list.indexOf(active) : -1;
-      if (
-        e.key === "ArrowDown" ||
-        e.key === "ArrowUp" ||
-        e.key === "Tab"
-      ) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Tab") {
         e.preventDefault();
         e.stopPropagation();
-        const delta = e.key === "Tab" ? (e.shiftKey ? -1 : 1) : e.key === "ArrowDown" ? 1 : -1;
-        const nextIndex = index < 0
-          ? delta > 0
-            ? 0
-            : list.length - 1
-          : (index + delta + list.length) % list.length;
+        const delta =
+          e.key === "Tab"
+            ? e.shiftKey
+              ? -1
+              : 1
+            : e.key === "ArrowDown"
+              ? 1
+              : -1;
+        const nextIndex =
+          index < 0
+            ? delta > 0
+              ? 0
+              : list.length - 1
+            : (index + delta + list.length) % list.length;
         list[nextIndex]?.focus();
       }
     };
@@ -229,9 +232,17 @@
 
 <svelte:window onclick={closeAccountMenu} />
 
-<nav class="sidebar" class:collapsed={!sidebarOpen} aria-label={t("nav.mainNavigation")}>
+<nav
+  class="sidebar"
+  class:collapsed={!sidebarOpen}
+  aria-label={t("nav.mainNavigation")}
+>
   <div class="nav-group">
-    <button class="nav-link" class:active={page === "library"} onclick={onLibrary}>
+    <button
+      class="nav-link"
+      class:active={page === "library"}
+      onclick={onLibrary}
+    >
       <span class="nav-icon"><Library size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("common.library")}</span>
     </button>
@@ -243,7 +254,11 @@
       <span class="nav-icon"><Compass size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("common.browse")}</span>
     </button>
-    <button class="nav-link" class:active={page === "player"} onclick={onPlayer}>
+    <button
+      class="nav-link"
+      class:active={page === "player"}
+      onclick={onPlayer}
+    >
       <span class="nav-icon"><Music2 size={15} stroke-width={1.5} /></span>
       <span class="nav-label">{t("nav.nowPlaying")}</span>
     </button>
@@ -315,7 +330,9 @@
           data-playlist={p.id}
           class:active={page === "playlist" && selectedId === p.id}
           class:dragging={drag.dragging && drag.grabIdx === i}
-          class:drag-over={drag.dragging && drag.overIdx === i && drag.grabIdx !== i}
+          class:drag-over={drag.dragging &&
+            drag.overIdx === i &&
+            drag.grabIdx !== i}
           onclick={() => {
             if (shouldSkipClick()) return;
             onOpenPlaylist(p.id);
@@ -394,22 +411,38 @@
                 {session.signedIn ? session.email : t("account.notSignedIn")}
               </span>
             </div>
-            <span class="menu-status" class:connected={session.signedIn} aria-hidden="true"></span>
+            <span
+              class="menu-status"
+              class:connected={session.signedIn}
+              aria-hidden="true"
+            ></span>
           </div>
 
           <div class="account-menu-body">
             {#if session.signedIn}
-              <button class="menu-item" role="menuitem" onclick={openAccountModal}>
+              <button
+                class="menu-item"
+                role="menuitem"
+                onclick={openAccountModal}
+              >
                 <UserRound size={13} stroke-width={1.5} />
                 <span>{t("common.account")}</span>
               </button>
             {:else}
-              <button class="menu-item" role="menuitem" onclick={openAccountModal}>
+              <button
+                class="menu-item"
+                role="menuitem"
+                onclick={openAccountModal}
+              >
                 <LogIn size={13} stroke-width={1.5} />
                 <span>{t("account.signIn")}</span>
               </button>
             {/if}
-            <button class="menu-item" role="menuitem" onclick={openAccountSettings}>
+            <button
+              class="menu-item"
+              role="menuitem"
+              onclick={openAccountSettings}
+            >
               <SettingsIcon size={13} stroke-width={1.5} />
               <span>{t("common.settings")}</span>
             </button>
@@ -417,7 +450,11 @@
 
           {#if session.signedIn}
             <div class="account-menu-foot">
-              <button class="menu-item danger" role="menuitem" onclick={() => void signOutSync()}>
+              <button
+                class="menu-item danger"
+                role="menuitem"
+                onclick={() => void signOutSync()}
+              >
                 <LogOut size={13} stroke-width={1.5} />
                 <span>{t("account.signOut")}</span>
               </button>
@@ -657,12 +694,11 @@
     content: "";
     position: absolute;
     inset: -40%;
-    background:
-      radial-gradient(
-        circle at 50% 50%,
-        color-mix(in srgb, var(--accent) 52%, transparent) 0%,
-        transparent 62%
-      );
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--accent) 52%, transparent) 0%,
+      transparent 62%
+    );
     filter: blur(10px);
     opacity: 0.85;
   }
@@ -689,12 +725,11 @@
     content: "";
     position: absolute;
     inset: -40%;
-    background:
-      radial-gradient(
-        circle at 50% 50%,
-        color-mix(in srgb, var(--accent) 52%, transparent) 0%,
-        transparent 62%
-      );
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--accent) 52%, transparent) 0%,
+      transparent 62%
+    );
     filter: blur(10px);
     opacity: 0.85;
   }
@@ -736,12 +771,11 @@
     content: "";
     position: absolute;
     inset: -40%;
-    background:
-      radial-gradient(
-        circle at 50% 50%,
-        color-mix(in srgb, var(--accent) 38%, transparent) 0%,
-        transparent 62%
-      );
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--accent) 38%, transparent) 0%,
+      transparent 62%
+    );
     filter: blur(8px);
     opacity: 0.9;
   }
@@ -1031,7 +1065,7 @@
 
     .rail-cover,
     .rail-cover-grid {
-    border-radius: var(--radius-sm);
+      border-radius: var(--radius-sm);
     }
 
     .rail-name {

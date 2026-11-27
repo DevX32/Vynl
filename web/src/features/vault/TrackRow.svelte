@@ -34,16 +34,23 @@
 
   function statusLabel(s: TrackProgress["status"], message?: string): string {
     switch (s) {
-      case "done": return t("common.done");
-      case "error": return t("common.failed");
+      case "done":
+        return t("common.done");
+      case "error":
+        return t("common.failed");
       case "skipped":
         if (message?.includes("length")) return t("trackRow.badLen");
         return t("trackRow.exists");
-      case "cancelled": return t("trackRow.cancelled");
-      case "searching": return t("common.search");
-      case "processing": return t("trackRow.tag");
-      case "downloading": return "";
-      default: return t("common.queue");
+      case "cancelled":
+        return t("trackRow.cancelled");
+      case "searching":
+        return t("common.search");
+      case "processing":
+        return t("trackRow.tag");
+      case "downloading":
+        return "";
+      default:
+        return t("common.queue");
     }
   }
 
@@ -59,7 +66,8 @@
     !!selected &&
       !!selected.duration &&
       !!track.duration &&
-      Math.abs(selected.duration - track.duration) / track.duration > DURATION_TOLERANCE,
+      Math.abs(selected.duration - track.duration) / track.duration >
+        DURATION_TOLERANCE,
   );
 </script>
 
@@ -67,10 +75,14 @@
   class="row"
   class:done={status === "done"}
   class:failed={status === "error"}
-  class:active={isDownloading || status === "processing" || status === "searching"}
+  class:active={isDownloading ||
+    status === "processing" ||
+    status === "searching"}
 >
   <span class="c-num mono" class:hidden={!track.trackNumber}>
-    {track.trackNumber != null ? String(track.trackNumber).padStart(2, "0") : "··"}
+    {track.trackNumber != null
+      ? String(track.trackNumber).padStart(2, "0")
+      : "··"}
   </span>
 
   <span class="c-cover">
@@ -80,7 +92,8 @@
   <div class="c-title">
     <div class="title">{track.title}</div>
     <div class="sub mono">
-      {track.artist}{#if track.album} · {track.album}{/if}
+      {track.artist}{#if track.album}
+        · {track.album}{/if}
     </div>
   </div>
 
@@ -122,7 +135,10 @@
 <style>
   .row {
     display: grid;
-    grid-template-columns: var(--track-cols, 32px 36px minmax(0, 1fr) minmax(0, 1fr) 70px);
+    grid-template-columns: var(
+      --track-cols,
+      32px 36px minmax(0, 1fr) minmax(0, 1fr) 70px
+    );
     align-items: center;
     gap: var(--col-gap, 8px);
     padding: var(--row-py, 8px) var(--row-px, 0px);
@@ -213,11 +229,19 @@
     text-overflow: ellipsis;
   }
 
-  .status-label.done { color: var(--green); }
-  .status-label.error { color: var(--red); }
-  .status-label.skipped { color: var(--amber); }
+  .status-label.done {
+    color: var(--green);
+  }
+  .status-label.error {
+    color: var(--red);
+  }
+  .status-label.skipped {
+    color: var(--amber);
+  }
   .status-label.cancelled,
-  .status-label.queued { color: var(--faint); }
+  .status-label.queued {
+    color: var(--faint);
+  }
   .status-label.searching {
     color: var(--dim);
     animation: blink 1s steps(2) infinite;

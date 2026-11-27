@@ -2,7 +2,11 @@ import type { CatalogueTrack, LibraryTrack, TasteEntry } from "@lib/types";
 import { cataloguePath } from "@lib/catalogue";
 import { readStringSet } from "@lib/storage";
 import { vynl } from "@lib/vynl";
-import { getCatalogueTrack, enrichCatalogueTrack, removeFromCatalogueTaste } from "./catalogue.svelte";
+import {
+  getCatalogueTrack,
+  enrichCatalogueTrack,
+  removeFromCatalogueTaste,
+} from "./catalogue.svelte";
 import { scheduleCloudSyncPush } from "./sync.svelte";
 
 const TASTE_KEY = "vynl.taste.v1";
@@ -140,7 +144,10 @@ export async function hydrateTaste(): Promise<void> {
   }
 }
 
-function mergeTrack(current: CatalogueTrack, patch: CatalogueTrack): CatalogueTrack {
+function mergeTrack(
+  current: CatalogueTrack,
+  patch: CatalogueTrack,
+): CatalogueTrack {
   const artists =
     patch.artists.length > 0
       ? patch.artists.map((artist) => {
@@ -310,8 +317,7 @@ export function getTasteSeeds(limit = 6): string[] {
         ? (now - entry.lastPlayed) / 86_400_000
         : 60;
       const recency = Math.max(0, 8 - daysSincePlay) / 4;
-      const score =
-        (entry.liked ? 6 : 0) + Math.min(entry.plays, 8) + recency;
+      const score = (entry.liked ? 6 : 0) + Math.min(entry.plays, 8) + recency;
       return { id: entry.track.id, score, lastPlayed: entry.lastPlayed };
     })
     .sort((a, b) => b.score - a.score || b.lastPlayed - a.lastPlayed)

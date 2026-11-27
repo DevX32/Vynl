@@ -1,6 +1,12 @@
 <script lang="ts">
   import { toasts } from "../lib/toast";
-  import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-svelte";
+  import {
+    AlertCircle,
+    AlertTriangle,
+    CheckCircle2,
+    Info,
+    X,
+  } from "lucide-svelte";
   import { fade, fly } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { t } from "@lib/i18n";
@@ -125,7 +131,9 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     transform: rotate(45deg);
-    transition: color 120ms, border-color 120ms;
+    transition:
+      color 120ms,
+      border-color 120ms;
   }
 
   button :global(svg) {

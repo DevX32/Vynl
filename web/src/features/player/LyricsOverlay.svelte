@@ -5,7 +5,10 @@
   import { fly } from "svelte/transition";
   import { cubicOut, cubicIn } from "svelte/easing";
 
-  let { onclose, fullscreen = false }: { onclose: () => void; fullscreen?: boolean } = $props();
+  let {
+    onclose,
+    fullscreen = false,
+  }: { onclose: () => void; fullscreen?: boolean } = $props();
 
   const track = $derived(getCurrentTrack());
 </script>

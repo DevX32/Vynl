@@ -8,7 +8,10 @@
     SkipBack,
     SkipForward,
   } from "lucide-svelte";
-  import { getCurrentTrack, getIsTrackPlaying } from "@state/now-playing.svelte";
+  import {
+    getCurrentTrack,
+    getIsTrackPlaying,
+  } from "@state/now-playing.svelte";
   import {
     getCurrentLoop,
     getCurrentShuffle,

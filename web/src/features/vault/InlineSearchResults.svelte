@@ -83,9 +83,10 @@
           </span>
           <span class="meta">
             <span class="name">{r.title}</span>
-            <span class="artist"
-              >{r.artist}{#if r.album} · {r.album}{/if}</span
-            >
+            <span class="artist">
+              {r.artist}{#if r.album}
+                · {r.album}{/if}
+            </span>
           </span>
           {#if r.duration}
             <span class="dur mono">{fmtDuration(r.duration)}</span>

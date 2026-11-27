@@ -2,7 +2,11 @@
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { Volume2, VolumeOff, X } from "lucide-svelte";
-  import { getCurrentTrack, getIsTrackPlaying, getCurrentTime } from "@state/now-playing.svelte";
+  import {
+    getCurrentTrack,
+    getIsTrackPlaying,
+    getCurrentTime,
+  } from "@state/now-playing.svelte";
   import {
     getCurrentMuted,
     getCurrentVolume,
@@ -42,7 +46,6 @@
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
-
 </script>
 
 <div class="fs-overlay" transition:fade={{ duration: 200 }}>
@@ -83,7 +86,15 @@
         </div>
 
         <div class="fs-vol">
-          <button class="vol-btn" onclick={() => { toggleMute(); }} aria-label={getCurrentMuted() ? t("player.unmute") : t("player.mute")}>
+          <button
+            class="vol-btn"
+            onclick={() => {
+              toggleMute();
+            }}
+            aria-label={getCurrentMuted()
+              ? t("player.unmute")
+              : t("player.mute")}
+          >
             {#if getCurrentMuted() || getCurrentVolume() === 0}
               <VolumeOff size={14} stroke-width={1.5} />
             {:else}
@@ -151,7 +162,11 @@
     cursor: pointer;
     transform: translateY(-50%) rotate(45deg);
     opacity: 0;
-    transition: opacity 0.15s ease, color 0.15s, background 0.15s, border-color 0.15s;
+    transition:
+      opacity 0.15s ease,
+      color 0.15s,
+      background 0.15s,
+      border-color 0.15s;
   }
 
   .fs-close :global(svg) {
@@ -250,5 +265,4 @@
     height: 100%;
     padding: 16px 24px;
   }
-
 </style>

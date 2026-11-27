@@ -1,14 +1,56 @@
+import { de } from "@lib/locales/de";
 import { en } from "@lib/locales/en";
+import { es } from "@lib/locales/es";
 
-type Locale = "en";
+export type Locale = "en" | "es" | "de";
 
-const locales: Record<Locale, Record<string, unknown>> = { en };
+export const LOCALES: ReadonlyArray<{ id: Locale; label: string }> = [
+  { id: "en", label: "English" },
+  { id: "es", label: "Español" },
+  { id: "de", label: "Deutsch" },
+];
 
-let _locale = $state<Locale>(
-  typeof localStorage === "undefined"
-    ? "en"
-    : ((localStorage.getItem("vynl.locale") as Locale | null) ?? "en"),
-);
+type Messages = typeof en;
+
+const locales: Record<Locale, Messages> = { en, es, de };
+
+function isLocale(value: string | null): value is Locale {
+  return value === "en" || value === "es" || value === "de";
+}
+
+function detectLocale(): Locale {
+  if (typeof localStorage !== "undefined") {
+    const stored = localStorage.getItem("vynl.locale");
+    if (isLocale(stored)) return stored;
+  }
+  if (typeof navigator !== "undefined") {
+    for (const language of navigator.languages ?? [navigator.language]) {
+      const base = language.toLowerCase().split("-")[0];
+      if (isLocale(base)) return base;
+    }
+  }
+  return "en";
+}
+
+let _locale = $state<Locale>(detectLocale());
+
+if (typeof document !== "undefined") {
+  document.documentElement.lang = _locale;
+}
+
+export function getLocale(): Locale {
+  return _locale;
+}
+
+export function setLocale(locale: Locale): void {
+  _locale = locale;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("vynl.locale", locale);
+  }
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = locale;
+  }
+}
 
 function get(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
@@ -19,14 +61,21 @@ function get(obj: unknown, path: string): unknown {
   return cur;
 }
 
+function interpolate(
+  value: string,
+  params?: Record<string, string | number>,
+): string {
+  if (!params) return value;
+  return value.replace(/\{(\w+)\}/g, (_, key: string) =>
+    key in params ? String(params[key]) : `{${key}}`,
+  );
+}
+
 export function t(
   key: string,
   params?: Record<string, string | number>,
 ): string {
   const val = get(locales[_locale], key) ?? get(locales.en, key) ?? key;
   if (typeof val !== "string") return key;
-  if (!params) return val;
-  return val.replace(/\{(\w+)\}/g, (_, k: string) =>
-    k in params ? String(params[k]) : `{${k}}`,
-  );
+  return interpolate(val, params);
 }

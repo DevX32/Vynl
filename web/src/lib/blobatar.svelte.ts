@@ -83,7 +83,8 @@ export function avatarProps(
   if (custom.hue !== null) options.hue = custom.hue;
   if (custom.tone !== null) options.tone = custom.tone;
   if (custom.background === "none") options.background = false;
-  else if (custom.background !== "default") options.background = custom.background;
+  else if (custom.background !== "default")
+    options.background = custom.background;
   if (custom.shape && SHAPE_BANDS[custom.shape] !== undefined) {
     options.traits = { shape: SHAPE_BANDS[custom.shape] };
   }

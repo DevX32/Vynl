@@ -259,7 +259,9 @@ function handleTick(tick: PlaybackTick): void {
       updateMediaSession();
       if (streamError && catalogueIdOf(np.path) === streamError.videoId) {
         consecutivePlayFailures += 1;
-        setPlayError(friendlyError(streamError.message, t("error.couldNotPlay")));
+        setPlayError(
+          friendlyError(streamError.message, t("error.couldNotPlay")),
+        );
         if (consecutivePlayFailures >= MAX_CONSECUTIVE_PLAY_FAILURES) {
           return;
         }
@@ -415,7 +417,11 @@ function updateMediaSession(): void {
   };
   if (np.cover) {
     meta.artwork = [
-      { src: /^https?:\/\//i.test(np.cover) ? np.cover : convertFileSrc(np.cover) },
+      {
+        src: /^https?:\/\//i.test(np.cover)
+          ? np.cover
+          : convertFileSrc(np.cover),
+      },
     ];
   }
   navigator.mediaSession.metadata = new MediaMetadata(meta);
@@ -497,7 +503,9 @@ function extractVideoId(value: string): string | null {
   return null;
 }
 
-async function resolveMissingStreamVideoId(path: string): Promise<string | null> {
+async function resolveMissingStreamVideoId(
+  path: string,
+): Promise<string | null> {
   try {
     const source = await vynl.syncResolveMissingSource(path);
     const fromSource = source ? extractVideoId(source) : null;
@@ -528,7 +536,8 @@ async function playNative(
   if (seekTo !== undefined && (!Number.isFinite(seekTo) || seekTo < 0)) {
     throw new Error("invalid seek time");
   }
-  const normalizedSeek = seekTo !== undefined && seekTo > 0 ? seekTo : undefined;
+  const normalizedSeek =
+    seekTo !== undefined && seekTo > 0 ? seekTo : undefined;
   const videoId = catalogueIdOf(path);
   if (videoId) {
     const np = getCurrentTrack();
@@ -557,10 +566,7 @@ async function playNative(
       if (normalizedSeek === undefined) prebufferState.delete(missingId);
       return info;
     }
-    if (
-      normalizedSeek === undefined ||
-      !isSeekUnsupported(error)
-    ) {
+    if (normalizedSeek === undefined || !isSeekUnsupported(error)) {
       throw error;
     }
     await vynl.playerPlay(path, undefined, generation);
@@ -568,31 +574,29 @@ async function playNative(
   return null;
 }
 
-function loadAndPlayNative(
-  path: string,
-  gen: number,
-  seekTo?: number,
-): void {
+function loadAndPlayNative(path: string, gen: number, seekTo?: number): void {
   beginPlayReconcile(gen);
   schedulePrebuffers();
-  void playNative(path, seekTo, gen).then((info) => {
-    finishPlayReconcile(gen);
-    if (gen !== playGeneration) return;
-    if (info?.duration && info.duration > 0) {
-      const np = getCurrentTrack();
-      if (np && !(np.duration > 0)) {
-        patchNowPlaying({ duration: info.duration });
+  void playNative(path, seekTo, gen)
+    .then((info) => {
+      finishPlayReconcile(gen);
+      if (gen !== playGeneration) return;
+      if (info?.duration && info.duration > 0) {
+        const np = getCurrentTrack();
+        if (np && !(np.duration > 0)) {
+          patchNowPlaying({ duration: info.duration });
+        }
       }
-    }
-    if (pendingStreamError) return;
-    updatePlaying(true);
-    updateMediaSession();
-    schedulePrebuffers();
-  }).catch((err) => {
-    finishPlayReconcile(gen);
-    if (gen !== playGeneration) return;
-    handlePlayReject(err);
-  });
+      if (pendingStreamError) return;
+      updatePlaying(true);
+      updateMediaSession();
+      schedulePrebuffers();
+    })
+    .catch((err) => {
+      finishPlayReconcile(gen);
+      if (gen !== playGeneration) return;
+      handlePlayReject(err);
+    });
 }
 
 export function playTrack(
@@ -690,7 +694,8 @@ export function toggle(): void {
   }
   const np = getCurrentTrack();
   if (!np) return;
-  const effectivelyPlaying = np.playing !== (pauseIntent > 0) || resumePending > 0;
+  const effectivelyPlaying =
+    np.playing !== pauseIntent > 0 || resumePending > 0;
   if (effectivelyPlaying) {
     pausePlayback();
   } else {
@@ -766,7 +771,13 @@ function maybeStartCrossfade(position: number): boolean {
   if (fade <= 0 || crossfadeTried) return false;
 
   const np = getCurrentTrack();
-  if (!np?.playing || !np.path || !Number.isFinite(np.duration) || np.duration <= 0) return false;
+  if (
+    !np?.playing ||
+    !np.path ||
+    !Number.isFinite(np.duration) ||
+    np.duration <= 0
+  )
+    return false;
   if (isSeekDragging() || seekPending) return false;
   if (getCurrentLoop() === "one") return false;
   if (getSleepMode() === "end") return false;
@@ -1132,7 +1143,11 @@ if (typeof window !== "undefined" && !IS_MINI) {
     $effect(() => {
       const np = getCurrentTrack();
       const playing = getIsTrackPlaying();
-      syncMedia(np, playing, untrack(() => getCurrentTime()));
+      syncMedia(
+        np,
+        playing,
+        untrack(() => getCurrentTime()),
+      );
     });
   });
   const mediaTimer = window.setInterval(() => {

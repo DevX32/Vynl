@@ -98,7 +98,8 @@
     if (!firstRowRo) {
       firstRowRo = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          const h = (entry.target as HTMLElement).getBoundingClientRect().height;
+          const h = (entry.target as HTMLElement).getBoundingClientRect()
+            .height;
           if (h > 0 && Math.abs(h - rowHeight) > 0.5) rowHeight = h;
         }
       });

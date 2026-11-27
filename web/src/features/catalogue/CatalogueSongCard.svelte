@@ -1,7 +1,10 @@
 <script lang="ts">
   import { Music } from "lucide-svelte";
   import { blobSrc } from "@lib/format";
-  import { getCurrentTrack, matchesCurrentSong } from "@state/now-playing.svelte";
+  import {
+    getCurrentTrack,
+    matchesCurrentSong,
+  } from "@state/now-playing.svelte";
   import type { CatalogueTrack } from "@lib/types";
   import { t } from "@lib/i18n";
 
@@ -17,11 +20,7 @@
 
   const isCurrent = $derived.by(() => {
     if (getCurrentTrack()?.id === track.id) return true;
-    return matchesCurrentSong(
-      track.title,
-      track.artist,
-      track.duration ?? 0,
-    );
+    return matchesCurrentSong(track.title, track.artist, track.duration ?? 0);
   });
 </script>
 

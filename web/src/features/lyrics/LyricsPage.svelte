@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { ClipboardPaste, Copy, Keyboard, Search, Settings2, X } from "lucide-svelte";
+  import {
+    ClipboardPaste,
+    Copy,
+    Keyboard,
+    Search,
+    Settings2,
+    X,
+  } from "lucide-svelte";
   import { cubicIn, cubicOut } from "svelte/easing";
   import { fade, fly } from "svelte/transition";
   import { t } from "@lib/i18n";
@@ -29,7 +36,10 @@
   import LyricsPasteOverlay from "./LyricsPasteOverlay.svelte";
   import LyricsSearchOverlay from "./LyricsSearchOverlay.svelte";
 
-  let { onclose, fullscreen = false }: { onclose: () => void; fullscreen?: boolean } = $props();
+  let {
+    onclose,
+    fullscreen = false,
+  }: { onclose: () => void; fullscreen?: boolean } = $props();
 
   type Overlay = "help" | "search" | "paste" | null;
 
@@ -61,8 +71,12 @@
   const result = $derived(getLyricsResult());
   const error = $derived(getLyricsError());
   const playing = $derived(getIsTrackPlaying());
-  const hasRoman = $derived(lines.some((l) => !!l.roman && l.roman.trim() !== ""));
-  const hasContent = $derived(lines.some((l) => l.text.trim() !== "" || isInstrumental(l.text)));
+  const hasRoman = $derived(
+    lines.some((l) => !!l.roman && l.roman.trim() !== ""),
+  );
+  const hasContent = $derived(
+    lines.some((l) => l.text.trim() !== "" || isInstrumental(l.text)),
+  );
 
   function readAutoScroll(): boolean {
     if (typeof localStorage === "undefined") return true;
@@ -90,7 +104,11 @@
     toastTimer = setTimeout(() => (toast = ""), 1600);
   }
 
-  function copy(text: string, key = "lyrics.copied", values: Record<string, string | number> = {}): void {
+  function copy(
+    text: string,
+    key = "lyrics.copied",
+    values: Record<string, string | number> = {},
+  ): void {
     vynl
       .copyText(text)
       .then(() => showToast(t(key, values)))
@@ -109,7 +127,10 @@
   }
 
   function prefersReducedMotion(): boolean {
-    return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return (
+      typeof matchMedia === "function" &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
   }
 
   function targetScrollTop(index: number): number | null {
@@ -121,7 +142,8 @@
     const current = c.scrollTop;
     const offset = eRect.top - cRect.top + current;
     const topPad = 84;
-    const target = offset - topPad - Math.max(0, (c.clientHeight - eRect.height) * 0.18);
+    const target =
+      offset - topPad - Math.max(0, (c.clientHeight - eRect.height) * 0.18);
     const max = Math.max(0, c.scrollHeight - c.clientHeight);
     return Math.max(0, Math.min(target, max));
   }
@@ -218,8 +240,15 @@
   $effect(() => {
     const c = container;
     const canScroll =
-      !synced && autoScroll && !userScrolling && !overlay && !settingsOpen &&
-      selected.length === 0 && !!result && lines.length > 0 && !!c;
+      !synced &&
+      autoScroll &&
+      !userScrolling &&
+      !overlay &&
+      !settingsOpen &&
+      selected.length === 0 &&
+      !!result &&
+      lines.length > 0 &&
+      !!c;
     if (!canScroll) {
       cancelPassive();
       return;
@@ -228,7 +257,10 @@
     const speed = 18;
     const step = (now: number) => {
       const el = container;
-      if (!el) { cancelPassive(); return; }
+      if (!el) {
+        cancelPassive();
+        return;
+      }
       if (passiveLast === null) passiveLast = now;
       const dt = Math.min(0.05, (now - passiveLast) / 1000);
       passiveLast = now;
@@ -273,7 +305,9 @@
   function onLineClick(e: MouseEvent, i: number): void {
     e.stopPropagation();
     if (e.ctrlKey || e.metaKey) {
-      selected = selected.includes(i) ? selected.filter((x) => x !== i) : [...selected, i].sort((a, b) => a - b);
+      selected = selected.includes(i)
+        ? selected.filter((x) => x !== i)
+        : [...selected, i].sort((a, b) => a - b);
       return;
     }
     const line = lines[i];
@@ -298,12 +332,21 @@
   }
 
   function copyAll(): void {
-    const text = lines.map((l) => l.text.trim()).filter(Boolean).join("\n\n");
-    if (text) copy(text, "lyrics.copiedAll", { n: lines.filter((l) => l.text.trim()).length });
+    const text = lines
+      .map((l) => l.text.trim())
+      .filter(Boolean)
+      .join("\n\n");
+    if (text)
+      copy(text, "lyrics.copiedAll", {
+        n: lines.filter((l) => l.text.trim()).length,
+      });
   }
 
   function copySelected(): void {
-    const text = selected.map((i) => lines[i]?.text?.trim()).filter((v): v is string => !!v).join("\n\n");
+    const text = selected
+      .map((i) => lines[i]?.text?.trim())
+      .filter((v): v is string => !!v)
+      .join("\n\n");
     if (text)
       copy(text, "lyrics.copiedN", {
         n: selected.length,
@@ -317,10 +360,19 @@
   }
 </script>
 
-{#snippet modal(title: string, close: () => void, body: import("svelte").Snippet)}
+{#snippet modal(
+  title: string,
+  close: () => void,
+  body: import("svelte").Snippet,
+)}
   <div class="modal" transition:fade={{ duration: 120 }}>
-    <button class="backdrop" onclick={close} aria-label={t("common.esc")}></button>
-    <div class="modal-card" in:fly={{ y: 8, duration: 180, easing: cubicOut }} out:fly={{ y: 8, duration: 120, easing: cubicIn }}>
+    <button class="backdrop" onclick={close} aria-label={t("common.esc")}
+    ></button>
+    <div
+      class="modal-card"
+      in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+      out:fly={{ y: 8, duration: 120, easing: cubicIn }}
+    >
       <div class="modal-title display">{title}</div>
       {@render body()}
     </div>
@@ -333,7 +385,7 @@
       <aside class="art-col">
         <NowPlayingArt
           current={np}
-          playing={playing}
+          {playing}
           playError={null}
           scanning={false}
           lyricsOpen={true}
@@ -348,58 +400,112 @@
         <header class="head">
           <div class="track">
             {#if np.cover}
-              <img class="cover" use:blobSrc={np.cover} alt="" draggable="false" />
+              <img
+                class="cover"
+                use:blobSrc={np.cover}
+                alt=""
+                draggable="false"
+              />
             {:else}
-              <div class="cover placeholder">{np.title.charAt(0).toUpperCase()}</div>
+              <div class="cover placeholder">
+                {np.title.charAt(0).toUpperCase()}
+              </div>
             {/if}
             <div class="track-text">
               <div class="title display">{np.title}</div>
               <div class="meta mono">
                 <span>{np.artist || t("common.unknownArtist")}</span>
-                {#if np.album}<span class="sep">·</span><span class="album">{np.album}</span>{/if}
+                {#if np.album}<span class="sep">·</span><span class="album">
+                    {np.album}
+                  </span>{/if}
               </div>
             </div>
           </div>
 
           <div class="lyr-controls">
-            <button class="lyr-icon" onclick={copyAll} aria-label={t("lyrics.copyAllLyrics")} disabled={!hasContent}>
+            <button
+              class="lyr-icon"
+              onclick={copyAll}
+              aria-label={t("lyrics.copyAllLyrics")}
+              disabled={!hasContent}
+            >
               <Copy size={14} stroke-width={1.5} />
             </button>
-            <button class="lyr-icon" class:active={settingsOpen} onclick={() => (settingsOpen = !settingsOpen)} aria-label={t("common.settings")}>
+            <button
+              class="lyr-icon"
+              class:active={settingsOpen}
+              onclick={() => (settingsOpen = !settingsOpen)}
+              aria-label={t("common.settings")}
+            >
               <Settings2 size={14} stroke-width={1.5} />
             </button>
             <span class="lyr-divider" aria-hidden="true"></span>
-            <button class="lyr-icon" onclick={onclose} aria-label={t("lyrics.closeLyrics")}>
+            <button
+              class="lyr-icon"
+              onclick={onclose}
+              aria-label={t("lyrics.closeLyrics")}
+            >
               <X size={14} stroke-width={1.5} />
             </button>
           </div>
 
           {#if settingsOpen}
-            <div class="lyr-settings" bind:this={settingsEl} transition:fly={{ y: -6, duration: 150, easing: cubicOut }}>
+            <div
+              class="lyr-settings"
+              bind:this={settingsEl}
+              transition:fly={{ y: -6, duration: 150, easing: cubicOut }}
+            >
               <div class="settings-row">
-                <span class="settings-label mono">{t("lyrics.autoScroll")}</span>
-                <button class="mini-switch" class:on={autoScroll} onclick={() => setAutoScroll(!autoScroll)} aria-label={t("lyrics.toggleAutoScroll")}><span></span></button>
+                <span class="settings-label mono">
+                  {t("lyrics.autoScroll")}
+                </span>
+                <button
+                  class="mini-switch"
+                  class:on={autoScroll}
+                  onclick={() => setAutoScroll(!autoScroll)}
+                  aria-label={t("lyrics.toggleAutoScroll")}
+                >
+                  <span></span>
+                </button>
               </div>
               {#if hasRoman}
                 <div class="settings-row">
-                  <span class="settings-label mono">{t("lyrics.romanization")}</span>
-                  <button class="mini-switch" class:on={showRomanization} onclick={() => setRomanization(!showRomanization)} aria-label={t("lyrics.toggleRomanization")}><span></span></button>
+                  <span class="settings-label mono">
+                    {t("lyrics.romanization")}
+                  </span>
+                  <button
+                    class="mini-switch"
+                    class:on={showRomanization}
+                    onclick={() => setRomanization(!showRomanization)}
+                    aria-label={t("lyrics.toggleRomanization")}
+                  >
+                    <span></span>
+                  </button>
                 </div>
               {/if}
               <div class="settings-row">
-                <button class="btn-ghost settings-action mono" onclick={() => open("search")}>
+                <button
+                  class="btn-ghost settings-action mono"
+                  onclick={() => open("search")}
+                >
                   <Search size={13} stroke-width={1.5} />
                   {t("common.search")}
                 </button>
               </div>
               <div class="settings-row">
-                <button class="btn-ghost settings-action mono" onclick={() => open("paste")}>
+                <button
+                  class="btn-ghost settings-action mono"
+                  onclick={() => open("paste")}
+                >
                   <ClipboardPaste size={13} stroke-width={1.5} />
                   {t("lyrics.paste")}
                 </button>
               </div>
               <div class="settings-row">
-                <button class="btn-ghost settings-action mono" onclick={() => open("help")}>
+                <button
+                  class="btn-ghost settings-action mono"
+                  onclick={() => open("help")}
+                >
                   <Keyboard size={13} stroke-width={1.5} />
                   {t("lyrics.shortcuts")}
                 </button>
@@ -420,29 +526,57 @@
         ontouchmove={noteUserScroll}
       >
         {#if loading && lines.length === 0}
-          <div class="empty" transition:fade={{ duration: 120 }} role="status" aria-label={t("lyrics.loadingLyrics")}>
+          <div
+            class="empty"
+            transition:fade={{ duration: 120 }}
+            role="status"
+            aria-label={t("lyrics.loadingLyrics")}
+          >
             <div class="skeleton" aria-hidden="true">
               {#each { length: 6 } as _, i (i)}
-                <div class="skeleton-line" style:--w={`${70 - (i % 3) * 12}%`}></div>
+                <div
+                  class="skeleton-line"
+                  style:--w={`${70 - (i % 3) * 12}%`}
+                ></div>
               {/each}
             </div>
           </div>
         {:else if !result && error}
           <div class="empty" transition:fade={{ duration: 120 }}>
             <div class="empty-title display">{t("lyrics.loadFailed")}</div>
-            <button class="retry-btn mono" onclick={() => loadLyrics(getCurrentId(), true)}>{t("common.retry")}</button>
+            <button
+              class="retry-btn mono"
+              onclick={() => loadLyrics(getCurrentId(), true)}
+            >
+              {t("common.retry")}
+            </button>
           </div>
         {:else if !result}
           <div class="empty" transition:fade={{ duration: 120 }}>
             <div class="empty-title display">{t("lyrics.noLyricsFound")}</div>
-            <button class="retry-btn mono" onclick={() => loadLyrics(getCurrentId(), true)}>{t("common.retry")}</button>
+            <button
+              class="retry-btn mono"
+              onclick={() => loadLyrics(getCurrentId(), true)}
+            >
+              {t("common.retry")}
+            </button>
             <div class="empty-actions">
-              <button class="retry-btn mono" onclick={() => open("search")}><Search size={13} stroke-width={1.5} />{t("lyrics.searchLyrics")}</button>
-              <button class="retry-btn mono" onclick={() => open("paste")}><ClipboardPaste size={13} stroke-width={1.5} />{t("lyrics.paste")}</button>
+              <button class="retry-btn mono" onclick={() => open("search")}>
+                <Search size={13} stroke-width={1.5} />{t(
+                  "lyrics.searchLyrics",
+                )}
+              </button>
+              <button class="retry-btn mono" onclick={() => open("paste")}>
+                <ClipboardPaste size={13} stroke-width={1.5} />{t(
+                  "lyrics.paste",
+                )}
+              </button>
             </div>
           </div>
         {:else if lines.length === 0}
-          <div class="empty mono" transition:fade={{ duration: 120 }}>{t("lyrics.emptyLyricsFile")}</div>
+          <div class="empty mono" transition:fade={{ duration: 120 }}>
+            {t("lyrics.emptyLyricsFile")}
+          </div>
         {:else}
           {#each lines as line, i (i)}
             {@const active = i === activeIndex}
@@ -463,14 +597,18 @@
             >
               <span class="line-inner">
                 {#if instrumental}
-                  <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                  <span class="dots" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                  </span>
                 {:else if active && line.words?.length}
                   <KaraokeWords words={line.words} lineEnd={line.end} />
                 {:else}
                   <span class="text">{line.text || "\u00A0"}</span>
                 {/if}
                 {#if showRomanization && line.roman}
-                  <span class="roman" class:open={active}><span class="roman-text">{line.roman}</span></span>
+                  <span class="roman" class:open={active}>
+                    <span class="roman-text">{line.roman}</span>
+                  </span>
                 {/if}
               </span>
             </button>
@@ -479,23 +617,64 @@
       </div>
 
       {#if selected.length > 0}
-        <div class="selection" transition:fly={{ y: 8, duration: 140, easing: cubicOut }}>
-          <span class="selection-count mono">{t("lyrics.nLines", { n: selected.length, unit: selected.length === 1 ? t("lyrics.line") : t("lyrics.lines"), c: selected.reduce((n, i) => n + (lines[i]?.text?.length ?? 0), 0) })}</span>
-          <button class="sel-btn" onclick={copySelected} aria-label={t("lyrics.copySelected")}><Copy size={13} stroke-width={1.5} /></button>
-          <button class="sel-btn" onclick={() => (selected = [])} aria-label={t("lyrics.clearSelection")}><X size={13} stroke-width={1.5} /></button>
+        <div
+          class="selection"
+          transition:fly={{ y: 8, duration: 140, easing: cubicOut }}
+        >
+          <span class="selection-count mono">
+            {t("lyrics.nLines", {
+              n: selected.length,
+              unit:
+                selected.length === 1 ? t("lyrics.line") : t("lyrics.lines"),
+              c: selected.reduce(
+                (n, i) => n + (lines[i]?.text?.length ?? 0),
+                0,
+              ),
+            })}
+          </span>
+          <button
+            class="sel-btn"
+            onclick={copySelected}
+            aria-label={t("lyrics.copySelected")}
+          >
+            <Copy size={13} stroke-width={1.5} />
+          </button>
+          <button
+            class="sel-btn"
+            onclick={() => (selected = [])}
+            aria-label={t("lyrics.clearSelection")}
+          >
+            <X size={13} stroke-width={1.5} />
+          </button>
         </div>
       {/if}
 
       {#if userScrolling && synced && activeIndex >= 0 && autoScroll && selected.length === 0}
-        <button class="jump-btn mono" onclick={jumpToCurrent} transition:fly={{ y: 8, duration: 140, easing: cubicOut }}>
+        <button
+          class="jump-btn mono"
+          onclick={jumpToCurrent}
+          transition:fly={{ y: 8, duration: 140, easing: cubicOut }}
+        >
           {t("lyrics.jumpToCurrent")}
         </button>
       {/if}
     </div>
 
-    {#if overlay === "help"}{@render modal(t("lyrics.helpTitle"), () => (overlay = null), helpBody)}{/if}
-    {#if overlay === "search"}{@render modal(t("lyrics.searchLyrics"), () => (overlay = null), searchBody)}{/if}
-    {#if overlay === "paste"}{@render modal(t("lyrics.pasteLyrics"), () => (overlay = null), pasteBody)}{/if}
+    {#if overlay === "help"}{@render modal(
+        t("lyrics.helpTitle"),
+        () => (overlay = null),
+        helpBody,
+      )}{/if}
+    {#if overlay === "search"}{@render modal(
+        t("lyrics.searchLyrics"),
+        () => (overlay = null),
+        searchBody,
+      )}{/if}
+    {#if overlay === "paste"}{@render modal(
+        t("lyrics.pasteLyrics"),
+        () => (overlay = null),
+        pasteBody,
+      )}{/if}
 
     {#if toast}
       <div class="toast mono" transition:fade={{ duration: 120 }}>{toast}</div>
@@ -508,9 +687,15 @@
   {/if}
 </section>
 
-{#snippet helpBody()}<LyricsHelpOverlay onClose={() => (overlay = null)} />{/snippet}
-{#snippet searchBody()}<LyricsSearchOverlay onClose={() => (overlay = null)} />{/snippet}
-{#snippet pasteBody()}<LyricsPasteOverlay onClose={() => (overlay = null)} />{/snippet}
+{#snippet helpBody()}<LyricsHelpOverlay
+    onClose={() => (overlay = null)}
+  />{/snippet}
+{#snippet searchBody()}<LyricsSearchOverlay
+    onClose={() => (overlay = null)}
+  />{/snippet}
+{#snippet pasteBody()}<LyricsPasteOverlay
+    onClose={() => (overlay = null)}
+  />{/snippet}
 
 <style>
   :root {
@@ -569,9 +754,16 @@
   .head::after {
     content: "";
     position: absolute;
-    left: 0; right: 0; bottom: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     height: 1px;
-    background: linear-gradient(90deg, var(--line-strong), var(--line) 40%, transparent);
+    background: linear-gradient(
+      90deg,
+      var(--line-strong),
+      var(--line) 40%,
+      transparent
+    );
   }
 
   .track {
@@ -588,18 +780,18 @@
     flex-shrink: 0;
   }
   .cover.placeholder {
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: var(--placeholder-gradient);
     color: var(--faint);
     font-size: 18px;
   }
   .track-text {
     min-width: 0;
-    display:flex;
-    flex-direction:column;
-    gap:4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
   .title {
     font-size: 17px;
@@ -609,10 +801,10 @@
     text-overflow: ellipsis;
   }
   .meta {
-    display:flex;
-    gap:6px;
-    min-width:0;
-    font-size:11px;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
     color: var(--dim);
   }
   .meta > span {
@@ -620,7 +812,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .sep, .album {
+  .sep,
+  .album {
     color: var(--faint);
     flex-shrink: 0;
   }
@@ -655,7 +848,10 @@
     border-radius: 6px;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s,
+      border-color 0.15s;
   }
   .lyr-icon :global(svg) {
     transform: rotate(-45deg);
@@ -731,7 +927,9 @@
     height: 11px;
     border-radius: var(--radius-xs);
     background: var(--faint);
-    transition: transform 0.15s var(--ease-out), background 0.15s;
+    transition:
+      transform 0.15s var(--ease-out),
+      background 0.15s;
   }
   .mini-switch.on {
     background: var(--accent-soft);
@@ -778,8 +976,22 @@
     overflow-x: hidden;
     scrollbar-width: none;
     padding: calc(var(--fade-top) + 36px) 20px 12vh;
-    mask-image: linear-gradient(to bottom, transparent 0, transparent 12px, black var(--fade-top), black calc(100% - var(--fade-bottom)), transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 12px, black var(--fade-top), black calc(100% - var(--fade-bottom)), transparent 100%);
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 12px,
+      black var(--fade-top),
+      black calc(100% - var(--fade-bottom)),
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 12px,
+      black var(--fade-top),
+      black calc(100% - var(--fade-bottom)),
+      transparent 100%
+    );
   }
   .scroll::-webkit-scrollbar {
     display: none;
@@ -790,7 +1002,7 @@
 
   .empty {
     margin: auto;
-    text-align:center;
+    text-align: center;
     color: var(--faint);
     font-size: 11.5px;
   }
@@ -816,7 +1028,10 @@
     font-size: 11px;
     letter-spacing: 0.05em;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
   .retry-btn:hover {
     color: var(--accent);
@@ -844,8 +1059,12 @@
     gap: 14px;
   }
   .skeleton-line {
-    height: 18px; width: var(--w, 70%); margin: 0 auto; border-radius: 6px;
-    background: var(--bg-raise); animation: skel-pulse 1.2s ease-in-out infinite;
+    height: 18px;
+    width: var(--w, 70%);
+    margin: 0 auto;
+    border-radius: 6px;
+    background: var(--bg-raise);
+    animation: skel-pulse 1.2s ease-in-out infinite;
   }
   @keyframes skel-pulse {
     0%,
@@ -879,15 +1098,20 @@
     display: grid;
     grid-template-rows: 1fr;
     transform-origin: center;
-    transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1), margin .32s cubic-bezier(.22,1,.36,1), transform .45s cubic-bezier(.22,1,.36,1), color .35s, opacity .3s;
+    transition:
+      grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+      margin 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      color 0.35s,
+      opacity 0.3s;
   }
   .line:last-child {
     margin-bottom: 0;
   }
   .line-inner {
-    display:block;
-    min-height:0;
-    overflow:hidden;
+    display: block;
+    min-height: 0;
+    overflow: hidden;
     padding: 10px 0;
   }
   .line.active {
@@ -913,11 +1137,14 @@
   }
 
   .roman {
-    display:grid;
+    display: grid;
     grid-template-rows: 0fr;
     opacity: 0;
     margin-top: 0;
-    transition: grid-template-rows .3s, opacity .3s, margin .3s;
+    transition:
+      grid-template-rows 0.3s,
+      opacity 0.3s,
+      margin 0.3s;
   }
   .roman.open {
     grid-template-rows: 1fr;
@@ -925,34 +1152,35 @@
     margin-top: 6px;
   }
   .roman-text {
-    display:block;
-    min-height:0;
-    overflow:hidden;
-    font-size:14px;
-    line-height:1.4;
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.4;
     color: color-mix(in srgb, var(--dim) 70%, var(--bg));
   }
 
   .dots {
-    display:inline-flex;
-    gap:10px;
-    align-items:center;
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
   }
   .dots span {
-    width:10px;
-    height:10px;
-    border-radius:50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
     background: currentColor;
-    opacity:.45;
-    animation: dot 1.4s cubic-bezier(.45,0,.55,1) infinite;
+    opacity: 0.45;
+    animation: dot 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
   .dots span:nth-child(2) {
-    animation-delay: .2s;
+    animation-delay: 0.2s;
   }
   .dots span:nth-child(3) {
-    animation-delay: .4s;
+    animation-delay: 0.4s;
   }
-  .scroll.paused .dots span, .line.hidden-line .dots span {
+  .scroll.paused .dots span,
+  .line.hidden-line .dots span {
     animation-play-state: paused;
   }
   @keyframes dot {
@@ -968,15 +1196,33 @@
   }
 
   .selection {
-    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30;
-    display:flex; align-items:center; gap:4px; padding:5px 6px 5px 14px;
-    background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 6px 5px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
   }
   .jump-btn {
-    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30;
-    padding: 8px 14px; font-size: 10.5px; letter-spacing: .05em;
-    color: var(--dim); background: var(--surface); border: 1px solid var(--line-strong);
-    border-radius: var(--radius-sm); cursor: pointer;
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 8px 14px;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    color: var(--dim);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
   }
   .jump-btn:hover {
     color: var(--accent);
@@ -1002,34 +1248,52 @@
   }
 
   .modal {
-    position:absolute;
-    inset:0;
-    z-index:40;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .backdrop {
-    position:fixed;
-    inset:0;
-    border:none;
-    background: rgba(0,0,0,.3);
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(12px);
-    cursor:pointer;
+    cursor: pointer;
   }
   .modal-card {
-    position:relative; min-width:min(360px, calc(100vw - 32px)); max-width:min(520px, calc(100vw - 32px)); max-height:80%; overflow:hidden;
-    display:flex; flex-direction:column; gap:14px; padding:24px 28px;
-    background: var(--surface); border:1px solid var(--line-strong); border-radius: var(--radius-sm);
+    position: relative;
+    min-width: min(360px, calc(100vw - 32px));
+    max-width: min(520px, calc(100vw - 32px));
+    max-height: 80%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 24px 28px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
   }
   .modal-title {
     font-size: 17px;
   }
 
   .toast {
-    position:absolute; left:50%; bottom:56px; transform:translateX(-50%); z-index:50;
-    padding:8px 18px; font-size:10.5px; letter-spacing:.05em; color:var(--text);
-    background: var(--bg-raise); border:1px solid var(--line-strong); border-radius: var(--radius-sm);
+    position: absolute;
+    left: 50%;
+    bottom: 56px;
+    transform: translateX(-50%);
+    z-index: 50;
+    padding: 8px 18px;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    background: var(--bg-raise);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
   }
 
   @media (max-width: 900px) {
@@ -1042,7 +1306,10 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .line, .lyr-icon, .dots span, .mini-switch span {
+    .line,
+    .lyr-icon,
+    .dots span,
+    .mini-switch span {
       transition: none !important;
       animation: none !important;
     }

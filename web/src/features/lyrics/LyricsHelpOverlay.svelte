@@ -26,7 +26,9 @@
     {t("common.esc")}
   </div>
 </div>
-<button class="btn-ghost help-close" onclick={onClose}>{t("lyrics.gotIt")}</button>
+<button class="btn-ghost help-close" onclick={onClose}>
+  {t("lyrics.gotIt")}
+</button>
 
 <style>
   .help-items {

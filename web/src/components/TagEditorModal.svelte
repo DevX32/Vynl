@@ -9,10 +9,7 @@
   import { focusTrap } from "@lib/actions/focus-trap";
   import { vynl } from "@lib/vynl";
   import type { TrackTags } from "@lib/types";
-  import {
-    closeTagEditor,
-    getTagEditorPath,
-  } from "@state/tag-editor.svelte";
+  import { closeTagEditor, getTagEditorPath } from "@state/tag-editor.svelte";
 
   const path = $derived(getTagEditorPath());
 
@@ -84,7 +81,11 @@
 <svelte:window onkeydown={onKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="overlay" transition:fade={{ duration: 150 }} onclick={closeTagEditor}>
+<div
+  class="overlay"
+  transition:fade={{ duration: 150 }}
+  onclick={closeTagEditor}
+>
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
     class="panel"
@@ -99,7 +100,11 @@
   >
     <div class="head">
       <span class="title display">{t("library.editTags")}</span>
-      <button class="icon-btn close-btn" onclick={closeTagEditor} aria-label={t("common.close")}>
+      <button
+        class="icon-btn close-btn"
+        onclick={closeTagEditor}
+        aria-label={t("common.close")}
+      >
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -108,11 +113,15 @@
         <div class="loading mono">{t("common.loading")}</div>
       {:else}
         <div class="field">
-          <label class="label mono" for="tag-title">{t("common.titleLabel")}</label>
+          <label class="label mono" for="tag-title">
+            {t("common.titleLabel")}
+          </label>
           <input id="tag-title" class="text" bind:value={title} />
         </div>
         <div class="field">
-          <label class="label mono" for="tag-artist">{t("common.artistLabel")}</label>
+          <label class="label mono" for="tag-artist">
+            {t("common.artistLabel")}
+          </label>
           <input id="tag-artist" class="text" bind:value={artist} />
         </div>
         <div class="field">
@@ -125,23 +134,34 @@
             <input id="tag-year" class="text" bind:value={year} />
           </div>
           <div class="field">
-            <label class="label mono" for="tag-track">{t("library.tagTrackNumber")}</label>
+            <label class="label mono" for="tag-track">
+              {t("library.tagTrackNumber")}
+            </label>
             <input id="tag-track" class="text" bind:value={trackNumber} />
           </div>
         </div>
         <div class="field">
-          <label class="label mono" for="tag-genre">{t("library.tagGenre")}</label>
+          <label class="label mono" for="tag-genre">
+            {t("library.tagGenre")}
+          </label>
           <input id="tag-genre" class="text" bind:value={genre} />
         </div>
         <div class="field">
-          <label class="label mono" for="tag-comment">{t("library.tagComment")}</label>
-          <textarea id="tag-comment" class="text" bind:value={comment}></textarea>
+          <label class="label mono" for="tag-comment">
+            {t("library.tagComment")}
+          </label>
+          <textarea id="tag-comment" class="text" bind:value={comment}
+          ></textarea>
         </div>
       {/if}
     </div>
     <div class="foot">
       <Button size="sm" onclick={closeTagEditor}>{t("common.cancel")}</Button>
-      <Button size="sm" onclick={() => void save()} disabled={loading || saving}>
+      <Button
+        size="sm"
+        onclick={() => void save()}
+        disabled={loading || saving}
+      >
         {saving ? t("common.saving") : t("common.save")}
       </Button>
     </div>
@@ -226,7 +246,10 @@
     padding: 24px 0;
   }
   .foot {
-    display: flex; justify-content: flex-end; gap: 8px;
-    padding: 12px 18px; border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
   }
 </style>

@@ -62,7 +62,9 @@ function loadRegistry(): LibraryTrack[] {
       album: track.album,
       year: null,
       duration:
-        Number.isFinite(track.duration) && track.duration >= 0 ? track.duration : 0,
+        Number.isFinite(track.duration) && track.duration >= 0
+          ? track.duration
+          : 0,
       cover: track.cover,
       trackNumber: null,
       lyrics: null,
@@ -93,14 +95,16 @@ function registryIndex(): Map<string, LibraryTrack> {
 function writeRegistry(): void {
   if (typeof localStorage === "undefined") return;
   try {
-    const stored: StoredTrack[] = _tracks.slice(-REGISTRY_LIMIT).map((track) => ({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      album: track.album,
-      duration: track.duration,
-      cover: track.cover,
-    }));
+    const stored: StoredTrack[] = _tracks
+      .slice(-REGISTRY_LIMIT)
+      .map((track) => ({
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration,
+        cover: track.cover,
+      }));
     localStorage.setItem(REGISTRY_KEY, JSON.stringify(stored));
   } catch (error) {
     console.warn("catalogue registry save failed:", error);
@@ -167,7 +171,9 @@ function sameMetadata(a: LibraryTrack, b: LibraryTrack): boolean {
   );
 }
 
-export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void {
+export function registerCatalogueTracks(
+  tracks: readonly CatalogueTrack[],
+): void {
   if (tracks.length === 0) return;
   const next = new Map(registryIndex());
   let changed = false;
@@ -177,7 +183,11 @@ export function registerCatalogueTracks(tracks: readonly CatalogueTrack[]): void
     const current = next.get(entry.id);
     const mergedEntry =
       current && entry.duration <= 0 && current.duration > 0
-        ? { ...entry, duration: current.duration, cover: entry.cover ?? current.cover }
+        ? {
+            ...entry,
+            duration: current.duration,
+            cover: entry.cover ?? current.cover,
+          }
         : entry;
     if (!current || !sameMetadata(current, mergedEntry)) changed = true;
     next.set(entry.id, mergedEntry);
@@ -350,7 +360,9 @@ function writeTasteCache(cache: TasteCache): void {
 
 const cachedTaste = readTasteCache();
 const cachedDismissed = readDismissedIds();
-const cachedTracks = (cachedTaste?.tracks ?? []).filter((t) => !cachedDismissed.has(t.id));
+const cachedTracks = (cachedTaste?.tracks ?? []).filter(
+  (t) => !cachedDismissed.has(t.id),
+);
 if (cachedTracks.length > 0) {
   registerCatalogueTracks(cachedTracks);
 }
@@ -372,7 +384,11 @@ export function removeFromCatalogueTaste(id: string): void {
   if (next.length === _taste.length) return;
   _taste = next;
   if (_tasteProfileKey) {
-    writeTasteCache({ profileKey: _tasteProfileKey, seedsKey: _tasteKey, tracks: _taste });
+    writeTasteCache({
+      profileKey: _tasteProfileKey,
+      seedsKey: _tasteKey,
+      tracks: _taste,
+    });
   }
 }
 
@@ -438,7 +454,10 @@ export async function loadCatalogueTaste(
     const dismissed = readDismissedIds();
     const filtered = tracks.filter((t) => !dismissed.has(t.id));
     if (previous.length > 0) {
-      const kept = shuffle(previous.filter((t) => !dismissed.has(t.id))).slice(0, TASTE_KEEP);
+      const kept = shuffle(previous.filter((t) => !dismissed.has(t.id))).slice(
+        0,
+        TASTE_KEEP,
+      );
       const keptIds = new Set(kept.map((track) => track.id));
       const fresh = filtered
         .filter((track) => !keptIds.has(track.id))

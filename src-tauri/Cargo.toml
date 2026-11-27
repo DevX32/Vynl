@@ -42,7 +42,7 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 ctrlc = "3"
-rodio = "0.19"
+rodio = { version = "0.19", default-features = false }
 uuid = { version = "1", features = ["v4"] }
 lofty = "0.25"
 axum = { version = "0.8", features = ["multipart"] }

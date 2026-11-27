@@ -64,7 +64,12 @@
   ): void {
     const track = tracksOf(section)[idx];
     if (track) {
-      start(e, { section, idx, path: track.path, paths: tracksOf(section).map((t) => t.path) });
+      start(e, {
+        section,
+        idx,
+        path: track.path,
+        paths: tracksOf(section).map((t) => t.path),
+      });
     }
   }
 
@@ -76,7 +81,6 @@
       behavior: calm ? "auto" : "smooth",
     });
   });
-
 </script>
 
 <aside class="queue" transition:slide={{ axis: "x", duration: 240 }}>
@@ -140,26 +144,26 @@
     </div>
 
     {#if np}
-        <div class="np-slot">
-          {#key `${np.id}:${playToken}`}
-            <div
-              class="now-playing"
-              in:fade={{ duration: calm ? 0 : 200 }}
-              out:fade={{ duration: calm ? 0 : 140 }}
-            >
-              <div class="q-cover">
-                <TrackCover src={np.cover} />
-              </div>
-              <div class="q-meta">
-                <span class="q-title accent">{np.title}</span>
-                {#if "artist" in np && np.artist}
-                  <span class="q-artist">{np.artist}</span>
-                {/if}
-              </div>
-              <span class="q-dur mono">{fmtTime(np.duration, "--:--")}</span>
+      <div class="np-slot">
+        {#key `${np.id}:${playToken}`}
+          <div
+            class="now-playing"
+            in:fade={{ duration: calm ? 0 : 200 }}
+            out:fade={{ duration: calm ? 0 : 140 }}
+          >
+            <div class="q-cover">
+              <TrackCover src={np.cover} />
             </div>
-          {/key}
-        </div>
+            <div class="q-meta">
+              <span class="q-title accent">{np.title}</span>
+              {#if "artist" in np && np.artist}
+                <span class="q-artist">{np.artist}</span>
+              {/if}
+            </div>
+            <span class="q-dur mono">{fmtTime(np.duration, "--:--")}</span>
+          </div>
+        {/key}
+      </div>
 
       <div class="queue-body" bind:this={drag.rowsEl} bind:this={queueBodyEl}>
         {#if !repeating && userQueue.length > 0}
@@ -205,14 +209,13 @@
               <span class="queue-empty-sub mono">{t("player.repeating")}</span>
             {:else}
               <span class="mono">{t("player.nothingPlaying")}</span>
-              <span class="queue-empty-sub mono"
-                >{t("player.pickFromLibrary")}</span
-              >
+              <span class="queue-empty-sub mono">
+                {t("player.pickFromLibrary")}
+              </span>
             {/if}
           </div>
         {/if}
       </div>
-
     {:else}
       <div class="queue-empty">
         <span class="mono">{t("player.nothingPlaying")}</span>
@@ -236,7 +239,6 @@
       />
     {/if}
   </div>
-
 </aside>
 
 <style>

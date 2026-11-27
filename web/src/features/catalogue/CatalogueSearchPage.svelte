@@ -87,11 +87,11 @@
 
   const showMixHeading = $derived(
     !error &&
-    !requested.trim() &&
-    !(searching && !results) &&
-    !(summary.liked === 0 && summary.played === 0) &&
-    !tasteError &&
-    (taste.length > 0 || tasteLoading),
+      !requested.trim() &&
+      !(searching && !results) &&
+      !(summary.liked === 0 && summary.played === 0) &&
+      !tasteError &&
+      (taste.length > 0 || tasteLoading),
   );
 
   $effect(() => {
@@ -99,7 +99,8 @@
     if (!grid) return;
     const measure = (): void => {
       const template = getComputedStyle(grid).gridTemplateColumns;
-      const columns = template && template !== "none" ? template.split(" ").length : 1;
+      const columns =
+        template && template !== "none" ? template.split(" ").length : 1;
       mixColumns = Math.max(1, columns);
     };
     measure();
@@ -136,7 +137,10 @@
     );
   }
 
-  function playTrack(track: CatalogueTrack, queue: readonly CatalogueTrack[]): void {
+  function playTrack(
+    track: CatalogueTrack,
+    queue: readonly CatalogueTrack[],
+  ): void {
     requestPlay(
       track.id,
       queue.map((item) => cataloguePath(item.id)),
@@ -148,7 +152,11 @@
   }
 
   function retryTaste(): void {
-    void loadCatalogueTaste(untrack(() => getTasteSeeds(6)), true, profileKey);
+    void loadCatalogueTaste(
+      untrack(() => getTasteSeeds(6)),
+      true,
+      profileKey,
+    );
   }
 </script>
 

@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { Play, Shuffle, Disc3, AlertCircle, LoaderCircle } from "lucide-svelte";
+  import {
+    Play,
+    Shuffle,
+    Disc3,
+    AlertCircle,
+    LoaderCircle,
+  } from "lucide-svelte";
   import type { CatalogueAlbumDetail, CatalogueTrack, Page } from "@lib/types";
   import { loadCatalogueAlbum, cataloguePath } from "@state/catalogue.svelte";
   import { requestPlay } from "@state/now-playing.svelte";
@@ -126,10 +132,14 @@
           {/each}
         </div>
         <div class="hero-sub mono">
-          {#if album.year}{album.year} · {/if}
+          {#if album.year}{album.year} ·
+          {/if}
           {tracks.length}
           {tracks.length === 1 ? t("common.trackLc") : t("common.tracks")}
-          {#if totalDur > 0} · {fmtTotalDuration(totalDur)}{:else if detail.durationText}{detail.durationText}{/if}
+          {#if totalDur > 0}
+            · {fmtTotalDuration(
+              totalDur,
+            )}{:else if detail.durationText}{detail.durationText}{/if}
         </div>
       </div>
 
@@ -194,7 +204,8 @@
         {tracks}
         showAlbum={false}
         onPlayTrack={playTrack}
-        onNavigateArtist={(artistId) => onNavigate(`catalogue:artist:${artistId}`)}
+        onNavigateArtist={(artistId) =>
+          onNavigate(`catalogue:artist:${artistId}`)}
       />
     {/if}
   </div>
@@ -339,7 +350,9 @@
     border: none;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: transform 0.15s, background 0.15s;
+    transition:
+      transform 0.15s,
+      background 0.15s;
   }
 
   .play-big :global(svg) {
@@ -372,7 +385,10 @@
     justify-content: center;
     cursor: pointer;
     transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .icon-btn.round :global(svg) {

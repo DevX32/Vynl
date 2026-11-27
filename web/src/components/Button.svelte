@@ -139,6 +139,8 @@
   }
 
   .selected:focus-visible {
-    box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
+    box-shadow:
+      0 0 0 2px var(--accent-soft),
+      0 0 0 1px var(--accent);
   }
 </style>

@@ -96,7 +96,10 @@ export async function initAppUpdate(): Promise<void> {
   await checkForAppUpdate();
 }
 
-export async function checkForAppUpdate(force = true, notify = false): Promise<void> {
+export async function checkForAppUpdate(
+  force = true,
+  notify = false,
+): Promise<void> {
   if (_checking) return;
   _checking = true;
   try {
@@ -137,4 +140,3 @@ export async function installAppUpdate(): Promise<void> {
   disarmRestart();
   armRestart(RESTART_DELAY_MS);
 }
-

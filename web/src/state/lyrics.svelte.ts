@@ -4,7 +4,12 @@ import { vynl } from "@lib/vynl";
 import { getCurrentTrack, getCurrentId } from "@state/now-playing.svelte";
 import { getSmoothTime } from "@state/media-clock.svelte";
 import type { LyricLine, Word } from "@lib/lyrics/parse";
-import { HAS_STAMP_RE, lyricsKindOf, plainLine, toLyricLines } from "@lib/lyrics/parse";
+import {
+  HAS_STAMP_RE,
+  lyricsKindOf,
+  plainLine,
+  toLyricLines,
+} from "@lib/lyrics/parse";
 
 export type { Word, LyricLine } from "@lib/lyrics/parse";
 export { isInstrumental, lyricsKindOf, toLyricLines } from "@lib/lyrics/parse";
@@ -41,7 +46,11 @@ function setFromCache(entry: CacheEntry): void {
   loadError = null;
 }
 
-function storeCache(path: string, res: LyricsResult, lyricLines: LyricLine[]): void {
+function storeCache(
+  path: string,
+  res: LyricsResult,
+  lyricLines: LyricLine[],
+): void {
   cache.set(path, { result: res, lines: lyricLines });
   evictOldest(cache, MAX_CACHE);
 }
@@ -51,24 +60,34 @@ function dropCache(path: string): void {
 }
 
 function tryEmbed(res: LyricsResult, path: string): void {
-  if (res.source !== "remote" || res.kind === "ttml" || embedded.has(path)) return;
+  if (res.source !== "remote" || res.kind === "ttml" || embedded.has(path))
+    return;
   const text =
     res.kind === "lrc" || HAS_STAMP_RE.test(res.text)
       ? res.text.split(/\r?\n/).map(plainLine).filter(Boolean).join("\n")
       : res.text.trim();
   if (!text) return;
   embedded.add(path);
-  void vynl.lyricsEmbed({ file: path, text }).catch(() => embedded.delete(path));
+  void vynl
+    .lyricsEmbed({ file: path, text })
+    .catch(() => embedded.delete(path));
 }
 
-async function persistManualLyrics(path: string, res: LyricsResult): Promise<void> {
+async function persistManualLyrics(
+  path: string,
+  res: LyricsResult,
+): Promise<void> {
   try {
     await vynl.lyricsSave({ file: path, kind: res.kind, text: res.text });
   } catch (error) {
     console.warn("Failed to save lyrics sidecar", error);
   }
   if (res.kind === "ttml") return;
-  const plain = res.text.split(/\r?\n/).map(plainLine).filter(Boolean).join("\n");
+  const plain = res.text
+    .split(/\r?\n/)
+    .map(plainLine)
+    .filter(Boolean)
+    .join("\n");
   if (!plain) return;
   try {
     await vynl.lyricsEmbed({ file: path, text: plain });
@@ -94,7 +113,11 @@ export function prefetchLyrics(
   if (!path || cache.has(path) || prefetching.has(path)) return;
   const current = getCurrentTrack();
   const currentId = getCurrentId();
-  if (current?.path === path && (activeId === currentId || loadingId === currentId)) return;
+  if (
+    current?.path === path &&
+    (activeId === currentId || loadingId === currentId)
+  )
+    return;
   prefetching.add(path);
   void (async () => {
     try {
@@ -201,16 +224,19 @@ export function loadLyrics(id: string | null, force = false): void {
       if (version !== loadVersion) return;
       const embeddedText = track.lyrics?.trim() ?? "";
       const res = embeddedText
-        ? ({ kind: lyricsKindOf(embeddedText), text: embeddedText, source: "local" } as LyricsResult)
+        ? ({
+            kind: lyricsKindOf(embeddedText),
+            text: embeddedText,
+            source: "local",
+          } as LyricsResult)
         : null;
       result = res;
       lines = res ? toLyricLines(res) : [];
-      loadError =
-        res
-          ? null
-          : error instanceof Error && error.message
-            ? error.message
-            : "could not load lyrics";
+      loadError = res
+        ? null
+        : error instanceof Error && error.message
+          ? error.message
+          : "could not load lyrics";
       if (res) storeCache(track.path, res, lines);
       else activeId = null;
     } finally {
@@ -220,7 +246,10 @@ export function loadLyrics(id: string | null, force = false): void {
   })();
 }
 
-export function setLyricsManual(res: LyricsResult, parsedLines: LyricLine[]): void {
+export function setLyricsManual(
+  res: LyricsResult,
+  parsedLines: LyricLine[],
+): void {
   loadVersion++;
   loading = false;
   loadingId = null;
@@ -250,7 +279,11 @@ function findActiveLineIndex(lyricLines: LyricLine[], t: number): number {
       lo = mid + 1;
     }
   }
-  if (idx >= 0 && idx === lyricLines.length - 1 && t - lyricLines[idx].time > LAST_LINE_GRACE_SECS) {
+  if (
+    idx >= 0 &&
+    idx === lyricLines.length - 1 &&
+    t - lyricLines[idx].time > LAST_LINE_GRACE_SECS
+  ) {
     return -1;
   }
   return idx;
@@ -282,7 +315,12 @@ function wordEndAt(words: Word[], i: number, lineEnd?: number): number {
   return w.time + LAST_WORD_FALLBACK_SECS;
 }
 
-export function wordFill(words: Word[], i: number, t: number, lineEnd?: number): number {
+export function wordFill(
+  words: Word[],
+  i: number,
+  t: number,
+  lineEnd?: number,
+): number {
   const w = words[i];
   if (!w || t <= w.time) return 0;
   const end = wordEndAt(words, i, lineEnd);
@@ -293,7 +331,9 @@ export function wordFill(words: Word[], i: number, t: number, lineEnd?: number):
 }
 
 const synced = $derived(lines.some((l) => l.time >= 0));
-const activeIndex = $derived(synced ? findActiveLineIndex(lines, getSmoothTime()) : -1);
+const activeIndex = $derived(
+  synced ? findActiveLineIndex(lines, getSmoothTime()) : -1,
+);
 const activeWordIndex = $derived.by(() => {
   if (!synced || activeIndex < 0) return -1;
   const words = lines[activeIndex]?.words;

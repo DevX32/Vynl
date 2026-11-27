@@ -5,7 +5,10 @@ const FOCUSABLE =
 
 function visible(items: HTMLElement[]): HTMLElement[] {
   return items.filter((el) => {
-    if (el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true") {
+    if (
+      el.hasAttribute("disabled") ||
+      el.getAttribute("aria-disabled") === "true"
+    ) {
       return false;
     }
     return el.offsetParent !== null || el === document.activeElement;
@@ -17,7 +20,9 @@ export const focusTrap: Action<HTMLElement> = (node) => {
 
   const onKeydown = (event: KeyboardEvent): void => {
     if (event.key !== "Tab") return;
-    const items = visible(Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)));
+    const items = visible(
+      Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)),
+    );
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
@@ -37,7 +42,9 @@ export const focusTrap: Action<HTMLElement> = (node) => {
   };
 
   const frame = requestAnimationFrame(() => {
-    const first = visible(Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)))[0];
+    const first = visible(
+      Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)),
+    )[0];
     (first ?? node).focus?.();
   });
 

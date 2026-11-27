@@ -1,5 +1,6 @@
 const URL_PATTERN = /https?:\/\/\S+/gi;
-const YT_API_PATTERN = /\b(?:music\.youtube\.com|www\.youtube\.com|youtube\.com)\b[^\s]*/gi;
+const YT_API_PATTERN =
+  /\b(?:music\.youtube\.com|www\.youtube\.com|youtube\.com)\b[^\s]*/gi;
 
 const CAUSES: { test: RegExp; reason: string }[] = [
   {
@@ -67,7 +68,9 @@ export function friendlyVaultError(error: unknown, fallback = ""): string {
   if (/not permitted|developer terms|blocked the request/i.test(cleaned)) {
     return "This service blocked the request.";
   }
-  if (/totp|sign[- ]?in|unauthorized|forbidden|\b401\b|\b403\b/i.test(cleaned)) {
+  if (
+    /totp|sign[- ]?in|unauthorized|forbidden|\b401\b|\b403\b/i.test(cleaned)
+  ) {
     return "Could not sign in to the music service.";
   }
   if (/429|too many requests|rate.?limit/i.test(cleaned)) {

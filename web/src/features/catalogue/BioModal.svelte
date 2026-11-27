@@ -51,12 +51,7 @@
   >
     <header class="head">
       {#if image}
-        <img
-          class="head-image"
-          use:blobSrc={image}
-          alt=""
-          draggable="false"
-        />
+        <img class="head-image" use:blobSrc={image} alt="" draggable="false" />
       {/if}
       <div class="head-text">
         <span class="head-kicker mono">{heading}</span>
@@ -64,7 +59,11 @@
           <span class="head-title">{subtitle}</span>
         {/if}
       </div>
-      <button class="icon-btn close-btn" onclick={onClose} aria-label={t("common.close")}>
+      <button
+        class="icon-btn close-btn"
+        onclick={onClose}
+        aria-label={t("common.close")}
+      >
         <X size={12} stroke-width={1.6} />
       </button>
     </header>

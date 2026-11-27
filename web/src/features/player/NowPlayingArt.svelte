@@ -81,9 +81,9 @@
       {:else}
         <div class="now-cover placeholder" in:fade={{ duration: 260 }}>
           {#if current}
-            <span class="ph-initial display"
-              >{current.title.charAt(0).toUpperCase()}</span
-            >
+            <span class="ph-initial display">
+              {current.title.charAt(0).toUpperCase()}
+            </span>
           {:else}
             <span class="ph">
               <Music2 size={17} stroke-width={1.1} />
@@ -224,11 +224,7 @@
         rgba(255, 255, 255, 0.05) 214deg,
         transparent 250deg
       ),
-      linear-gradient(
-        150deg,
-        rgba(255, 255, 255, 0.1) 0%,
-        transparent 32%
-      );
+      linear-gradient(150deg, rgba(255, 255, 255, 0.1) 0%, transparent 32%);
     mix-blend-mode: screen;
     pointer-events: none;
   }
@@ -263,11 +259,7 @@
     align-items: center;
     justify-content: center;
     background:
-      linear-gradient(
-        155deg,
-        rgba(255, 255, 255, 0.05) 0%,
-        transparent 55%
-      ),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.05) 0%, transparent 55%),
       var(--placeholder-gradient);
     color: var(--faint);
   }

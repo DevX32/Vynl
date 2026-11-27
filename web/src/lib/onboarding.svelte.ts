@@ -15,10 +15,8 @@ export async function completeOnboarding(name: string): Promise<void> {
   const trimmed = name.trim().slice(0, 32);
   try {
     await patchSettings({ displayName: trimmed });
-  } catch {
-  }
+  } catch {}
   try {
     localStorage.setItem(STORAGE_KEY, "1");
-  } catch {
-  }
+  } catch {}
 }

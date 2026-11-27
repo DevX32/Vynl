@@ -1,7 +1,7 @@
 ﻿<script lang="ts">
   import { onDestroy, onMount, untrack } from "svelte";
   import { RefreshCw } from "lucide-svelte";
-  import { t } from "@lib/i18n";
+  import { LOCALES, getLocale, setLocale, t } from "@lib/i18n";
   import { isCataloguePath } from "@lib/catalogue";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
   import ColorPicker from "@components/ColorPicker.svelte";
@@ -64,7 +64,8 @@
   function fmtBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024 * 1024 * 1024)
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   }
 
@@ -106,11 +107,13 @@
         if (getIsTrackPlaying()) toggle();
         clearNowPlaying();
       }
-      await Promise.all([refreshLibrary(), refreshPlaylists(), refreshDownloads()]);
+      await Promise.all([
+        refreshLibrary(),
+        refreshPlaylists(),
+        refreshDownloads(),
+      ]);
       if (result.failed > 0) {
-        toasts.error(
-          t("common.deletePartial", { failed: result.failed }),
-        );
+        toasts.error(t("common.deletePartial", { failed: result.failed }));
       } else {
         toasts.success(
           t("downloads.removeDownloadedDone", { deleted: result.deleted }),
@@ -213,7 +216,11 @@
       <div class="hint mono">{t("settings.nicknameHint")}</div>
       <Button size="sm" onclick={rollDisplayName} disabled={_rolling}>
         <span class="roll-icon">
-          <RefreshCw size={13} stroke-width={1.5} class={_rolling ? "spin" : ""} />
+          <RefreshCw
+            size={13}
+            stroke-width={1.5}
+            class={_rolling ? "spin" : ""}
+          />
         </span>
         {t("settings.nicknameRoll")}
       </Button>
@@ -267,6 +274,22 @@
           ? t("settings.dynamicAccentHint")
           : t("settings.accentColorHint")}
       </div>
+    </div>
+
+    <div class="section flush divider">
+      <div class="label mono">{t("settings.language")}</div>
+      <div class="chips">
+        {#each LOCALES as locale (locale.id)}
+          <Button
+            size="sm"
+            selected={getLocale() === locale.id}
+            onclick={() => setLocale(locale.id)}
+          >
+            {locale.label}
+          </Button>
+        {/each}
+      </div>
+      <div class="hint mono">{t("settings.languageHint")}</div>
     </div>
   </div>
 
@@ -430,7 +453,9 @@
             on={settings.launchAtStartup}
             label={t("settings.launchAtStartupToggle")}
             onclick={() =>
-              void patchSettings({ launchAtStartup: !settings.launchAtStartup })}
+              void patchSettings({
+                launchAtStartup: !settings.launchAtStartup,
+              })}
           />
         {/snippet}
       </SettingRow>
@@ -452,43 +477,40 @@
             label={t("settings.discordToggle")}
             onclick={() =>
               void patchSettings({ discordRpc: !settings.discordRpc })}
-           />
-         {/snippet}
-       </SettingRow>
+          />
+        {/snippet}
+      </SettingRow>
 
-       <SettingRow
-         label={t("settings.globalMediaKeys")}
-         hint={t("settings.globalMediaKeysHint")}
-       >
-         {#snippet control()}
-           <Switch
-             on={settings.globalMediaKeys}
-             label={t("settings.globalMediaKeysToggle")}
-             onclick={() =>
-               void patchSettings({ globalMediaKeys: !settings.globalMediaKeys })}
-           />
-         {/snippet}
-       </SettingRow>
-     </div>
-   </div>
+      <SettingRow
+        label={t("settings.globalMediaKeys")}
+        hint={t("settings.globalMediaKeysHint")}
+      >
+        {#snippet control()}
+          <Switch
+            on={settings.globalMediaKeys}
+            label={t("settings.globalMediaKeysToggle")}
+            onclick={() =>
+              void patchSettings({
+                globalMediaKeys: !settings.globalMediaKeys,
+              })}
+          />
+        {/snippet}
+      </SettingRow>
+    </div>
+  </div>
   <div class="group">
     <div class="group-head">
       <span class="label mono">{t("settings.groupStorage")}</span>
     </div>
     <div class="rows">
-      <SettingRow
-        label={t("settings.downloadedSongs")}
-        hint={downloadsHint}
-      >
+      <SettingRow label={t("settings.downloadedSongs")} hint={downloadsHint}>
         {#snippet control()}
           <Button
             size="sm"
             disabled={!canRemoveDownloads}
             onclick={() => (_confirmingRemove = true)}
           >
-            {_removingDownloads
-              ? t("downloads.removing")
-              : t("common.delete")}
+            {_removingDownloads ? t("downloads.removing") : t("common.delete")}
           </Button>
         {/snippet}
       </SettingRow>
@@ -498,10 +520,12 @@
         hint={t("settings.clearCacheHint")}
       >
         {#snippet control()}
-          <Button size="sm" disabled={_clearingCache} onclick={() => (_confirmingClear = true)}>
-            {_clearingCache
-              ? t("settings.cacheClearing")
-              : t("common.clear")}
+          <Button
+            size="sm"
+            disabled={_clearingCache}
+            onclick={() => (_confirmingClear = true)}
+          >
+            {_clearingCache ? t("settings.cacheClearing") : t("common.clear")}
           </Button>
         {/snippet}
       </SettingRow>

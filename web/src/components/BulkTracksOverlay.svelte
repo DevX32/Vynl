@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Plus, Check, X, Download, LoaderCircle, FolderOpen } from "lucide-svelte";
+  import {
+    Plus,
+    Check,
+    X,
+    Download,
+    LoaderCircle,
+    FolderOpen,
+  } from "lucide-svelte";
   import { untrack } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicIn, cubicOut } from "svelte/easing";
@@ -112,7 +119,9 @@
   }
 
   function albumName(track: Track): string | null {
-    return typeof track.album === "string" ? track.album : (track.album?.name ?? null);
+    return typeof track.album === "string"
+      ? track.album
+      : (track.album?.name ?? null);
   }
 
   function submit(): void {
@@ -237,7 +246,9 @@
         onclick={submit}
       >
         {#if busy}
-          <span class="spin"><LoaderCircle size={13} stroke-width={1.5} /></span>
+          <span class="spin">
+            <LoaderCircle size={13} stroke-width={1.5} />
+          </span>
         {:else if mode === "add"}
           <Plus size={13} stroke-width={1.5} />
         {:else}
@@ -310,7 +321,9 @@
     font-size: 11px;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: background 0.12s, color 0.12s;
+    transition:
+      background 0.12s,
+      color 0.12s;
   }
   .dl-tab:hover {
     color: var(--dim);
@@ -428,7 +441,9 @@
     justify-content: center;
     padding: 0;
     cursor: pointer;
-    transition: color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
   }
   .icon-btn.mini:hover {
     color: var(--text);
@@ -457,7 +472,10 @@
     font-weight: 500;
     letter-spacing: 0.03em;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
     white-space: nowrap;
   }
   .dl-btn:disabled {
@@ -473,5 +491,4 @@
     background: color-mix(in srgb, var(--accent) 18%, transparent);
     border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   }
-
 </style>

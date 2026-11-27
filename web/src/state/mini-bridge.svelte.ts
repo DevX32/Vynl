@@ -54,20 +54,18 @@ export function initMiniBridge(): () => void {
             await win.unminimize();
             await win.show();
             await win.setFocus();
-          } catch {
-
-          }
+          } catch {}
         })();
         break;
     }
   };
 
-  void listen<MiniCommand>(MINI_COMMAND_EVENT, (e) => applyCommand(e.payload)).then(
-    (fn) => {
-      if (disposed) fn();
-      else offCommand = fn;
-    },
-  );
+  void listen<MiniCommand>(MINI_COMMAND_EVENT, (e) =>
+    applyCommand(e.payload),
+  ).then((fn) => {
+    if (disposed) fn();
+    else offCommand = fn;
+  });
 
   void listen<unknown>(MINI_REQUEST_STATE_EVENT, () => {
     sendMiniState(currentSnapshot());

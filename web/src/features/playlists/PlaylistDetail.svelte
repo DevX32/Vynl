@@ -163,7 +163,18 @@
     }
   }
 
-  async function downloadTracks(tracks: { id: string; title: string; artist: string; artists: { name: string; id: string | null }[]; album: { name: string; id: string | null } | null; duration: number | null; cover: string | null; explicit: boolean }[]): Promise<void> {
+  async function downloadTracks(
+    tracks: {
+      id: string;
+      title: string;
+      artist: string;
+      artists: { name: string; id: string | null }[];
+      album: { name: string; id: string | null } | null;
+      duration: number | null;
+      cover: string | null;
+      explicit: boolean;
+    }[],
+  ): Promise<void> {
     if (!pl || downloadBusy) return;
     downloadBusy = true;
     try {
@@ -390,9 +401,8 @@
         <div class="hero-sub mono">
           {#if currentTracks.length > 0}
             {currentTracks.length}
-            {currentTracks.length === 1
-              ? t("library.song")
-              : t("common.songs")} · {t("common.about")}
+            {currentTracks.length === 1 ? t("library.song") : t("common.songs")} ·
+            {t("common.about")}
             {fmtTotalDuration(totalDur)}
           {:else}
             {t("playlist.zeroSongs")}
@@ -444,16 +454,16 @@
       {#if plHits.length === 0}
         <div class="tbl-empty">
           <ListMusic size={30} stroke-width={1.1} />
-          <span class="display"
-            >{pl.paths.length === 0
+          <span class="display">
+            {pl.paths.length === 0
               ? t("playlist.empty")
-              : t("library.noMatches")}</span
-          >
-          <span class="mono sub"
-            >{pl.paths.length === 0
+              : t("library.noMatches")}
+          </span>
+          <span class="mono sub">
+            {pl.paths.length === 0
               ? t("playlist.addSomeTracks")
-              : t("common.nothingMatchesQuery", { query: q })}</span
-          >
+              : t("common.nothingMatchesQuery", { query: q })}
+          </span>
         </div>
       {:else}
         {#snippet row(trk: (typeof plHits)[number], i: number)}
@@ -527,7 +537,11 @@
         onSubmit={(picked, mode) => {
           if (mode === "add") {
             const paths = picked
-              .map((t) => (t as { path?: string }).path ?? library.find((l) => l.id === t.id)?.path)
+              .map(
+                (t) =>
+                  (t as { path?: string }).path ??
+                  library.find((l) => l.id === t.id)?.path,
+              )
               .filter((p): p is string => !!p);
             void addPaths(paths);
           } else {
@@ -555,14 +569,16 @@
   <Dialog
     open={removeTarget !== null}
     title={t("playlist.removeTrackTitle")}
-    description={removeTarget ? t(
-      isCataloguePath(removeTarget.path)
-        ? "playlist.removeStreamBody"
-        : "playlist.removeTrackBody",
-      {
-        title: removeTarget.title,
-      },
-    ) : ""}
+    description={removeTarget
+      ? t(
+          isCataloguePath(removeTarget.path)
+            ? "playlist.removeStreamBody"
+            : "playlist.removeTrackBody",
+          {
+            title: removeTarget.title,
+          },
+        )
+      : ""}
     confirmLabel={t("common.delete")}
     danger
     onConfirm={() => void confirmRemoveTrack()}
@@ -595,7 +611,11 @@
       >
         <div class="edit-head">
           <span class="edit-title">{t("playlist.editPlaylist")}</span>
-          <button class="edit-close" onclick={() => (editOpen = false)} aria-label={t("common.cancel")}>
+          <button
+            class="edit-close"
+            onclick={() => (editOpen = false)}
+            aria-label={t("common.cancel")}
+          >
             <X size={12} stroke-width={1.6} />
           </button>
         </div>
@@ -605,30 +625,56 @@
             {#if covers.length >= 2}
               <div class="edit-cover-grid">
                 {#each covers as c (c)}
-                  <img class="edit-cover-tile" use:blobSrc={c} alt="" loading="lazy" draggable="false" />
+                  <img
+                    class="edit-cover-tile"
+                    use:blobSrc={c}
+                    alt=""
+                    loading="lazy"
+                    draggable="false"
+                  />
                 {/each}
                 {#each Array(4 - covers.length) as _}
                   <div class="edit-cover-tile edit-cover-empty"></div>
                 {/each}
               </div>
             {:else if covers.length === 1}
-              <img class="edit-cover-img" use:blobSrc={covers[0]} alt="" loading="lazy" draggable="false" />
+              <img
+                class="edit-cover-img"
+                use:blobSrc={covers[0]}
+                alt=""
+                loading="lazy"
+                draggable="false"
+              />
             {:else}
-              <div class="edit-cover-placeholder"><Disc3 size={24} stroke-width={1} /></div>
+              <div class="edit-cover-placeholder">
+                <Disc3 size={24} stroke-width={1} />
+              </div>
             {/if}
             <div class="edit-cover-overlay">
-              <button class="cover-action" onclick={pickCover} disabled={coverBusy} aria-label={t("playlist.changeCover")}>
+              <button
+                class="cover-action"
+                onclick={pickCover}
+                disabled={coverBusy}
+                aria-label={t("playlist.changeCover")}
+              >
                 <Image size={14} stroke-width={1.5} />
               </button>
               {#if pl.cover}
-                <button class="cover-action" onclick={() => void removeCover()} disabled={coverBusy} aria-label={t("playlist.removeCover")}>
+                <button
+                  class="cover-action"
+                  onclick={() => void removeCover()}
+                  disabled={coverBusy}
+                  aria-label={t("playlist.removeCover")}
+                >
                   <ImageOff size={14} stroke-width={1.5} />
                 </button>
               {/if}
             </div>
           </div>
           <div class="edit-field">
-            <label class="edit-label" for="pl-rename">{t("playlists.renameTitle")}</label>
+            <label class="edit-label" for="pl-rename">
+              {t("playlists.renameTitle")}
+            </label>
             <div class="edit-row">
               <input
                 id="pl-rename"
@@ -640,11 +686,19 @@
                   if (e.key === "Enter") void savePlaylistRename();
                 }}
               />
-              <button class="action-btn-sm" onclick={() => void savePlaylistRename()} disabled={editBusy || !editRename.trim()}>
+              <button
+                class="action-btn-sm"
+                onclick={() => void savePlaylistRename()}
+                disabled={editBusy || !editRename.trim()}
+              >
                 {t("common.save")}
               </button>
             </div>
-            <button class="edit-action" onclick={() => (confirmDeletePlaylistOpen = true)} disabled={editBusy}>
+            <button
+              class="edit-action"
+              onclick={() => (confirmDeletePlaylistOpen = true)}
+              disabled={editBusy}
+            >
               <Trash2 size={14} stroke-width={1.5} />
               <span>{t("playlists.deleteTitle")}</span>
             </button>
@@ -1053,7 +1107,9 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .edit-head {

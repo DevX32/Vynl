@@ -4,7 +4,10 @@
   import { t } from "@lib/i18n";
   import { vynl } from "@lib/vynl";
   import { toasts } from "@lib/toast";
-  import { getCurrentPlaylists, refreshPlaylists } from "@state/playlists.svelte";
+  import {
+    getCurrentPlaylists,
+    refreshPlaylists,
+  } from "@state/playlists.svelte";
   import { queueRestore } from "@state/vault-restore.svelte";
   import Button from "@components/Button.svelte";
   import SettingRow from "./SettingRow.svelte";
@@ -57,7 +60,10 @@
     libraryError = null;
     trackCount = null;
     try {
-      const [tracks] = await Promise.all([vynl.getLibrary(), refreshPlaylists()]);
+      const [tracks] = await Promise.all([
+        vynl.getLibrary(),
+        refreshPlaylists(),
+      ]);
       trackCount = tracks.length;
     } catch {
       trackCount = 0;
@@ -144,7 +150,6 @@
       exporting = false;
     }
   }
-
 </script>
 
 <div class="panel">
@@ -160,7 +165,11 @@
       {#snippet control()}
         <div class="export-controls">
           {#if libraryError}
-            <Button size="sm" variant="ghost" onclick={() => void loadLibrary()}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onclick={() => void loadLibrary()}
+            >
               <RefreshCw size={13} stroke-width={1.5} />
               {t("common.retry")}
             </Button>
@@ -174,10 +183,7 @@
       {/snippet}
     </SettingRow>
 
-    <SettingRow
-      label={t("backup.restoreTitle")}
-      hint={t("backup.restoreHint")}
-    >
+    <SettingRow label={t("backup.restoreTitle")} hint={t("backup.restoreHint")}>
       {#snippet control()}
         <Button size="sm" disabled={importing} onclick={runImport}>
           <Upload size={13} stroke-width={1.5} />
@@ -185,9 +191,7 @@
         </Button>
       {/snippet}
     </SettingRow>
-
   </div>
-
 </div>
 
 <style>

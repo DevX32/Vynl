@@ -34,7 +34,8 @@
         <span class="pv-sidebar" style:background={theme.colors.surface}>
           <span class="pv-logo" style:background={accent}></span>
           <span class="pv-line" style:background={theme.colors.faint}></span>
-          <span class="pv-line short" style:background={theme.colors.faint}></span>
+          <span class="pv-line short" style:background={theme.colors.faint}
+          ></span>
         </span>
         <span class="pv-main">
           <span class="pv-title" style:background={theme.colors.text}></span>

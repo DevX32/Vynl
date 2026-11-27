@@ -12,9 +12,7 @@
   }
 
   export type CtxEntry =
-    | CtxItem
-    | { type: "separator" }
-    | { label?: string; items: CtxItem[] };
+    CtxItem | { type: "separator" } | { label?: string; items: CtxItem[] };
 
   let {
     x = 0,
@@ -47,7 +45,9 @@
     if (rect.bottom > vh) menuEl.style.top = `${y - rect.height}px`;
     if (rect.left < 0) menuEl.style.left = `0px`;
     if (rect.top < 0) menuEl.style.top = `0px`;
-    const first = menuEl.querySelector<HTMLElement>("[role=menuitem]:not([aria-disabled='true'])");
+    const first = menuEl.querySelector<HTMLElement>(
+      "[role=menuitem]:not([aria-disabled='true'])",
+    );
     first?.focus();
   });
 
@@ -64,7 +64,9 @@
     }
     if (!menuEl) return;
     const items = Array.from(
-      menuEl.querySelectorAll<HTMLElement>("[role=menuitem]:not([aria-disabled='true'])"),
+      menuEl.querySelectorAll<HTMLElement>(
+        "[role=menuitem]:not([aria-disabled='true'])",
+      ),
     );
     if (items.length === 0) return;
     const idx = items.indexOf(document.activeElement as HTMLElement);

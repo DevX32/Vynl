@@ -24,7 +24,11 @@
   import { t } from "@lib/i18n";
   import { refreshLibrary } from "@state/library.svelte";
   import { playTrack } from "@lib/playback.svelte";
-  import { handleGlobalKey, getShowShortcutsOverlay, toggleShortcutsOverlay } from "@state/shortcuts.svelte";
+  import {
+    handleGlobalKey,
+    getShowShortcutsOverlay,
+    toggleShortcutsOverlay,
+  } from "@state/shortcuts.svelte";
   import { getMobileSyncUiOpen } from "@state/mobile-sync.svelte";
   import { wasOnboarded } from "@lib/onboarding.svelte";
   import Onboarding from "./features/onboarding/Onboarding.svelte";
@@ -123,7 +127,11 @@
   let createCoverFile = $state<File | null>(null);
   let createCoverPreview = $state<string | null>(null);
   let createCoverInput: HTMLInputElement | undefined = $state();
-  let editTarget = $state<{ id: string; name: string; cover: string | null } | null>(null);
+  let editTarget = $state<{
+    id: string;
+    name: string;
+    cover: string | null;
+  } | null>(null);
   let editRename = $state("");
   let editBusy = $state(false);
   let editDeleteConfirm = $state(false);
@@ -211,8 +219,12 @@
       await initSettings();
       void vynl.rpcUpdate(null).catch(() => {});
       await Promise.all([
-        refreshPlaylists().catch((e) => console.warn("playlist refresh failed:", e)),
-        refreshLibrary().catch((e) => console.warn("library refresh failed:", e)),
+        refreshPlaylists().catch((e) =>
+          console.warn("playlist refresh failed:", e),
+        ),
+        refreshLibrary().catch((e) =>
+          console.warn("library refresh failed:", e),
+        ),
         restoreNowPlaying().catch((e) => console.warn("restore failed:", e)),
       ]);
     } catch (e) {
@@ -236,7 +248,9 @@
         console.warn("sync status failed", e);
       }
     })();
-    return () => { off(); };
+    return () => {
+      off();
+    };
   }
 
   onMount(() => {
@@ -245,7 +259,9 @@
       return () => {};
     }
 
-    void getCurrentWindow().show().catch(() => {});
+    void getCurrentWindow()
+      .show()
+      .catch(() => {});
 
     let offConsole: (() => void) | undefined;
     let consoleDisposed = false;
@@ -303,7 +319,9 @@
     window.addEventListener("keydown", handleGlobalKey);
     window.addEventListener("pagehide", flushCloudSyncPush);
     window.addEventListener("online", retryPendingSync);
-    const onFullscreenToggle = (): void => { showFullscreen = !showFullscreen; };
+    const onFullscreenToggle = (): void => {
+      showFullscreen = !showFullscreen;
+    };
     document.addEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
     let cleanup: (() => void) | undefined;
     let disposeMini: (() => void) | undefined;
@@ -337,7 +355,10 @@
       window.removeEventListener("keydown", handleGlobalKey);
       window.removeEventListener("pagehide", flushCloudSyncPush);
       window.removeEventListener("online", retryPendingSync);
-      document.removeEventListener("vynl:toggle-fullscreen", onFullscreenToggle);
+      document.removeEventListener(
+        "vynl:toggle-fullscreen",
+        onFullscreenToggle,
+      );
     };
   });
 
@@ -550,7 +571,8 @@
 
   function ctxItems(): CtxEntry[] {
     const m = ctxMenu;
-    if (!m || m.type !== "playlist" || !m.playlistId || !m.playlistName) return [];
+    if (!m || m.type !== "playlist" || !m.playlistId || !m.playlistName)
+      return [];
     const id = m.playlistId;
     const name = m.playlistName;
     const items: CtxEntry[] = [
@@ -574,298 +596,376 @@
 {:else if !onboarded}
   <Onboarding onComplete={() => (onboarded = true)} />
 {:else}
-<div class="shell">
-  <TitleBar
-    onBack={goBack}
-    onForward={goForward}
-    canBack={historyIdx > 0}
-    canForward={historyIdx < history.length - 1}
-    onHome={openHome}
-    {sidebarOpen}
-    onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-    onShowShortcuts={toggleShortcutsOverlay}
-  />
-  <div class="body">
-    <Sidebar
-      {page}
+  <div class="shell">
+    <TitleBar
+      onBack={goBack}
+      onForward={goForward}
+      canBack={historyIdx > 0}
+      canForward={historyIdx < history.length - 1}
+      onHome={openHome}
       {sidebarOpen}
-      {playlists}
-      selectedId={getSelectedId()}
-      onLibrary={openLibrary}
-      onCatalogue={openCatalogue}
-      onPlayer={openPlayer}
-      onVault={openVault}
-      onSettings={openSettings}
-      onAccount={openAccount}
-      onNewPlaylist={newPlaylist}
-      onMoveToVynl={() => (moveToVynlOpen = true)}
-      onOpenPlaylist={(id) => void openPlaylist(id)}
-      onOpenLikedSongs={openLikedSongs}
-      onShowCtx={showCtx}
-      onShowRailCtx={showRailCtx}
-      onReorderPlaylists={(fromId, toId) => void reorderPlaylists(fromId, toId)}
+      onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+      onShowShortcuts={toggleShortcutsOverlay}
     />
-
-    <main>
-      <div class="page-wrap" class:bleed={page === "player"}>
-        {#if page === "home"}
-          <div class="page-inner">
-            <HomePage onNavigate={(p) => navigate(p)} />
-          </div>
-        {:else if page === "library"}
-          <div class="page-inner">
-            <LibraryPage active={true} />
-          </div>
-        {:else if catalogue}
-          <div class="page-inner">
-            <CataloguePage route={catalogue} onNavigate={(p) => navigate(p)} />
-          </div>
-        {:else if page === "playlist"}
-          <div class="page-inner">
-            <PlaylistDetail />
-          </div>
-        {:else if page === "player"}
-          <div class="page-inner">
-            <PlayerPage active={true} fullscreen={showFullscreen} />
-          </div>
-        {:else if page === "settings"}
-          <div class="page-inner">
-            <SettingsPage onOpenVault={openVault} />
-          </div>
-        {/if}
-        <div class="page-inner" class:hidden={page !== "vault"}>
-          <VaultPage active={page === "vault"} />
-        </div>
-      </div>
-    </main>
-
-    {#if getQueueOpen()}
-      <QueueList />
-    {/if}
-  </div>
-
-  <PlayerBar onOpenPlayer={openPlayer} fullscreen={showFullscreen} active={page === "player" || showFullscreen} onToggleFullscreen={() => { showFullscreen = !showFullscreen; }} />
-</div>
-
-{#if showFullscreen}
-  <FullscreenPlayer onclose={() => { showFullscreen = false; }} />
-{/if}
-
-{#if getShowShortcutsOverlay()}
-  <ShortcutsOverlay />
-{/if}
-
-{#if accountOpen}
-  <AccountModal onclose={() => (accountOpen = false)} />
-{/if}
-
-{#if getTagEditorOpen()}
-  <TagEditorModal />
-{/if}
-
-{#if getMobileSyncUiOpen()}
-  <MobileSyncModal />
-{/if}
-
-{#if ctxMenu}
-  <ContextMenu
-    x={ctxMenu.x}
-    y={ctxMenu.y}
-    onClose={() => (ctxMenu = null)}
-    onNewPlaylist={ctxMenu.type === "rail" ? newPlaylist : undefined}
-    onMoveToVynl={ctxMenu.type === "rail" ? () => (moveToVynlOpen = true) : undefined}
-    items={ctxItems()}
-  />
-{/if}
-
-{#if createTarget}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div
-    class="backdrop"
-    role="presentation"
-    transition:fade={{ duration: 150 }}
-    onclick={() => {
-      if (!createBusy) createTarget = false;
-    }}
-  >
-    <div
-      class="edit-panel"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("common.newPlaylistTitle")}
-      tabindex="-1"
-      in:fly={{ y: 8, duration: 180, easing: cubicOut }}
-      out:fly={{ y: 8, duration: 140, easing: cubicIn }}
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => {
-        if (e.key === "Escape" && !e.defaultPrevented && !createBusy) {
-          e.preventDefault();
-          createTarget = false;
-        }
-      }}
-      use:focusTrap
-    >
-      <div class="edit-head">
-        <span class="edit-title">{t("common.newPlaylistTitle")}</span>
-        <button class="edit-close" onclick={() => (createTarget = false)} disabled={createBusy} aria-label={t("common.close")}>
-          <X size={12} stroke-width={1.6} />
-        </button>
-      </div>
-
-      <div class="edit-hero">
-        <div class="edit-cover">
-          {#if createCoverPreview}
-            <img class="edit-cover-img" src={createCoverPreview} alt="" draggable="false" />
-          {:else}
-            <div class="edit-cover-placeholder"><Disc3 size={24} stroke-width={1} /></div>
-          {/if}
-          <div class="edit-cover-overlay">
-            <button class="cover-action" onclick={pickCreateCover} aria-label={t("playlist.changeCover")}>
-              <Image size={14} stroke-width={1.5} />
-            </button>
-            {#if createCoverPreview}
-              <button class="cover-action" onclick={removeCreateCover} aria-label={t("playlist.removeCover")}>
-                <ImageOff size={14} stroke-width={1.5} />
-              </button>
-            {/if}
-          </div>
-        </div>
-        <div class="edit-field">
-          <label class="edit-label" for="pl-create-name">{t("playlists.newDesc")}</label>
-          <div class="edit-row">
-            <input
-              id="pl-create-name"
-              class="dlg-input"
-              type="text"
-              bind:value={createVal}
-              spellcheck={false}
-              onkeydown={(e) => {
-                if (e.key === "Enter") void confirmCreatePlaylist();
-              }}
-            />
-            <button class="action-btn-sm" onclick={() => void confirmCreatePlaylist()} disabled={createBusy || !createVal.trim()}>
-              {t("common.create")}
-            </button>
-          </div>
-        </div>
-      </div>
-      <input
-        bind:this={createCoverInput}
-        type="file"
-        accept="image/*"
-        class="cover-file-input"
-        onchange={onCreateCoverFile}
+    <div class="body">
+      <Sidebar
+        {page}
+        {sidebarOpen}
+        {playlists}
+        selectedId={getSelectedId()}
+        onLibrary={openLibrary}
+        onCatalogue={openCatalogue}
+        onPlayer={openPlayer}
+        onVault={openVault}
+        onSettings={openSettings}
+        onAccount={openAccount}
+        onNewPlaylist={newPlaylist}
+        onMoveToVynl={() => (moveToVynlOpen = true)}
+        onOpenPlaylist={(id) => void openPlaylist(id)}
+        onOpenLikedSongs={openLikedSongs}
+        onShowCtx={showCtx}
+        onShowRailCtx={showRailCtx}
+        onReorderPlaylists={(fromId, toId) =>
+          void reorderPlaylists(fromId, toId)}
       />
-    </div>
-  </div>
-{/if}
 
-{#if editTarget}
-  <div
-    class="backdrop"
-    role="presentation"
-    transition:fade={{ duration: 150 }}
-    onclick={() => {
-      if (!editBusy) editTarget = null;
-    }}
-  >
-    <div
-      class="edit-panel"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("playlist.editPlaylist")}
-      tabindex="-1"
-      in:fly={{ y: 8, duration: 180, easing: cubicOut }}
-      out:fly={{ y: 8, duration: 140, easing: cubicIn }}
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => {
-        if (e.key === "Escape" && !editBusy) {
-          e.preventDefault();
-          editTarget = null;
-        }
-      }}
-      use:focusTrap
-    >
-      <div class="edit-head">
-        <span class="edit-title">{t("playlist.editPlaylist")}</span>
-        <button class="edit-close" onclick={() => (editTarget = null)} disabled={editBusy} aria-label={t("common.cancel")}>
-          <X size={12} stroke-width={1.6} />
-        </button>
-      </div>
-
-      <div class="edit-hero">
-        <div class="edit-cover">
-          {#if editTarget.cover}
-            <img class="edit-cover-img" use:blobSrc={editTarget.cover} alt="" loading="lazy" draggable="false" />
-          {:else}
-            <div class="edit-cover-placeholder"><Disc3 size={24} stroke-width={1} /></div>
+      <main>
+        <div class="page-wrap" class:bleed={page === "player"}>
+          {#if page === "home"}
+            <div class="page-inner">
+              <HomePage onNavigate={(p) => navigate(p)} />
+            </div>
+          {:else if page === "library"}
+            <div class="page-inner">
+              <LibraryPage active={true} />
+            </div>
+          {:else if catalogue}
+            <div class="page-inner">
+              <CataloguePage
+                route={catalogue}
+                onNavigate={(p) => navigate(p)}
+              />
+            </div>
+          {:else if page === "playlist"}
+            <div class="page-inner">
+              <PlaylistDetail />
+            </div>
+          {:else if page === "player"}
+            <div class="page-inner">
+              <PlayerPage active={true} fullscreen={showFullscreen} />
+            </div>
+          {:else if page === "settings"}
+            <div class="page-inner">
+              <SettingsPage onOpenVault={openVault} />
+            </div>
           {/if}
-          <div class="edit-cover-overlay">
-            <button class="cover-action" onclick={pickEditCover} disabled={editBusy} aria-label={t("playlist.changeCover")}>
-              <Image size={14} stroke-width={1.5} />
-            </button>
-            {#if editTarget.cover}
-              <button class="cover-action" onclick={() => void removeEditCover()} disabled={editBusy} aria-label={t("playlist.removeCover")}>
-                <ImageOff size={14} stroke-width={1.5} />
-              </button>
-            {/if}
+          <div class="page-inner" class:hidden={page !== "vault"}>
+            <VaultPage active={page === "vault"} />
           </div>
         </div>
-        <div class="edit-field">
-          <label class="edit-label" for="pl-rename-side">{t("playlists.renameTitle")}</label>
-          <div class="edit-row">
-            <input
-              id="pl-rename-side"
-              class="dlg-input"
-              type="text"
-              bind:value={editRename}
-              spellcheck={false}
-              onkeydown={(e) => {
-                if (e.key === "Enter") void saveEditRename();
-              }}
-            />
-            <button class="action-btn-sm" onclick={() => void saveEditRename()} disabled={editBusy || !editRename.trim()}>
-              {t("common.save")}
-            </button>
-          </div>
-          <button class="edit-action" onclick={() => (editDeleteConfirm = true)} disabled={editBusy}>
-            <Trash2 size={14} stroke-width={1.5} />
-            <span>{t("playlists.deleteTitle")}</span>
+      </main>
+
+      {#if getQueueOpen()}
+        <QueueList />
+      {/if}
+    </div>
+
+    <PlayerBar
+      onOpenPlayer={openPlayer}
+      fullscreen={showFullscreen}
+      active={page === "player" || showFullscreen}
+      onToggleFullscreen={() => {
+        showFullscreen = !showFullscreen;
+      }}
+    />
+  </div>
+
+  {#if showFullscreen}
+    <FullscreenPlayer
+      onclose={() => {
+        showFullscreen = false;
+      }}
+    />
+  {/if}
+
+  {#if getShowShortcutsOverlay()}
+    <ShortcutsOverlay />
+  {/if}
+
+  {#if accountOpen}
+    <AccountModal onclose={() => (accountOpen = false)} />
+  {/if}
+
+  {#if getTagEditorOpen()}
+    <TagEditorModal />
+  {/if}
+
+  {#if getMobileSyncUiOpen()}
+    <MobileSyncModal />
+  {/if}
+
+  {#if ctxMenu}
+    <ContextMenu
+      x={ctxMenu.x}
+      y={ctxMenu.y}
+      onClose={() => (ctxMenu = null)}
+      onNewPlaylist={ctxMenu.type === "rail" ? newPlaylist : undefined}
+      onMoveToVynl={ctxMenu.type === "rail"
+        ? () => (moveToVynlOpen = true)
+        : undefined}
+      items={ctxItems()}
+    />
+  {/if}
+
+  {#if createTarget}
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div
+      class="backdrop"
+      role="presentation"
+      transition:fade={{ duration: 150 }}
+      onclick={() => {
+        if (!createBusy) createTarget = false;
+      }}
+    >
+      <div
+        class="edit-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("common.newPlaylistTitle")}
+        tabindex="-1"
+        in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+        out:fly={{ y: 8, duration: 140, easing: cubicIn }}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          if (e.key === "Escape" && !e.defaultPrevented && !createBusy) {
+            e.preventDefault();
+            createTarget = false;
+          }
+        }}
+        use:focusTrap
+      >
+        <div class="edit-head">
+          <span class="edit-title">{t("common.newPlaylistTitle")}</span>
+          <button
+            class="edit-close"
+            onclick={() => (createTarget = false)}
+            disabled={createBusy}
+            aria-label={t("common.close")}
+          >
+            <X size={12} stroke-width={1.6} />
           </button>
         </div>
+
+        <div class="edit-hero">
+          <div class="edit-cover">
+            {#if createCoverPreview}
+              <img
+                class="edit-cover-img"
+                src={createCoverPreview}
+                alt=""
+                draggable="false"
+              />
+            {:else}
+              <div class="edit-cover-placeholder">
+                <Disc3 size={24} stroke-width={1} />
+              </div>
+            {/if}
+            <div class="edit-cover-overlay">
+              <button
+                class="cover-action"
+                onclick={pickCreateCover}
+                aria-label={t("playlist.changeCover")}
+              >
+                <Image size={14} stroke-width={1.5} />
+              </button>
+              {#if createCoverPreview}
+                <button
+                  class="cover-action"
+                  onclick={removeCreateCover}
+                  aria-label={t("playlist.removeCover")}
+                >
+                  <ImageOff size={14} stroke-width={1.5} />
+                </button>
+              {/if}
+            </div>
+          </div>
+          <div class="edit-field">
+            <label class="edit-label" for="pl-create-name">
+              {t("playlists.newDesc")}
+            </label>
+            <div class="edit-row">
+              <input
+                id="pl-create-name"
+                class="dlg-input"
+                type="text"
+                bind:value={createVal}
+                spellcheck={false}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") void confirmCreatePlaylist();
+                }}
+              />
+              <button
+                class="action-btn-sm"
+                onclick={() => void confirmCreatePlaylist()}
+                disabled={createBusy || !createVal.trim()}
+              >
+                {t("common.create")}
+              </button>
+            </div>
+          </div>
+        </div>
+        <input
+          bind:this={createCoverInput}
+          type="file"
+          accept="image/*"
+          class="cover-file-input"
+          onchange={onCreateCoverFile}
+        />
       </div>
-      <input
-        bind:this={editCoverInput}
-        type="file"
-        accept="image/*"
-        class="cover-file-input"
-        onchange={onEditCoverFile}
-      />
     </div>
-  </div>
-{/if}
+  {/if}
 
-<Dialog
-  open={editDeleteConfirm && !!editTarget}
-  title={t("playlists.deleteTitle")}
-  description={editTarget ? t("playlists.deleteBody", { name: editTarget.name }) : ""}
-  confirmLabel={t("common.delete")}
-  danger
-  confirmDisabled={editBusy}
-  onConfirm={() => void confirmEditDeletePlaylist()}
-  onClose={() => {
-    if (!editBusy) editDeleteConfirm = false;
-  }}
-/>
+  {#if editTarget}
+    <div
+      class="backdrop"
+      role="presentation"
+      transition:fade={{ duration: 150 }}
+      onclick={() => {
+        if (!editBusy) editTarget = null;
+      }}
+    >
+      <div
+        class="edit-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("playlist.editPlaylist")}
+        tabindex="-1"
+        in:fly={{ y: 8, duration: 180, easing: cubicOut }}
+        out:fly={{ y: 8, duration: 140, easing: cubicIn }}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          if (e.key === "Escape" && !editBusy) {
+            e.preventDefault();
+            editTarget = null;
+          }
+        }}
+        use:focusTrap
+      >
+        <div class="edit-head">
+          <span class="edit-title">{t("playlist.editPlaylist")}</span>
+          <button
+            class="edit-close"
+            onclick={() => (editTarget = null)}
+            disabled={editBusy}
+            aria-label={t("common.cancel")}
+          >
+            <X size={12} stroke-width={1.6} />
+          </button>
+        </div>
 
-{#if moveToVynlOpen}
-  <MoveToVynlDialog
-    onClose={() => (moveToVynlOpen = false)}
-    onImported={onMovedToVynl}
+        <div class="edit-hero">
+          <div class="edit-cover">
+            {#if editTarget.cover}
+              <img
+                class="edit-cover-img"
+                use:blobSrc={editTarget.cover}
+                alt=""
+                loading="lazy"
+                draggable="false"
+              />
+            {:else}
+              <div class="edit-cover-placeholder">
+                <Disc3 size={24} stroke-width={1} />
+              </div>
+            {/if}
+            <div class="edit-cover-overlay">
+              <button
+                class="cover-action"
+                onclick={pickEditCover}
+                disabled={editBusy}
+                aria-label={t("playlist.changeCover")}
+              >
+                <Image size={14} stroke-width={1.5} />
+              </button>
+              {#if editTarget.cover}
+                <button
+                  class="cover-action"
+                  onclick={() => void removeEditCover()}
+                  disabled={editBusy}
+                  aria-label={t("playlist.removeCover")}
+                >
+                  <ImageOff size={14} stroke-width={1.5} />
+                </button>
+              {/if}
+            </div>
+          </div>
+          <div class="edit-field">
+            <label class="edit-label" for="pl-rename-side">
+              {t("playlists.renameTitle")}
+            </label>
+            <div class="edit-row">
+              <input
+                id="pl-rename-side"
+                class="dlg-input"
+                type="text"
+                bind:value={editRename}
+                spellcheck={false}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") void saveEditRename();
+                }}
+              />
+              <button
+                class="action-btn-sm"
+                onclick={() => void saveEditRename()}
+                disabled={editBusy || !editRename.trim()}
+              >
+                {t("common.save")}
+              </button>
+            </div>
+            <button
+              class="edit-action"
+              onclick={() => (editDeleteConfirm = true)}
+              disabled={editBusy}
+            >
+              <Trash2 size={14} stroke-width={1.5} />
+              <span>{t("playlists.deleteTitle")}</span>
+            </button>
+          </div>
+        </div>
+        <input
+          bind:this={editCoverInput}
+          type="file"
+          accept="image/*"
+          class="cover-file-input"
+          onchange={onEditCoverFile}
+        />
+      </div>
+    </div>
+  {/if}
+
+  <Dialog
+    open={editDeleteConfirm && !!editTarget}
+    title={t("playlists.deleteTitle")}
+    description={editTarget
+      ? t("playlists.deleteBody", { name: editTarget.name })
+      : ""}
+    confirmLabel={t("common.delete")}
+    danger
+    confirmDisabled={editBusy}
+    onConfirm={() => void confirmEditDeletePlaylist()}
+    onClose={() => {
+      if (!editBusy) editDeleteConfirm = false;
+    }}
   />
-{/if}
 
-<Toast />
+  {#if moveToVynlOpen}
+    <MoveToVynlDialog
+      onClose={() => (moveToVynlOpen = false)}
+      onImported={onMovedToVynl}
+    />
+  {/if}
+
+  <Toast />
 {/if}
 
 <style>
@@ -939,7 +1039,9 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .edit-head {

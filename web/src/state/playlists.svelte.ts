@@ -5,9 +5,18 @@ import type {
   Playlist,
   PlaylistMeta,
 } from "@lib/types";
-import { getLibrary, getLibraryRevision, onLibraryChanged, refreshLibrary } from "./library.svelte";
+import {
+  getLibrary,
+  getLibraryRevision,
+  onLibraryChanged,
+  refreshLibrary,
+} from "./library.svelte";
 import { moveItem } from "@lib/reorder";
-import { getCatalogueTrack, enrichLibraryTrack, getCatalogueRevision } from "./catalogue.svelte";
+import {
+  getCatalogueTrack,
+  enrichLibraryTrack,
+  getCatalogueRevision,
+} from "./catalogue.svelte";
 import { songKey } from "@lib/format";
 import { evictOldest } from "@lib/cache";
 import {
@@ -328,7 +337,9 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
   const seen = new Map<string, LibraryTrack>();
   for (const pl of Object.values(_all)) {
     if (pl.id === "liked") continue;
-    const markAt = new Map((pl.adds ?? []).map((mark) => [mark.trackId, mark.at]));
+    const markAt = new Map(
+      (pl.adds ?? []).map((mark) => [mark.trackId, mark.at]),
+    );
     for (const track of pl.streams) {
       const at = markAt.get(cataloguePath(track.id)) ?? 0;
       const known = seen.get(track.id);
@@ -344,14 +355,22 @@ export function getPlaylistStreamTracks(): LibraryTrack[] {
 
 const _tracksCache = new Map<
   Playlist,
-  { library: LibraryTrack[] | null; catalogueRevision: number; result: LibraryTrack[] }
+  {
+    library: LibraryTrack[] | null;
+    catalogueRevision: number;
+    result: LibraryTrack[];
+  }
 >();
 
 export function tracksOf(pl: Playlist): LibraryTrack[] {
   const library = getLibrary();
   const catalogueRevision = getCatalogueRevision();
   const cached = _tracksCache.get(pl);
-  if (cached && cached.library === library && cached.catalogueRevision === catalogueRevision)
+  if (
+    cached &&
+    cached.library === library &&
+    cached.catalogueRevision === catalogueRevision
+  )
     return cached.result;
 
   if (_pathSource !== library) {
@@ -396,7 +415,9 @@ export function tracksOf(pl: Playlist): LibraryTrack[] {
       if (!track) {
         const known = id ? getCatalogueTrack(id) : null;
         if (known) {
-          result.push(enrichLibraryTrack({ ...known, path, id: known.id ?? id ?? path }));
+          result.push(
+            enrichLibraryTrack({ ...known, path, id: known.id ?? id ?? path }),
+          );
           continue;
         }
         result.push({
@@ -460,7 +481,12 @@ export function getPlaylistCovers(id: string): string[] {
   const cached = _coversCache.get(id);
   const revision = getLibraryRevision();
   const meta = _metaGeneration;
-  if (cached && cached.failed === _failedCovers && cached.revision === revision && cached.meta === meta) {
+  if (
+    cached &&
+    cached.failed === _failedCovers &&
+    cached.revision === revision &&
+    cached.meta === meta
+  ) {
     return cached.result;
   }
   const result = resolvePlaylistCovers(pl.cover, tracksOf(pl));

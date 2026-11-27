@@ -32,8 +32,11 @@
 <svelte:window onkeydown={onKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="overlay" transition:fade={{ duration: 150 }} onclick={closeMobileSyncUi}>
-
+<div
+  class="overlay"
+  transition:fade={{ duration: 150 }}
+  onclick={closeMobileSyncUi}
+>
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
     class="panel"
@@ -48,7 +51,11 @@
   >
     <div class="head">
       <span class="title display">{t("settings.mobileSync")}</span>
-      <button class="icon-btn close-btn" onclick={closeMobileSyncUi} aria-label={t("common.close")}>
+      <button
+        class="icon-btn close-btn"
+        onclick={closeMobileSyncUi}
+        aria-label={t("common.close")}
+      >
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -80,33 +87,37 @@
           {/if}
 
           <div class="qr-wrap">
-              {#if status.qrSvg}
-                <img
-                  class="qr"
-                  alt={t("settings.mobileSyncQr")}
-                  draggable="false"
-                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(status.qrSvg)}`}
-                />
-                <div class="qr-cap mono">{t("settings.mobileSyncQr")}</div>
-              {:else}
-                <div class="qr qr-empty mono">
-                  {t("settings.mobileSyncNoNetwork")}
-                </div>
-              {/if}
-
-              <div class="qr-actions">
-                <Button
-                  size="sm"
-                  onclick={() => void rotateMobileSyncPin()}
-                  disabled={busy}
-                >
-                  <span class="qr-icon">
-                    <RefreshCw size={13} stroke-width={1.5} class={rotating ? "spin" : ""} />
-                  </span>
-                  {t("settings.mobileSyncNewQr")}
-                </Button>
+            {#if status.qrSvg}
+              <img
+                class="qr"
+                alt={t("settings.mobileSyncQr")}
+                draggable="false"
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(status.qrSvg)}`}
+              />
+              <div class="qr-cap mono">{t("settings.mobileSyncQr")}</div>
+            {:else}
+              <div class="qr qr-empty mono">
+                {t("settings.mobileSyncNoNetwork")}
               </div>
+            {/if}
+
+            <div class="qr-actions">
+              <Button
+                size="sm"
+                onclick={() => void rotateMobileSyncPin()}
+                disabled={busy}
+              >
+                <span class="qr-icon">
+                  <RefreshCw
+                    size={13}
+                    stroke-width={1.5}
+                    class={rotating ? "spin" : ""}
+                  />
+                </span>
+                {t("settings.mobileSyncNewQr")}
+              </Button>
             </div>
+          </div>
 
           <div class="notice insecure">
             <ShieldAlert size={14} stroke-width={1.5} />
@@ -297,5 +308,4 @@
     color: var(--faint);
     line-height: 1.6;
   }
-
-  </style>
+</style>

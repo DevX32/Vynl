@@ -27,7 +27,10 @@
   } from "@state/now-playing.svelte";
   import { setShuffle } from "@state/player.svelte";
   import { getLikedTracks, toggleTasteLike } from "@state/taste.svelte";
-  import { getCurrentPlaylists, saveStreamToPlaylist } from "@state/playlists.svelte";
+  import {
+    getCurrentPlaylists,
+    saveStreamToPlaylist,
+  } from "@state/playlists.svelte";
   import {
     fmtTime,
     fmtTotalDuration,
@@ -50,7 +53,9 @@
   } = $props();
 
   let q = $state("");
-  let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(null);
+  let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(
+    null,
+  );
   let pickerTarget = $state<CatalogueTrack | null>(null);
   let pickerBusy = $state(false);
   let streamTarget = $state<CatalogueTrack | null>(null);
@@ -83,11 +88,7 @@
 
   function isCurrent(track: CatalogueTrack): boolean {
     if (track.id === currentTrackId) return true;
-    return matchesCurrentSong(
-      track.title,
-      track.artist,
-      track.duration ?? 0,
-    );
+    return matchesCurrentSong(track.title, track.artist, track.duration ?? 0);
   }
 
   function playAll(shuffle = false): void {
@@ -193,7 +194,12 @@
     let failed = 0;
     for (const track of list) {
       try {
-        await saveStreamToPlaylist(track, playlistId, playlistName ?? undefined, false);
+        await saveStreamToPlaylist(
+          track,
+          playlistId,
+          playlistName ?? undefined,
+          false,
+        );
         done += 1;
       } catch (error) {
         failed += 1;
@@ -214,15 +220,16 @@
         playlistName ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: name }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
     } else {
       toasts.error(t("catalogue.addPartial", { done, failed }));
     }
   }
 
-  async function runBulkDownload(playlistId: string | null, playlistName: string | null): Promise<void> {
+  async function runBulkDownload(
+    playlistId: string | null,
+    playlistName: string | null,
+  ): Promise<void> {
     const list = bulkTracks;
     if (bulkBusy || list.length === 0) return;
     bulkBusy = true;
@@ -252,9 +259,7 @@
         playlistName ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(
-        t("catalogue.downloadDone", { n: done, name: name }),
-      );
+      toasts.success(t("catalogue.downloadDone", { n: done, name: name }));
     } else {
       toasts.error(t("catalogue.downloadPartial", { done, failed }));
     }
@@ -271,9 +276,7 @@
         result.playlist?.name ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: name }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
     } catch (error) {
       console.warn("catalogue add to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -291,9 +294,7 @@
       const result = await saveCatalogueTrack(target, null, name);
       await refreshAfterCatalogueSave();
       const playlistName = result.playlist?.name ?? name;
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: playlistName }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: playlistName }));
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -311,9 +312,7 @@
       await saveStreamToPlaylist(target, mixId);
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: name }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -365,7 +364,10 @@
           {t("playlist.zeroSongs")}
         {/if}
         {#if bulkBusy}
-          · {t("catalogue.downloading", { done: bulkDone, total: bulkTracks.length })}
+          · {t("catalogue.downloading", {
+            done: bulkDone,
+            total: bulkTracks.length,
+          })}
         {/if}
       </div>
     </div>
@@ -399,7 +401,9 @@
         aria-label={t("catalogue.bulkActions")}
       >
         {#if bulkBusy}
-          <span class="spin"><LoaderCircle size={14} stroke-width={1.5} /></span>
+          <span class="spin">
+            <LoaderCircle size={14} stroke-width={1.5} />
+          </span>
         {:else}
           <Plus size={14} stroke-width={1.5} />
         {/if}
@@ -622,12 +626,11 @@
     content: "";
     position: absolute;
     inset: -40%;
-    background:
-      radial-gradient(
-        circle at 50% 50%,
-        color-mix(in srgb, var(--accent) 42%, transparent) 0%,
-        transparent 62%
-      );
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--accent) 42%, transparent) 0%,
+      transparent 62%
+    );
     filter: blur(34px);
     opacity: 0.8;
   }

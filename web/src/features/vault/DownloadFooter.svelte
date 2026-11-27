@@ -24,7 +24,13 @@
     running: boolean;
     reviewing: boolean;
     summary: DownloadSummary | null;
-    counts: { done: number; skipped: number; failed: number; queued: number; active: number };
+    counts: {
+      done: number;
+      skipped: number;
+      failed: number;
+      queued: number;
+      active: number;
+    };
     totalDuration: number;
     savingPlaylist?: boolean;
     saveHint?: string | null;
@@ -72,9 +78,7 @@
         {#if total > 0}
           <div class="track-pill mono">
             <span class="pill-num">{total}</span>
-            <span class="pill-label"
-              >{t("vault.tracks")}</span
-            >
+            <span class="pill-label">{t("vault.tracks")}</span>
             <span class="pill-sep"></span>
             <span class="pill-dur">{fmtDuration(totalDuration)}</span>
           </div>

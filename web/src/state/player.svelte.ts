@@ -137,7 +137,7 @@ export function setVolume(v: number): void {
 }
 
 let _onMuteChange: (() => void)[] = [];
-export function onMuteChange(fn: () => void): (() => void) {
+export function onMuteChange(fn: () => void): () => void {
   _onMuteChange.push(fn);
   return () => {
     _onMuteChange = _onMuteChange.filter((f) => f !== fn);

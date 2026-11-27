@@ -20,7 +20,9 @@
     onDismiss?: (track: CatalogueTrack) => void;
   } = $props();
 
-  let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(null);
+  let ctx = $state<{ x: number; y: number; track: CatalogueTrack } | null>(
+    null,
+  );
   let pickerTarget = $state<CatalogueTrack | null>(null);
   let pickerBusy = $state(false);
 
@@ -78,9 +80,7 @@
       await saveStreamToPlaylist(target, playlistId);
       const name =
         playlists.find((playlist) => playlist.id === playlistId)?.name ?? "";
-      toasts.success(
-        t("catalogue.addedToPlaylist", { name: name }),
-      );
+      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));

@@ -46,7 +46,7 @@ function normalizeSettings(s: Settings): Settings {
   if (br && s.bitrate != null && !br.includes(s.bitrate)) {
     console.warn(
       `[Settings] Bitrate ${s.bitrate} is not valid. ` +
-        `Valid bitrates: ${br.join(", ")}. Using ${br[br.length - 1]} as fallback.`
+        `Valid bitrates: ${br.join(", ")}. Using ${br[br.length - 1]} as fallback.`,
     );
     return { ...s, format, theme, bitrate: br[br.length - 1] };
   }
@@ -119,7 +119,9 @@ let _settingsQueue: Promise<void> = Promise.resolve();
 export async function patchSettings(patch: Partial<Settings>): Promise<void> {
   const job = _settingsQueue.then(async () => {
     if (!_settings) {
-      console.warn("patchSettings called before settings finished loading — patch dropped");
+      console.warn(
+        "patchSettings called before settings finished loading — patch dropped",
+      );
       return;
     }
     const next = normalizeSettings({ ..._settings, ...patch });
@@ -196,4 +198,3 @@ function markToolError(name: ToolName, err: unknown): void {
       : s,
   );
 }
-

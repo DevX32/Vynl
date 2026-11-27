@@ -61,7 +61,11 @@ export async function setMobileSyncEnabled(enabled: boolean): Promise<void> {
   try {
     _status = await vynl.setMobileSyncEnabled(enabled);
     toasts.success(
-      t(enabled ? "settings.mobileSyncTurnedOn" : "settings.mobileSyncTurnedOff"),
+      t(
+        enabled
+          ? "settings.mobileSyncTurnedOn"
+          : "settings.mobileSyncTurnedOff",
+      ),
     );
   } catch (e) {
     toasts.error(t("settings.mobileSyncToggleFailed", { error: errText(e) }));

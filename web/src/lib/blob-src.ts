@@ -23,7 +23,8 @@ function upsizeCover(url: string): string {
   let i = start + 2;
   while (i < trimmed.length && trimmed[i] >= "0" && trimmed[i] <= "9") i++;
   const width = Number.parseInt(trimmed.slice(start + 2, i), 10);
-  if (!Number.isFinite(width) || !trimmed.slice(i).startsWith("-h")) return trimmed;
+  if (!Number.isFinite(width) || !trimmed.slice(i).startsWith("-h"))
+    return trimmed;
 
   let j = i + 2;
   const hStart = j;
@@ -43,7 +44,8 @@ function upsizeCover(url: string): string {
   const nw = Math.max(width, 512);
   const nh = Math.max(height, 512);
   const dashCount = (trimmed.slice(j).match(/-/g) ?? []).length;
-  if (nw === width && nh === height && params.length === dashCount) return trimmed;
+  if (nw === width && nh === height && params.length === dashCount)
+    return trimmed;
 
   return `${trimmed.slice(0, start)}=w${nw}-h${nh}${params.map((p) => `-${p}`).join("")}`;
 }
@@ -70,7 +72,10 @@ function cacheRemote(url: string): Promise<string> {
 export function blobSrc(
   node: HTMLImageElement,
   path: string | null | undefined,
-): { update: (newPath: string | null | undefined) => void; destroy: () => void } {
+): {
+  update: (newPath: string | null | undefined) => void;
+  destroy: () => void;
+} {
   let token = 0;
   let current: string | null = null;
 

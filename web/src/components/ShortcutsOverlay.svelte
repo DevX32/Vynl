@@ -30,8 +30,11 @@
 <svelte:window onkeydown={onKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="overlay" transition:fade={{ duration: 150 }} onclick={closeShortcutsOverlay}>
-
+<div
+  class="overlay"
+  transition:fade={{ duration: 150 }}
+  onclick={closeShortcutsOverlay}
+>
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div
     class="panel"
@@ -46,7 +49,11 @@
   >
     <div class="head">
       <span class="title display">{t("shortcuts.title")}</span>
-      <button class="icon-btn close-btn" onclick={closeShortcutsOverlay} aria-label={t("common.close")}>
+      <button
+        class="icon-btn close-btn"
+        onclick={closeShortcutsOverlay}
+        aria-label={t("common.close")}
+      >
         <X size={12} stroke-width={1.6} />
       </button>
     </div>
@@ -115,7 +122,10 @@
     background: var(--surface);
     border: 1px solid var(--line);
     transform: rotate(45deg);
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .close-btn:hover {

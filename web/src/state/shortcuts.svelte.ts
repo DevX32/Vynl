@@ -85,7 +85,12 @@ function comboId(mods: ComboModifiers, key: string): string {
 }
 
 function bindingModifiers(b: KeyBinding, shift: boolean): ComboModifiers {
-  return { ctrl: b.ctrl === true, meta: b.meta === true, alt: b.alt === true, shift };
+  return {
+    ctrl: b.ctrl === true,
+    meta: b.meta === true,
+    alt: b.alt === true,
+    shift,
+  };
 }
 
 function bindingIds(binding: KeyBinding): string[] {
@@ -153,7 +158,8 @@ const ACTIONS: readonly KeybindAction[] = [
     labelKey: "shortcuts.actions.fullscreenPlayer",
     categoryKey: "shortcuts.categories.interface",
     binding: { key: "f" },
-    run: () => document.dispatchEvent(new CustomEvent("vynl:toggle-fullscreen")),
+    run: () =>
+      document.dispatchEvent(new CustomEvent("vynl:toggle-fullscreen")),
   },
 ];
 
@@ -245,7 +251,8 @@ const ACTIVATION_KEYS = new Set(["space", "enter"]);
 const NAVIGATION_ROLES =
   '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="switch"], [role="combobox"]';
 
-const MODAL_ROLES = '[role="dialog"], [aria-modal="true"], [role="alertdialog"]';
+const MODAL_ROLES =
+  '[role="dialog"], [aria-modal="true"], [role="alertdialog"]';
 
 const CONTEXT_MENU = '.ctx-menu, [role="listbox"], [role="menu"]';
 
@@ -253,7 +260,9 @@ export function shouldYieldToTarget(e: KeyboardEvent): boolean {
   if (
     typeof document !== "undefined" &&
     e.key !== "Escape" &&
-    document.querySelector('[role="dialog"], [aria-modal="true"], [role="alertdialog"], .ctx-menu, [role="menu"]') !== null
+    document.querySelector(
+      '[role="dialog"], [aria-modal="true"], [role="alertdialog"], .ctx-menu, [role="menu"]',
+    ) !== null
   ) {
     return true;
   }

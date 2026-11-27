@@ -29,7 +29,8 @@ export const en = {
     likedEmptyTitle: "No liked songs yet",
     likedEmptyHint: "Like songs from Browse to build this playlist.",
     freshTitle: "Start your own mix",
-    freshHint:"Search for something you love and like it. Vynl learns from your likes and plays, right here on this device.",
+    freshHint:
+      "Search for something you love and like it. Vynl learns from your likes and plays, right here on this device.",
     mixFailed: "Could not build your mix",
     likeTrack: "Like song",
     unlikeTrack: "Unlike song",
@@ -79,14 +80,17 @@ export const en = {
     repeatAll: "Repeat all",
     repeatOne: "Repeat one",
     crossfade: "Crossfade",
-    crossfadeHint:"Blend the end of one track into the start of the next.",
+    crossfadeHint: "Blend the end of one track into the start of the next.",
     playbackSpeed: "Playback speed",
-    playbackSpeedHint:"Change how fast tracks play. Higher speeds also raise the pitch.",
+    playbackSpeedHint:
+      "Change how fast tracks play. Higher speeds also raise the pitch.",
     replayGain: "ReplayGain",
-    replayGainHint:"Normalize loudness using ReplayGain tags in your files. Applies from the next track.",
+    replayGainHint:
+      "Normalize loudness using ReplayGain tags in your files. Applies from the next track.",
     replayGainToggle: "ReplayGain toggle",
     sleepTimer: "Sleep timer",
-    sleepTimerHint:"Pause playback after a set time, or when the current track ends.",
+    sleepTimerHint:
+      "Pause playback after a set time, or when the current track ends.",
     sleepMinutes: "{n} min",
     sleepEndOfTrack: "End of track",
     sleepRemaining: "{time} left",
@@ -133,11 +137,14 @@ export const en = {
     hintClear: "to clear",
     keyEnter: "Enter",
     step1Title: "Paste a link",
-    step1Body: "Drop in a track, album or playlist URL — or just type a song name.",
+    step1Body:
+      "Drop in a track, album or playlist URL — or just type a song name.",
     step2Title: "Review the matches",
-    step2Body: "Every track is matched against a source. Swap any of them by hand.",
+    step2Body:
+      "Every track is matched against a source. Swap any of them by hand.",
     step3Title: "Save it",
-    step3Body: "Tracks are tagged, saved to your library and offered to a playlist.",
+    step3Body:
+      "Tracks are tagged, saved to your library and offered to a playlist.",
     searching: "Searching",
     searchFailed: "Search failed",
     addedCount: "· {n} added",
@@ -154,7 +161,8 @@ export const en = {
     filter: "Filter Playlists",
   },
   moveToVynl: {
-    description:"Paste a link to a public playlist. Every track is matched to a streamable source and moved into a Vynl playlist.",
+    description:
+      "Paste a link to a public playlist. Every track is matched to a streamable source and moved into a Vynl playlist.",
     placeholder: "Paste a playlist link",
     continue: "Move",
     stages: "Import stages",
@@ -169,7 +177,8 @@ export const en = {
     notPlaylist: "That link is not a supported playlist.",
     empty: "That playlist has no tracks.",
     done: 'Moved {n} tracks into "{name}"',
-    partial:'Moved {n} of {total} tracks into "{name}" — {missed} could not be matched',
+    partial:
+      'Moved {n} of {total} tracks into "{name}" — {missed} could not be matched',
   },
   trackRow: {
     badLen: "Bad len",
@@ -239,13 +248,16 @@ export const en = {
     discordHint: "Show the current track on your Discord profile.",
     discordToggle: "Discord Rich Presence toggle",
     globalMediaKeys: "Global Media Keys",
-    globalMediaKeysHint: "Control playback with hardware media keys even when Vynl is not focused.",
+    globalMediaKeysHint:
+      "Control playback with hardware media keys even when Vynl is not focused.",
     globalMediaKeysToggle: "Global media keys toggle",
     confirmMatches: "Confirm Matches Before Download",
-    confirmMatchesHint: "Review the found video for each track and pick the right one.",
+    confirmMatchesHint:
+      "Review the found video for each track and pick the right one.",
     confirmMatchesToggle: "Confirm matches toggle",
     minimizeToTray: "Minimize to System Tray",
-    minimizeToTrayHint: "When closing, minimize to the system tray instead of quitting.",
+    minimizeToTrayHint:
+      "When closing, minimize to the system tray instead of quitting.",
     minimizeToTrayToggle: "Minimize to tray toggle",
     accentColor: "Accent Color",
     accentColorHint: "Pick a preset or set a custom color.",
@@ -256,49 +268,64 @@ export const en = {
     theme: "Theme",
     themeHint: "Choose Vynl's surfaces. Your accent color stays independent.",
     themePicker: "Theme picker",
+    language: "Language",
+    languageHint:
+      "Applies immediately. Some catalogue content stays in its original language.",
     hardwareAcceleration: "Hardware Acceleration",
-    hardwareAccelerationHint: "Use GPU for rendering. Disable if you experience display issues. Requires restart.",
+    hardwareAccelerationHint:
+      "Use GPU for rendering. Disable if you experience display issues. Requires restart.",
     hardwareAccelerationToggle: "Hardware acceleration toggle",
     launchAtStartup: "Launch at Startup",
-    launchAtStartupHint:"Automatically start Vynl when you log in.",
+    launchAtStartupHint: "Automatically start Vynl when you log in.",
     launchAtStartupToggle: "Launch at startup toggle",
     nickname: "Nickname",
-    nicknameHint:"Your name across Vynl. Leave blank for a random nickname.",
+    nicknameHint: "Your name across Vynl. Leave blank for a random nickname.",
     nicknameRoll: "Roll",
     taste: "Your Taste",
     tasteHint: "Vynl builds your mixes from this.",
-    tasteEmpty:"Like a song or play a few tracks and Vynl will start building your mix.",
+    tasteEmpty:
+      "Like a song or play a few tracks and Vynl will start building your mix.",
     tasteResetTitle: "Reset your taste profile?",
-    tasteResetBody:"This erases everything Vynl learned from your listening — including your liked songs on every synced device. You can build it up again by listening.",
+    tasteResetBody:
+      "This erases everything Vynl learned from your listening — including your liked songs on every synced device. You can build it up again by listening.",
     mobileSync: "Mobile Sync",
-    mobileSyncHint:"Share your library with the Vynl Android app over your local Wi‑Fi.",
+    mobileSyncHint:
+      "Share your library with the Vynl Android app over your local Wi‑Fi.",
     mobileSyncToggle: "Mobile sync toggle",
     mobileSyncLoading: "Reading status",
     mobileSyncUnavailable: "Could not read mobile sync status.",
     mobileSyncTurnedOn: "Mobile sync is live on your local network.",
     mobileSyncTurnedOff: "Mobile sync turned off.",
-    mobileSyncPinRotated:"New pairing code generated. Scan the QR again on any paired phone.",
+    mobileSyncPinRotated:
+      "New pairing code generated. Scan the QR again on any paired phone.",
     mobileSyncToggleFailed: "Couldn't update mobile sync: {error}",
     mobileSyncPinFailed: "Couldn't generate a new pairing code: {error}",
-    mobileSyncInsecureNotice:"Traffic is unencrypted over HTTP. Only enable this on a Wi‑Fi network you trust.",
-    mobileSyncNotRunning:"Enabled, but the server isn't listening. Restart Vynl to bring it back up.",
+    mobileSyncInsecureNotice:
+      "Traffic is unencrypted over HTTP. Only enable this on a Wi‑Fi network you trust.",
+    mobileSyncNotRunning:
+      "Enabled, but the server isn't listening. Restart Vynl to bring it back up.",
     mobileSyncNoNetwork: "No network address found.",
     mobileSyncNewQr: "New QR",
     mobileSyncQr: "Scan with the Vynl Android app",
-    mobileSyncFoot:"Regenerating invalidates every paired phone — they'll need to scan the new code. Downloads stay on your local network.",
-    equalizerHint: "Shape the sound of everything you play. Changes apply live.",
+    mobileSyncFoot:
+      "Regenerating invalidates every paired phone — they'll need to scan the new code. Downloads stay on your local network.",
+    equalizerHint:
+      "Shape the sound of everything you play. Changes apply live.",
     equalizerHintOff: "Turn on to shape the sound of everything you play.",
     equalizerToggle: "Equalizer toggle",
     eqResponseCurve: "Response curve",
-    audioFormatHint:"MP3 re-encodes the stream and plays everywhere. Opus keeps the audio exactly as YouTube sends it, at roughly a third of the file size.",
+    audioFormatHint:
+      "MP3 re-encodes the stream and plays everywhere. Opus keeps the audio exactly as YouTube sends it, at roughly a third of the file size.",
     equalizerBand: "band",
     support: "Support Vynl",
     supportHint: "If you like the app, a coffee helps keep it going.",
     supportButton: "Support on Ko-fi",
     clearCache: "Clear Cache",
-    clearCacheHint:"Delete cached cover art, streamed audio and lookup data. Your library and downloads stay intact.",
+    clearCacheHint:
+      "Delete cached cover art, streamed audio and lookup data. Your library and downloads stay intact.",
     clearCacheTitle: "Clear cache?",
-    clearCacheBody:"Cached cover art, streamed audio and lookup data will be deleted and fetched again as needed. Your library and downloads are not affected.",
+    clearCacheBody:
+      "Cached cover art, streamed audio and lookup data will be deleted and fetched again as needed. Your library and downloads are not affected.",
     cacheClearing: "Clearing",
     cacheCleared: "Cache cleared. {mb} MB freed.",
     cacheClearFailed: "Couldn't clear the cache: {error}",
@@ -316,11 +343,13 @@ export const en = {
     signingUp: "Creating account",
     switchToSignUp: "New here? Create an account",
     switchToSignIn: "Already have an account? Sign in",
-    confirmationNeeded:"Check your email to confirm your account, then come back and sign in.",
+    confirmationNeeded:
+      "Check your email to confirm your account, then come back and sign in.",
     signedInAs: "Signed in as",
     notSignedIn: "Not signed in",
     emailConfirmed: "Email confirmed. You can sign in now.",
-    emailConfirmFailed: "Couldn't confirm this email — the link may have expired.",
+    emailConfirmFailed:
+      "Couldn't confirm this email — the link may have expired.",
     createAccount: "Create account",
     modeSync: "Sync playlists already saved to your account",
     modeCreate: "Create an account to sync playlists from this device",
@@ -344,39 +373,49 @@ export const en = {
     signOutFailed: "Couldn't sign out: {error}",
     welcomeBack: "Signed in to Vynl.",
     signUpSuccess: "Welcome to Vynl.",
-    staysLocal: "Stay signed out and Vynl works exactly as it does today — everything stays on this device.",
+    staysLocal:
+      "Stay signed out and Vynl works exactly as it does today — everything stays on this device.",
     avatarReroll: "Reroll",
   },
   backup: {
     title: "Export and Import",
     hint: "Save your whole library — every track, playlist and your settings — to one file you can keep or move to another machine.",
     contents: "Ready to export",
-    contentsHint: "{tracks} tracks and {playlists} playlists from your library, always included.",
+    contentsHint:
+      "{tracks} tracks and {playlists} playlists from your library, always included.",
     export: "Export",
     exporting: "Exporting",
     saved: "Exported {tracks} tracks to {path}",
-    savedPlaylists: "Exported {tracks} tracks and {playlists} playlists to {path}",
+    savedPlaylists:
+      "Exported {tracks} tracks and {playlists} playlists to {path}",
     lastExport: "Last: {tracks} tracks · {bytes} · {format}",
-    lastExportPlaylists: "Last: {tracks} tracks and {playlists} playlists · {bytes} · {format}",
-    nothingToExport: "There's nothing in your library yet. Download something first.",
+    lastExportPlaylists:
+      "Last: {tracks} tracks and {playlists} playlists · {bytes} · {format}",
+    nothingToExport:
+      "There's nothing in your library yet. Download something first.",
     libraryLoadFailed: "Couldn't load your library.",
     failed: "Export failed: {error}",
     restoreTitle: "Import from a backup",
-    restoreHint:"Import a Vynl JSON backup and start downloading right away — no match review, it runs in the background. Tracks still on disk are skipped, the rest are fetched again.",
+    restoreHint:
+      "Import a Vynl JSON backup and start downloading right away — no match review, it runs in the background. Tracks still on disk are skipped, the rest are fetched again.",
     restore: "Import",
     restoring: "Importing",
     restoredTitle: "Imported backup",
-    restored: "Importing {tracks} tracks from your backup — downloading in the background ({known} already have a saved source).",
-    restoreConfirm: "Restore {tracks} tracks from this backup and start downloading now?",
+    restored:
+      "Importing {tracks} tracks from your backup — downloading in the background ({known} already have a saved source).",
+    restoreConfirm:
+      "Restore {tracks} tracks from this backup and start downloading now?",
     restoreFailed: "Couldn't import that backup: {error}",
   },
   downloads: {
-    hint:"Songs stored in your music folder. Streaming from the catalogue does not count as a download — only files on disk.",
+    hint: "Songs stored in your music folder. Streaming from the catalogue does not count as a download — only files on disk.",
     removeAll: "Remove all downloaded songs",
-    removeAllHint:"Deletes every audio file in your music folder, including songs you added yourself. Downloaded lyric files go too, and every playlist is cleaned of the deleted tracks. This cannot be undone.",
+    removeAllHint:
+      "Deletes every audio file in your music folder, including songs you added yourself. Downloaded lyric files go too, and every playlist is cleaned of the deleted tracks. This cannot be undone.",
     removeAllConfirm: "Delete All",
     removeAllTitle: "Remove all downloaded songs?",
-    removeAllBody:"Every audio file in your music folder will be permanently deleted. This action cannot be undone.",
+    removeAllBody:
+      "Every audio file in your music folder will be permanently deleted. This action cannot be undone.",
     removing: "Deleting",
     removeDownloadedDone: "Deleted {deleted} songs",
     removeDownloadedFailed: "Couldn't remove songs: {error}",
@@ -403,7 +442,8 @@ export const en = {
     nothingHere: "Nothing here yet.",
     pasteToStart: "Paste a link in Vault to start your library",
     deleteTitle: "Delete track",
-    deleteBody:'"{title}" will be permanently removed from your library and deleted from disk. This action cannot be undone.',
+    deleteBody:
+      '"{title}" will be permanently removed from your library and deleted from disk. This action cannot be undone.',
     deleteFailed: "Failed to delete track",
     deleted: 'Deleted "{title}"',
     editTags: "Edit Tags",
@@ -418,8 +458,10 @@ export const en = {
     empty: "This playlist is empty",
     addSomeTracks: "Add some tracks to get started",
     removeTrackTitle: "Delete song",
-    removeTrackBody:'"{title}" will be removed from this playlist and deleted from disk. This action cannot be undone.',
-    removeStreamBody:'"{title}" will be removed from this playlist. It is not stored on your computer, so nothing is deleted. This action cannot be undone.',
+    removeTrackBody:
+      '"{title}" will be removed from this playlist and deleted from disk. This action cannot be undone.',
+    removeStreamBody:
+      '"{title}" will be removed from this playlist. It is not stored on your computer, so nothing is deleted. This action cannot be undone.',
     removeTrackFailed: "Failed to remove track",
     reorderFailed: "Couldn't reorder the playlist",
     addFailed: "Couldn't add those tracks",
@@ -436,7 +478,8 @@ export const en = {
   playlists: {
     playlistUnavailable: "This playlist is no longer available",
     deleteTitle: "Delete Playlist",
-    deleteBody:'"{name}" and every song in it will be permanently deleted. This action cannot be undone.',
+    deleteBody:
+      '"{name}" and every song in it will be permanently deleted. This action cannot be undone.',
     deleteFailed: "Failed to delete playlist",
     createFailed: "Couldn't create the playlist",
     renameTitle: "Rename playlist",
@@ -535,7 +578,8 @@ export const en = {
     failed: "Failed",
     equalizer: "Equalizer",
     done: "Done",
-    deletePartial: "{failed} songs could not be deleted because they were in use",
+    deletePartial:
+      "{failed} songs could not be deleted because they were in use",
     delete: "Delete",
     create: "Create",
     clear: "Clear",
@@ -569,5 +613,4 @@ export const en = {
     saving: "Saving",
     save: "Save",
   },
-
-} as const;
+};

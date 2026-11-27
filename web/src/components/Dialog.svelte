@@ -74,9 +74,13 @@
       {/if}
       <div class="footer">
         <Button onclick={onClose}>{t("common.cancel")}</Button>
-        <Button variant={danger ? "danger" : "primary"} onclick={onConfirm} disabled={confirmDisabled}
-          >{confirmLabel || t("common.confirm")}</Button
+        <Button
+          variant={danger ? "danger" : "primary"}
+          onclick={onConfirm}
+          disabled={confirmDisabled}
         >
+          {confirmLabel || t("common.confirm")}
+        </Button>
       </div>
     </div>
   </div>
@@ -141,5 +145,4 @@
     justify-content: flex-end;
     gap: 8px;
   }
-
 </style>

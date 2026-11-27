@@ -13,7 +13,11 @@
     Tag,
   } from "lucide-svelte";
   import { vynl } from "../../lib/vynl";
-  import { refreshLibrary, getLibrary, getLibraryError } from "@state/library.svelte";
+  import {
+    refreshLibrary,
+    getLibrary,
+    getLibraryError,
+  } from "@state/library.svelte";
   import {
     clearNowPlaying,
     getCurrentTrack,
@@ -235,9 +239,18 @@
       markAdded(plId, target.path);
       const added = (after?.trackCount ?? 0) - (before?.trackCount ?? 0);
       if (added > 0) {
-        toasts.success(t("vault.addedToPlaylist", { n: added, name: after?.name ?? before?.name ?? "" }));
+        toasts.success(
+          t("vault.addedToPlaylist", {
+            n: added,
+            name: after?.name ?? before?.name ?? "",
+          }),
+        );
       } else {
-        toasts.info(t("vault.playlistAlreadyHas", { name: after?.name ?? before?.name ?? "" }));
+        toasts.info(
+          t("vault.playlistAlreadyHas", {
+            name: after?.name ?? before?.name ?? "",
+          }),
+        );
       }
     } catch (e) {
       console.warn("addToPlaylist error:", e);
@@ -255,7 +268,8 @@
       await addToPlaylist(pl.id, [target.path]);
       await refreshPlaylists();
       markAdded(pl.id, target.path);
-      const added = getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
+      const added =
+        getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
       toasts.success(t("vault.addedToPlaylist", { n: added, name: pl.name }));
     } catch (e) {
       console.warn("createAndAddPlaylist error:", e);
@@ -362,16 +376,14 @@
       {#if hits.length === 0}
         <div class="tbl-empty">
           <ListMusic size={28} stroke-width={1.1} />
-          <span class="empty-title display"
-            >{debouncedQuery
-              ? t("library.noMatches")
-              : t("library.nothingHere")}</span
-          >
-          <span class="empty-sub mono"
-            >{debouncedQuery
+          <span class="empty-title display">
+            {debouncedQuery ? t("library.noMatches") : t("library.nothingHere")}
+          </span>
+          <span class="empty-sub mono">
+            {debouncedQuery
               ? t("common.nothingMatchesQuery", { query: debouncedQuery })
-              : t("library.pasteToStart")}</span
-          >
+              : t("library.pasteToStart")}
+          </span>
         </div>
       {:else}
         {#snippet row(trk: (typeof hits)[number], i: number)}
@@ -431,7 +443,7 @@
   <PlaylistPicker
     suggestedName={pickerTarget.title}
     trackCount={1}
-    playlists={playlists}
+    {playlists}
     busy={pickerBusy}
     onAddExisting={addToSelectedPlaylist}
     onCreate={createAndAddPlaylist}
@@ -442,7 +454,9 @@
 <Dialog
   open={deleteTarget !== null}
   title={t("library.deleteTitle")}
-  description={deleteTarget ? t("library.deleteBody", { title: deleteTarget.title }) : ""}
+  description={deleteTarget
+    ? t("library.deleteBody", { title: deleteTarget.title })
+    : ""}
   confirmLabel={t("common.delete")}
   danger
   onConfirm={() => void handleDelete()}

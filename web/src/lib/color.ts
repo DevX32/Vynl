@@ -20,7 +20,10 @@ function hexToRgb(hex: string): [number, number, number] | null {
   const clean = hex.trim().replace("#", "");
   const full =
     clean.length === 3
-      ? clean.split("").map((c) => c + c).join("")
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
       : clean;
   if (full.length !== 6) return null;
   const num = parseInt(full, 16);
@@ -29,7 +32,9 @@ function hexToRgb(hex: string): [number, number, number] | null {
 }
 
 function componentToHex(c: number): string {
-  return Math.round(clamp(c, 0, 255)).toString(16).padStart(2, "0");
+  return Math.round(clamp(c, 0, 255))
+    .toString(16)
+    .padStart(2, "0");
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -158,7 +163,11 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 function lerpRgb(from: Rgb, to: Rgb, t: number): Rgb {
-  return [lerp(from[0], to[0], t), lerp(from[1], to[1], t), lerp(from[2], to[2], t)];
+  return [
+    lerp(from[0], to[0], t),
+    lerp(from[1], to[1], t),
+    lerp(from[2], to[2], t),
+  ];
 }
 
 function sameRgb(a: Rgb, b: Rgb): boolean {
@@ -196,7 +205,11 @@ export function applyAccentColor(
 
   const targetText = accentTextTarget(relativeLuminance(target));
 
-  if (!animate || prefersReducedMotion() || sameRgb(currentAccentBase(), target)) {
+  if (
+    !animate ||
+    prefersReducedMotion() ||
+    sameRgb(currentAccentBase(), target)
+  ) {
     writeAccent(target, targetText, persist);
     return;
   }

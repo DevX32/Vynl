@@ -66,7 +66,9 @@
   let saveHint = $state<string | null>(null);
   const PAGE_SIZE = 50;
   let page = $state(0);
-  let trackFilter = $state<"all" | "queued" | "active" | "failed" | "done" | "skipped">("all");
+  let trackFilter = $state<
+    "all" | "queued" | "active" | "failed" | "done" | "skipped"
+  >("all");
   let filteredTracks = $derived.by(() => {
     const tracks = collection?.tracks ?? [];
     if (trackFilter === "all") return tracks;
@@ -75,12 +77,13 @@
       if (trackFilter === "done") return s === "done";
       if (trackFilter === "failed") return s === "error";
       if (trackFilter === "skipped") return s === "skipped";
-      if (trackFilter === "active") return s === "searching" || s === "downloading" || s === "processing";
+      if (trackFilter === "active")
+        return s === "searching" || s === "downloading" || s === "processing";
       return s === "queued" || !s;
     });
   });
   let totalPages = $derived(
-    Math.max(1, Math.ceil((filteredTracks.length) / PAGE_SIZE)),
+    Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE)),
   );
   let pagedTracks = $derived.by(() => {
     const start = page * PAGE_SIZE;
@@ -122,7 +125,8 @@
   function handleEvent(e: DownloadEvent): void {
     if (e.type === "track") {
       if (!running) return;
-      if (!Object.prototype.hasOwnProperty.call(progress, e.payload.trackId)) return;
+      if (!Object.prototype.hasOwnProperty.call(progress, e.payload.trackId))
+        return;
       progress = { ...progress, [e.payload.trackId]: e.payload };
     } else if (e.type === "summary") {
       if (!running) return;
@@ -296,7 +300,9 @@
     }
 
     const tracksToSearch = target.tracks.filter((t) => !doneIds.includes(t.id));
-    const skippedIds = new Set(doneIds.filter((id) => target.tracks.some((t) => t.id === id)));
+    const skippedIds = new Set(
+      doneIds.filter((id) => target.tracks.some((t) => t.id === id)),
+    );
 
     const searchCollection = { ...target, tracks: tracksToSearch };
 
@@ -342,7 +348,10 @@
     await confirmDownload();
   }
 
-  function buildSkipIds(tracks: Collection["tracks"], doneIds: string[]): string[] {
+  function buildSkipIds(
+    tracks: Collection["tracks"],
+    doneIds: string[],
+  ): string[] {
     return tracks.filter((t) => doneIds.includes(t.id)).map((t) => t.id);
   }
 
@@ -354,7 +363,12 @@
     const next = { ...current };
     for (const t of tracks) {
       if (next[t.id]?.status === "queued") {
-        next[t.id] = { trackId: t.id, status: "error", percent: 0, message: msg };
+        next[t.id] = {
+          trackId: t.id,
+          status: "error",
+          percent: 0,
+          message: msg,
+        };
       }
     }
     return next;
@@ -410,7 +424,10 @@
     }
   }
 
-  async function postDownload(dlCollection: Collection, gen: number): Promise<void> {
+  async function postDownload(
+    dlCollection: Collection,
+    gen: number,
+  ): Promise<void> {
     try {
       const existingPaths = await collectDownloadedPaths(dlCollection);
       if (existingPaths.length === 0) return;
@@ -432,9 +449,7 @@
     }
   }
 
-  async function collectDownloadedPaths(
-    target: Collection,
-  ): Promise<string[]> {
+  async function collectDownloadedPaths(target: Collection): Promise<string[]> {
     const paths = await vynl.downloadedPaths(target);
     return paths.filter((p) => {
       const name = p.split(/[/\\]/).pop() ?? "";
@@ -475,11 +490,15 @@
   }
 
   function notifyPlaylistSaved(name: string, added: number): void {
-    if (added > 0) toasts.success(t("vault.addedToPlaylist", { n: added, name }));
+    if (added > 0)
+      toasts.success(t("vault.addedToPlaylist", { n: added, name }));
     else toasts.info(t("vault.playlistAlreadyHas", { name }));
   }
 
-  async function savePathsToPlaylist(playlistId: string, paths: string[]): Promise<{ added: number; failed: number }> {
+  async function savePathsToPlaylist(
+    playlistId: string,
+    paths: string[],
+  ): Promise<{ added: number; failed: number }> {
     try {
       await addToPlaylist(playlistId, paths);
       return { added: paths.length, failed: 0 };
@@ -507,17 +526,16 @@
       const result = await savePathsToPlaylist(playlistId, pendingPaths);
       await refreshPlaylists();
       const after = getCurrentPlaylists().find((p) => p.id === playlistId);
-      const delta = after ? after.trackCount - (before?.trackCount ?? 0) : result.added;
+      const delta = after
+        ? after.trackCount - (before?.trackCount ?? 0)
+        : result.added;
       const added = Math.max(0, delta);
       if (result.failed > 0 && result.added === 0) {
         toasts.error(t("vault.playlistSaveFailed"));
       } else if (result.failed > 0) {
         toasts.warning(t("vault.playlistSaveFailed"), 6000);
       } else {
-        notifyPlaylistSaved(
-          after?.name ?? before?.name ?? "",
-          added,
-        );
+        notifyPlaylistSaved(after?.name ?? before?.name ?? "", added);
       }
     } catch (e) {
       console.warn("addToPlaylist error:", e);
@@ -551,14 +569,12 @@
   }
 
   let coverTiles = $derived(
-    resolvePlaylistCovers(
-      collection?.cover,
-      collection?.tracks ?? [],
-    ),
+    resolvePlaylistCovers(collection?.cover, collection?.tracks ?? []),
   );
 
   const counts = $derived.by(() => {
-    if (!collection) return { done: 0, skipped: 0, failed: 0, queued: 0, active: 0 };
+    if (!collection)
+      return { done: 0, skipped: 0, failed: 0, queued: 0, active: 0 };
     let done = 0,
       skipped = 0,
       failed = 0,
@@ -716,8 +732,8 @@
       onResolve={resolve}
       onSearch={openSearch}
       onClear={dismissSearch}
-      resolving={resolving}
-      searching={searching}
+      {resolving}
+      {searching}
     >
       {#if showSearchResults}
         <InlineSearchResults
@@ -732,154 +748,155 @@
     </VaultHero>
 
     <div class="page-body">
-    {#if error}
-      <div class="page-error" role="alert">
-        <AlertCircle size={16} stroke-width={1.5} />
-        <span class="page-error-text">{error}</span>
-        <button
-          type="button"
-          class="page-error-retry mono"
-          onclick={() => resolve()}
-        >
-          {t("common.retry")}
-        </button>
-      </div>
-    {/if}
-
-    {#if collection && !showSearchResults}
-      <div class="coll-header">
-        <div class="coll-cover">
-          {#if coverTiles.length >= 2}
-            <div class="coll-cover-grid">
-              {#each coverTiles as c (c)}
-                <img
-                  class="coll-cover-tile"
-                  use:blobSrc={c}
-                  alt=""
-                  loading="lazy"
-                  draggable="false"
-                  onerror={() => markCoverFailed(c)}
-                />
-              {/each}
-              {#each Array(4 - coverTiles.length) as _}
-                <div class="coll-cover-tile coll-cover-tile-empty"></div>
-              {/each}
-            </div>
-          {:else if coverTiles.length === 1}
-            <img
-              class="coll-cover-tile"
-              use:blobSrc={coverTiles[0]}
-              alt=""
-              loading="lazy"
-              draggable="false"
-              onerror={() => markCoverFailed(coverTiles[0])}
-            />
-          {:else}
-            <div class="coll-cover-tile placeholder">
-              <Disc3 size={16} stroke-width={1} />
-            </div>
-          {/if}
-        </div>
-
-        <div class="coll-meta">
-          <div class="coll-title display">{collection.title}</div>
-          <div class="coll-sub mono">
-            {collection.tracks.length}
-            {t("vault.tracks")}
-            {#if totalDur() > 0} · {fmtDuration(totalDur())}{/if}
-          </div>
-        </div>
-        <TrackFilterBar
-          total={collection.tracks.length}
-          {trackFilter}
-          {counts}
-          onFilterChange={handleFilterChange}
-        />
-        <button
-          type="button"
-          class="coll-clear mono"
-          disabled={running}
-          onclick={clearAll}
-        >
-          {t("common.clear")}
-        </button>
-      </div>
-
-      {#if reviewing && !running}
-        <div class="review-note">
-          <span class="sync-text mono">{t("vault.reviewNote")}</span>
-          {#if counts.failed > 0}
-            <Button variant="ghost" size="sm" onclick={retryFailed}>
-              {t("vault.retryFailed", { n: counts.failed })}
-            </Button>
-          {/if}
+      {#if error}
+        <div class="page-error" role="alert">
+          <AlertCircle size={16} stroke-width={1.5} />
+          <span class="page-error-text">{error}</span>
+          <button
+            type="button"
+            class="page-error-retry mono"
+            onclick={() => resolve()}
+          >
+            {t("common.retry")}
+          </button>
         </div>
       {/if}
 
-      <div class="tbl-head">
-        <span class="h-num mono">#</span>
-        <span class="h-cover"></span>
-        <span class="h-title mono">{t("common.titleLabel")}</span>
-        <span class="h-source mono">{t("library.sourceHeader")}</span>
-        <span class="h-status mono">{t("library.statusHeader")}</span>
-      </div>
+      {#if collection && !showSearchResults}
+        <div class="coll-header">
+          <div class="coll-cover">
+            {#if coverTiles.length >= 2}
+              <div class="coll-cover-grid">
+                {#each coverTiles as c (c)}
+                  <img
+                    class="coll-cover-tile"
+                    use:blobSrc={c}
+                    alt=""
+                    loading="lazy"
+                    draggable="false"
+                    onerror={() => markCoverFailed(c)}
+                  />
+                {/each}
+                {#each Array(4 - coverTiles.length) as _}
+                  <div class="coll-cover-tile coll-cover-tile-empty"></div>
+                {/each}
+              </div>
+            {:else if coverTiles.length === 1}
+              <img
+                class="coll-cover-tile"
+                use:blobSrc={coverTiles[0]}
+                alt=""
+                loading="lazy"
+                draggable="false"
+                onerror={() => markCoverFailed(coverTiles[0])}
+              />
+            {:else}
+              <div class="coll-cover-tile placeholder">
+                <Disc3 size={16} stroke-width={1} />
+              </div>
+            {/if}
+          </div>
 
-      <div class="list" bind:this={listEl}>
-        {#each pagedTracks as track, i (track.id + "#" + i)}
-          <TrackRow
-            {track}
-            progress={progress[track.id]}
-            candidates={matches[track.id]}
-            picked={picks[track.id]}
-            allowPick={reviewing && !running}
-            onpick={(id, i) => (picks[id] = i)}
+          <div class="coll-meta">
+            <div class="coll-title display">{collection.title}</div>
+            <div class="coll-sub mono">
+              {collection.tracks.length}
+              {t("vault.tracks")}
+              {#if totalDur() > 0}
+                · {fmtDuration(totalDur())}{/if}
+            </div>
+          </div>
+          <TrackFilterBar
+            total={collection.tracks.length}
+            {trackFilter}
+            {counts}
+            onFilterChange={handleFilterChange}
           />
-        {/each}
-      </div>
-
-      {#if totalPages > 1}
-        <div class="pagination">
           <button
-            class="page-arrow"
-            aria-label={t("common.previousPage")}
-            disabled={page === 0}
-            onclick={() => (page = Math.max(0, page - 1))}
+            type="button"
+            class="coll-clear mono"
+            disabled={running}
+            onclick={clearAll}
           >
-            <ChevronLeft size={14} />
-          </button>
-          <div class="page-pill mono">
-            <span class="page-cur">{page + 1}</span>
-            <span class="page-sep">/</span>
-            <span class="page-total">{totalPages}</span>
-          </div>
-          <button
-            class="page-arrow"
-            aria-label={t("common.nextPage")}
-            disabled={page >= totalPages - 1}
-            onclick={() => (page = Math.min(totalPages - 1, page + 1))}
-          >
-            <ChevronRight size={14} />
+            {t("common.clear")}
           </button>
         </div>
-      {/if}
-    {/if}
 
-    <DownloadFooter
-      {collection}
-      running={running || starting}
-      {reviewing}
-      {summary}
-      {counts}
-      totalDuration={totalDur()}
-      {savingPlaylist}
-      {saveHint}
-      onBeginDownload={beginDownload}
-      onConfirmDownload={confirmDownload}
-      onRetryFailed={retryFailed}
-      onCancel={cancel}
-      onSaveToPlaylist={saveToPlaylist}
-      onDone={clearAll}
-    />
+        {#if reviewing && !running}
+          <div class="review-note">
+            <span class="sync-text mono">{t("vault.reviewNote")}</span>
+            {#if counts.failed > 0}
+              <Button variant="ghost" size="sm" onclick={retryFailed}>
+                {t("vault.retryFailed", { n: counts.failed })}
+              </Button>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="tbl-head">
+          <span class="h-num mono">#</span>
+          <span class="h-cover"></span>
+          <span class="h-title mono">{t("common.titleLabel")}</span>
+          <span class="h-source mono">{t("library.sourceHeader")}</span>
+          <span class="h-status mono">{t("library.statusHeader")}</span>
+        </div>
+
+        <div class="list" bind:this={listEl}>
+          {#each pagedTracks as track, i (track.id + "#" + i)}
+            <TrackRow
+              {track}
+              progress={progress[track.id]}
+              candidates={matches[track.id]}
+              picked={picks[track.id]}
+              allowPick={reviewing && !running}
+              onpick={(id, i) => (picks[id] = i)}
+            />
+          {/each}
+        </div>
+
+        {#if totalPages > 1}
+          <div class="pagination">
+            <button
+              class="page-arrow"
+              aria-label={t("common.previousPage")}
+              disabled={page === 0}
+              onclick={() => (page = Math.max(0, page - 1))}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div class="page-pill mono">
+              <span class="page-cur">{page + 1}</span>
+              <span class="page-sep">/</span>
+              <span class="page-total">{totalPages}</span>
+            </div>
+            <button
+              class="page-arrow"
+              aria-label={t("common.nextPage")}
+              disabled={page >= totalPages - 1}
+              onclick={() => (page = Math.min(totalPages - 1, page + 1))}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        {/if}
+      {/if}
+
+      <DownloadFooter
+        {collection}
+        running={running || starting}
+        {reviewing}
+        {summary}
+        {counts}
+        totalDuration={totalDur()}
+        {savingPlaylist}
+        {saveHint}
+        onBeginDownload={beginDownload}
+        onConfirmDownload={confirmDownload}
+        onRetryFailed={retryFailed}
+        onCancel={cancel}
+        onSaveToPlaylist={saveToPlaylist}
+        onDone={clearAll}
+      />
     </div>
   </div>
 </div>
@@ -914,8 +931,8 @@
     --col-gap: 8px;
     --row-px: 10px;
     --row-py: 8px;
-    --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr)
-      minmax(0, 1fr) var(--status-w);
+    --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr) minmax(0, 1fr)
+      var(--status-w);
 
     height: 100%;
     min-width: 0;
@@ -1143,7 +1160,10 @@
     border: 1px solid var(--line-strong);
     color: var(--dim);
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
 
   .page-arrow:hover:not(:disabled) {
@@ -1207,7 +1227,8 @@
       --num-w: 28px;
       --cover-size: 32px;
       --col-gap: 6px;
-      --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr) var(--status-w);
+      --track-cols: var(--num-w) var(--cover-size) minmax(0, 1fr)
+        var(--status-w);
     }
 
     .h-source {

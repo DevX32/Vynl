@@ -1,7 +1,11 @@
 <script lang="ts">
   import { t } from "@lib/i18n";
   import type { LyricsResult } from "@lib/types";
-  import { lyricsKindOf, setLyricsManual, toLyricLines } from "@state/lyrics.svelte";
+  import {
+    lyricsKindOf,
+    setLyricsManual,
+    toLyricLines,
+  } from "@state/lyrics.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -10,7 +14,11 @@
   function apply(): void {
     const value = text.trim();
     if (!value) return;
-    const result: LyricsResult = { kind: lyricsKindOf(value), text: value, source: "local" };
+    const result: LyricsResult = {
+      kind: lyricsKindOf(value),
+      text: value,
+      source: "local",
+    };
     setLyricsManual(result, toLyricLines(result));
     onClose();
   }
@@ -20,11 +28,12 @@
   class="paste-input mono"
   bind:value={text}
   placeholder={t("lyrics.pastePlaceholder")}
-  rows={12}
-></textarea>
+  rows={12}></textarea>
 <div class="actions">
   <button class="btn" onclick={onClose}>{t("common.cancel")}</button>
-  <button class="btn primary" onclick={apply} disabled={!text.trim()}>{t("lyrics.apply")}</button>
+  <button class="btn primary" onclick={apply} disabled={!text.trim()}>
+    {t("lyrics.apply")}
+  </button>
 </div>
 
 <style>
@@ -58,7 +67,10 @@
     font-size: 10.5px;
     letter-spacing: 0.06em;
     cursor: pointer;
-    transition: color .15s, border-color .15s, background .15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .btn:hover:not(:disabled) {

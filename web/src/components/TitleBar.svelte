@@ -92,7 +92,9 @@
   <div class="left" class:collapsed={!sidebarOpen}>
     <button
       class="nav-btn sidebar-toggle"
-      aria-label={sidebarOpen ? t("playlists.collapseSidebar") : t("playlists.expandSidebar")}
+      aria-label={sidebarOpen
+        ? t("playlists.collapseSidebar")
+        : t("playlists.expandSidebar")}
       onclick={onToggleSidebar}
     >
       {#if sidebarOpen}
@@ -101,11 +103,7 @@
         <PanelLeftOpen size={14} stroke-width={1.5} />
       {/if}
     </button>
-    <button
-      class="nav-btn"
-      aria-label={t("nav.home")}
-      onclick={onHome}
-    >
+    <button class="nav-btn" aria-label={t("nav.home")} onclick={onHome}>
       <Home size={14} stroke-width={1.5} />
     </button>
     <span class="left-divider" aria-hidden="true"></span>
@@ -149,7 +147,9 @@
         disabled={updateInstalling || updateDownloading}
       >
         {#if updateInstalling || updateDownloading}
-          <span class="spin"><LoaderCircle size={15} stroke-width={1.5} aria-hidden="true" /></span>
+          <span class="spin">
+            <LoaderCircle size={15} stroke-width={1.5} aria-hidden="true" />
+          </span>
         {:else}
           <Download size={15} stroke-width={1.5} />
         {/if}

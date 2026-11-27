@@ -5,8 +5,17 @@
   font-display: swap;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { background: transparent; height: 100%; overflow: hidden; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  background: transparent;
+  height: 100%;
+  overflow: hidden;
+}
 
 #splash {
   position: fixed;
@@ -67,27 +76,62 @@ html, body { background: transparent; height: 100%; overflow: hidden; }
   margin-right: -0.3em;
 }
 
-.letter:nth-child(1) { animation-delay: 1.0s; }
-.letter:nth-child(2) { animation-delay: 1.15s; }
-.letter:nth-child(3) { animation-delay: 1.3s; }
-.letter:nth-child(4) { animation-delay: 1.45s; }
+.letter:nth-child(1) {
+  animation-delay: 1s;
+}
+.letter:nth-child(2) {
+  animation-delay: 1.15s;
+}
+.letter:nth-child(3) {
+  animation-delay: 1.3s;
+}
+.letter:nth-child(4) {
+  animation-delay: 1.45s;
+}
 
 @keyframes logoEntrance {
-  0% { opacity: 0; transform: scale(0.5) rotate(-10deg); }
-  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
 }
 
 @keyframes labelReveal {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes letterFade {
-  from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
 
 @keyframes splashExit {
-  0% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.05); pointer-events: none; }
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+    pointer-events: none;
+  }
 }

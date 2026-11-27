@@ -19,7 +19,7 @@
   role="switch"
   aria-checked={on}
   aria-label={label}
-  onclick={onclick}
+  {onclick}
 >
   <span class="knob"></span>
 </button>

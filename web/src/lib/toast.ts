@@ -73,10 +73,7 @@ function playNotifySound(): void {
         const partialFrequency = frequency * partial.ratio;
         const decay = duration * partial.decay;
         oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(
-          partialFrequency * 1.002,
-          start,
-        );
+        oscillator.frequency.setValueAtTime(partialFrequency * 1.002, start);
         oscillator.frequency.exponentialRampToValueAtTime(
           partialFrequency,
           start + Math.min(0.04, decay),
@@ -136,10 +133,7 @@ function push(message: string, kind: ToastKind = "info", duration = 3000) {
     }
 
     id = nextId++;
-    return [
-      ...l,
-      { id, message, kind, duration },
-    ];
+    return [...l, { id, message, kind, duration }];
   });
 
   if (id === null) return;

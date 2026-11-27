@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Play, Shuffle, Link2, Music2, Library, Compass } from "lucide-svelte";
+  import {
+    Play,
+    Shuffle,
+    Link2,
+    Music2,
+    Library,
+    Compass,
+  } from "lucide-svelte";
   import { getLibrary } from "@state/library.svelte";
   import { getPlaylistStreamTracks } from "@state/playlists.svelte";
   import { getLikedStreamTracks } from "@state/taste.svelte";
@@ -144,8 +151,10 @@
 <section class="home-page">
   <div class="home-scroll">
     <header class="home-hdr">
-      <span class="greeting display">{greeting.base}{#if greeting.name},
-      <span class="greeting-name">{greeting.name}</span>{/if}</span>
+      <span class="greeting display">
+        {greeting.base}{#if greeting.name},
+          <span class="greeting-name">{greeting.name}</span>{/if}
+      </span>
       <span class="quote">{quote}</span>
     </header>
 
@@ -191,10 +200,10 @@
           <Link2 size={14} stroke-width={1.5} />
           <span>{t("home.addMusic")}</span>
         </button>
-          <button class="action-btn" onclick={() => onNavigate("library")}>
-            <Library size={14} stroke-width={1.5} />
-            <span>{t("common.library")}</span>
-          </button>
+        <button class="action-btn" onclick={() => onNavigate("library")}>
+          <Library size={14} stroke-width={1.5} />
+          <span>{t("common.library")}</span>
+        </button>
       </div>
 
       {#if recentTracks.length > 0}
@@ -220,9 +229,9 @@
                     </div>
                   {/if}
                 </div>
-                <span class="recent-title" class:playing={isCurrent(track)}
-                  >{track.title}</span
-                >
+                <span class="recent-title" class:playing={isCurrent(track)}>
+                  {track.title}
+                </span>
                 <span class="recent-artist">{track.artist}</span>
               </button>
             {/each}
@@ -230,7 +239,7 @@
         </div>
       {/if}
     {:else}
-        <div class="empty-state">
+      <div class="empty-state">
         <Music2 size={32} stroke-width={1} />
         <span class="empty-title display">{t("home.emptyTitle")}</span>
         <span class="empty-sub">{t("home.emptySub")}</span>
@@ -474,7 +483,10 @@
     flex: 1 1 120px;
     max-width: 160px;
     min-width: 100px;
-    transition: background 0.15s, flex-basis 0.2s ease, max-width 0.2s ease;
+    transition:
+      background 0.15s,
+      flex-basis 0.2s ease,
+      max-width 0.2s ease;
   }
 
   .recent-card:hover {

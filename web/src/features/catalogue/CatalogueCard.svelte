@@ -24,7 +24,13 @@
 <button class="card" onclick={onopen} aria-label={`${openLabel}: ${title}`}>
   <span class="art">
     {#if cover}
-      <img class="art-img" use:blobSrc={cover} alt="" loading="lazy" draggable="false" />
+      <img
+        class="art-img"
+        use:blobSrc={cover}
+        alt=""
+        loading="lazy"
+        draggable="false"
+      />
     {:else}
       <span class="art-placeholder">
         {#if kind === "playlist"}
