@@ -2,7 +2,7 @@
   import type { SearchResult } from "../../lib/types";
   import { Music, Check } from "lucide-svelte";
   import { fmtDuration } from "../../lib/format";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
 
   let {
     query = "",
@@ -32,7 +32,7 @@
       {:else if error}
         {t("vault.searchFailed")}
       {:else if results.length > 0}
-        {t("vault.searchResults", { n: results.length })}
+        {tp("vault.searchResults", results.length, { n: results.length })}
         {#if addedCount > 0}
           {t("vault.addedCount", { n: addedCount })}
         {/if}

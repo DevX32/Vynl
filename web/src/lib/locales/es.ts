@@ -118,7 +118,8 @@ export const es = {
     heroLine2: "del streaming.",
     inputPlaceholder: "Pega el enlace de una lista o busca una canción",
     tracks: "Pistas",
-    searchResults: "{n} resultados",
+    searchResults_one: "{n} resultado",
+    searchResults_other: "{n} resultados",
     searchTitle: "Resultados de búsqueda",
     skipped: "Omitidas",
     reviewNote:
@@ -241,7 +242,8 @@ export const es = {
     groupSystem: "Sistema",
     groupStorage: "Almacenamiento",
     downloadedSongs: "Canciones descargadas",
-    downloadedSongsHint: "{count} canciones que ocupan {size}",
+    downloadedSongsHint_one: "{count} canción que ocupa {size}",
+    downloadedSongsHint_other: "{count} canciones que ocupan {size}",
     downloadedSongsReading: "Leyendo tu carpeta de música",
     downloadedSongsNone: "Aún no hay descargas",
     groupIntegrations: "Integraciones",
@@ -430,7 +432,8 @@ export const es = {
     removeAllBody:
       "Todos los archivos de audio de tu carpeta de música se eliminarán de forma permanente. Esta acción no se puede deshacer.",
     removing: "Eliminando",
-    removeDownloadedDone: "Se eliminaron {deleted} canciones",
+    removeDownloadedDone_one: "Se eliminó {deleted} canción",
+    removeDownloadedDone_other: "Se eliminaron {deleted} canciones",
     removeDownloadedFailed: "No se pudieron eliminar las canciones: {error}",
   },
   update: {
@@ -592,7 +595,9 @@ export const es = {
     failed: "Error",
     equalizer: "Ecualizador",
     done: "Listo",
-    deletePartial:
+    deletePartial_one:
+      "No se pudo eliminar {failed} canción porque estaba en uso",
+    deletePartial_other:
       "No se pudieron eliminar {failed} canciones porque estaban en uso",
     delete: "Eliminar",
     create: "Crear",

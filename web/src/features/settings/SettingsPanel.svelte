@@ -1,7 +1,7 @@
 ﻿<script lang="ts">
   import { onDestroy, onMount, untrack } from "svelte";
   import { RefreshCw } from "lucide-svelte";
-  import { LOCALES, getLocale, setLocale, t } from "@lib/i18n";
+  import { LOCALES, getLocale, setLocale, t, tp } from "@lib/i18n";
   import { isCataloguePath } from "@lib/catalogue";
   import { getNickname, rollNickname } from "@lib/nickname.svelte";
   import ColorPicker from "@components/ColorPicker.svelte";
@@ -72,8 +72,7 @@
   const downloadsHint = $derived.by(() => {
     if (_downloads === null) return t("settings.downloadedSongsReading");
     if (_downloads.files === 0) return t("settings.downloadedSongsNone");
-    return t("settings.downloadedSongsHint", {
-      count: _downloads.files,
+    return tp("settings.downloadedSongsHint", _downloads.files, {
       size: fmtBytes(_downloads.bytes),
     });
   });

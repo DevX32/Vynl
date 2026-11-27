@@ -120,7 +120,8 @@ export const de = {
     heroLine2: "Stream.",
     inputPlaceholder: "Playlist-Link einfügen oder nach einem Song suchen",
     tracks: "Titel",
-    searchResults: "{n} Ergebnisse",
+    searchResults_one: "{n} Ergebnis",
+    searchResults_other: "{n} Ergebnisse",
     searchTitle: "Suchergebnisse",
     skipped: "Übersprungen",
     reviewNote:
@@ -243,7 +244,8 @@ export const de = {
     groupSystem: "System",
     groupStorage: "Speicher",
     downloadedSongs: "Heruntergeladene Songs",
-    downloadedSongsHint: "{count} Songs belegen {size}",
+    downloadedSongsHint_one: "{count} Song belegt {size}",
+    downloadedSongsHint_other: "{count} Songs belegen {size}",
     downloadedSongsReading: "Musikordner wird gelesen",
     downloadedSongsNone: "Noch nichts heruntergeladen",
     groupIntegrations: "Integrationen",
@@ -436,7 +438,8 @@ export const de = {
     removeAllBody:
       "Jede Audiodatei in deinem Musikordner wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
     removing: "Wird gelöscht",
-    removeDownloadedDone: "{deleted} Songs gelöscht",
+    removeDownloadedDone_one: "{deleted} Song gelöscht",
+    removeDownloadedDone_other: "{deleted} Songs gelöscht",
     removeDownloadedFailed: "Songs konnten nicht entfernt werden: {error}",
   },
   update: {
@@ -599,7 +602,9 @@ export const de = {
     failed: "Fehlgeschlagen",
     equalizer: "Equalizer",
     done: "Fertig",
-    deletePartial:
+    deletePartial_one:
+      "{failed} Song konnte nicht gelöscht werden, da er in Verwendung war",
+    deletePartial_other:
       "{failed} Songs konnten nicht gelöscht werden, da sie in Verwendung waren",
     delete: "Löschen",
     create: "Erstellen",

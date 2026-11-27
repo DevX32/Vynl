@@ -32,10 +32,11 @@ function detectLocale(): Locale {
   return "en";
 }
 
-let _locale = $state<Locale>(detectLocale());
+const initialLocale = detectLocale();
+let _locale = $state<Locale>(initialLocale);
 
 if (typeof document !== "undefined") {
-  document.documentElement.lang = _locale;
+  document.documentElement.lang = initialLocale;
 }
 
 export function getLocale(): Locale {
@@ -44,6 +45,7 @@ export function getLocale(): Locale {
 
 export function setLocale(locale: Locale): void {
   _locale = locale;
+  if (typeof document !== "undefined") document.documentElement.lang = locale;
   if (typeof localStorage !== "undefined") {
     localStorage.setItem("vynl.locale", locale);
   }
@@ -78,4 +80,32 @@ export function t(
   const val = get(locales[_locale], key) ?? get(locales.en, key) ?? key;
   if (typeof val !== "string") return key;
   return interpolate(val, params);
+}
+
+const pluralRules: Partial<Record<Locale, Intl.PluralRules>> = {};
+
+function pluralCategory(locale: Locale, count: number): Intl.LDMLPluralRule {
+  (pluralRules[locale] ??= new Intl.PluralRules(locale));
+  return pluralRules[locale].select(count);
+}
+
+export function tp(
+  key: string,
+  count: number,
+  params?: Record<string, string | number>,
+): string {
+  const category = pluralCategory(_locale, count);
+  const merged = { count, ...params };
+  const preferred = `${key}_${category}`;
+  const fallback = `${key}_other`;
+  const val =
+    get(locales[_locale], preferred) ??
+    get(locales[_locale], fallback) ??
+    get(locales.en, preferred) ??
+    get(locales.en, fallback) ??
+    get(locales[_locale], key) ??
+    get(locales.en, key) ??
+    key;
+  if (typeof val !== "string") return key;
+  return interpolate(val, merged);
 }

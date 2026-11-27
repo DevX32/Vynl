@@ -116,7 +116,8 @@ export const en = {
     heroLine2: "the stream.",
     inputPlaceholder: "Paste a playlist link or search for a song",
     tracks: "Tracks",
-    searchResults: "{n} results",
+    searchResults_one: "{n} result",
+    searchResults_other: "{n} results",
     searchTitle: "Search Results",
     skipped: "Skipped",
     reviewNote: "Review the matched sources below, then confirm to start.",
@@ -237,7 +238,8 @@ export const en = {
     groupSystem: "System",
     groupStorage: "Storage",
     downloadedSongs: "Downloaded Songs",
-    downloadedSongsHint: "{count} songs taking {size}",
+    downloadedSongsHint_one: "{count} song taking {size}",
+    downloadedSongsHint_other: "{count} songs taking {size}",
     downloadedSongsReading: "Reading your music folder",
     downloadedSongsNone: "Nothing downloaded yet",
     groupIntegrations: "Integrations",
@@ -417,7 +419,8 @@ export const en = {
     removeAllBody:
       "Every audio file in your music folder will be permanently deleted. This action cannot be undone.",
     removing: "Deleting",
-    removeDownloadedDone: "Deleted {deleted} songs",
+    removeDownloadedDone_one: "Deleted {deleted} song",
+    removeDownloadedDone_other: "Deleted {deleted} songs",
     removeDownloadedFailed: "Couldn't remove songs: {error}",
   },
   update: {
@@ -578,7 +581,9 @@ export const en = {
     failed: "Failed",
     equalizer: "Equalizer",
     done: "Done",
-    deletePartial:
+    deletePartial_one:
+      "{failed} song could not be deleted because it was in use",
+    deletePartial_other:
       "{failed} songs could not be deleted because they were in use",
     delete: "Delete",
     create: "Create",

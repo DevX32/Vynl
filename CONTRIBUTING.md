@@ -92,12 +92,11 @@ bun run dev
 There is currently no automated test suite, so these checks are what CI runs:
 
 ```bash
-# Frontend type checking
+# Frontend
 bun run typecheck
 bun run build
 
-# Rust linting and formatting
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+# Rust
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
