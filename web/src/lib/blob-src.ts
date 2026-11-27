@@ -79,17 +79,33 @@ export function blobSrc(
   let token = 0;
   let current: string | null = null;
 
-  function setSrc(src: string, mine: number): void {
+  function mark(state: "loading" | "loaded" | "error" | "idle"): void {
+    node.dataset.coverState = state;
+  }
+
+  function setSrc(src: string, mine: number, showSkeleton = false): void {
     if (mine !== token || current === src) return;
     current = src;
+    mark(showSkeleton ? "loading" : "idle");
+    node.onload = () => {
+      if (mine !== token) return;
+      mark("loaded");
+    };
+    node.onerror = () => {
+      if (mine !== token) return;
+      mark("error");
+    };
     node.src = src;
   }
 
   function load(p: string | null | undefined): void {
     const mine = ++token;
+    node.onload = null;
+    node.onerror = null;
     if (!p) {
       current = null;
       node.removeAttribute("src");
+      mark("idle");
       return;
     }
 
@@ -105,6 +121,7 @@ export function blobSrc(
       return;
     }
 
+    mark("loading");
     node.referrerPolicy = "no-referrer";
     let remoteLoaded = false;
     void cacheRemote(url).then(
@@ -113,16 +130,20 @@ export function blobSrc(
         evictIfNeeded(resolved);
         if (!remoteLoaded) setSrc(convertFileSrc(local), mine);
       },
-      () => {},
+      () => {
+        if (mine === token && !remoteLoaded && !current) mark("error");
+      },
     );
 
     const preload = new Image();
     preload.referrerPolicy = "no-referrer";
     preload.onload = () => {
       remoteLoaded = true;
-      if (!resolved.has(url)) setSrc(url, mine);
+      if (!resolved.has(url)) setSrc(url, mine, true);
     };
-    preload.onerror = () => {};
+    preload.onerror = () => {
+      if (mine === token && !current) mark("error");
+    };
     preload.src = url;
   }
 
@@ -135,6 +156,8 @@ export function blobSrc(
     destroy() {
       token++;
       current = null;
+      node.onload = null;
+      node.onerror = null;
     },
   };
 }

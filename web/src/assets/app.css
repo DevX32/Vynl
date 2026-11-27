@@ -405,3 +405,29 @@ html[data-theme="espresso"] .tbl-head {
   opacity: 0.35;
   cursor: default;
 }
+
+@keyframes cover-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+img[data-cover-state="loading"] {
+  opacity: 0;
+}
+
+img[data-cover-state="loaded"] {
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+
+img[data-cover-state="error"] {
+  opacity: 0;
+}
+
+.art:has(img[data-cover-state="loading"]),
+.hero-cover:has(img[data-cover-state="loading"]),
+.cover:has(img[data-cover-state="loading"]) {
+  background: linear-gradient(90deg, var(--bg-raise) 25%, color-mix(in srgb, var(--line) 60%, var(--bg-raise)) 50%, var(--bg-raise) 75%);
+  background-size: 200% 100%;
+  animation: cover-skeleton 1.2s linear infinite;
+}
