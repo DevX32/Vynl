@@ -14,7 +14,7 @@
   import { blobSrc, fmtDuration, totalSeconds } from "../../lib/format";
   import { toasts } from "@lib/toast";
   import { friendlyVaultError } from "@lib/errors";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import {
     getCurrentPlaylists,
     createPlaylist,
@@ -493,7 +493,7 @@
 
   function notifyPlaylistSaved(name: string, added: number): void {
     if (added > 0)
-      toasts.success(t("vault.addedToPlaylist", { n: added, name }));
+      toasts.success(tp("vault.addedToPlaylist", added, { n: added, name }));
     else toasts.info(t("vault.playlistAlreadyHas", { name }));
   }
 

@@ -19,7 +19,7 @@
     saveCatalogueTrack,
   } from "@state/catalogue.svelte";
   import { fmtTime, stripAlbumSuffix } from "@lib/format";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import { vynl } from "@lib/vynl";
   import type { Snippet } from "svelte";
@@ -173,7 +173,7 @@
         result.playlist?.name ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
+      toasts.success(tp("vault.addedToPlaylist", 1, { n: 1, name }));
     } catch (error) {
       console.warn("catalogue add to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -192,9 +192,7 @@
       await refreshAfterCatalogueSave();
       const playlistName = result.playlist?.name ?? name;
       toasts.success(
-        t("catalogue.addedToPlaylist", {
-          name: playlistName,
-        }),
+        tp("vault.addedToPlaylist", 1, { n: 1, name: playlistName }),
       );
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);
@@ -213,7 +211,7 @@
       await saveStreamToPlaylist(target, mixId);
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
-      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
+      toasts.success(tp("vault.addedToPlaylist", 1, { n: 1, name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -230,9 +228,7 @@
     try {
       const playlist = await saveStreamToPlaylist(target, null, name);
       toasts.success(
-        t("catalogue.addedToPlaylist", {
-          name: playlist.name,
-        }),
+        tp("vault.addedToPlaylist", 1, { n: 1, name: playlist.name }),
       );
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);

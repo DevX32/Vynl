@@ -203,7 +203,7 @@
     class="panel"
     role="dialog"
     aria-modal="true"
-    aria-label={t("account.title")}
+    aria-label={t("common.appName")}
     tabindex="-1"
     in:fly={{ y: 8, duration: 180, easing: cubicOut }}
     out:fly={{ y: 8, duration: 140, easing: cubicIn }}

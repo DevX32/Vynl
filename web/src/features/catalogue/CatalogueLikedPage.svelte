@@ -38,7 +38,7 @@
     matchesQuery,
     totalSeconds,
   } from "@lib/format";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import SearchInput from "@components/SearchInput.svelte";
   import TrackCover from "@components/TrackCover.svelte";
@@ -223,7 +223,7 @@
         playlistName ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
+      toasts.success(tp("vault.addedToPlaylist", done, { n: done, name }));
     } else {
       toasts.error(t("catalogue.addPartial", { done, failed }));
     }
@@ -279,7 +279,7 @@
         result.playlist?.name ??
         playlists.find((playlist) => playlist.id === playlistId)?.name ??
         "";
-      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
+      toasts.success(tp("vault.addedToPlaylist", 1, { n: 1, name }));
     } catch (error) {
       console.warn("catalogue add to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -297,7 +297,9 @@
       const result = await saveCatalogueTrack(target, null, name);
       await refreshAfterCatalogueSave();
       const playlistName = result.playlist?.name ?? name;
-      toasts.success(t("catalogue.addedToPlaylist", { name: playlistName }));
+      toasts.success(
+        tp("vault.addedToPlaylist", 1, { n: 1, name: playlistName }),
+      );
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -315,7 +317,7 @@
       await saveStreamToPlaylist(target, mixId);
       const name =
         playlists.find((playlist) => playlist.id === mixId)?.name ?? "";
-      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
+      toasts.success(tp("vault.addedToPlaylist", 1, { n: 1, name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -332,9 +334,7 @@
     try {
       const playlist = await saveStreamToPlaylist(target, null, name);
       toasts.success(
-        t("catalogue.addedToPlaylist", {
-          name: playlist.name,
-        }),
+        tp("vault.addedToPlaylist", 1, { n: 1, name: playlist.name }),
       );
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);
@@ -488,7 +488,7 @@
         <span class="display">
           {tracks.length === 0
             ? t("catalogue.likedEmptyTitle")
-            : t("library.noMatches")}
+            : t("common.noMatches")}
         </span>
         <span class="mono sub">
           {tracks.length === 0

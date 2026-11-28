@@ -37,7 +37,7 @@
           {t("vault.addedCount", { n: addedCount })}
         {/if}
       {:else if q}
-        {t("vault.noMatches")}
+        {t("common.noMatches")}
       {:else}
         {t("vault.searchTitle")}
       {/if}

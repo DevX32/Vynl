@@ -5,7 +5,7 @@
     getCurrentPlaylists,
     saveStreamToPlaylist,
   } from "@state/playlists.svelte";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import ContextMenu, { type CtxEntry } from "@components/ContextMenu.svelte";
   import PlaylistPicker from "@components/PlaylistPicker.svelte";
@@ -80,7 +80,7 @@
       await saveStreamToPlaylist(target, playlistId);
       const name =
         playlists.find((playlist) => playlist.id === playlistId)?.name ?? "";
-      toasts.success(t("catalogue.addedToPlaylist", { name: name }));
+      toasts.success(tp("vault.addedToPlaylist", 1, { n: 1, name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -97,9 +97,7 @@
     try {
       const playlist = await saveStreamToPlaylist(target, null, name);
       toasts.success(
-        t("catalogue.addedToPlaylist", {
-          name: playlist.name,
-        }),
+        tp("vault.addedToPlaylist", 1, { n: 1, name: playlist.name }),
       );
     } catch (error) {
       console.warn("catalogue create playlist failed:", error);

@@ -87,11 +87,11 @@
       </label>
       <div class="row">
         <span class="hint">{t("onboarding.blankNickname")}</span>
-        <button class="roll" type="button" onclick={roll}>{t("onboarding.roll")}</button>
+        <button class="roll" type="button" onclick={roll}>{t("common.roll")}</button>
       </div>
 
       <div class="actions">
-        <button class="btn secondary" type="button" onclick={() => (step = 1)} disabled={saving}>{t("onboarding.back")}</button>
+        <button class="btn secondary" type="button" onclick={() => (step = 1)} disabled={saving}>{t("common.back")}</button>
         <button class="btn cta" disabled={saving} onclick={finish}>
           <span>{saving ? t("onboarding.saving") : t("onboarding.startListening")}</span>
           <ArrowRight size={17} stroke-width={2} />

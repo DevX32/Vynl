@@ -64,7 +64,7 @@
     setPlaylistCover,
     tracksOf,
   } from "@state/playlists.svelte";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import { focusTrap } from "@lib/actions/focus-trap";
   import BulkTracksOverlay from "@components/BulkTracksOverlay.svelte";
 
@@ -168,7 +168,10 @@
       await addToPlaylist(pl.id, paths);
       adding = false;
       toasts.success(
-        t("playlist.addedToPlaylist", { n: paths.length, name: pl.name }),
+        tp("vault.addedToPlaylist", paths.length, {
+          n: paths.length,
+          name: pl.name,
+        }),
       );
     } catch (e) {
       console.warn("addToPlaylist error:", e);
@@ -514,7 +517,7 @@
           <span class="display">
             {pl.paths.length === 0
               ? t("playlist.empty")
-              : t("library.noMatches")}
+              : t("common.noMatches")}
           </span>
           <span class="mono sub">
             {pl.paths.length === 0

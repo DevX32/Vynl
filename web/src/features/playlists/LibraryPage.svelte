@@ -37,7 +37,7 @@
     totalSeconds,
     matchesQuery,
   } from "../../lib/format";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import { toasts } from "@lib/toast";
   import SearchInput from "../../components/SearchInput.svelte";
   import TrackCover from "../../components/TrackCover.svelte";
@@ -240,7 +240,7 @@
       const added = (after?.trackCount ?? 0) - (before?.trackCount ?? 0);
       if (added > 0) {
         toasts.success(
-          t("vault.addedToPlaylist", {
+          tp("vault.addedToPlaylist", added, {
             n: added,
             name: after?.name ?? before?.name ?? "",
           }),
@@ -270,7 +270,9 @@
       markAdded(pl.id, target.path);
       const added =
         getCurrentPlaylists().find((p) => p.id === pl.id)?.trackCount ?? 0;
-      toasts.success(t("vault.addedToPlaylist", { n: added, name: pl.name }));
+      toasts.success(
+        tp("vault.addedToPlaylist", added, { n: added, name: pl.name }),
+      );
     } catch (e) {
       console.warn("createAndAddPlaylist error:", e);
       toasts.error(t("vault.playlistSaveFailed"));
@@ -377,7 +379,7 @@
         <div class="tbl-empty">
           <ListMusic size={28} stroke-width={1.1} />
           <span class="empty-title display">
-            {debouncedQuery ? t("library.noMatches") : t("library.nothingHere")}
+            {debouncedQuery ? t("common.noMatches") : t("library.nothingHere")}
           </span>
           <span class="empty-sub mono">
             {debouncedQuery

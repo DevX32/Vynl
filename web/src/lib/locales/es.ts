@@ -54,7 +54,6 @@ export const es = {
     downloadDone: "Se descargaron {n} canciones en {name}",
     downloadPartial: "Se descargaron {done} canciones, {failed} fallaron",
     addPartial: "Se añadieron {done}, {failed} fallaron",
-    addedToPlaylist: "Añadido a {name}",
     saveFailed: "No se pudo añadir esta pista a tu biblioteca",
     goToAlbum: "Ir al álbum",
     goToArtist: "Ir al artista",
@@ -153,12 +152,12 @@ export const es = {
     searching: "Buscando",
     searchFailed: "Error en la búsqueda",
     addedCount: "· {n} añadidas",
-    noMatches: "Sin coincidencias",
     noResultsFor: "Sin resultados para “{q}”",
     searchHint: "Escribe una canción, artista o álbum",
     saveToPlaylist: "Guardar en una lista",
     nothingDownloadedYet: "Primero descarga algunas pistas",
-    addedToPlaylist: "Se añadieron {n} pistas a {name}",
+    addedToPlaylist_one: "Se añadió {n} pista a {name}",
+    addedToPlaylist_other: "Se añadieron {n} pistas a {name}",
     playlistAlreadyHas: "Esas pistas ya están en {name}",
     playlistSaveFailed: "No se pudo guardar en la lista",
   },
@@ -291,7 +290,6 @@ export const es = {
     nickname: "Apodo",
     nicknameHint:
       "Tu nombre en Vynl. Déjalo en blanco para usar un apodo aleatorio.",
-    nicknameRoll: "Sortear",
     taste: "Tus gustos",
     tasteHint: "Vynl crea tus mezclas a partir de esto.",
     tasteEmpty:
@@ -346,7 +344,6 @@ export const es = {
     cacheClearFailed: "No se pudo borrar la caché: {error}",
   },
   account: {
-    title: "Vynl",
     email: "Correo electrónico",
     emailPlaceholder: "tu@ejemplo.com",
     password: "Contraseña",
@@ -455,7 +452,6 @@ export const es = {
     song: "Canción",
     sourceHeader: "Fuente",
     statusHeader: "Estado",
-    noMatches: "Sin coincidencias",
     nothingHere: "Aún no hay nada aquí.",
     pasteToStart: "Pega un enlace en Bóveda para empezar tu biblioteca",
     deleteTitle: "Eliminar pista",
@@ -525,7 +521,6 @@ export const es = {
     title: "Atajos de teclado",
     categories: {
       playback: "Reproducción",
-      volume: "Volumen",
       interface: "Interfaz",
     },
     actions: {
@@ -550,8 +545,6 @@ export const es = {
     nameHint: "Tu nombre en Vynl.",
     yourName: "TU NOMBRE",
     blankNickname: "Déjalo vacío para un apodo aleatorio",
-    roll: "Sortear",
-    back: "Atrás",
     saving: "Guardando...",
     startListening: "Empezar a escuchar",
   },
@@ -586,6 +579,8 @@ export const es = {
   },
   common: {
     appName: "Vynl",
+    noMatches: "Sin coincidencias",
+    roll: "Sortear",
     confirm: "Confirmar",
     year: "Año",
     volume: "Volumen",

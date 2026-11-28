@@ -120,7 +120,7 @@ function eventId(e: KeyboardEvent): string | null {
 
 export const SHORTCUT_CATEGORIES = [
   "shortcuts.categories.playback",
-  "shortcuts.categories.volume",
+  "common.volume",
   "shortcuts.categories.interface",
 ] as const;
 
@@ -135,21 +135,21 @@ const ACTIONS: readonly KeybindAction[] = [
   {
     id: "volumeUp",
     labelKey: "shortcuts.actions.volumeUp",
-    categoryKey: "shortcuts.categories.volume",
+    categoryKey: "common.volume",
     binding: { key: "ArrowUp" },
     run: () => setVolumeAt(getCurrentVolume() + VOLUME_STEP),
   },
   {
     id: "volumeDown",
     labelKey: "shortcuts.actions.volumeDown",
-    categoryKey: "shortcuts.categories.volume",
+    categoryKey: "common.volume",
     binding: { key: "ArrowDown" },
     run: () => setVolumeAt(getCurrentVolume() - VOLUME_STEP),
   },
   {
     id: "toggleMute",
     labelKey: "shortcuts.actions.muteUnmute",
-    categoryKey: "shortcuts.categories.volume",
+    categoryKey: "common.volume",
     binding: { key: "m" },
     run: () => toggleMute(),
   },

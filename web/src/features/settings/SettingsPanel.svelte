@@ -112,10 +112,14 @@
         refreshDownloads(),
       ]);
       if (result.failed > 0) {
-        toasts.error(t("common.deletePartial", { failed: result.failed }));
+        toasts.error(
+          tp("common.deletePartial", result.failed, { failed: result.failed }),
+        );
       } else {
         toasts.success(
-          t("downloads.removeDownloadedDone", { deleted: result.deleted }),
+          tp("downloads.removeDownloadedDone", result.deleted, {
+            deleted: result.deleted,
+          }),
         );
       }
     } catch (error) {
@@ -221,7 +225,7 @@
             class={_rolling ? "spin" : ""}
           />
         </span>
-        {t("settings.nicknameRoll")}
+        {t("common.roll")}
       </Button>
     </div>
   </div>

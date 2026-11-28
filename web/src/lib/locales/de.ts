@@ -55,7 +55,6 @@ export const de = {
     downloadDone: "{n} Songs zu {name} heruntergeladen",
     downloadPartial: "{done} Songs heruntergeladen, {failed} fehlgeschlagen",
     addPartial: "{done} hinzugefügt, {failed} fehlgeschlagen",
-    addedToPlaylist: "Zu {name} hinzugefügt",
     saveFailed:
       "Dieser Titel konnte nicht zu deiner Bibliothek hinzugefügt werden",
     goToAlbum: "Zum Album",
@@ -155,12 +154,12 @@ export const de = {
     searching: "Suche läuft",
     searchFailed: "Suche fehlgeschlagen",
     addedCount: "· {n} hinzugefügt",
-    noMatches: "Keine Übereinstimmungen",
     noResultsFor: "Keine Ergebnisse für „{q}“",
     searchHint: "Song, Künstler oder Album eingeben",
     saveToPlaylist: "In Playlist speichern",
     nothingDownloadedYet: "Lade zuerst einige Titel herunter",
-    addedToPlaylist: "{n} Titel zu {name} hinzugefügt",
+    addedToPlaylist_one: "{n} Titel zu {name} hinzugefügt",
+    addedToPlaylist_other: "{n} Titel zu {name} hinzugefügt",
     playlistAlreadyHas: "Diese Titel sind bereits in {name}",
     playlistSaveFailed: "Speichern in Playlist fehlgeschlagen",
   },
@@ -293,7 +292,6 @@ export const de = {
     nickname: "Spitzname",
     nicknameHint:
       "Dein Name in Vynl. Leer lassen für einen zufälligen Spitznamen.",
-    nicknameRoll: "Würfeln",
     taste: "Dein Geschmack",
     tasteHint: "Daraus erstellt Vynl deine Mixe.",
     tasteEmpty:
@@ -350,7 +348,6 @@ export const de = {
     cacheClearFailed: "Cache konnte nicht geleert werden: {error}",
   },
   account: {
-    title: "Vynl",
     email: "E-Mail",
     emailPlaceholder: "du@beispiel.de",
     password: "Passwort",
@@ -461,7 +458,6 @@ export const de = {
     song: "Song",
     sourceHeader: "Quelle",
     statusHeader: "Status",
-    noMatches: "Keine Übereinstimmungen",
     nothingHere: "Noch nichts hier.",
     pasteToStart:
       "Füge im Archiv einen Link ein, um deine Bibliothek aufzubauen",
@@ -532,7 +528,6 @@ export const de = {
     title: "Tastenkürzel",
     categories: {
       playback: "Wiedergabe",
-      volume: "Lautstärke",
       interface: "Oberfläche",
     },
     actions: {
@@ -557,8 +552,6 @@ export const de = {
     nameHint: "Dein Name in Vynl.",
     yourName: "DEIN NAME",
     blankNickname: "Leer lassen für einen zufälligen Spitznamen",
-    roll: "Würfeln",
-    back: "Zurück",
     saving: "Speichern...",
     startListening: "Loslegen",
   },
@@ -593,6 +586,8 @@ export const de = {
   },
   common: {
     appName: "Vynl",
+    noMatches: "Keine Übereinstimmungen",
+    roll: "Würfeln",
     confirm: "Bestätigen",
     year: "Jahr",
     volume: "Lautstärke",

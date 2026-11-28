@@ -32,7 +32,7 @@
   import { getTasteLikedIds, toggleTasteLike } from "@state/taste.svelte";
   import type { CatalogueTrack } from "@lib/types";
   import { blobSrc, fmtTime } from "../../lib/format";
-  import { t } from "@lib/i18n";
+  import { t, tp } from "@lib/i18n";
   import SeekSlider from "./SeekSlider.svelte";
   import TransportControls from "./TransportControls.svelte";
   import VolumeSlider from "./VolumeSlider.svelte";
@@ -141,7 +141,7 @@
       await saveStreamToPlaylist(target, playlistId);
       const name =
         playlists.find((playlist) => playlist.id === playlistId)?.name ?? "";
-      toasts.success(t("catalogue.addedToPlaylist", { name }));
+      toasts.success(tp("vault.addedToPlaylist", 1, { n: 1, name }));
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
@@ -157,7 +157,9 @@
     pickerBusy = true;
     try {
       const playlist = await saveStreamToPlaylist(target, null, name);
-      toasts.success(t("catalogue.addedToPlaylist", { name: playlist.name }));
+      toasts.success(
+        tp("vault.addedToPlaylist", 1, { n: 1, name: playlist.name }),
+      );
     } catch (error) {
       console.warn("catalogue save to playlist failed:", error);
       toasts.error(t("catalogue.saveFailed"));
