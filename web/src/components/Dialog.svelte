@@ -1,3 +1,7 @@
+<script module lang="ts">
+  let dialogSeq = 0;
+</script>
+
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { fade, fly } from "svelte/transition";
@@ -5,6 +9,8 @@
   import Button from "./Button.svelte";
   import { t } from "@lib/i18n";
   import { focusTrap } from "@lib/actions/focus-trap";
+
+  const uid = `dlg-${++dialogSeq}`;
 
   let {
     open = false,
@@ -52,8 +58,8 @@
       class="panel"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="dlg-title"
-      aria-describedby={description ? "dlg-desc" : undefined}
+      aria-labelledby={`${uid}-title`}
+      aria-describedby={description ? `${uid}-desc` : undefined}
       tabindex="-1"
       in:fly={{ y: 8, duration: 180, easing: cubicOut }}
       out:fly={{ y: 8, duration: 140, easing: cubicIn }}
@@ -62,10 +68,10 @@
       use:focusTrap
     >
       <div class="header">
-        <span id="dlg-title">{title}</span>
+        <span id={`${uid}-title`}>{title}</span>
       </div>
       {#if description}
-        <p id="dlg-desc" class="desc">{description}</p>
+        <p id={`${uid}-desc`} class="desc">{description}</p>
       {/if}
       {#if children}
         <div class="body">

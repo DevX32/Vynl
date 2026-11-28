@@ -38,15 +38,15 @@
 
 <div class="onboarding" role="main" aria-label={t("onboarding.setName")}>
   <div class="card">
-    <div class="kicker">GET STARTED</div>
-    <div class="steps" aria-label="Onboarding steps">
+    <div class="kicker">{t("onboarding.getStarted")}</div>
+    <div class="steps" aria-label={t("onboarding.steps")}>
       <span class="step-dot" class:active={step === 1}></span>
       <span class="step-dot" class:active={step === 2}></span>
     </div>
 
     {#if step === 1}
-      <h1>Choose your<br />language</h1>
-      <p class="sub">You can change this later in Settings.</p>
+      <h1>{t("onboarding.chooseLanguageLine1")}<br />{t("onboarding.chooseLanguageLine2")}</h1>
+      <p class="sub">{t("onboarding.changeLater")}</p>
 
       <label class="field">
         <span class="field-label">{t("settings.language")}</span>
@@ -65,15 +65,15 @@
       </label>
 
       <button class="btn cta" onclick={nextStep}>
-        <span>Continue</span>
+        <span>{t("onboarding.continue")}</span>
         <ArrowRight size={17} stroke-width={2} />
       </button>
     {:else}
-      <h1>What should<br />we call you?</h1>
-      <p class="sub">Your name across Vynl.</p>
+      <h1>{t("onboarding.nameTitleLine1")}<br />{t("onboarding.nameTitleLine2")}</h1>
+      <p class="sub">{t("onboarding.nameHint")}</p>
 
       <label class="field">
-        <span class="field-label">YOUR NAME</span>
+        <span class="field-label">{t("onboarding.yourName")}</span>
         <!-- svelte-ignore a11y_autofocus -->
         <input
           class="dlg-input name-input"
@@ -86,14 +86,14 @@
         />
       </label>
       <div class="row">
-        <span class="hint">Leave blank for a random nickname</span>
-        <button class="roll" type="button" onclick={roll}>Roll</button>
+        <span class="hint">{t("onboarding.blankNickname")}</span>
+        <button class="roll" type="button" onclick={roll}>{t("onboarding.roll")}</button>
       </div>
 
       <div class="actions">
-        <button class="btn secondary" type="button" onclick={() => (step = 1)} disabled={saving}>Back</button>
+        <button class="btn secondary" type="button" onclick={() => (step = 1)} disabled={saving}>{t("onboarding.back")}</button>
         <button class="btn cta" disabled={saving} onclick={finish}>
-          <span>{saving ? "Saving..." : "Start listening"}</span>
+          <span>{saving ? t("onboarding.saving") : t("onboarding.startListening")}</span>
           <ArrowRight size={17} stroke-width={2} />
         </button>
       </div>

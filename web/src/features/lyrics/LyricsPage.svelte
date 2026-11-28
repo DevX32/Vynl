@@ -10,6 +10,7 @@
   import { cubicIn, cubicOut } from "svelte/easing";
   import { fade, fly } from "svelte/transition";
   import { t } from "@lib/i18n";
+  import { focusTrap } from "@lib/actions/focus-trap";
   import { vynl } from "@lib/vynl";
   import { blobSrc } from "@lib/format";
   import {
@@ -373,8 +374,13 @@
     ></button>
     <div
       class="modal-card"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      tabindex="-1"
       in:fly={{ y: 8, duration: 180, easing: cubicOut }}
       out:fly={{ y: 8, duration: 120, easing: cubicIn }}
+      use:focusTrap
     >
       <div class="modal-title display">{title}</div>
       {@render body()}

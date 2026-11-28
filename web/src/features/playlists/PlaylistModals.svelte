@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { fade, fly } from "svelte/transition";
 	import { cubicIn, cubicOut } from "svelte/easing";
 	import { Disc3, Image, ImageOff, Trash2, X } from "lucide-svelte";
@@ -41,7 +42,7 @@
 	$effect(() => {
 		if (createOpen) {
 			createVal = "";
-			removeCreateCover();
+			untrack(() => removeCreateCover());
 		}
 	});
 

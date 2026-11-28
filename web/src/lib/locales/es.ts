@@ -539,6 +539,21 @@ export const es = {
   },
   onboarding: {
     setName: "Elige tu nombre",
+    getStarted: "EMPEZAR",
+    steps: "Pasos de configuración",
+    chooseLanguageLine1: "Elige tu",
+    chooseLanguageLine2: "idioma",
+    changeLater: "Puedes cambiarlo más tarde en Ajustes.",
+    continue: "Continuar",
+    nameTitleLine1: "¿Cómo debemos",
+    nameTitleLine2: "llamarte?",
+    nameHint: "Tu nombre en Vynl.",
+    yourName: "TU NOMBRE",
+    blankNickname: "Déjalo vacío para un apodo aleatorio",
+    roll: "Sortear",
+    back: "Atrás",
+    saving: "Guardando...",
+    startListening: "Empezar a escuchar",
   },
   eq: {
     presets: {

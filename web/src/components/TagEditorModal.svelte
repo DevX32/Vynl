@@ -46,6 +46,26 @@
       });
   });
 
+  function parseOptionalInt(
+    raw: string,
+    min: number,
+    max: number,
+  ): number | null | undefined {
+    const text = raw.trim();
+    if (!text) return null;
+    if (!/^\d+$/.test(text)) return undefined;
+    const value = Number(text);
+    return Number.isSafeInteger(value) && value >= min && value <= max
+      ? value
+      : undefined;
+  }
+
+  const parsedYear = $derived(parseOptionalInt(year, 0, 9999));
+  const parsedTrack = $derived(parseOptionalInt(trackNumber, 0, 9999));
+  const invalidNumbers = $derived(
+    parsedYear === undefined || parsedTrack === undefined,
+  );
+
   function onKeydown(event: KeyboardEvent): void {
     if (event.key !== "Escape" || saving || event.defaultPrevented) return;
     event.preventDefault();
@@ -55,15 +75,15 @@
 
   async function save(): Promise<void> {
     const p = path;
-    if (!p) return;
+    if (!p || invalidNumbers) return;
     saving = true;
     try {
       const tags: TrackTags = {
         title: title.trim() || null,
         artist: artist.trim() || null,
         album: album.trim() || null,
-        year: year.trim() ? Number(year) : null,
-        trackNumber: trackNumber.trim() ? Number(trackNumber) : null,
+        year: parsedYear ?? null,
+        trackNumber: parsedTrack ?? null,
         genre: genre.trim() || null,
         comment: comment.trim() || null,
       };
@@ -131,13 +151,31 @@
         <div class="row">
           <div class="field">
             <label class="label mono" for="tag-year">{t("common.year")}</label>
-            <input id="tag-year" class="text" bind:value={year} />
+            <input
+              id="tag-year"
+              class="text"
+              type="number"
+              min="0"
+              max="9999"
+              step="1"
+              aria-invalid={parsedYear === undefined}
+              bind:value={year}
+            />
           </div>
           <div class="field">
             <label class="label mono" for="tag-track">
               {t("library.tagTrackNumber")}
             </label>
-            <input id="tag-track" class="text" bind:value={trackNumber} />
+            <input
+              id="tag-track"
+              class="text"
+              type="number"
+              min="0"
+              max="9999"
+              step="1"
+              aria-invalid={parsedTrack === undefined}
+              bind:value={trackNumber}
+            />
           </div>
         </div>
         <div class="field">
@@ -160,7 +198,7 @@
       <Button
         size="sm"
         onclick={() => void save()}
-        disabled={loading || saving}
+        disabled={loading || saving || invalidNumbers}
       >
         {saving ? t("common.saving") : t("common.save")}
       </Button>

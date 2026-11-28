@@ -88,6 +88,36 @@
     sendMiniCommand({ type: "volume", value: next });
   }
 
+  function onSeekKeyDown(e: KeyboardEvent): void {
+    if (duration <= 0) return;
+    let next = time;
+    if (e.key === "ArrowRight") next += 5;
+    else if (e.key === "ArrowLeft") next -= 5;
+    else if (e.key === "PageUp") next += 15;
+    else if (e.key === "PageDown") next -= 15;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = duration;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    time = Math.min(duration, Math.max(0, next));
+    sendMiniCommand({ type: "seek", value: time });
+  }
+
+  function onVolumeKeyDown(e: KeyboardEvent): void {
+    let next = volume;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") next += 0.05;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next -= 0.05;
+    else if (e.key === "PageUp") next += 0.1;
+    else if (e.key === "PageDown") next -= 0.1;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = 1;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    setVolume(next);
+  }
+
   function toggleMute(): void {
     muted = !muted;
     localStorage.setItem(MUTED_KEY, muted ? "1" : "0");
@@ -417,9 +447,11 @@
         aria-valuemin={0}
         aria-valuemax={duration}
         aria-valuenow={Math.round(displayTime)}
-        tabindex="0"
+        aria-disabled={duration <= 0}
+        tabindex={duration > 0 ? 0 : -1}
         onpointerdown={onSeekPointerDown}
         onlostpointercapture={endSeekDrag}
+        onkeydown={onSeekKeyDown}
       >
         <div class="rail">
           <div class="fill" style:width={`${seekRatio * 100}%`}></div>
@@ -485,6 +517,7 @@
         tabindex="0"
         onpointerdown={onVolumePointerDown}
         onlostpointercapture={endVolDrag}
+        onkeydown={onVolumeKeyDown}
       >
         <div class="rail">
           <div class="fill" style:width={`${volRatio * 100}%`}></div>

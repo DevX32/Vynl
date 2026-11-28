@@ -11,6 +11,7 @@
     LoaderCircle,
   } from "lucide-svelte";
   import type { CatalogueTrack, Page } from "@lib/types";
+  import VirtualList from "@components/VirtualList.svelte";
   import {
     cataloguePath,
     refreshAfterCatalogueSave,
@@ -67,6 +68,7 @@
   let bulkDone = $state(0);
   let downloadOpen = $state(false);
 
+  let tracksEl = $state<HTMLDivElement | undefined>();
   const tracks = $derived(getLikedTracks());
   $effect(() => {
     registerCatalogueTracks(tracks);
@@ -419,7 +421,61 @@
     <span class="h-dur"><Clock size={12} stroke-width={2} /></span>
   </div>
 
-  <div class="tracks">
+  <div class="tracks" bind:this={tracksEl}>
+    {#snippet row(track: CatalogueTrack, i: number)}
+      <div
+        class="row"
+        class:playing={isCurrent(track)}
+        role="button"
+        tabindex="0"
+        aria-label={`${track.title} — ${track.artist}`}
+        onclick={() => playTrack(track)}
+        onkeydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            playTrack(track);
+          }
+        }}
+        oncontextmenu={(e) => showCtx(e, track)}
+      >
+        <span class="c-num mono">
+          {#if isCurrent(track)}
+            <EqualizerBars />
+          {:else}
+            {String(i + 1).padStart(2, "0")}
+          {/if}
+        </span>
+        <div class="c-cover">
+          <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
+        </div>
+        <div class="c-title-col">
+          <span class="c-title">{track.title}</span>
+          {#if track.album}
+            <span class="c-album">{track.album.name}</span>
+          {/if}
+        </div>
+        <div class="c-artists">
+          {#each track.artists as artist, idx (artist.id ?? `${artist.name}:${idx}`)}
+            {#if idx > 0}<span class="comma">{", "}</span>{/if}
+            {#if artist.id}
+              <button
+                type="button"
+                class="artist-link"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onNavigate(`catalogue:artist:${artist.id ?? ""}`);
+                }}
+              >
+                {artist.name}
+              </button>
+            {:else}
+              <span>{artist.name}</span>
+            {/if}
+          {/each}
+        </div>
+        <span class="c-dur mono">{fmtTime(track.duration, "--:--")}</span>
+      </div>
+    {/snippet}
     {#if hits.length === 0}
       <div class="tbl-empty">
         <ListMusic size={30} stroke-width={1.1} />
@@ -435,60 +491,13 @@
         </span>
       </div>
     {:else}
-      {#each hits as track, i (track.id)}
-        <div
-          class="row"
-          class:playing={isCurrent(track)}
-          role="button"
-          tabindex="0"
-          aria-label={`${track.title} — ${track.artist}`}
-          onclick={() => playTrack(track)}
-          onkeydown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              playTrack(track);
-            }
-          }}
-          oncontextmenu={(e) => showCtx(e, track)}
-        >
-          <span class="c-num mono">
-            {#if isCurrent(track)}
-              <EqualizerBars />
-            {:else}
-              {String(i + 1).padStart(2, "0")}
-            {/if}
-          </span>
-          <div class="c-cover">
-            <TrackCover src={track.cover} shadow="var(--shadow-sm)" />
-          </div>
-          <div class="c-title-col">
-            <span class="c-title">{track.title}</span>
-            {#if track.album}
-              <span class="c-album">{track.album.name}</span>
-            {/if}
-          </div>
-          <div class="c-artists">
-            {#each track.artists as artist, idx (artist.id ?? `${artist.name}:${idx}`)}
-              {#if idx > 0}<span class="comma">{", "}</span>{/if}
-              {#if artist.id}
-                <button
-                  type="button"
-                  class="artist-link"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    onNavigate(`catalogue:artist:${artist.id ?? ""}`);
-                  }}
-                >
-                  {artist.name}
-                </button>
-              {:else}
-                <span>{artist.name}</span>
-              {/if}
-            {/each}
-          </div>
-          <span class="c-dur mono">{fmtTime(track.duration, "--:--")}</span>
-        </div>
-      {/each}
+      <VirtualList
+        items={hits}
+        {row}
+        scrollEl={tracksEl ?? null}
+        rowKey={(item) => item.id}
+        estimateRowHeight={54}
+      />
     {/if}
   </div>
 </div>

@@ -546,6 +546,21 @@ export const de = {
   },
   onboarding: {
     setName: "Lege deinen Namen fest",
+    getStarted: "LOSLEGEN",
+    steps: "Onboarding-Schritte",
+    chooseLanguageLine1: "Wähle deine",
+    chooseLanguageLine2: "Sprache",
+    changeLater: "Du kannst das später in den Einstellungen ändern.",
+    continue: "Weiter",
+    nameTitleLine1: "Wie sollen wir",
+    nameTitleLine2: "dich nennen?",
+    nameHint: "Dein Name in Vynl.",
+    yourName: "DEIN NAME",
+    blankNickname: "Leer lassen für einen zufälligen Spitznamen",
+    roll: "Würfeln",
+    back: "Zurück",
+    saving: "Speichern...",
+    startListening: "Loslegen",
   },
   eq: {
     presets: {

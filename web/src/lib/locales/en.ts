@@ -526,6 +526,21 @@ export const en = {
   },
   onboarding: {
     setName: "Set your name",
+    getStarted: "GET STARTED",
+    steps: "Onboarding steps",
+    chooseLanguageLine1: "Choose your",
+    chooseLanguageLine2: "language",
+    changeLater: "You can change this later in Settings.",
+    continue: "Continue",
+    nameTitleLine1: "What should",
+    nameTitleLine2: "we call you?",
+    nameHint: "Your name across Vynl.",
+    yourName: "YOUR NAME",
+    blankNickname: "Leave blank for a random nickname",
+    roll: "Roll",
+    back: "Back",
+    saving: "Saving...",
+    startListening: "Start listening",
   },
   eq: {
     presets: {
