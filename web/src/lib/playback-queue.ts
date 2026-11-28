@@ -119,9 +119,10 @@ export function maybeStartCrossfade(position: number): boolean {
       console.warn("[vynl] crossfade failed:", error);
       if (ps.playGeneration === generation && generation > 0) {
         ps.playGeneration = generation - 1;
+        playbackPhase.crossfadeTried = false;
+        schedulePrebuffers(true);
       }
       if (nextVideoId) prebufferState.delete(nextVideoId);
-      playbackPhase.crossfadeTried = true;
     });
 
   return true;
@@ -167,7 +168,7 @@ export function prev(): void {
   resetCrossfade();
   cancelSeek(false);
   const gen = ++ps.playGeneration;
-  setNowPlaying(nowPlayingFromTrack(prevTrack));
+  setNowPlaying({ ...nowPlayingFromTrack(prevTrack), playing: true });
   deps.loadAndPlayNative(prevTrack.path, gen);
 }
 

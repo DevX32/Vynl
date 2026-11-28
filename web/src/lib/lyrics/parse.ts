@@ -39,8 +39,7 @@ function clockSeconds(m: RegExpExecArray): number {
   const third = m[3];
   const frac = m[4] ? Number(`0.${m[4]}`) : 0;
   if (!third) return a * 60 + b + frac;
-  if (m[4]) return a * 3600 + b * 60 + Number(third) + frac;
-  return a * 60 + b + Number(`0.${third}`);
+  return a * 3600 + b * 60 + Number(third) + frac;
 }
 
 function readOffsetSecs(text: string): number {

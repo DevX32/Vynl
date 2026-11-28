@@ -22,12 +22,12 @@ export function extractVideoId(value: string): string | null {
   if (/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
   try {
     const url = new URL(raw);
-    const host = url.hostname.replace(/^www./, "").toLowerCase();
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
     if (host === "youtu.be") {
       const id = url.pathname.split("/").filter(Boolean)[0];
       return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
     }
-    if (host.endsWith("youtube.com")) {
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
       const v = url.searchParams.get("v");
       if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
       const parts = url.pathname.split("/").filter(Boolean);

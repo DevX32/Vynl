@@ -9,7 +9,9 @@ type CurrentMedia = ReturnType<typeof getCurrentTrack>;
 
 let lastMediaSentAt = 0;
 const mediaCoverPaths = new Map<string, string>();
-let mediaUpdateChain: Promise<void> = Promise.resolve();
+let pendingMedia: MediaUpdate | null = null;
+let flushingMedia = false;
+let mediaFlush: Promise<void> = Promise.resolve();
 let lastMediaUpdateWarningAt = 0;
 let lastMediaAction: { action: string; at: number } | null = null;
 
@@ -55,16 +57,31 @@ function warnMediaUpdateFailed(error: unknown): void {
   console.warn("[vynl] media update failed:", error);
 }
 
+function flushMediaUpdates(): Promise<void> {
+  if (flushingMedia) return mediaFlush;
+  flushingMedia = true;
+  mediaFlush = (async () => {
+    while (pendingMedia) {
+      const payload = pendingMedia;
+      pendingMedia = null;
+      try {
+        if (payload.cover) payload.cover = await resolveMediaCover(payload.cover);
+        await vynl.mediaUpdate(payload);
+      } catch (error) {
+        warnMediaUpdateFailed(error);
+      }
+    }
+  })().finally(() => {
+    flushingMedia = false;
+  });
+  return mediaFlush;
+}
+
 function sendMediaUpdate(np: CurrentMedia, playing: boolean, position: number): void {
-  const payload: MediaUpdate | null = np
+  pendingMedia = np
     ? { title: np.title, artist: np.artist, album: np.album, duration: np.duration, cover: np.cover, playing, position }
     : null;
-  mediaUpdateChain = mediaUpdateChain
-    .then(async () => {
-      if (payload) payload.cover = await resolveMediaCover(payload.cover);
-      await vynl.mediaUpdate(payload);
-    })
-    .catch(warnMediaUpdateFailed);
+  void flushMediaUpdates();
 }
 
 export function syncMedia(np: CurrentMedia, playing: boolean, position: number): void {
@@ -82,10 +99,16 @@ export function handleMediaPlay(): void { if (!getIsTrackPlaying()) deps.toggle(
 export function handleMediaPause(): void { if (getIsTrackPlaying()) deps.toggle(); }
 export function handleMediaStop(): void { if (getIsTrackPlaying()) deps.pausePlayback(); deps.seekToTime(0); }
 
+const IDEMPOTENT_MEDIA_ACTIONS = new Set([
+  "play", "pause", "toggle", "mute", "stop",
+]);
+
 export function handleMediaControl(event: MediaControlEvent): void {
-  const now = Date.now();
-  if (lastMediaAction?.action === event.action && now - lastMediaAction.at < 150) return;
-  lastMediaAction = { action: event.action, at: now };
+  if (IDEMPOTENT_MEDIA_ACTIONS.has(event.action)) {
+    const now = Date.now();
+    if (lastMediaAction?.action === event.action && now - lastMediaAction.at < 150) return;
+    lastMediaAction = { action: event.action, at: now };
+  }
   switch (event.action) {
     case "play": handleMediaPlay(); break;
     case "pause": handleMediaPause(); break;

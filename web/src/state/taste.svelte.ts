@@ -108,14 +108,24 @@ function persistDismissed(): void {
   }
 }
 
-function persist(): void {
-  persistLocal();
-  void vynl
-    .tasteSave(_entries)
-    .then(() => markSynced())
+let saveChain: Promise<void> = Promise.resolve();
+
+function queueTasteSave(entries: TasteEntry[]): Promise<void> {
+  saveChain = saveChain
+    .catch(() => {})
+    .then(async () => {
+      await vynl.tasteSave(entries);
+      markSynced();
+    })
     .catch((error) => {
       console.warn("taste profile sync failed:", error);
     });
+  return saveChain;
+}
+
+function persist(): void {
+  persistLocal();
+  void queueTasteSave(_entries.map((entry) => ({ ...entry })));
 }
 
 function commit(next: TasteEntry[]): void {
@@ -124,21 +134,47 @@ function commit(next: TasteEntry[]): void {
   scheduleCloudSyncPush();
 }
 
-export async function hydrateTaste(): Promise<void> {
+function mergeTaste(local: TasteEntry[], stored: TasteEntry[]): TasteEntry[] {
+  const byId = new Map<string, TasteEntry>();
+  for (const entry of stored) byId.set(entry.track.id, entry);
+  for (const entry of local) {
+    const remote = byId.get(entry.track.id);
+    if (!remote) {
+      byId.set(entry.track.id, entry);
+      continue;
+    }
+    const touched = (e: TasteEntry): number =>
+      Math.max(e.lastPlayed, e.likedAt ?? 0);
+    const winner = touched(entry) >= touched(remote) ? entry : remote;
+    byId.set(entry.track.id, {
+      ...winner,
+      plays: Math.max(entry.plays, remote.plays),
+    });
+  }
+  return trim([...byId.values()]);
+}
+
+let hydrationInFlight: Promise<void> | null = null;
+
+export function hydrateTaste(): Promise<void> {
+  if (hydrationInFlight) return hydrationInFlight;
+  const task = hydrateTasteInner().finally(() => {
+    if (hydrationInFlight === task) hydrationInFlight = null;
+  });
+  hydrationInFlight = task;
+  return task;
+}
+
+async function hydrateTasteInner(): Promise<void> {
   try {
     const stored = await vynl.tasteLoad();
     if (stored.length > 0) {
-      const known = new Set(stored.map((entry) => entry.track.id));
-      const extra = _entries.filter((entry) => !known.has(entry.track.id));
-      _entries = extra.length > 0 ? [...stored, ...extra] : stored;
-      markSynced();
+      _entries = mergeTaste(_entries, stored);
       persistLocal();
+      void queueTasteSave(_entries.map((entry) => ({ ...entry })));
       return;
     }
-    if (_entries.length > 0) {
-      await vynl.tasteSave(_entries);
-      markSynced();
-    }
+    if (_entries.length > 0) await queueTasteSave(_entries);
   } catch (error) {
     console.warn("taste profile hydrate failed:", error);
   }

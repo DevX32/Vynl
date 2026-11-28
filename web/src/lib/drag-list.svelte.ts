@@ -247,5 +247,7 @@ export function useDragList(options: DragListOptions) {
     };
   }
 
+  $effect(() => () => cancel());
+
   return { drag, start, cancel, shouldSkipClick };
 }
