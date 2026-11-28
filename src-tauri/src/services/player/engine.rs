@@ -707,6 +707,12 @@ pub(super) fn player_thread(
                     }
                     PlayerCmd::ReplayGain(enabled) => {
                         REPLAY_GAIN.store(enabled, Ordering::Relaxed);
+                        if let Some(t) = &sink {
+                            t.replay_gain.apply(enabled);
+                        }
+                        if let Some(out) = &fading {
+                            out.track.replay_gain.apply(enabled);
+                        }
                         PlayerResp::Ok
                     }
                     PlayerCmd::GetPosition(generation) => {

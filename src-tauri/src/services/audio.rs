@@ -46,6 +46,7 @@ pub struct FileSource {
     sample_rate: u32,
     duration: Option<Duration>,
     samples: Vec<f32>,
+    scratch: Vec<f32>,
     cursor: usize,
 }
 
@@ -96,6 +97,7 @@ impl FileSource {
             sample_rate,
             duration,
             samples: Vec::new(),
+            scratch: Vec::new(),
             cursor: 0,
         })
     }
@@ -126,10 +128,9 @@ impl Iterator for FileSource {
             }
             match self.decoder.decode(&packet) {
                 Ok(audio) => {
-                    let samples = audio.samples_interleaved();
-                    let mut buffer = vec![0.0f32; samples];
-                    audio.copy_to_slice_interleaved(&mut buffer);
-                    self.samples.extend_from_slice(&buffer);
+                    self.scratch.resize(audio.samples_interleaved(), 0.0);
+                    audio.copy_to_slice_interleaved(&mut self.scratch);
+                    self.samples.extend_from_slice(&self.scratch);
                 }
                 Err(error) => {
                     log::error!("[Vynl] audio decode error: {error}");

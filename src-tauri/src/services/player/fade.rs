@@ -41,15 +41,18 @@ impl FadeControl {
     }
 
     pub(super) fn take_order(&self, since: Option<u32>) -> Option<(u32, f32, u32)> {
-        let serial = self.0.serial.load(Ordering::Acquire);
-        if serial != self.0.serial.load(Ordering::Acquire) || Some(serial) == since {
-            return None;
+        for _ in 0..4 {
+            let serial = self.0.serial.load(Ordering::Acquire);
+            if Some(serial) == since {
+                return None;
+            }
+            let to = f32::from_bits(self.0.to.load(Ordering::Relaxed));
+            let ramp = self.0.ramp.load(Ordering::Relaxed);
+            if self.0.serial.load(Ordering::Acquire) == serial {
+                return Some((serial, to, ramp));
+            }
         }
-        Some((
-            serial,
-            f32::from_bits(self.0.to.load(Ordering::Relaxed)),
-            self.0.ramp.load(Ordering::Relaxed),
-        ))
+        None
     }
 
     pub(super) fn current(&self) -> f32 {

@@ -199,6 +199,7 @@ impl Coeffs {
 
 struct EqBand {
     cur: Coeffs,
+    start: Coeffs,
     target: Coeffs,
     x1: f32,
     x2: f32,
@@ -211,6 +212,7 @@ impl EqBand {
         let coeffs = Coeffs::design(band, gains[band], sample_rate);
         Self {
             cur: coeffs,
+            start: coeffs,
             target: coeffs,
             x1: 0.0,
             x2: 0.0,
@@ -220,12 +222,21 @@ impl EqBand {
     }
 
     fn aim(&mut self, band: usize, gains: &[f32; EQ_BAND_COUNT], sample_rate: f32) {
+        self.start = self.cur;
         self.target = Coeffs::design(band, gains[band], sample_rate);
     }
 
     #[inline]
-    fn glide(&mut self, step: f32) {
-        self.cur = self.cur.lerp(self.target, step);
+    fn glide(&mut self, t: f32) {
+        self.cur = self.start.lerp(self.target, t);
+    }
+
+    #[inline]
+    fn clear_history(&mut self) {
+        self.x1 = 0.0;
+        self.x2 = 0.0;
+        self.y1 = 0.0;
+        self.y2 = 0.0;
     }
 
     #[inline]
@@ -278,9 +289,12 @@ pub(crate) struct EqualizerSource<S> {
     sample_rate: u32,
     frame: u64,
     ramp: u32,
+    ramp_total: u32,
     wet: f32,
+    wet_start: f32,
     wet_target: f32,
     preamp: f32,
+    preamp_start: f32,
     preamp_target: f32,
 }
 
@@ -303,9 +317,12 @@ where
             sample_rate,
             frame: 0,
             ramp: 0,
+            ramp_total: 0,
             wet,
+            wet_start: wet,
             wet_target: wet,
             preamp,
+            preamp_start: preamp,
             preamp_target: preamp,
         };
         source.build();
@@ -340,6 +357,9 @@ where
             self.preamp = self.preamp_target;
             self.build();
             self.ramp = 0;
+            self.ramp_total = 0;
+            self.wet_start = self.wet;
+            self.preamp_start = self.preamp;
             return;
         }
 
@@ -351,6 +371,9 @@ where
             }
         }
         self.ramp = (rate * EQ_RAMP_SECS * channels as f32).round().max(1.0) as u32;
+        self.ramp_total = self.ramp;
+        self.wet_start = self.wet;
+        self.preamp_start = self.preamp;
     }
 }
 
@@ -375,13 +398,13 @@ where
         };
 
         if self.ramp > 0 {
-            let step = 1.0 / self.ramp as f32;
-            self.wet += (self.wet_target - self.wet) * step;
-            self.preamp += (self.preamp_target - self.preamp) * step;
-            for band in chain.iter_mut() {
-                band.glide(step);
-            }
             self.ramp -= 1;
+            let t = (self.ramp_total - self.ramp) as f32 / self.ramp_total as f32;
+            self.wet = self.wet_start + (self.wet_target - self.wet_start) * t;
+            self.preamp = self.preamp_start + (self.preamp_target - self.preamp_start) * t;
+            for band in chain.iter_mut() {
+                band.glide(t);
+            }
             if self.ramp == 0 {
                 self.wet = self.wet_target;
                 self.preamp = self.preamp_target;
@@ -421,6 +444,13 @@ where
     }
 
     fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
-        self.inner.try_seek(pos)
+        self.inner.try_seek(pos)?;
+        self.frame = 0;
+        for chain in self.bands.iter_mut() {
+            for band in chain.iter_mut() {
+                band.clear_history();
+            }
+        }
+        Ok(())
     }
 }

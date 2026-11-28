@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use rodio::{OutputStreamHandle, Sink, Source};
@@ -30,9 +30,6 @@ impl TrackInput {
 }
 
 pub(super) fn track_replay_gain(input: &TrackInput) -> Option<f32> {
-    if !REPLAY_GAIN.load(Ordering::Relaxed) {
-        return None;
-    }
     match input {
         TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
             crate::services::audio::replay_gain_db(path)
@@ -63,9 +60,84 @@ pub(super) fn apply_pending_pause(
     }
 }
 
+#[derive(Clone)]
+pub(super) struct ReplayGainControl {
+    gain: Arc<AtomicU32>,
+    db: Option<f32>,
+}
+
+impl ReplayGainControl {
+    fn new(enabled: bool, db: Option<f32>) -> Self {
+        let control = Self {
+            gain: Arc::new(AtomicU32::new(1.0f32.to_bits())),
+            db,
+        };
+        control.apply(enabled);
+        control
+    }
+
+    pub(super) fn apply(&self, enabled: bool) {
+        let linear = if enabled {
+            replay_gain_linear(self.db.unwrap_or(0.0))
+        } else {
+            1.0
+        };
+        self.gain.store(linear.to_bits(), Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn value(&self) -> f32 {
+        f32::from_bits(self.gain.load(Ordering::Relaxed))
+    }
+}
+
+struct ReplayGainSource<S> {
+    inner: S,
+    control: ReplayGainControl,
+}
+
+impl<S> Iterator for ReplayGainSource<S>
+where
+    S: Source<Item = f32>,
+{
+    type Item = f32;
+
+    #[inline]
+    fn next(&mut self) -> Option<f32> {
+        let sample = self.inner.next()?;
+        Some(sample * self.control.value())
+    }
+}
+
+impl<S> Source for ReplayGainSource<S>
+where
+    S: Source<Item = f32>,
+{
+    fn current_frame_len(&self) -> Option<usize> {
+        self.inner.current_frame_len()
+    }
+
+    fn channels(&self) -> u16 {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+
+    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
+        self.inner.try_seek(pos)
+    }
+}
+
 pub(crate) struct TrackSink {
     pub(super) sink: Sink,
     pub(super) fade: FadeControl,
+    pub(super) replay_gain: ReplayGainControl,
     pub(super) sample_rate: u32,
     pub(super) channels: u16,
     pub(super) position_offset: Duration,
@@ -79,7 +151,8 @@ impl TrackSink {
         fade_secs: f64,
         position_offset: Duration,
     ) -> Result<(Self, Option<f64>), String> {
-        let replay_gain = track_replay_gain(&input);
+        let replay_db = track_replay_gain(&input);
+        let replay_gain = ReplayGainControl::new(REPLAY_GAIN.load(Ordering::Relaxed), replay_db);
         let (source, total, session): DecodedStream = match input {
             TrackInput::File(path) | TrackInput::CatalogueFile(path) => {
                 let source = crate::services::audio::FileSource::open(&path)?;
@@ -105,7 +178,10 @@ impl TrackSink {
         }
         let sink = Sink::try_new(handle).map_err(|e| format!("sink: {e}"))?;
         sink.append(FadeSource::new(
-            EqualizerSource::new(source).amplify(replay_gain_linear(replay_gain.unwrap_or(0.0))),
+            ReplayGainSource {
+                inner: EqualizerSource::new(source),
+                control: replay_gain.clone(),
+            },
             control.clone(),
         ));
         sink.set_speed(playback_speed());
@@ -113,6 +189,7 @@ impl TrackSink {
             Self {
                 sink,
                 fade: control,
+                replay_gain,
                 sample_rate,
                 channels,
                 position_offset,
