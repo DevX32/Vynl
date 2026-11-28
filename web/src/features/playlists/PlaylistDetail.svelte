@@ -95,6 +95,12 @@
   });
 
   const currentTracks = $derived(pl ? tracksOf(pl) : []);
+  const existingPaths = $derived(
+    new Set(currentTracks.map((track) => track.path)),
+  );
+  const addableLibrary = $derived(
+    library.filter((track) => !existingPaths.has(track.path)),
+  );
   const covers = $derived(resolvePlaylistCovers(pl?.cover, currentTracks));
   const needle = $derived(q.toLowerCase());
   const plHits = $derived(
@@ -127,6 +133,9 @@
 
   let adding = $state(false);
   let downloadBusy = $state(false);
+  let bulkMode = $state<"add" | "download">("add");
+  let bulkDone = $state(0);
+  let bulkTotal = $state(0);
   let coverInput: HTMLInputElement | undefined = $state();
   let coverBusy = $state(false);
   let tracksEl: HTMLDivElement | undefined = $state();
@@ -150,16 +159,24 @@
   }
 
   async function addPaths(paths: string[]): Promise<void> {
-    if (!pl || downloadBusy) return;
+    if (!pl || downloadBusy || paths.length === 0) return;
     downloadBusy = true;
+    bulkMode = "add";
+    bulkTotal = paths.length;
+    bulkDone = paths.length;
     try {
       await addToPlaylist(pl.id, paths);
       adding = false;
+      toasts.success(
+        t("playlist.addedToPlaylist", { n: paths.length, name: pl.name }),
+      );
     } catch (e) {
       console.warn("addToPlaylist error:", e);
       toasts.error(t("playlist.addFailed"));
     } finally {
       downloadBusy = false;
+      bulkDone = 0;
+      bulkTotal = 0;
     }
   }
 
@@ -175,19 +192,41 @@
       explicit: boolean;
     }[],
   ): Promise<void> {
-    if (!pl || downloadBusy) return;
+    if (!pl || downloadBusy || tracks.length === 0) return;
     downloadBusy = true;
+    bulkMode = "download";
+    bulkTotal = tracks.length;
+    bulkDone = 0;
+    let done = 0;
+    let failed = 0;
     try {
       for (const track of tracks) {
-        await saveCatalogueTrack(track, pl.id);
+        try {
+          await saveCatalogueTrack(track, pl.id);
+          done += 1;
+        } catch (error) {
+          failed += 1;
+          console.warn("download failed for", track.id, error);
+        }
+        bulkDone = done;
       }
-      await refreshAfterCatalogueSave();
+      try {
+        await refreshAfterCatalogueSave();
+      } catch (error) {
+        console.warn("download refresh failed:", error);
+      }
       adding = false;
-    } catch (e) {
-      console.warn("download failed:", e);
-      toasts.error(t("playlist.addFailed"));
+      if (failed === 0) {
+        toasts.success(
+          t("catalogue.downloadDone", { n: done, name: pl.name }),
+        );
+      } else {
+        toasts.error(t("catalogue.downloadPartial", { done, failed }));
+      }
     } finally {
       downloadBusy = false;
+      bulkDone = 0;
+      bulkTotal = 0;
     }
   }
 
@@ -228,6 +267,7 @@
 
   function showTrackCtx(e: MouseEvent, idx: number): void {
     e.preventDefault();
+    if (downloadBusy) return;
     ctxMenu = { x: e.clientX, y: e.clientY, idx };
   }
 
@@ -235,26 +275,31 @@
     if (!ctxMenu || !pl) return [];
     const trk = plHits[ctxMenu.idx];
     if (!trk) return [];
-    return [
+    const items: CtxEntry[] = [
       {
         label: t("common.addToQueue"),
         icon: ListPlus,
         action: () => addToQueue(trk.path),
       },
-      { type: "separator" },
-      {
-        label: t("playlist.remove"),
-        icon: X,
-        danger: true,
-        action: () => {
-          removeTarget = trk;
-        },
-      },
     ];
+    if (!downloadBusy) {
+      items.push(
+        { type: "separator" },
+        {
+          label: t("playlist.remove"),
+          icon: X,
+          danger: true,
+          action: () => {
+            removeTarget = trk;
+          },
+        },
+      );
+    }
+    return items;
   }
 
   function onRowPointerDown(e: PointerEvent, idx: number): void {
-    if (!!q) return;
+    if (downloadBusy || !!q) return;
     const track = plHits[idx];
     if (track) {
       start(e, { idx, path: track.path, paths: plHits.map((t) => t.path) });
@@ -407,6 +452,17 @@
           {:else}
             {t("playlist.zeroSongs")}
           {/if}
+          {#if downloadBusy}
+            · {bulkMode === "add"
+              ? t("catalogue.adding", {
+                  done: bulkDone,
+                  total: bulkTotal,
+                })
+              : t("catalogue.downloading", {
+                  done: bulkDone,
+                  total: bulkTotal,
+                })}
+          {/if}
         </div>
       </div>
 
@@ -435,6 +491,7 @@
         <button
           class="icon-btn round"
           onclick={() => (adding = true)}
+          disabled={downloadBusy}
           aria-label={t("playlist.addTracks")}
         >
           <Plus size={14} stroke-width={1.5} />
@@ -530,7 +587,7 @@
 
     {#if adding}
       <BulkTracksOverlay
-        addTracks={library}
+        addTracks={addableLibrary}
         downloadTracks={playlistStreams}
         busy={downloadBusy}
         onClose={() => (adding = false)}

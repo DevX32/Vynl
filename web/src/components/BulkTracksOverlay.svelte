@@ -51,7 +51,11 @@
   let mode = $state<"add" | "download">("add");
 
   let query = $state("");
-  let selected = $state<Set<string>>(new Set());
+  let selectedAdd = $state<Set<string>>(new Set());
+  let selectedDownload = $state<Set<string>>(new Set());
+  const selected = $derived(
+    mode === "add" ? selectedAdd : selectedDownload,
+  );
   let searchInput: SearchInput | undefined = $state();
 
   let debouncedQuery = $state(untrack(() => query));
@@ -69,11 +73,6 @@
 
   $effect(() => {
     requestAnimationFrame(() => searchInput?.focus());
-  });
-
-  $effect(() => {
-    mode;
-    selected = new Set();
   });
 
   const titleCollator = new Intl.Collator();
@@ -101,21 +100,26 @@
     hits.length > 0 && hits.every((track) => selected.has(track.id)),
   );
 
+  function setSelected(next: Set<string>): void {
+    if (mode === "add") selectedAdd = next;
+    else selectedDownload = next;
+  }
+
   function toggle(id: string): void {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    selected = next;
+    setSelected(next);
   }
 
   function toggleAllShown(): void {
-    const next = new Set(selected);
     if (allShownSelected) {
-      for (const track of hits) next.delete(track.id);
-    } else {
-      for (const track of hits) next.add(track.id);
+      setSelected(new Set());
+      return;
     }
-    selected = next;
+    const next = new Set(selected);
+    for (const track of hits) next.add(track.id);
+    setSelected(next);
   }
 
   function albumName(track: Track): string | null {
@@ -140,10 +144,10 @@
   aria-label={title}
   transition:fade={{ duration: 150 }}
   onkeydown={(e) => {
-    if (e.key === "Escape" && !busy) onClose();
+    if (e.key === "Escape") onClose();
   }}
   onclick={(e) => {
-    if (e.target === e.currentTarget && !busy) onClose();
+    if (e.target === e.currentTarget) onClose();
   }}
 >
   <div
@@ -157,7 +161,6 @@
       <button
         class="icon-btn close-btn"
         onclick={onClose}
-        disabled={busy}
         aria-label={t("common.close")}
       >
         <X size={12} stroke-width={1.6} />
@@ -170,6 +173,7 @@
         class:active={mode === "add"}
         role="tab"
         aria-selected={mode === "add"}
+        disabled={busy}
         onclick={() => (mode = "add")}
       >
         <Plus size={12} stroke-width={1.5} />
@@ -180,6 +184,7 @@
         class:active={mode === "download"}
         role="tab"
         aria-selected={mode === "download"}
+        disabled={busy}
         onclick={() => (mode = "download")}
       >
         <Download size={12} stroke-width={1.5} />
@@ -197,7 +202,7 @@
     </div>
 
     <div class="dl-tools">
-      <button class="tool-btn" onclick={toggleAllShown}>
+      <button class="tool-btn" disabled={busy} onclick={toggleAllShown}>
         {allShownSelected ? t("common.clear") : t("catalogue.selectAll")}
       </button>
       <span class="tool-count mono">
@@ -216,7 +221,11 @@
           {@const isSelected = selected.has(track.id)}
           <div class="dl-row" class:on={isSelected}>
             <TrackCover src={track.cover ?? null} shadow="var(--shadow-sm)" />
-            <button class="dl-row-main" onclick={() => toggle(track.id)}>
+            <button
+              class="dl-row-main"
+              disabled={busy}
+              onclick={() => toggle(track.id)}
+            >
               <span class="dl-row-title display">
                 {stripAlbumSuffix(track.title, albumName(track))}
               </span>
@@ -225,6 +234,7 @@
             <button
               class="icon-btn mini"
               class:added={isSelected}
+              disabled={busy}
               onclick={() => toggle(track.id)}
               aria-label={isSelected ? t("common.close") : t("playlist.add")}
             >

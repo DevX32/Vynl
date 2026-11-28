@@ -115,6 +115,7 @@
   function showCtx(e: MouseEvent, track: CatalogueTrack): void {
     e.preventDefault();
     e.stopPropagation();
+    if (bulkBusy) return;
     ctx = { x: e.clientX, y: e.clientY, track };
   }
 
@@ -207,7 +208,7 @@
         failed += 1;
         console.warn("catalogue bulk add failed for", track.id, error);
       }
-      bulkDone = done + failed;
+      bulkDone = done;
     }
     try {
       await refreshAfterCatalogueSave();
@@ -246,7 +247,7 @@
         failed += 1;
         console.warn("catalogue bulk download failed for", track.id, error);
       }
-      bulkDone = done + failed;
+      bulkDone = done;
     }
     try {
       await refreshAfterCatalogueSave();
@@ -366,10 +367,15 @@
           {t("playlist.zeroSongs")}
         {/if}
         {#if bulkBusy}
-          · {t("catalogue.downloading", {
-            done: bulkDone,
-            total: bulkTracks.length,
-          })}
+          · {bulkMode === "add"
+            ? t("catalogue.adding", {
+                done: bulkDone,
+                total: bulkTracks.length,
+              })
+            : t("catalogue.downloading", {
+                done: bulkDone,
+                total: bulkTracks.length,
+              })}
         {/if}
       </div>
     </div>
