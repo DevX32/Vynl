@@ -32,12 +32,8 @@ fn fail_cache() -> &'static tokio::sync::RwLock<HashMap<String, u64>> {
 }
 
 pub fn clear_memory_caches() {
-    if let Ok(mut cache) = remote_cache().try_write() {
-        cache.clear();
-    }
-    if let Ok(mut cache) = fail_cache().try_write() {
-        cache.clear();
-    }
+    remote_cache().blocking_write().clear();
+    fail_cache().blocking_write().clear();
 }
 
 static DISK_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();

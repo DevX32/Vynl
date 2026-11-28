@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -196,7 +197,37 @@ pub fn write_backup(content: &str, path: &Path) -> Result<u64, String> {
     {
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create folder: {e}"))?;
     }
-    std::fs::write(path, content).map_err(|e| format!("Failed to write backup: {e}"))?;
+
+    let mut temp = path.to_path_buf();
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("backup.json");
+    temp.set_file_name(format!(".{name}.tmp-{}", std::process::id()));
+
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temp)
+        .map_err(|e| format!("Failed to create backup: {e}"))?;
+    file.write_all(content.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|e| format!("Failed to write backup: {e}"))?;
+    drop(file);
+
+    #[cfg(not(unix))]
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| format!("Failed to replace backup: {e}"))?;
+    }
+    std::fs::rename(&temp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        format!("Failed to save backup: {e}")
+    })?;
     Ok(content.len() as u64)
 }
 

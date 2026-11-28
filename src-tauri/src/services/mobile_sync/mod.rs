@@ -80,8 +80,8 @@ fn config_path(user_data_dir: &Path) -> PathBuf {
 }
 
 fn generate_pin() -> String {
-    let n = (uuid::Uuid::new_v4().as_u128() % 1_000_000) as u32;
-    format!("{n:06}")
+    let n = (uuid::Uuid::new_v4().as_u128() % 100_000_000) as u32;
+    format!("{n:08}")
 }
 
 fn generate_token() -> String {

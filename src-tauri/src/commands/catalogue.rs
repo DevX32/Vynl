@@ -20,8 +20,8 @@ pub async fn search_tracks(
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<SearchResult>, String> {
-    let l = limit.unwrap_or(20);
-    let o = offset.unwrap_or(0);
+    let l = limit.unwrap_or(20).clamp(1, 50);
+    let o = offset.unwrap_or(0).min(10_000);
     crate::services::internal::search_tracks(&query, l, o).await
 }
 

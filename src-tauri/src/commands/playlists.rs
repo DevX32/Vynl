@@ -8,12 +8,15 @@ use super::{load_settings, output_dir_from_settings, require_deletable_path, use
 
 #[tauri::command]
 pub async fn list_playlists(app: AppHandle) -> Result<Vec<PlaylistMeta>, String> {
-    let output = output_dir_from_settings(&app)?;
-    let playlists = crate::services::playlists::list_playlists(&output)
-        .into_iter()
-        .filter(|meta| meta.id != crate::services::sync::LIKED_PLAYLIST_ID)
-        .collect();
-    Ok(playlists)
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = output_dir_from_settings(&app)?;
+        Ok(crate::services::playlists::list_playlists(&output)
+            .into_iter()
+            .filter(|meta| meta.id != crate::services::sync::LIKED_PLAYLIST_ID)
+            .collect())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -21,14 +24,23 @@ pub async fn get_playlist(id: String, app: AppHandle) -> Result<Option<Playlist>
     if id == crate::services::sync::LIKED_PLAYLIST_ID {
         return Ok(None);
     }
-    let output = output_dir_from_settings(&app)?;
-    Ok(crate::services::playlists::get_playlist(&output, &id))
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = output_dir_from_settings(&app)?;
+        Ok(crate::services::playlists::get_playlist(&output, &id))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn create_playlist(name: String, app: AppHandle) -> Result<Playlist, String> {
-    let output = output_dir_from_settings(&app)?;
-    let playlist = crate::services::playlists::create_playlist(&output, &name)?;
+    let blocking_app = app.clone();
+    let playlist = tauri::async_runtime::spawn_blocking(move || {
+        let output = output_dir_from_settings(&blocking_app)?;
+        crate::services::playlists::create_playlist(&output, &name)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     sync_playlist(&app, &playlist);
     Ok(playlist)
 }

@@ -51,7 +51,6 @@ const MAX_PAIR_FAILURES: u32 = 5;
 const LOCKOUT_SECS: u64 = 30;
 const LOCKOUT_MAX_SECS: u64 = 900;
 const MAX_PAIR_FAILURES_GLOBAL: u32 = 60;
-const GLOBAL_PAIR_WINDOW_SECS: u64 = 300;
 const MAX_ATTEMPT_ENTRIES: usize = 1000;
 const SNAPSHOT_TTL: Duration = Duration::from_secs(10);
 const STREAM_CHUNK: usize = 128 * 1024;
@@ -355,21 +354,16 @@ fn lan_request(req: &Request) -> bool {
 }
 
 async fn pair_global_allowed(state: &SharedState) -> bool {
-    let mut global = state.global_pair_failures.lock().await;
-    let now = now_secs();
-    if now.saturating_sub(global.0) > GLOBAL_PAIR_WINDOW_SECS {
-        *global = (now, 0);
-    }
-    global.1 < MAX_PAIR_FAILURES_GLOBAL
+    state.global_pair_failures.lock().await.1 < MAX_PAIR_FAILURES_GLOBAL
 }
 
 async fn record_global_failure(state: &SharedState) {
     let mut global = state.global_pair_failures.lock().await;
-    let now = now_secs();
-    if now.saturating_sub(global.0) > GLOBAL_PAIR_WINDOW_SECS {
-        *global = (now, 0);
-    }
     global.1 = global.1.saturating_add(1);
+}
+
+async fn clear_global_failures(state: &SharedState) {
+    state.global_pair_failures.lock().await.1 = 0;
 }
 
 async fn auth_middleware(State(state): State<SharedState>, req: Request, next: Next) -> Response {
@@ -419,6 +413,7 @@ async fn pair(
     }
 
     clear_attempts(&state, &key).await;
+    clear_global_failures(&state).await;
 
     let token = state.token.lock().await.clone();
     let cfg = mobile_sync::load_config(&state.user_data);
