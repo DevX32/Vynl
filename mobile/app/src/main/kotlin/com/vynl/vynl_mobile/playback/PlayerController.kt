@@ -185,7 +185,6 @@ class PlayerController(
                 connectOnce()
             } catch (error: Exception) {
                 _state.value = _state.value.copy(connected = false, error = "could not connect to the player")
-                throw error
             }
         }
     }

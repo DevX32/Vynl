@@ -131,15 +131,15 @@ fun HomeShell(
         playback.track?.let { viewModel.ensureLyrics(it) }
     }
 
-    LaunchedEffect(viewModel.notice) {
-        val message = viewModel.notice ?: return@LaunchedEffect
-        snackbar.showSnackbar(message)
+    var lastSnackbar by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(viewModel.notice, playback.error) {
+        val message = playback.error ?: viewModel.notice ?: return@LaunchedEffect
+        if (message != lastSnackbar) {
+            lastSnackbar = message
+            snackbar.showSnackbar(message)
+            lastSnackbar = null
+        }
         viewModel.dismissNotice()
-    }
-
-    LaunchedEffect(playback.error) {
-        val message = playback.error ?: return@LaunchedEffect
-        snackbar.showSnackbar(message)
         viewModel.player.clearError()
     }
 
