@@ -395,7 +395,9 @@ fn lacing(len: usize) -> Vec<u8> {
         out.push(255u8);
         left -= 255;
     }
-    out.push(left as u8);
+    if left > 0 {
+        out.push(left as u8);
+    }
     out
 }
 
@@ -486,7 +488,7 @@ pub fn mux(
     if packets.is_empty() {
         return Err("No packets to write.".into());
     }
-    if let Some(packet) = packets.iter().find(|packet| packet.data.len() > 65_025) {
+    if let Some(packet) = packets.iter().find(|packet| packet.data.len() >= 65_025) {
         return Err(format!(
             "Packet too large to mux ({} bytes).",
             packet.data.len()
@@ -507,15 +509,15 @@ pub fn mux(
         960
     };
 
+    let pre_skip = u64::from(head.pre_skip);
     for (i, packet) in packets.iter().enumerate() {
         let last = i + 1 == total;
         let granule = if last {
-            positions[total - 1]
-                .saturating_add(typical)
-                .saturating_sub(head.pre_skip as u64)
+            positions[total - 1].saturating_add(typical)
         } else {
             positions[i + 1]
-        };
+        }
+        .saturating_sub(pre_skip);
         writer.page(if last { 0x04 } else { 0x00 }, granule, &packet.data);
     }
 

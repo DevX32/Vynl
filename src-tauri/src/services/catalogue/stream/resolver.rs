@@ -73,7 +73,14 @@ pub async fn fetch_complete_file(
                 refreshes += 1;
                 let itag = (format.itag != 0).then_some(format.itag);
                 match resolver.resolve(video_id, itag).await {
-                    Ok(next) => format = next,
+                    Ok(next) => {
+                        if next.itag != format.itag || next.content_length != Some(total) {
+                            let _ = std::fs::remove_file(&path);
+                            cache.finish(video_id, &file_name, false);
+                            return Err("stream format changed while downloading".into());
+                        }
+                        format = next;
+                    }
                     Err(error) => {
                         let _ = std::fs::remove_file(&path);
                         cache.finish(video_id, &file_name, false);
@@ -164,6 +171,7 @@ pub struct UrlResolver {
 }
 
 const FORMAT_TTL: Duration = Duration::from_secs(20 * 60);
+const MAX_FORMAT_CACHE: usize = 256;
 
 impl UrlResolver {
     pub(super) fn cached_format(&self, video_id: &str) -> Option<YtAudioFormat> {
@@ -182,7 +190,21 @@ impl UrlResolver {
 
     pub(super) fn remember_format(&self, video_id: &str, format: &YtAudioFormat) {
         let mut formats = self.formats.lock().unwrap_or_else(|e| e.into_inner());
-        formats.insert(video_id.to_string(), (format.clone(), Instant::now()));
+        let now = Instant::now();
+        formats.retain(|_, (_, at)| {
+            now.checked_duration_since(*at)
+                .is_some_and(|age| age < FORMAT_TTL)
+        });
+        if formats.len() >= MAX_FORMAT_CACHE
+            && !formats.contains_key(video_id)
+            && let Some(oldest) = formats
+                .iter()
+                .min_by_key(|(_, (_, at))| *at)
+                .map(|(id, _)| id.clone())
+        {
+            formats.remove(&oldest);
+        }
+        formats.insert(video_id.to_string(), (format.clone(), now));
     }
 
     pub async fn resolve(

@@ -290,7 +290,7 @@ pub(super) fn decode_loop(
     };
 
     let mut discard = 0usize;
-    if start > 0.5
+    if start > 0.0
         && let Some(time) = Time::try_from_secs_f64(start)
     {
         match format_reader.seek(

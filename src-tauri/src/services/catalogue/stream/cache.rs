@@ -208,7 +208,6 @@ impl StreamCache {
             entry.last_used = now_secs();
         }
         state.dirty = true;
-        self.save_locked(&mut state);
         Some(path)
     }
 
@@ -223,10 +222,18 @@ impl StreamCache {
         if resume && itag != 0 {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(entry) = state.index.entries.get(video_id) {
+                let path = self.dir.join(&entry.file);
+                let on_disk = std::fs::metadata(&path).ok().map(|m| m.len());
+                let covered_end = entry
+                    .coverage
+                    .iter()
+                    .map(|(_, end)| *end)
+                    .max()
+                    .unwrap_or(0);
                 let usable = !entry.complete
                     && entry.itag == Some(itag)
                     && entry.size == total
-                    && self.dir.join(&entry.file).is_file();
+                    && on_disk.is_some_and(|len| len >= covered_end);
                 if usable {
                     let file_name = entry.file.clone();
                     let coverage = entry.coverage.clone();
@@ -239,7 +246,6 @@ impl StreamCache {
                         .or_default()
                         .push(file_name.clone());
                     state.dirty = true;
-                    self.save_locked(&mut state);
                     return Ok(BeginResult {
                         path: self.dir.join(&file_name),
                         file_name,

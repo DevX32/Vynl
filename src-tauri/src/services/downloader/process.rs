@@ -19,9 +19,12 @@ pub(super) static CHILDREN: once_cell::sync::Lazy<AsyncMutex<Vec<(u32, u64)>>> =
 pub(super) const DOWNLOAD_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
 
 pub(super) fn fmt_dur(sec: f64) -> String {
-    let m = (sec / 60.0).floor() as u64;
-    let s = (sec % 60.0).round() as u64;
-    format!("{}:{:02}", m, s)
+    let total = if sec.is_finite() && sec > 0.0 {
+        sec.round() as u64
+    } else {
+        0
+    };
+    format!("{}:{:02}", total / 60, total % 60)
 }
 
 pub(super) fn progress_from_line(line: &str) -> Option<f64> {
