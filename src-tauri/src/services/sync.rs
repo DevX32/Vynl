@@ -150,12 +150,16 @@ pub fn clear_sync_error(data_dir: &Path) {
 }
 
 pub fn set_sync_result(data_dir: &Path, error: Option<&str>) {
+    set_sync_result_at(data_dir, error, None);
+}
+
+fn set_sync_result_at(data_dir: &Path, error: Option<&str>, synced_at: Option<i64>) {
     let _guard = sync_meta_lock();
     let mut meta = read_sync_meta(data_dir);
     meta.dirty = error.is_some();
     meta.last_error = error.map(str::to_string);
     if error.is_none() {
-        meta.last_synced_at = Some(util::now_ms());
+        meta.last_synced_at = synced_at.or_else(|| Some(now_ms()));
     }
     write_sync_meta(data_dir, &meta);
 }
@@ -1094,6 +1098,7 @@ pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncS
         .into_iter()
         .next()
         .ok_or_else(|| format!("{NO_REMOTE_STATE}."))?;
+    let remote_updated = row.get("updated_at").and_then(|value| value.as_i64());
     let data = row
         .get("data")
         .cloned()
@@ -1105,12 +1110,13 @@ pub async fn pull_sync_state(data_dir: &Path, output_dir: &Path) -> Result<SyncS
     let report = apply_sync_state(data_dir, output_dir, &state);
     write_sync_state_cache_rs(data_dir, &state);
     if report.errors.is_empty() {
-        clear_sync_error(data_dir);
+        set_sync_result_at(data_dir, None, remote_updated);
     } else {
         for error in &report.errors {
             log::error!("[Vynl sync] {error}");
         }
-        record_sync_error(data_dir, &report.errors.join("; "));
+        let joined = report.errors.join("; ");
+        set_sync_result_at(data_dir, Some(&joined), remote_updated);
     }
 
     Ok(state)

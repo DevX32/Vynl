@@ -90,10 +90,14 @@ pub async fn taste_save(
     entries: Vec<crate::services::taste::TasteEntry>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let user_data = user_data_dir(&app)?;
-    let output = output_dir_from_settings(&app)?;
-    mirror_taste_to_liked(&output, &user_data, &entries, &app)?;
-    crate::services::taste::save(&user_data, &entries)
+    tauri::async_runtime::spawn_blocking(move || {
+        let user_data = user_data_dir(&app)?;
+        let output = output_dir_from_settings(&app)?;
+        mirror_taste_to_liked(&output, &user_data, &entries, &app)?;
+        crate::services::taste::save(&user_data, &entries)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 pub fn mirror_taste_to_liked(
@@ -122,7 +126,7 @@ pub fn mirror_taste_to_liked(
     }
     let now = crate::services::util::now_ms();
     let id = crate::services::sync::LIKED_PLAYLIST_ID;
-    let mut playlist = match crate::services::playlists::get_playlist(output_dir, id) {
+    let mut playlist = match crate::services::playlists::get_reserved_playlist(output_dir, id) {
         Some(found) => found,
         None => {
             let streams: Vec<crate::commands::types::CatalogueTrack> = entries
@@ -177,7 +181,7 @@ pub fn mirror_taste_to_liked(
     }
     crate::services::playlists::record_marks(&mut playlist, &adds, &removals);
     playlist.updated_at = now;
-    crate::services::playlists::upsert_playlist(output_dir, &playlist)?;
+    crate::services::playlists::upsert_reserved_playlist(output_dir, &playlist)?;
     sync_playlist(app, &playlist);
     Ok(())
 }

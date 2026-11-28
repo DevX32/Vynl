@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -263,6 +264,22 @@ pub fn upsert_playlist(output_dir: &Path, playlist: &Playlist) -> Result<(), Str
     write_playlist(output_dir, playlist)
 }
 
+pub fn get_reserved_playlist(output_dir: &Path, id: &str) -> Option<Playlist> {
+    if id != crate::services::sync::LIKED_PLAYLIST_ID {
+        return None;
+    }
+    let _lock = file_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    read_playlist(output_dir, id)
+}
+
+pub fn upsert_reserved_playlist(output_dir: &Path, playlist: &Playlist) -> Result<(), String> {
+    if playlist.id != crate::services::sync::LIKED_PLAYLIST_ID {
+        return Err("invalid reserved playlist id".into());
+    }
+    let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
+    write_playlist(output_dir, playlist)
+}
+
 fn to_base36(mut num: u64) -> String {
     const CHARS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     if num == 0 {
@@ -323,6 +340,11 @@ pub fn create_playlist(output_dir: &Path, name: &str) -> Result<Playlist, String
         removals: Vec::new(),
     };
     write_playlist(output_dir, &pl)?;
+    let mut order = read_order(output_dir);
+    if !order.iter().any(|existing| existing == &id) {
+        order.push(id.clone());
+        write_order(output_dir, &order)?;
+    }
     Ok(pl)
 }
 
@@ -535,19 +557,28 @@ pub fn add_streams_to_playlist(
     let _lock = file_mutex().lock().map_err(|e| e.to_string())?;
     let mut pl = read_playlist(output_dir, id).ok_or("playlist not found")?;
     let mut added: Vec<String> = Vec::new();
+    let mut paths: HashSet<String> = pl.paths.iter().cloned().collect();
+    let mut stream_index: HashMap<String, usize> = pl
+        .streams
+        .iter()
+        .enumerate()
+        .map(|(i, t)| (t.id.clone(), i))
+        .collect();
     for track in tracks {
         let video_id = track.id.trim();
         if video_id.is_empty() {
             continue;
         }
         let path = format!("{CATALOGUE_PREFIX}{video_id}");
-        if !pl.paths.iter().any(|p| p == &path) {
+        if paths.insert(path.clone()) {
             pl.paths.push(path.clone());
             added.push(path);
         }
-        match pl.streams.iter_mut().find(|t| t.id == video_id) {
-            Some(existing) => *existing = track.clone(),
-            None => pl.streams.push(track.clone()),
+        if let Some(&index) = stream_index.get(video_id) {
+            pl.streams[index] = track.clone();
+        } else {
+            stream_index.insert(video_id.to_string(), pl.streams.len());
+            pl.streams.push(track.clone());
         }
     }
     record_marks(&mut pl, &added, &[]);
