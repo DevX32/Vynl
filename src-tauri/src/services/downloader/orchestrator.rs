@@ -153,7 +153,7 @@ async fn download_collection_inner(
         s.cancelled = true;
     }
 
-    emit_final_summary(app_handle, &summary).await;
+    emit_final_summary(app_handle, &summary, opts.quiet).await;
 
     let _ = app_handle.emit("vynl:dl", DownloadEvent::Finished);
     Ok(())

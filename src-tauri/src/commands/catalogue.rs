@@ -81,6 +81,7 @@ pub async fn start_download(
         matches: None,
         picks: None,
         skip_ids: None,
+        quiet: false,
     });
     crate::services::downloader::download_collection(
         collection,

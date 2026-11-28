@@ -322,6 +322,7 @@ impl CatalogueService {
                     matches: Some(matches),
                     picks: Some(picks),
                     skip_ids: None,
+                    quiet: true,
                 },
             )
             .await?;

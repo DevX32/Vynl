@@ -488,6 +488,8 @@ pub struct DownloadOpts {
     pub matches: Option<std::collections::HashMap<String, Vec<SearchCandidate>>>,
     pub picks: Option<std::collections::HashMap<String, i64>>,
     pub skip_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub quiet: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

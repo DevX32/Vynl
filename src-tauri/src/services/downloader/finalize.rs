@@ -11,11 +11,16 @@ use super::*;
 pub(super) async fn emit_final_summary(
     app_handle: &tauri::AppHandle,
     summary: &Arc<Mutex<DownloadSummary>>,
+    quiet: bool,
 ) {
     let s = summary.lock().await;
     let _ = app_handle.emit("vynl:dl", DownloadEvent::Summary { payload: s.clone() });
 
-    if !s.cancelled && !CANCELLED_DOWNLOAD.load(Ordering::SeqCst) && (s.done > 0 || s.failed > 0) {
+    if !quiet
+        && !s.cancelled
+        && !CANCELLED_DOWNLOAD.load(Ordering::SeqCst)
+        && (s.done > 0 || s.failed > 0)
+    {
         let _ = app_handle.emit("vynl:toast", &*s);
     }
 }
