@@ -47,6 +47,7 @@ export const de = {
     downloadToPlaylist: "Herunterladen",
     bulkActions: "Sammelaktionen",
     downloading: "Lädt {done} von {total} herunter",
+    adding: "Fügt {done} von {total} hinzu",
     selected: "{n} ausgewählt",
     selectAll: "Alle auswählen",
     downloadN: "Herunterladen ({n})",
@@ -57,7 +58,6 @@ export const de = {
     addedToPlaylist: "Zu {name} hinzugefügt",
     saveFailed:
       "Dieser Titel konnte nicht zu deiner Bibliothek hinzugefügt werden",
-    replaceWithLocal: "Stream durch lokale Datei ersetzen",
     goToAlbum: "Zum Album",
     goToArtist: "Zum Künstler",
     kind: {

@@ -427,7 +427,6 @@ pub fn run() {
             commands::cancel_stream_import,
             commands::downloaded_paths,
             commands::check_duplicates,
-            commands::find_local_for_track,
             commands::start_download,
             commands::cancel_download,
             commands::export_backup,
